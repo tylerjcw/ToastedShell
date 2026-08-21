@@ -40,7 +40,19 @@ internal sealed partial class EmitterImpl
         try
         {
             if (!TryFindDeclaredClassDefinition(cls.BaseClassName, out var baseClass))
-                return false;
+            {
+                // `TOAST-0030` cause A, second half. A base that is not declared in this
+                // unit is not automatically unknown: `extends Error` names one of Tōast's
+                // own types, and `extends Exception` a CLR one. Both are perfectly good
+                // parents for an emitted type.
+                //
+                // Returning false here sent the whole declaration to source replay — which
+                // then failed at runtime with "Command 'class' was not found", so
+                // `class E extends Error { }` did not work compiled at all. That is Phase
+                // B's second bullet ("remove compiler-subset source replay") arriving from
+                // underneath rather than being scheduled.
+                return TryResolveExternalBaseType(cls.BaseClassName, out _);
+            }
 
             // The runtime/source path owns the user-facing diagnostic for
             // attempting to inherit from a sealed/static-only class. More
@@ -54,6 +66,47 @@ internal sealed partial class EmitterImpl
         {
             visiting.Remove(cls.Name);
         }
+    }
+
+    /// <summary>
+    /// A base class that is not declared in this unit but is a usable CLR parent.
+    /// </summary>
+    /// <remarks>
+    /// Conservative on purpose. A sealed type cannot be a parent at all, and a type with
+    /// no reachable parameterless constructor cannot be chained to from an emitted
+    /// constructor — in either case source replay is still the honest answer, because
+    /// truncating the hierarchy at <c>System.Object</c> would silently give the class a
+    /// different identity than it has interpreted.
+    ///
+    /// The name is resolved through <see cref="DotNetTypeResolver.TryResolveToastTypeName"/>,
+    /// the same lookup the compiled <c>new</c> uses, so a name means one thing wherever it
+    /// appears.
+    /// </remarks>
+    private static bool TryResolveExternalBaseType(string name, out Type? type)
+    {
+        type = null;
+
+        if (!DotNetTypeResolver.TryResolveToastTypeName(name, out var resolved) ||
+            resolved is null ||
+            !resolved.IsClass ||
+            resolved.IsSealed)
+        {
+            return false;
+        }
+
+        var parameterless = resolved.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            Type.EmptyTypes,
+            modifiers: null);
+
+        if (parameterless is null || parameterless.IsPrivate)
+        {
+            return false;
+        }
+
+        type = resolved;
+        return true;
     }
 
     private static bool CanEmitClrClassShellOwnShape(BoundClassDefinition cls)

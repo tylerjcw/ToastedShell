@@ -111,6 +111,10 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             + "echo (describe (new DiffBase()))");
 
         yield return Case(
+            "base-annotated-variable-accepts-subclass",
+            Hierarchy + "var b: DiffBase = new DiffLeaf(4)\necho $b.Kind");
+
+        yield return Case(
             "two-level-inheritance",
             "class DiffA { prop Tag: string = \"a\" }\nclass DiffB extends DiffA { prop Tag: string = \"b\" }\nclass DiffC extends DiffB { prop Tag: string = \"c\" }\nvar x: DiffA = new DiffC()\necho $x.Tag");
 
@@ -192,6 +196,43 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case("nested-arrays-are-items", "echo ([[1, 2], [3]] | count)");
         yield return Case("a-string-is-one-value", "echo (\"abc\" | count)");
         yield return Case("a-set-is-a-sequence", "echo ({: 1, 2, 3 :} | count)");
+
+        // ── `TOAST-0030` cause A completed, and `TOAST-0031`'s deferred case ──
+        //
+        // `class E extends Error` did not compile at all: any base not declared in the same
+        // unit sent the whole declaration to source replay, which failed at runtime with
+        // "Command 'class' was not found". An emitted type can now derive from a real CLR
+        // parent, which is what `Error` and `Exception` are.
+        yield return Case(
+            "declared-error-type-is-an-error",
+            "class DiffErr extends Error { }\necho ((new DiffErr()) is Error)");
+
+        yield return Case(
+            "declared-error-type-at-depth",
+            "class DiffErrA extends Error { }\nclass DiffErrB extends DiffErrA { }\n"
+            + "echo ((new DiffErrB()) is Error)");
+
+        // Moved from `TOAST-0031`, which could not add it: a corpus case here would have
+        // asserted that `class E extends Error` does not compile, which was already
+        // recorded. `Failure` names anything the language raised; `Error` and `Diagnostic`
+        // are the two kinds, and a plain thrown value is none of them.
+        yield return Case(
+            "a-declared-error-is-a-failure",
+            "class DiffErrC extends Error { }\necho ((new DiffErrC()) is Failure)");
+
+        yield return Case(
+            "a-declared-error-is-not-a-diagnostic",
+            "class DiffErrD extends Error { }\necho ((new DiffErrD()) is Diagnostic)");
+
+        yield return Case(
+            "a-runtime-diagnostic-is-a-failure",
+            "try { (1 / 0) } catch (e) { echo $\"{($e is Failure)} {($e is Diagnostic)} {($e is Error)}\" }");
+
+        // The control for deriving from an external base: a class with no base is still
+        // rooted at `object`, and an unrelated declared error is still not this one.
+        yield return Case(
+            "an-ordinary-class-is-not-an-error",
+            "class DiffPlain { }\necho ((new DiffPlain()) is Error)");
 
         // ── Portable semantics: the eight `TOAST-0018` concerns ───────────
         //
@@ -279,9 +320,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A variable annotated with a base class rejects a subclass value when
         // compiled. Parameters and returns take a different path and accept it,
         // so this is specific to the variable annotation.
-        yield return Divergence(
-            "TS-P1-47", "base-annotated-variable-rejects-subclass",
-            Hierarchy + "var b: DiffBase = new DiffLeaf(4)\necho $b.Kind");
 
         // A compiled class is a real emitted CLR type rather than a ToshClassInstance, so
         // it never answers `TryGetOwnRendering` and its `Display` implementation is not
@@ -307,12 +345,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // what Phase A's exit asks for. Each is the compiled side failing to implement
         // something `docs/spec/` now states, so each is a claim about the *language* that
         // only one backend currently honours. `TOAST-0030` carries them.
-
-        // A declared error type is an `Error` (§Errors and catch). The compiled backend
-        // does not accept the declaration at all: "Command 'class' was not found".
-        yield return Divergence(
-            "TOAST-0030", "declared-error-type-is-an-error",
-            "class DiffErr extends Error { }\necho ((new DiffErr()) is Error)");
 
     }
 

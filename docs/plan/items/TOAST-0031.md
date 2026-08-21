@@ -66,9 +66,10 @@ the language *defines* or a host detail it *exposes*.
 - [x] `§Errors and catch` carries the decision, and its defect box is gone rather than
       reworded
 - [x] The differential corpus covers it, so both backends must agree — **moved to
-      `TOAST-0030`**, which owns the compiled-backend gap. A case here today would assert
-      that `class E extends Error` does not compile, which that item already records; it
-      belongs beside the fix, not beside the design
+      `TOAST-0030`** and landed there on 2026-08-21, once `class E extends Error` compiled.
+      `Failure` / `Error` / `Diagnostic` are now asserted across both backends. Filing it
+      beside the fix rather than beside the design was right: the case could not have been
+      written here, because the declaration it needs did not compile at all
 - [x] A negative control — the three-way table is asserted per thrown value, and a
       plain thrown string answers false to all three
 

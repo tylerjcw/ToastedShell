@@ -531,9 +531,37 @@ public sealed partial class ToshEngine
 
         var resolvedType = ResolveTypeName(normalizedTypeName);
 
+        if (resolvedType is not null &&
+            TypeConversion.TryConvert(value, resolvedType, out converted))
+        {
+            return true;
+        }
+
+        // `TS-P1-47`, absorbed into `TOAST-0030`. After conversion, not before.
+        //
+        // An annotation and `is` have to agree about what a type name means, and
+        // `OperatorEvaluator` is where that meaning lives — including, since cause D, the
+        // walk up a CLR base chain. The compiled backend needs that here because nothing
+        // above can see its classes: an emitted class is a real CLR type rather than a
+        // registered shell definition, so `TryGetNamedType` finds nothing and every branch
+        // that walks a `ToshClassInstance` is skipped. `var b: DiffBase = new DiffLeaf(4)`
+        // then reached `TypeConversion.TryConvert`, which reported that a `DiffLeaf` could
+        // not be converted to the base it already derives from.
+        //
+        // Trying it *first* was the obvious arrangement and it was wrong: an annotation can
+        // legitimately retype a value it already matches, so `var a: array = [1, 2]` bound
+        // as `array<int>` instead of `array`. Conversion means "make it this"; this check
+        // only answers "it already is this", so it belongs where conversion has declined.
+        if (value is not null && OperatorEvaluator.IsInstanceOfShellType(value, normalizedTypeName))
+        {
+            converted = value;
+            return true;
+        }
+
         if (resolvedType is not null)
         {
-            return TypeConversion.TryConvert(value, resolvedType, out converted);
+            converted = null;
+            return false;
         }
 
         // Trait-style constraint names (Numeric, Add, Comparable, …) used as

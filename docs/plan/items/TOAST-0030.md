@@ -1,10 +1,11 @@
 ---
 id: TOAST-0030
 title: "The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-20
+closed: 2026-08-21
 absorbs: TS-P1-47
 ---
 
@@ -123,6 +124,38 @@ Nine cases added, four of them controls — an array, nested arrays, a string an
 because getting a dictionary to count 1 could equally have been done by making everything a
 single value. The negative control fails eight and leaves all four controls passing.
 
+### Cause A completed, and `TS-P1-47` with it
+
+**`class E extends Error` now compiles.** `CanEmitClrClassShell` refused any base not
+declared in the same unit and handed the whole declaration to source replay, which failed
+at runtime with "Command 'class' was not found". An emitted type can now derive from a real
+CLR parent, resolved through the same `TryResolveToastTypeName` the compiled `new` uses, so
+a name means one thing wherever it appears.
+
+Deliberately conservative: a sealed type cannot be a parent, and one with no reachable
+parameterless constructor cannot be chained to. In both cases source replay remains the
+honest answer, because truncating the hierarchy at `System.Object` would give the class a
+different identity than it has interpreted — quietly.
+
+`TOAST-0031`'s deferred corpus case landed with it: `Failure` / `Error` / `Diagnostic` are
+now asserted across both backends, which could not be written while a class extending
+`Error` did not compile at all.
+
+**`TS-P1-47` was a third consumer of the same question.** The annotation path walked
+`classInstance.Definition.BaseClass` — over *interpreter* instances. A compiled class is a
+real CLR type, fails that pattern, and fell through to `TypeConversion.TryConvert`, which
+reported that a `DiffLeaf` could not be converted to the base it already derives from.
+
+It asks `OperatorEvaluator.IsInstanceOfShellType` now, so an annotation and `is` cannot
+disagree about a type name.
+
+**Placement was the whole of it, and the first attempt was wrong.** Asking before
+conversion looks obviously right — why convert something that already is the type? — and it
+broke `var a: array = [1, 2]`, which bound as `array<int>` instead of `array`. An annotation
+may legitimately *retype* a value it already matches. Conversion means "make it this"; the
+new check only answers "it already is this", so it belongs where conversion has declined.
+One suite run found that; nothing about reading the code would have.
+
 ### Cause A, second half: `class E extends Error` is source replay
 
 Still divergent, and it is a bigger piece than the first half.
@@ -144,20 +177,20 @@ the case moves up into `Corpus()`.
 
 ## Acceptance
 
-- [~] **Cause A** (half) — `new Error(…)`, `class E extends Error`, `is Error`, `is Failure` and
+- [x] **Cause A** — `new Error(…)`, `class E extends Error`, `is Error`, `is Failure` and
       `is Diagnostic` behave identically on both backends
 - [x] **Cause B** — a dictionary, a record and a range have the same shape on both backends
 - [x] **Cause C** — the member-of-null and `null + "a"` messages come from one place
 - [x] **Cause D** — `is` against a declared base is true at any depth, compiled, and
       `TS-P1-47`'s base-annotated variable accepts a subclass
-- [ ] Every rule fixed lives in `Tosh.Runtime` and is called by both backends, rather than
+- [x] Every rule fixed lives in `Tosh.Runtime` and is called by both backends, rather than
       implemented twice and compared
-- [ ] Each case moves from `KnownDivergences()` into `Corpus()` as it is fixed
-- [ ] Once a class compiles, the corpus gains a `Failure` / `Error` / `Diagnostic` case —
+- [x] Each case moves from `KnownDivergences()` into `Corpus()` as it is fixed
+- [x] Once a class compiles, the corpus gains a `Failure` / `Error` / `Diagnostic` case —
       moved here from `TOAST-0031`, which could not add one while `class E extends Error`
       does not compile at all
-- [ ] The siblings found by probing are in the corpus too, not just the five recorded
-- [ ] A negative control
+- [x] The siblings found by probing are in the corpus too, not just the five recorded
+- [x] A negative control
 
 ## Notes
 

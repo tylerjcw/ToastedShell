@@ -65,8 +65,20 @@ internal sealed partial class EmitterImpl
             if (!EnsureBaseClassShellDeclared(cls.BaseClassName)
                 || !_clrTypeShells.TryGetValue(cls.BaseClassName, out baseShell))
             {
-                return;
+                // `TOAST-0030`. Not declared here, but possibly a real type all the same —
+                // `extends Error`, `extends Exception`. Deriving from it is what the
+                // interpreter does, so the emitted type does it too rather than handing the
+                // declaration to source replay.
+                if (!TryResolveExternalBaseType(cls.BaseClassName, out var externalBase) ||
+                    externalBase is null)
+                {
+                    return;
+                }
+
+                parentType = MetadataType(externalBase);
             }
+            else
+            {
 
             parentType = baseShell.Type;
 
@@ -82,6 +94,7 @@ internal sealed partial class EmitterImpl
                     + $"to base class '{cls.BaseClassName}', whose CLR shell "
                     + $"constructor requires {expectedBaseArity}.");
                 return;
+            }
             }
         }
 
@@ -285,7 +298,11 @@ internal sealed partial class EmitterImpl
         }
         else
         {
-            ctorIl.Emit(OpCodes.Call, MetadataType(typeof(object)).GetConstructor(Type.EmptyTypes)!);
+            // `TOAST-0030`. The *parent's* constructor, which is `object`'s only when there
+            // is no base. An external base — `Error`, `Exception` — is chained to here, and
+            // `TryResolveExternalBaseType` is what guarantees the parameterless constructor
+            // this looks up actually exists.
+            ctorIl.Emit(OpCodes.Call, parentType.GetConstructor(Type.EmptyTypes)!);
         }
 
         // CLR requires the base constructor call to be the first operation.
