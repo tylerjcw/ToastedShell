@@ -104,6 +104,16 @@ public static class TypeInferrer
     /// </summary>
     public static BoundType InferCommandOutput(BoundCommandCall call)
     {
+        // `TOAST-0034`. A function declared in this unit knows its own return type, and a
+        // call to it is a command call. Checked before `[CommandOutput]`, which only a
+        // builtin carries — a user function never had one, so `func f() -> int` followed by
+        // `var v = f()` reported that the type could not be pinned down with the answer
+        // written one line above.
+        if (call.LocalReturnType is { } declared && !declared.IsDynamic)
+        {
+            return declared;
+        }
+
         if (call.ResolvedCommand is null) return BoundType.Dynamic;
         var clr = GetCommandOutputClrType(call.ResolvedCommand.GetType());
         if (clr is null) return BoundType.Dynamic;

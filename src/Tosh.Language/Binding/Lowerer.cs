@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections.Immutable;
 using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
@@ -31,7 +32,11 @@ public static class Lowerer
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
 
-        var ctx = new LowerContext(commands, BuildUserTypeRegistry(parseResult.Statement), BuildLocalFunctionOverloads(parseResult.Statement));
+        var ctx = new LowerContext(
+            commands,
+            BuildUserTypeRegistry(parseResult.Statement),
+            BuildLocalFunctionOverloads(parseResult.Statement),
+            BuildLocalFunctionReturns(parseResult.Statement));
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
         return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList());
     }
@@ -155,6 +160,43 @@ public static class Lowerer
                 list.Add(fn.Parameters.Count);
             }
         }
+        return result;
+    }
+
+    /// <summary>
+    /// Each top-level function's declared return type name — `TOAST-0034`.
+    /// </summary>
+    /// <remarks>
+    /// Overloads that disagree map to <see langword="null"/>: the call site cannot know
+    /// which one it reached without full overload resolution, and guessing would be worse
+    /// than not inferring. One declaring a type and another not is a disagreement.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string?> BuildLocalFunctionReturns(StatementSyntax root)
+    {
+        var result = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        IEnumerable<StatementSyntax> stmts = root is ScriptStatementSyntax script
+            ? (IEnumerable<StatementSyntax>)script.Statements
+            : new[] { root };
+
+        foreach (var stmt in stmts)
+        {
+            if (stmt is not FunctionDefinitionStatementSyntax fn) { continue; }
+
+            if (!seen.Add(fn.Name))
+            {
+                if (!string.Equals(result[fn.Name], fn.ReturnTypeName, StringComparison.Ordinal))
+                {
+                    result[fn.Name] = null;
+                }
+
+                continue;
+            }
+
+            result[fn.Name] = fn.ReturnTypeName;
+        }
+
         return result;
     }
 
@@ -781,6 +823,20 @@ public static class Lowerer
             }
         }
 
+        // `TOAST-0034`. A user function is called as a command, so without this its
+        // declared return type never reached the call site and every value it produced was
+        // dynamic.
+        BoundType? localReturn = null;
+        if (ctx.LocalFunctionReturns.TryGetValue(command.Name, out var returnTypeName) &&
+            !string.IsNullOrWhiteSpace(returnTypeName))
+        {
+            var resolvedReturn = ctx.ResolveType(returnTypeName);
+            if (resolvedReturn is not null && !resolvedReturn.IsDynamic)
+            {
+                localReturn = resolvedReturn;
+            }
+        }
+
         return new BoundCommandCall(
             Name: command.Name,
             NameSpan: command.NameSpan,
@@ -789,10 +845,169 @@ public static class Lowerer
             Span: command.Span)
         {
             OverloadIndex = overloadIndex,
+            LocalReturnType = localReturn,
         };
     }
 
     // ── arguments / expressions ──────────────────────────────────
+
+    /// <summary>
+    /// A property read carries the property's declared type — `TOAST-0034`.
+    /// </summary>
+    /// <remarks>
+    /// `prop V: int` says what `$k.V` is, and nothing consulted it: every member read was
+    /// dynamic, so `var v = $k.V` reported that the type could not be pinned down. Only a
+    /// single-segment path is answered — a dotted path would need each step resolved, and
+    /// stopping at the first is honest rather than approximate.
+    /// </remarks>
+    private static BoundMemberAccess BuildMemberAccess(MemberAccessArgumentSyntax member, LowerContext ctx)
+    {
+        var target = LowerExpression(member.Target, ctx);
+
+        return new BoundMemberAccess(
+            Target: target,
+            MemberPath: member.MemberPath,
+            NullSafe: member.NullSafe,
+            Span: member.Span,
+            Type: InferMemberType(target.Type, member.MemberPath, ctx));
+    }
+
+    /// <summary>A method call carries the method's declared return type — `TOAST-0034`.</summary>
+    private static BoundMethodCall BuildMethodCall(MethodCallArgumentSyntax method, LowerContext ctx)
+    {
+        var target = LowerExpression(method.Target, ctx);
+
+        // `Math.Round(…)` reaches here as a call whose *target* is a static member access,
+        // and a type name is not an instance of that type — so the target's own `Type`
+        // cannot answer it, and typing it as one would be a lie. The static lookup is a
+        // separate question, asked separately.
+        var returnType = target is BoundStaticMemberAccess staticTarget
+            ? InferStaticMethodReturn(staticTarget.Path, method.MethodName, ctx)
+            : InferMethodReturn(target.Type, method.MethodName, ctx);
+
+        return new BoundMethodCall(
+            Target: target,
+            MethodName: method.MethodName,
+            Arguments: BuildArgumentList(method.Arguments, ctx),
+            NullSafe: method.NullSafe,
+            Span: method.Span,
+            Type: returnType);
+    }
+
+    /// <summary>
+    /// A static call carries its method's return type — `TOAST-0034`.
+    /// </summary>
+    /// <remarks>
+    /// The path is a dotted name whose last segment is the method: `Math.Round`,
+    /// `System.IO.Path.Combine`. The rest resolves through the same platform index
+    /// annotations use, so `Math` means here what it means in an annotation.
+    ///
+    /// Overloads must agree on a return type, as everywhere else in this file. `Math.Round`
+    /// has several and they all return `double`, which is why it can be answered at all
+    /// without resolving the arguments.
+    /// </remarks>
+    private static BoundType InferStaticCallReturn(string? path, LowerContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return BoundType.Dynamic;
+
+        var split = path.LastIndexOf('.');
+        if (split <= 0 || split == path.Length - 1) return BoundType.Dynamic;
+
+        return InferStaticMethodReturn(path[..split], path[(split + 1)..], ctx);
+    }
+
+    private static BoundType InferStaticMethodReturn(string? typeName, string methodName, LowerContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(typeName) || string.IsNullOrEmpty(methodName))
+        {
+            return BoundType.Dynamic;
+        }
+
+        var owner = ctx.ResolveType(typeName);
+        if (owner is null || !owner.IsConcrete || owner.ClrType is not { } clr)
+        {
+            return BoundType.Dynamic;
+        }
+
+        var returns = clr
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => string.Equals(m.Name, methodName, StringComparison.Ordinal))
+            .Select(m => m.ReturnType)
+            .Distinct()
+            .ToArray();
+
+        return returns.Length == 1 && returns[0] != typeof(void)
+            ? BoundType.FromClr(returns[0])
+            : BoundType.Dynamic;
+    }
+
+    private static BoundType InferMemberType(BoundType targetType, string memberPath, LowerContext ctx)
+    {
+        if (string.IsNullOrEmpty(memberPath) || memberPath.Contains('.')) return BoundType.Dynamic;
+
+        if (UserTypeMembers.TryGetProperty(targetType, memberPath, out var property) &&
+            !string.IsNullOrWhiteSpace(property.TypeName))
+        {
+            var resolved = ctx.ResolveType(property.TypeName);
+            if (resolved is not null && !resolved.IsDynamic) return resolved;
+        }
+
+        // A concrete CLR target answers for itself. Reflection here is binder-time and
+        // needs no runtime — the same reading `DotNetTypeResolver` already does.
+        if (targetType.IsConcrete && targetType.ClrType is { } clr)
+        {
+            var clrProperty = clr.GetProperty(memberPath);
+            if (clrProperty is not null) return BoundType.FromClr(clrProperty.PropertyType);
+
+            var clrField = clr.GetField(memberPath);
+            if (clrField is not null) return BoundType.FromClr(clrField.FieldType);
+        }
+
+        return BoundType.Dynamic;
+    }
+
+    private static BoundType InferMethodReturn(BoundType targetType, string methodName, LowerContext ctx)
+    {
+        if (string.IsNullOrEmpty(methodName)) return BoundType.Dynamic;
+
+        var declared = UserTypeMembers.GetMethods(targetType, methodName);
+        if (declared.Count > 0)
+        {
+            // Overloads that disagree about their return type say nothing about this call,
+            // and one declaring a type while another does not is a disagreement.
+            var first = declared[0].Method.ReturnTypeName;
+            foreach (var overload in declared)
+            {
+                if (!string.Equals(overload.Method.ReturnTypeName, first, StringComparison.Ordinal))
+                {
+                    return BoundType.Dynamic;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(first))
+            {
+                var resolved = ctx.ResolveType(first);
+                if (resolved is not null && !resolved.IsDynamic) return resolved;
+            }
+        }
+
+        if (targetType.IsConcrete && targetType.ClrType is { } clr)
+        {
+            var methods = clr.GetMethods()
+                .Where(m => string.Equals(m.Name, methodName, StringComparison.Ordinal))
+                .Select(m => m.ReturnType)
+                .Distinct()
+                .ToArray();
+
+            // Same rule for CLR overloads: one return type or nothing.
+            if (methods.Length == 1 && methods[0] != typeof(void))
+            {
+                return BoundType.FromClr(methods[0]);
+            }
+        }
+
+        return BoundType.Dynamic;
+    }
 
     private static BoundArgument LowerArgument(ArgumentSyntax argument, LowerContext ctx)
     {
@@ -843,12 +1058,7 @@ public static class Lowerer
                 BoundType.Dynamic),
 
         MemberAccessArgumentSyntax member =>
-            new BoundMemberAccess(
-                Target: LowerExpression(member.Target, ctx),
-                MemberPath: member.MemberPath,
-                NullSafe: member.NullSafe,
-                Span: member.Span,
-                Type: BoundType.Dynamic),
+            BuildMemberAccess(member, ctx),
 
         OperatorArgumentSyntax binary => BuildBinary(binary, ctx),
 
@@ -907,20 +1117,14 @@ public static class Lowerer
                 TypeArguments: newObj.TypeArguments),
 
         MethodCallArgumentSyntax method =>
-            new BoundMethodCall(
-                Target: LowerExpression(method.Target, ctx),
-                MethodName: method.MethodName,
-                Arguments: BuildArgumentList(method.Arguments, ctx),
-                NullSafe: method.NullSafe,
-                Span: method.Span,
-                Type: BoundType.Dynamic),
+            BuildMethodCall(method, ctx),
 
         StaticMethodCallArgumentSyntax staticCall =>
             new BoundStaticMethodCall(
                 Path: staticCall.Path,
                 Arguments: BuildArgumentList(staticCall.Arguments, ctx),
                 Span: staticCall.Span,
-                Type: BoundType.Dynamic),
+                Type: InferStaticCallReturn(staticCall.Path, ctx)),
 
         StaticMemberAccessArgumentSyntax staticMember =>
             new BoundStaticMemberAccess(
@@ -2094,11 +2298,14 @@ public static class Lowerer
         public LowerContext(
             ICommandTable commands,
             IReadOnlyDictionary<string, BoundType>? userTypes = null,
-            IReadOnlyDictionary<string, List<int>>? localFunctionOverloads = null)
+            IReadOnlyDictionary<string, List<int>>? localFunctionOverloads = null,
+            IReadOnlyDictionary<string, string?>? localFunctionReturns = null)
         {
             Commands = commands;
             LocalFunctionOverloads = localFunctionOverloads
                 ?? new Dictionary<string, List<int>>(StringComparer.Ordinal);
+            LocalFunctionReturns = localFunctionReturns
+                ?? new Dictionary<string, string?>(StringComparer.Ordinal);
             _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
             // Resolver is constructed once per lowering pass; user
             // types are seeded from a syntax-level scan of the
@@ -2118,6 +2325,12 @@ public static class Lowerer
         /// Single-definition names have a list of length&nbsp;1.
         /// </summary>
         public IReadOnlyDictionary<string, List<int>> LocalFunctionOverloads { get; }
+
+        /// <summary>
+        /// Each top-level function's declared return type name, or <see langword="null"/>
+        /// where overloads disagree — `TOAST-0034`.
+        /// </summary>
+        public IReadOnlyDictionary<string, string?> LocalFunctionReturns { get; }
 
         /// <summary>
         /// Maps textual type annotations

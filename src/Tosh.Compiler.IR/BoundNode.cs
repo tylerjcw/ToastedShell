@@ -1123,6 +1123,22 @@ public sealed record BoundCommandCall(
     /// dispatch) or a non-overloaded function.
     /// </summary>
     public int? OverloadIndex { get; init; }
+
+    /// <summary>
+    /// The declared return type, when this call names a function defined in the same unit
+    /// — `TOAST-0034`.
+    /// </summary>
+    /// <remarks>
+    /// A user function is invoked as a command, and command output was inferred solely from
+    /// <c>[CommandOutput]</c> — an attribute only builtins carry. So
+    /// <c>func f() -&gt; int</c> followed by <c>var v = f()</c> reported that the type could
+    /// not be pinned down, with the answer written one line above.
+    ///
+    /// <see langword="null"/> when the name is not a local function, when it declares no
+    /// return type, or when overloads disagree about it — in each case there is genuinely
+    /// nothing to propagate.
+    /// </remarks>
+    public BoundType? LocalReturnType { get; init; }
 }
 
 /// <summary>

@@ -15,7 +15,10 @@ public sealed class TypeNameResolverTests
 {
     [Theory]
     [InlineData("int", typeof(int))]
-    [InlineData("Int32", typeof(int))]   // case-sensitive in alias map; expect dynamic-fallback
+    // `TOAST-0034`. Not in the alias map — that is keyed by tōast's spellings — but a real
+    // CLR type name, which the platform index now answers. It used to fall back to dynamic,
+    // which is why the assertion below used to branch.
+    [InlineData("Int32", typeof(int))]
     [InlineData("long", typeof(long))]
     [InlineData("string", typeof(string))]
     [InlineData("bool", typeof(bool))]
@@ -28,17 +31,26 @@ public sealed class TypeNameResolverTests
     {
         var r = new TypeNameResolver();
         var t = r.Resolve(name);
-        if (TypeNameResolver.IsPrimitiveAlias(name))
-        {
-            Assert.True(t.IsConcrete);
-            Assert.Equal(expected, t.ClrType);
-        }
-        else
-        {
-            // Unknown alias falls back to dynamic with no CLR resolver wired.
-            Assert.True(t.IsDynamic);
-        }
+
+        // Every name here is a real type by one spelling or the other, so every one
+        // resolves concretely. This used to branch on `IsPrimitiveAlias` because a CLR name
+        // that was not also a tōast alias had nowhere to resolve — `TOAST-0034` gave the
+        // resolver the platform index, so the branch was describing a limitation rather
+        // than a rule.
+        Assert.True(t.IsConcrete, $"'{name}' did not resolve to a concrete type");
+        Assert.Equal(expected, t.ClrType);
     }
+
+    /// <summary>A name that is not a type at all still falls back to dynamic.</summary>
+    /// <remarks>
+    /// The control for the platform-index fallback. Consulting a broad index could have
+    /// resolved almost anything, and "resolves concretely" would then be worthless.
+    /// </remarks>
+    [Theory]
+    [InlineData("NotAnyTypeAnywhere")]
+    [InlineData("Zzz.Qqq.Nope")]
+    public void An_unknown_name_is_still_dynamic(string name)
+        => Assert.True(new TypeNameResolver().Resolve(name).IsDynamic);
 
     [Fact]
     public void Void_alias_returns_void_singleton()

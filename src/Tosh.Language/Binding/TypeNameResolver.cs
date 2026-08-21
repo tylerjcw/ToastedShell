@@ -232,6 +232,22 @@ public sealed class TypeNameResolver
             if (clr is not null) return BoundType.FromClr(clr);
         }
 
+        // 4. The platform index — `TOAST-0034`.
+        //
+        // Static, so it needs no runtime instance and does not compromise this resolver
+        // running without one. It is the same index `is` consults for a bare CLR name
+        // (`TOAST-0029`) and the compiled `new` for a bare type name (`TOAST-0030`), so
+        // adding it here aligns annotation resolution with what those two already answer
+        // rather than inventing a fourth opinion.
+        //
+        // Without it `var h = new System.Collections.Hashtable()` reported that the type
+        // could not be pinned down, while `new K()` for a class declared in the same file
+        // resolved — an asymmetry with no reason a reader could see.
+        if (DotNetTypeResolver.TryResolveKnownType(name, out var known) && known is not null)
+        {
+            return BoundType.FromClr(known);
+        }
+
         _onDiagnostic?.Invoke($"unknown type '{name}' in annotation '{sourceText}'");
         return BoundType.Dynamic;
     }
