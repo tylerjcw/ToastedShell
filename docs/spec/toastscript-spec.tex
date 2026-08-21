@@ -193,6 +193,17 @@
   left=8pt, right=8pt, top=6pt, bottom=6pt,
 }
 
+% `TOAST-0033`. A box for behaviour that is true today and intended to change. Its
+% contents are explicitly **not** normative: an implementation is never asked to
+% reproduce a defect, and the title says so wherever it appears.
+\newtcolorbox{defectbox}[1][Known defect --- not normative]{
+  colback=warnbg, colframe=warnborder,
+  fonttitle=\bfseries\sffamily,
+  title={#1},
+  boxrule=0.8pt, arc=3pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+}
+
 % Command reference box
 \newtcolorbox{cmdbox}[1]{
   breakable,
@@ -430,6 +441,53 @@ specification is your single source of truth.
   \item[\texttt{arg \dots}] One or more repetitions.
   \item[\texttt{a\,|\,b}] Choose one of the alternatives.
 \end{description}
+
+\section*{Conformance}
+\label{sec:conformance}
+
+This document is both a description and a contract. Most of it explains *why* a rule is
+what it is, and that explanation is deliberate --- a rule whose reason is lost gets
+"tidied" away by the next reader. But an implementation has to know which sentences bind
+it, so this section says how to tell.
+
+\subsection*{What binds an implementation}
+
+\begin{description}[style=nextline]
+  \item[\textbf{Statements of behaviour are normative.}] A sentence saying what a construct
+        \emph{is} or what an operation \emph{does} --- "a \code{str} is a sequence of
+        UTF-16 code units", "arithmetic on \code{null} raises" --- states a requirement. An
+        implementation that answers differently is not conforming.
+  \item[\textbf{Examples are normative in their results.}] Where a listing carries a
+        comment giving a value, that value is required. The examples in this document are
+        run against the implementation before they are written down.
+  \item[\textbf{\code{must} and \code{must not} mark a requirement} that might otherwise be
+        read as advice.] They add emphasis, not force: a plain statement of behaviour binds
+        just as much.
+  \item[\textbf{\code{may} marks a genuine choice}] left to the implementation. Where this
+        document says an implementation \emph{may}, two conforming implementations are
+        permitted to differ, and a program that depends on which is not portable.
+\end{description}
+
+\subsection*{What does not}
+
+\begin{description}[style=nextline]
+  \item[\textbf{Rationale.}] Text explaining why a rule was chosen, what was rejected, or
+        what went wrong before, constrains nothing. It is here because the reasons are
+        harder to recover than the rules.
+  \item[\textbf{A \emph{Known defect} box.}] These describe behaviour that is true today
+        and \emph{intended to change}. They name the item tracking the change. An
+        implementation is never required to reproduce one, and a program should not rely
+        on one.
+  \item[\textbf{Notes, tips and asides}] that restate or illustrate a rule stated
+        normatively elsewhere.
+\end{description}
+
+\begin{notebox}
+Where this document and the implementation disagree, that is a defect in one of them and
+neither is automatically right. Several rules here were written from the implementation's
+behaviour and then found to be wrong about it; the specification is kept honest by a
+corpus that runs its claims, not by its own authority.
+\end{notebox}
 
 % =============================================================================
 %  MAIN MATTER
@@ -2358,12 +2416,15 @@ try { (1 / 0) } catch (e) {
 }
 \end{lstlisting}
 
-\begin{notebox}
-The distinction is real --- one is the language reporting that an operation had no answer,
-the other is a program raising something deliberately --- but the \emph{spelling} of it is
-not yet portable: a diagnostic answers to the implementation type name it happens to have.
-A target without the CLR has nothing to call it. Recorded as \code{TOAST-0029}.
-\end{notebox}
+The distinction is intended: one is the language reporting that an operation had no
+answer, the other is a program raising something deliberately.
+
+\begin{defectbox}
+A diagnostic has no name of its own. It can be identified --- \code{\$e is Exception} is
+true for one and false for a thrown string --- but \code{Exception} is a name borrowed
+from the host, so a target without the CLR has nothing to call it. Giving the category a
+Tōast name is \code{docs/plan/items/TOAST-0031.md}.
+\end{defectbox}
 
 \paragraph{\code{finally} always runs, and \code{throw} re-raises.}
 A \code{finally} block runs whether its body completed, raised, or was caught further out,
@@ -2437,7 +2498,7 @@ Several collections are left as items:
 echo ([[1, 2], [3]] | count)          # 2  -- two items, each an array
 \end{lstlisting}
 
-\begin{notebox}[A known defect]
+\begin{defectbox}
 The second rule means a collection's meaning depends on \emph{how many} of them there
 are, so producing more data can change what the existing data means:
 
@@ -2455,10 +2516,11 @@ Deciding this also requires reading one item further than the consumer asked for
 generator is advanced once more than necessary and any side effect of that step happens
 for an item nobody requested.
 
-This is recorded as a defect rather than a design: shape should be decided where a value
-is produced, not by counting what arrives. The replacement is specified in
-\code{docs/plan/items/TOAST-0028.md}, and this section moves with it.
-\end{notebox}
+Shape should be decided where a value is produced, not by counting what arrives. The
+replacement is specified in \code{docs/plan/items/TOAST-0028.md}, and this section moves
+with it. \code{...} in pipeline position (\S\ref{sec:pipeline-spread}) already states the
+intent explicitly and is unaffected by the change.
+\end{defectbox}
 
 \subsection{Text and Unicode}
 \label{sec:unicode}
