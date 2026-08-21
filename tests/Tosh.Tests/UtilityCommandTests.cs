@@ -1774,17 +1774,39 @@ public sealed class UtilityCommandTests
 
         public static Task<TestHttpServer> StartAsync(Func<HttpListenerContext, Task> handler)
         {
-            var portProbe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-            portProbe.Start();
-            var port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
-            portProbe.Stop();
+            // `PLAN-0002`. Retried, because asking the OS for a free port and then binding
+            // it is a race the test cannot win outright: the probe has to be stopped before
+            // `HttpListener` can take the port, and anything on the machine may claim it in
+            // between. That surfaced as "Address already in use" once in twenty full-suite
+            // runs — rare enough to look like a mystery and frequent enough to matter.
+            //
+            // Holding the probe open is not an option, so the answer is to notice and pick
+            // another. Ten attempts, because a failure after ten is not a race any more.
+            const int Attempts = 10;
 
-            var prefix = $"http://127.0.0.1:{port}/";
-            var listener = new HttpListener();
-            listener.Prefixes.Add(prefix);
-            listener.Start();
+            for (var attempt = 1; ; attempt++)
+            {
+                var portProbe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+                portProbe.Start();
+                var port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
+                portProbe.Stop();
 
-            return Task.FromResult(new TestHttpServer(listener, new Uri(prefix), handler));
+                var prefix = $"http://127.0.0.1:{port}/";
+                var listener = new HttpListener();
+                listener.Prefixes.Add(prefix);
+
+                try
+                {
+                    listener.Start();
+                }
+                catch (HttpListenerException) when (attempt < Attempts)
+                {
+                    ((IDisposable)listener).Dispose();
+                    continue;
+                }
+
+                return Task.FromResult(new TestHttpServer(listener, new Uri(prefix), handler));
+            }
         }
 
         public void Dispose()

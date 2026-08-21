@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 2/5 | Divide the assemblies along the language/shell boundary |
-| [`PLAN-0002`](items/PLAN-0002.md) | P2 | open | 4/7 | Suite reliability on a clean checkout: the Debug-CLI race is fixed, one parallel flake remains |
+| [`PLAN-0002`](items/PLAN-0002.md) | P2 | partial | 6/7 | Suite reliability on a clean checkout: four flakes named, two fixed, one rare abort left |
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | open | 0/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |

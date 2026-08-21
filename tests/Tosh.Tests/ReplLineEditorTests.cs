@@ -629,6 +629,18 @@ public sealed class ReplLineEditorTests
     public void Prompt_renderer_uses_header_right_layout_when_width_allows_it()
     {
         var runtime = Tosh.Runtime.ToshRuntime.CreateDefault();
+
+        // `PLAN-0002`. The directory is pinned, because the header contains one and this
+        // test is about whether the layout fits in 120 columns — not about where the suite
+        // happens to be run from. `CreateDefault` inherits the *process* working
+        // directory, so the final assertion measured the length of that path: it passed in
+        // a checkout at `~/projects/tosh` and failed 5 of 5 in a worktree under a longer
+        // path. In the full suite it failed intermittently instead, because
+        // `DefaultShellExecHandler` changes the process directory around every external
+        // command and restores it, so the answer depended on whether another test was
+        // inside that window.
+        runtime.CurrentDirectory = "/tmp/prompt";
+
         runtime.Config.Prompt.TimeEnabled = true;
         runtime.Config.Prompt.GitEnabled = false;
         runtime.Config.Prompt.HeaderLeftLayout = "Time, Directory";
