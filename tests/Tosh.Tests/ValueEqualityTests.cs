@@ -167,6 +167,10 @@ public sealed class ValueEqualityTests
     // only one implementation carries the exact-numeric rule — which is the state the
     // first attempt at that rule actually left the tree in.
     [InlineData("9007199254740993 as long", "9007199254740992 as double", false)]
+    // `TOAST-0026`. A decimal against a double, which is the same rule and was added to
+    // one implementation only — this row is what turns that into a failing test.
+    [InlineData("1.0000000000000001", "1.0", false)]
+    [InlineData("0.1 as decimal", "0.1", true)]
     [InlineData("9007199254740992 as long", "9007199254740992 as double", true)]
     public async Task Both_paths_agree(string left, string right, bool expected)
     {

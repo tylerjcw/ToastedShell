@@ -401,6 +401,17 @@ public static class OperatorEvaluator
             return exact;
         }
 
+        // `TOAST-0026`. The same rule for a `decimal` against a floating value, which
+        // became reachable when a literal too precise for a `double` started arriving as a
+        // `decimal`. Deciding it by conversion made `==` intransitive again:
+        // `1.0000000000000001 == 1.0` was **true**, because converting the decimal to a
+        // double dropped exactly the digit that distinguished them — while the same pair
+        // were correctly *different keys*.
+        if (TryCompareDecimalWithFloat(actual, expected, out var exactDecimal))
+        {
+            return exactDecimal;
+        }
+
         // TS-P1-26: both directions are attempted, and equality holds if either
         // matches. Returning on the first *conversion* that succeeded — rather
         // than the first that produced equal values — made equality asymmetric:
@@ -468,6 +479,50 @@ public static class OperatorEvaluator
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Compares a <see cref="decimal"/> against a floating value — `TOAST-0026`.
+    /// </summary>
+    /// <remarks>
+    /// The floating value is taken at its round-trip form — every digit it actually holds —
+    /// and read back as a decimal. That is what makes `0.1 as decimal == 0.1` stay true,
+    /// which comparing exact binary values would not: no `double` is exactly a tenth, so
+    /// an exactness rule taken literally would separate two values everyone means to be
+    /// the same. What it does separate is a decimal carrying digits the double never had.
+    /// </remarks>
+    internal static bool TryCompareDecimalWithFloat(object actual, object expected, out bool equal)
+    {
+        equal = false;
+
+        if (actual is decimal leftDecimal && TryAsFloat(expected, out var rightFloat))
+        {
+            equal = DecimalEqualsFloat(leftDecimal, rightFloat);
+            return true;
+        }
+
+        if (expected is decimal rightDecimal && TryAsFloat(actual, out var leftFloat))
+        {
+            equal = DecimalEqualsFloat(rightDecimal, leftFloat);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool DecimalEqualsFloat(decimal value, double floating)
+    {
+        if (double.IsNaN(floating) || double.IsInfinity(floating))
+        {
+            return false;
+        }
+
+        return decimal.TryParse(
+                   floating.ToString("R", CultureInfo.InvariantCulture),
+                   NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                   CultureInfo.InvariantCulture,
+                   out var asDecimal)
+               && asDecimal == value;
     }
 
     private static bool IntegerEqualsFloat(long integer, double floating)

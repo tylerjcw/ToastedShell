@@ -14,7 +14,6 @@
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | open | 0/7 | The compiled backend does not implement five of the semantics `docs/spec/` now states |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
-| [`TOAST-0026`](items/TOAST-0026.md) | P3 | open | 0/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | partial | 7/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | open | 0/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |

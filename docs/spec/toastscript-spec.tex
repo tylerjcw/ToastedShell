@@ -2244,6 +2244,27 @@ $x = $x + 1                 # error: the value does not fit 'int'
 Conversion is the same: \code{300 as byte} raises rather than silently keeping
 \code{44}.
 
+\paragraph{A literal keeps the digits it was written with.}
+A number with a fractional part is a \code{double}, unless writing it as one would lose
+digits --- then it is a \code{decimal}, which holds about 28 significant figures where a
+\code{double} holds about 17:
+
+\begin{lstlisting}
+echo ((1.5).GetType().Name)                   # Double
+echo ((2.718281828459045).GetType().Name)     # Double  -- 16 digits, all kept
+echo ((1.0000000000000001).GetType().Name)    # Decimal -- the last digit needs one
+echo (1.0000000000000001 == 1.0)              # false
+\end{lstlisting}
+
+The cost is that a literal's \emph{type} depends on how many digits it has, which is
+worth knowing before it surprises. The alternative was a suffix, and the natural letters
+are taken: \code{1.5m} is one and a half \emph{minutes} and \code{1.5d} is one and a half
+\emph{days}. The two types interoperate --- \code{decimal + double} is a \code{decimal},
+and comparison and rendering work across them --- so a widened literal is not stranded.
+
+Arithmetic is unaffected: \code{0.1 + 0.2} is \code{0.30000000000000004}, because both
+operands are still \code{double}s.
+
 \paragraph{Floating point follows IEEE~754.}
 Overflow gives an infinity rather than an error, \code{1.0 / 0.0} is \code{Infinity},
 and \code{0.0 / 0.0} is \code{NaN} --- which is equal to itself here

@@ -384,6 +384,15 @@ public sealed partial class ToshEngine
             return exactNumeric;
         }
 
+        // `TOAST-0026`. Delegated for the same reason, and missed for the same reason: the
+        // rule was added to `OperatorEvaluator` alone and `==` still answered the old way,
+        // which is the third time this file's header has been proved right in one session.
+        if (actual is not null && expected is not null &&
+            OperatorEvaluator.TryCompareDecimalWithFloat(actual, expected, out var exactDecimal))
+        {
+            return exactDecimal;
+        }
+
         // TS-P1-26: both directions are attempted, and equality holds if either
         // matches. See OperatorEvaluator.AreEqual for why returning on the first
         // successful *conversion* rather than the first successful *equality*

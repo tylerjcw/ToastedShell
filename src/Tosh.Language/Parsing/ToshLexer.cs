@@ -1505,10 +1505,80 @@ public sealed class ToshLexer
 
         if (double.TryParse(textForParsing, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var floatingValue))
         {
+            // `TOAST-0026`. A literal too precise for a `double` becomes a `decimal`
+            // rather than being quietly rounded. `1.0000000000000001` used to arrive as
+            // `1.0`, so `1.0000000000000001 as decimal` was already `1.0` before the cast
+            // could do anything — the one type people reach for when rounding is
+            // unacceptable was the one that could not be written down.
+            //
+            // The test is whether the `double` **kept** the value: its round-trip form is
+            // compared against the literal, both read as decimals. Comparing against
+            // `(decimal)theDouble` instead was tried and is too eager by two digits —
+            // that conversion rounds to 15 significant figures, so `2.718281828459045`
+            // widened although its `double` holds every digit of it.
+            if (CarriesMorePrecisionThanDouble(textForParsing, floatingValue, out var exact))
+            {
+                return new SyntaxToken(SyntaxTokenKind.Number, start, text, exact);
+            }
+
             return new SyntaxToken(SyntaxTokenKind.Number, start, text, floatingValue);
         }
 
         return new SyntaxToken(SyntaxTokenKind.Bareword, start, text, text);
+    }
+
+    /// <summary>
+    /// Whether a literal's text holds digits its <see cref="double"/> did not keep, and if
+    /// so the <see cref="decimal"/> that does — `TOAST-0026`.
+    /// </summary>
+    /// <remarks>
+    /// A number outside `decimal`'s range answers <see langword="false"/>: `1e300` has no
+    /// decimal to widen into, and a `double` is the only thing that can hold it. So is a
+    /// non-finite one, which cannot be a decimal at all.
+    ///
+    /// The comparison is against the `double`'s **round-trip** form rather than against
+    /// `(decimal)parsed`: that cast rounds to 15 significant figures, which widened
+    /// `2.718281828459045` even though its `double` holds all sixteen of its digits.
+    /// </remarks>
+    private static bool CarriesMorePrecisionThanDouble(string text, double parsed, out decimal exact)
+    {
+        exact = default;
+
+        if (double.IsNaN(parsed) || double.IsInfinity(parsed))
+        {
+            return false;
+        }
+
+        if (!decimal.TryParse(
+                text,
+                NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out var fromText))
+        {
+            return false;
+        }
+
+        // What the `double` gives back when asked for every digit it holds. If reading
+        // that as a decimal recovers the literal, nothing was lost and the `double`
+        // stands.
+        if (!decimal.TryParse(
+                parsed.ToString("R", CultureInfo.InvariantCulture),
+                NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out var fromDouble))
+        {
+            // The double round-trips to something no decimal can read — an exponent far
+            // outside decimal's range — so it is the only type that can hold this.
+            return false;
+        }
+
+        if (fromText == fromDouble)
+        {
+            return false;
+        }
+
+        exact = fromText;
+        return true;
     }
 
     /// <summary>
