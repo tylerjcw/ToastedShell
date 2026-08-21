@@ -95,6 +95,36 @@ That is arguably a defect in those commands rather than a cost of this one — c
 whole table into one value also defeats streaming — but it is a **semantic judgement per
 command**, and there are at least six distinct causes behind the 39 failures.
 
+### Second attempt, 2026-08-21: Option A tried, and the estimate was wrong
+
+`from csv` was fixed — it yields one row per item now instead of the whole table, which is
+a strict improvement and took the failures from 39 to 16. One test that read
+`Assert.Single(results)` and enumerated inside was updated to read rows directly.
+
+**Then the estimate broke.** The remaining failures are not "five more commands like
+`from csv`". They are the discovery that **expansion does not happen in one place**:
+
+```tosh
+var v = [1, 2, 3]
+echo $v | count               # 1   -- `count` reads the helper, which now passes through
+echo $v | where $_ > 1        # 2, 3 -- `where` sees the elements anyway
+```
+
+`count` goes through `ReplaySingleInputCollectionAsync`, which the change made honest.
+`where` goes through `PeekForTreeAsync` and receives elements regardless. So after the
+change two commands disagree about the same input — a worse state than the defect being
+fixed, and one that no amount of per-command work resolves until every expansion path is
+found and unified.
+
+It also reaches documented behaviour: `echo [1, 2, 3] | cast list<int> | count` is the
+`cast` command's own first documented example and answers 1 rather than 3, because
+`cast list<int>` produces one list and nothing spreads it any more. Whether that should be
+1 or 3 is a real question, and it is a different question from the one this item asked.
+
+**Reverted to green again.** The two things worth keeping from the attempt: `from csv`
+yielding rows is right on its own merits and can be done independently, and the true scope
+of this item is *unify the expansion mechanisms*, not *mark the producer*.
+
 ### The narrower variant, and why it was not taken unilaterally
 
 A command's output could be marked spreadable too, leaving only *user-defined generators*
@@ -124,6 +154,24 @@ producer's declared output shape meet, which is exactly what `TS-P3-04` meant by
 `PreExpandedSequence` (`TS-P2-113`) is the existing half of the mechanism: a stream already
 carrying elements, marked so nothing expands it again. The inverse marker — a stream
 carrying values that must not be spread — is what is missing.
+
+## Scope, restated after two attempts
+
+The engine mechanism is settled and small: a `SpreadableSequence` marker set by the
+producer, and `ReplaySingleInputCollectionAsync` reading it instead of counting. What is
+not settled is everything around it:
+
+1. **Every expansion path must be found.** At least two exist —
+   `ReplaySingleInputCollectionAsync` (41 commands) and `PeekForTreeAsync` (5) — and they
+   respond differently to the same stream. Any others need finding before starting.
+2. **Commands that yield a whole collection meaning a sequence must yield elements.**
+   `from csv` is done in principle; the rest are unknown until the first item is resolved.
+3. **`echo`, `cast` and their kin need a decided answer**, because
+   `echo [1,2,3] | count` and `cast list<int> | count` change from 3 to 1 and both are
+   idiomatic.
+
+That is a piece of work with its own design phase, not a change that can be made while
+passing through.
 
 ## Acceptance
 
