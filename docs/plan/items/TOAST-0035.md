@@ -279,6 +279,45 @@ quietly stopped coercing and `-21` stayed `-42`. A shell is now stamped `alias` 
 `refinement`, and only the first is registered. The suite caught it, which is the first time
 in this item that a failure surfaced as a test rather than as a program crashing.
 
+### What emitting the predicate actually needs — measured 2026-08-22
+
+`BoundTypeAliasStatement` carries a `BoundExpression? Refinement`, which reads like the
+predicate is already bound IR. It is not.
+
+`RefinementClauseArgumentSyntax` — the clause model the parser builds, holding `where` and
+`coerce` clauses with their guards — has **no case in `LowerExpression`**, so it falls to the
+catch-all at the end:
+
+```csharp
+_ => new BoundDynamicExpression(expression, expression.Span),
+```
+
+whose comment says exactly what is happening, and what to do about it:
+
+> shapes whose semantics are hard to flatten into a single bound node. Keep them dynamic —
+> the lowering coverage on them can grow when (or if) the IL emitter needs structured access.
+
+The IL emitter needs structured access now. `BoundNode.cs` mentions refinements exactly once,
+and that is the field above: **there is no bound refinement clause model at all.**
+
+So the design document's §1 is right about where this starts, and it starts further back than
+"emit a method". In order:
+
+1. Bound clause nodes — a `where` clause, a `coerce` clause, its optional guard — with `_` as
+   a bound symbol rather than a name looked up in a pushed scope at evaluation time.
+2. A `LowerExpression` case building them, which is what turns the catch-all comment's "when
+   the IL emitter needs structured access" into that day.
+3. Emitted `IsValid` / `Convert` methods per the document's §2, using the ordinary expression
+   emitter.
+4. A registration carrying pointers to those methods, extending
+   `RegisterCompiledAliasType`, which today registers a base type and nothing else.
+5. Engine dispatch that calls the compiled check, and a differential case proving the
+   compiled and interpreted checks agree on the same value — including the coercion path,
+   whose base-type re-conversion `TOAST-0068` had to add first.
+
+Steps 1 and 2 are binder work and are the bulk of it. Nothing above needs the emitter until
+step 3.
+
 ### What the document gets right, and what it assumes
 
 Its core principle matches this item exactly — predicates and coercers become bound IR and
