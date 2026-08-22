@@ -318,6 +318,40 @@ public sealed partial class ToshEngine
             help: "choose a different alias name so refinements do not shadow real types.");
     }
 
+    /// <summary>
+    /// Registers a type alias read back from a compiled assembly — <c>TOAST-0035</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A compiled `type` alias emits a metadata shell implementing
+    /// <see cref="IShellRefinementTypeDescriptor"/>, and nothing read it back: the shell was
+    /// registered as a CLR *type alias*, so `M.Meters` named the shell class rather than
+    /// `int`, and `var d: M.Meters = 5` reported that 5 could not be converted to it.
+    /// </para>
+    /// <para>
+    /// The lookup this feeds requires the engine's own definition record, which a compiled
+    /// assembly cannot construct — hence an entry point rather than a dictionary write from
+    /// <c>ToshHost</c>. Registered globally, because a compiled alias has no lexical scope to
+    /// belong to by the time its assembly is loaded.
+    /// </para>
+    /// </remarks>
+    public void RegisterCompiledAliasType(string name, string baseTypeName, string? description = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseTypeName);
+
+        Runtime.Classes[name] = new RefinementTypeDefinition(
+            Name: name,
+            TypeParameters: Array.Empty<string>(),
+            BaseTypeName: baseTypeName,
+            Refinement: null,
+            SourceName: "<compiled>",
+            SourceText: string.Empty,
+            Modifier: DeclarationModifier.Export,
+            Span: default,
+            Description: description);
+    }
+
     private bool TryGetRefinementType(string name, out RefinementTypeDefinition definition)
     {
         // Same reasoning as the class lookup in TryGetNamedType: a refinement

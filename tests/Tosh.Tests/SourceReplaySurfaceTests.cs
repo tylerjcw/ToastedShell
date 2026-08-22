@@ -95,6 +95,9 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("a union", "    export union U {\n        Ok(value)\n        Err(message)\n    }")]
     [InlineData("a struct", "    export struct S {\n        prop X: int = 0\n    }")]
     [InlineData("a refinement type", "    export type Positive = int where $_ > 0")]
+    // Deliberate: a refinement's predicate still lives in replayed source, so lifting the
+    // alias out would take the check with it. Stamped as a different metadata kind from a
+    // plain alias so the two cannot be confused at load.
     public void A_declaration_kind_that_still_replays(string what, string body)
     {
         Assert.False(
@@ -224,6 +227,12 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     [InlineData(
         "export module M {\n    export record Point(X: int, Y: int)\n}\n" +
         "var p: dynamic = new M.Point(3, 4)\nvar r: int = $p.Y\necho $r", "4")]
+    // A plain `type` alias. Emitting the shell was never the problem — nothing read its
+    // BaseTypeName back, so `M.Meters` named the shell class rather than `int` and a value
+    // could not be assigned to it.
+    [InlineData(
+        "export module M {\n    export type Meters = int\n}\n" +
+        "var d: M.Meters = 5\necho $d", "5")]
     public void A_module_scoped_type_answers_without_replay(string source, string expected)
         => Assert.Equal(expected, RunWithoutReplay(source));
 

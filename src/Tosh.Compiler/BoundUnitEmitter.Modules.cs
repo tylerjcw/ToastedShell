@@ -50,6 +50,13 @@ internal sealed partial class EmitterImpl
                     DeclareClrRecordShell(rec);
                     StampModuleQualifiedName(rec.Name, moduleQualifier);
                     break;
+                // `TOAST-0035`. A *simple* alias only. A refinement alias emits the same
+                // metadata shell, but its predicate still lives in replayed source — lifting
+                // one out of replay would take the check with it.
+                case BoundTypeAliasStatement ta when ta.Refinement is null
+                    && CanEmitClrAliasShell(ta) && !_clrAliasTypes.Contains(ta.Name):
+                    DeclareClrAliasShell(ta, moduleQualifier);
+                    break;
                 case BoundInterfaceDefinition iface when !_clrTypeShells.ContainsKey(iface.Name):
                     DeclareClrInterfaceShell(iface);
                     StampModuleQualifiedName(iface.Name, moduleQualifier);
@@ -131,6 +138,8 @@ internal sealed partial class EmitterImpl
                 case BoundEnumDefinition en when CanEmitClrEnumType(en):
                     continue;
                 case BoundRecordDefinition rec when CanEmitClrRecordShell(rec):
+                    continue;
+                case BoundTypeAliasStatement ta when ta.Refinement is null && CanEmitClrAliasShell(ta):
                     continue;
                 case BoundInterfaceDefinition:
                     continue;

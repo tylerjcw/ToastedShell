@@ -2923,9 +2923,59 @@ public static class ToshHost
                     if (!string.IsNullOrWhiteSpace(toshName))
                     {
                         resolver.AddAlias(toshName, fullName);
+                        RegisterCompiledAliasIfDescriptor(type, toshName);
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Registers a compiled `type` alias with the engine — <c>TOAST-0035</c>.
+    /// </summary>
+    /// <remarks>
+    /// The alias shell carries its base type on
+    /// <see cref="global::Tosh.Runtime.IShellRefinementTypeDescriptor"/>, and registering it as a CLR type
+    /// alias alone made `M.Meters` name the shell class rather than `int`. A *refinement*
+    /// alias is deliberately skipped: its predicate still lives in replayed source, and
+    /// registering it here without one would silently drop the check.
+    /// </remarks>
+    private static void RegisterCompiledAliasIfDescriptor(Type type, string toshName)
+    {
+        if (s_engine is null)
+        {
+            return;
+        }
+
+        if (type.GetCustomAttribute<ToshTypeAttribute>() is not { Kind: "alias" })
+        {
+            return;
+        }
+
+        if (!typeof(global::Tosh.Runtime.IShellRefinementTypeDescriptor).IsAssignableFrom(type) || type.IsGenericTypeDefinition)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Activator.CreateInstance(type) is not global::Tosh.Runtime.IShellRefinementTypeDescriptor descriptor)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(descriptor.BaseTypeName))
+            {
+                return;
+            }
+
+            s_engine.RegisterCompiledAliasType(toshName, descriptor.BaseTypeName, descriptor.Description);
+        }
+        catch (Exception exception) when (
+            exception is MissingMethodException or TargetInvocationException or MemberAccessException)
+        {
+            // A shell that cannot be constructed is one the engine simply will not learn
+            // about, which leaves the alias resolving the way it did before.
         }
     }
 

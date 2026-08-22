@@ -45,6 +45,15 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case("arithmetic", "echo (1 + 2 * 3)");
         yield return Case("interpolation", "var n = 4\necho $\"n is {$n}\"");
 
+        yield return Case(
+            "module-simple-type-alias",
+            "export module M {\n    export type Meters = int\n}\nvar d: M.Meters = 5\necho $d");
+
+        yield return Case(
+            "refinement-coerces-a-negative",
+            "type PosInt = int where _ > 0 coerce (_ == 0 ? 1 : Math.abs(_))\n"
+            + "var p: PosInt = -21\necho $p");
+
         // ── Refinement coercion: TOAST-0068 ───────────────────────────────
         yield return Case(
             "refinement-coerced-value-has-base-type",

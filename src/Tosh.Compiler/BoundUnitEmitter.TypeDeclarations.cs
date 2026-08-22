@@ -873,7 +873,13 @@ internal sealed partial class EmitterImpl
 
         typeBuilder.AddInterfaceImplementation(ifaceType);
 
-        StampToshTypeAttribute(typeBuilder, "alias", ta.Span);
+        // `TOAST-0035`. A refinement alias is stamped as a different kind, because the two
+        // are not interchangeable to a reader of the metadata: a plain alias is complete in
+        // the shell, while a refinement's predicate still lives in replayed source. Without
+        // the distinction `ToshHost` registered a refinement as a predicate-less alias and
+        // the check silently disappeared — `type PosInt = int where _ > 0 coerce …` stopped
+        // coercing -21 to 21.
+        StampToshTypeAttribute(typeBuilder, ta.Refinement is null ? "alias" : "refinement", ta.Span);
 
         // `TOAST-0035`. Stamped during declaration, like an enum: the builder is closed with
         // `CreateType()` below, so a stamp afterwards would throw.

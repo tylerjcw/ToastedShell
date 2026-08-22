@@ -260,8 +260,24 @@ shell rather than from replayed source**: name, base type, and — for a refinem
 check lives. That is the same registration a compiled refinement will need, so it is the
 first piece of decision 3 rather than a detour from it.
 
-The lift was reverted: an alias that emits and then cannot be assigned to is worse than one
-that replays and works.
+### Built — the runtime reads an alias back from its shell
+
+`ToshEngine.RegisterCompiledAliasType` is the entry point, because the lookup it feeds needs
+the engine's own definition record and a compiled assembly cannot construct one.
+`RegisterCompiledAssembly` calls it for every alias shell it finds, reading `BaseTypeName`
+off the descriptor the shell already implemented.
+
+A module-scoped **plain** alias now emits with no source carried and answers correctly:
+`var d: M.Meters = 5` gives 5 on both backends. A **refinement** alias still replays,
+deliberately — its predicate lives in the replayed source, so lifting the alias would take
+the check with it.
+
+That distinction had to be made visible in the metadata, and finding out why cost a
+regression. The first version registered every alias shell, refinements included, as a
+predicate-less alias — so `type PosInt = int where _ > 0 coerce (_ == 0 ? 1 : Math.abs(_))`
+quietly stopped coercing and `-21` stayed `-42`. A shell is now stamped `alias` or
+`refinement`, and only the first is registered. The suite caught it, which is the first time
+in this item that a failure surfaced as a test rather than as a program crashing.
 
 ### What the document gets right, and what it assumes
 

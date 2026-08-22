@@ -82,6 +82,23 @@ public sealed class RefinementCoercionTests
         Assert.Equal("tosh.runtime.refinement_failed", failure.Diagnostics[0].Code);
     }
 
+    /// <summary>
+    /// A refinement compiled into an assembly still coerces.
+    /// </summary>
+    /// <remarks>
+    /// A regression guard, and it caught a real one. Teaching `RegisterCompiledAssembly` to
+    /// read a compiled `type` alias back registered *refinement* aliases too, as
+    /// predicate-less ones — so `type PosInt = int where _ > 0 coerce …` stopped coercing
+    /// and `-21` stayed negative. The shell now records which kind it is.
+    /// </remarks>
+    [Fact]
+    public async Task A_refinement_still_coerces_after_a_round_trip()
+        => Assert.Equal(
+            "21",
+            await RunAsync(
+                "type PosInt = int where _ > 0 coerce (_ == 0 ? 1 : Math.abs(_))\n" +
+                "var p: PosInt = -21\necho $p"));
+
     /// <summary>A float refinement keeps its own base type.</summary>
     /// <remarks>
     /// The counterpart: the fix must convert to the *declared* base, not to `int` in
