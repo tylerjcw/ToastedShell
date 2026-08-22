@@ -188,20 +188,39 @@ type is called, so there is nothing to compare against.
 |---|---|
 | class | **works** — `new M.Box()` gives 5, matching interpreted |
 | interface | **works** — a class fulfilling it answers 9 |
+| enum | **works** — `M.Colour.Green` renders `Green`, after one more fix below |
 | record | `M.Point(3, 4)` is read as a static *method* on the module shell |
 | union | `M.Result.Ok` — static member not found on the module shell |
 | struct | the property read comes back as something `int` will not take |
 | trait | the class using it still resolves to nothing |
 
-So the stamp is necessary and not sufficient: two kinds are lifted by it, four need their own
+`union` is a member chain like the enum and may well fall out of the same fallback once its
+variant shells are stamped; the other three are different routes.
+
+### Enum needed a second piece, and it names the general shape
+
+The stamp has to be written *during* declaration for an enum, because `DeclareClrEnumType`
+closes the builder with `CreateType()` before returning — a stamp afterwards throws.
+
+The rest is the more interesting half. `new M.Box()` resolves through the type-alias table,
+which the stamp populates; `M.Colour.Green` does not. It is a **member chain**, and
+`TryResolveCompiledModuleAccess` walked only the module shells — so it looked for a static
+`Colour` on `M` and reported it missing. It now falls back to resolving the prefix as a
+compiled *type* and reading the member from that.
+
+So there are two resolution routes into a module, and a kind is only lifted when the route it
+actually uses has been taught. That is why "mirror the switch" could not have worked, and it
+is the question to ask of each remaining kind: `record` is reached as a *call*
+(`M.Point(3, 4)`), `union` as a member chain like the enum, `struct` through `new`.
+
+So the stamp is necessary and not sufficient: three kinds are lifted, three need their own
 construction or member path taught about a module-qualified shell. The four are **left
 replaying** and are tripwires — a kind that emits and fails is worse than one that replays
 and works, which is the lesson this item keeps teaching.
 
-The measured library is unchanged at 2 of 16, because its blockers are refinement types (18)
-and enums (11) rather than classes. Enum is the next kind and is not in the table above: its
-shell calls `CreateType()` during declaration, so it cannot be stamped afterwards the way
-these are, and needs the qualified name passed in.
+The measured library is unchanged at 2 of 16 — `Git` and `Math`. Enum being lifted does not
+move it, because the files using enums (`Gl` 4, `Gtk` 5, `Sdl` 2) each carry other blockers
+as well. Refinement types remain the largest single one at 18 uses, and are decision 3.
 
 ### Where the measured library stands
 
@@ -214,8 +233,8 @@ used blocking construct at 18.
 - [x] Every "unsupported" emitter diagnostic is enumerated with a program that triggers it —
       `SourceReplaySurfaceTests`, as a corpus plus tripwires
 - [ ] Each is either implemented, or recorded as a deliberate and documented exclusion —
-      **implemented**: default, rest and optional parameters; module-scoped classes and
-      interfaces. **Remaining**: enum, record, struct, trait, union, and refinement types
+      **implemented**: default, rest and optional parameters; module-scoped classes,
+      interfaces and enums. **Remaining**: record, struct, trait, union, and refinement types
 - [ ] `--compile-allow-dynamic` is not needed by any program in `examples/` or `bench/`
 - [ ] A strict profile fails the build rather than replaying source
 - [ ] A negative control

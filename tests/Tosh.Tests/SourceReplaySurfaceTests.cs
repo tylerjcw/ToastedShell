@@ -92,7 +92,6 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// </remarks>
     [Theory]
     [InlineData("a record", "    export record R(A: int, B: string)")]
-    [InlineData("an enum", "    export enum E {\n        One\n        Two\n    }")]
     [InlineData("a trait", "    export trait T {\n        prop N: string = \"x\"\n    }")]
     [InlineData("a union", "    export union U {\n        Ok(value)\n        Err(message)\n    }")]
     [InlineData("a struct", "    export struct S {\n        prop X: int = 0\n    }")]
@@ -214,6 +213,12 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
         "export module M {\n    export interface IShape {\n        func Area() -> int\n    }\n" +
         "    export class Square fulfills IShape {\n        func Area() -> int => 9\n    }\n}\n" +
         "var s: dynamic = new M.Square()\nvar r: int = $s.Area()\necho $r", "9")]
+    // An enum reaches its members by a different route than `new` does: `M.Colour.Green` is
+    // a member chain, and the walk looked for a static `Colour` on the module shell. It now
+    // falls back to resolving the prefix as a compiled *type*.
+    [InlineData(
+        "export module M {\n    export enum Colour {\n        Red\n        Green\n    }\n}\n" +
+        "var r: string = $\"{M.Colour.Green}\"\necho $r", "Green")]
     public void A_module_scoped_type_answers_without_replay(string source, string expected)
         => Assert.Equal(expected, RunWithoutReplay(source));
 

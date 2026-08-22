@@ -2943,6 +2943,21 @@ public static class ToshHost
 
             if (!s_compiledModuleTypes.TryGetValue(modulePath, out var moduleType))
             {
+                // `TOAST-0035`. The prefix may name a *type* declared inside a module rather
+                // than a module: `M.Colour.Green` is the member `Green` of the enum
+                // `M.Colour`, and that enum is emitted as its own top-level CLR type stamped
+                // with the qualified name. Walking only the module shells looked for a
+                // static `Colour` on `M` and reported it missing.
+                if (ResolveCompiledToshClrType(modulePath) is { } qualifiedType)
+                {
+                    try
+                    {
+                        value = Runtime.Invoker.GetStaticMember(qualifiedType, memberPath);
+                        return true;
+                    }
+                    catch { }
+                }
+
                 if (prefixLen == 0) break;
                 continue;
             }

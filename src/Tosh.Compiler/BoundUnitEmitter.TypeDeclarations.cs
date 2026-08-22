@@ -314,7 +314,7 @@ internal sealed partial class EmitterImpl
     /// <see cref="global::Tosh.Runtime.ToshOriginalNameAttribute"/> so tools
     /// can recover the source spelling.
     /// </summary>
-    private void DeclareClrEnumType(BoundEnumDefinition en)
+    private void DeclareClrEnumType(BoundEnumDefinition en, string? moduleQualifier = null)
     {
         if (_clrEnumTypes.ContainsKey(en.Name)) return;
         if (!TryResolveClrEnumUnderlyingType(en.UnderlyingTypeName, out var underlying))
@@ -327,7 +327,19 @@ internal sealed partial class EmitterImpl
             TypeAttributes.Public,
             MetadataType(underlying));
         StampToshTypeAttribute(enumBuilder, "enum", en.Span);
-        StampOriginalNameIfMangled(enumBuilder, en.Name);
+        // `TOAST-0035`. An enum declared inside a module is stamped with its qualified
+        // name, the same as a class shell — but here it has to happen during declaration,
+        // because the builder is closed with `CreateType()` a few lines below and a stamp
+        // afterwards would throw.
+        if (moduleQualifier is null)
+        {
+            StampOriginalNameIfMangled(enumBuilder, en.Name);
+        }
+        else
+        {
+            enumBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+                s_toshOriginalNameCtor, new object[] { $"{moduleQualifier}.{en.Name}" }));
+        }
 
         var members = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < en.Members.Count; i++)

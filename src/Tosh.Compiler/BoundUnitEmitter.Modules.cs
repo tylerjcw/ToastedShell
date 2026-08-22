@@ -41,6 +41,10 @@ internal sealed partial class EmitterImpl
                 // it rather than by observing that it emits. `record`, `struct`, `trait` and
                 // `union` each need more than the stamp and are left replaying — see the
                 // item for what each one reported.
+                case BoundEnumDefinition en when CanEmitClrEnumType(en)
+                    && !_clrEnumTypes.ContainsKey(en.Name):
+                    DeclareClrEnumType(en, moduleQualifier);
+                    break;
                 case BoundInterfaceDefinition iface when !_clrTypeShells.ContainsKey(iface.Name):
                     DeclareClrInterfaceShell(iface);
                     StampModuleQualifiedName(iface.Name, moduleQualifier);
@@ -119,6 +123,8 @@ internal sealed partial class EmitterImpl
                 // *and* the emitted program was run and gave the interpreted answer. The
                 // first attempt accepted six kinds on the strength of emitting, and all six
                 // failed at run time.
+                case BoundEnumDefinition en when CanEmitClrEnumType(en):
+                    continue;
                 case BoundInterfaceDefinition:
                     continue;
 
