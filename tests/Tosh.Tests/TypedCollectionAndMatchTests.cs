@@ -169,4 +169,68 @@ public sealed class TypedCollectionAndMatchTests
         Assert.NotEmpty(result.UnsupportedShapes);
         Assert.Equal(0, stream.Length);
     }
+
+    /// <summary>
+    /// A class method with an expression body returns its expression — `TOAST-0043`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It returned <c>null</c>. Free functions had this rule and class methods did not, so
+    /// <c>class E { func M() -> int =&gt; 7 }</c> answered null compiled and 7 interpreted,
+    /// while the block-bodied <c>{ return 7 }</c> was correct throughout.
+    /// </para>
+    /// <para>
+    /// The comment on the free-function version already described the symptom exactly —
+    /// "the block was emitted for effect, its value dropped, and the fall-through returned
+    /// default(T) … silently, and for the most idiomatic way to write a function". The rule
+    /// is shared now rather than written twice, which is what let them drift.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("class E { func M() -> int => 7 }\necho $\"{((new E()).M())}\"", "7")]
+    // Through a private method, which is a separate emission path.
+    [InlineData("class E {\n    shy func Inner() -> int => 7\n    func M() -> int { return $this.Inner() }\n}\n"
+                + "echo $\"{((new E()).M())}\"", "7")]
+    // A match expression as the body — the shape the readiness probe is built from.
+    [InlineData("""
+        class N { prop K: string = "n" }
+        class Leaf(v: double) extends N { prop V: double = $v }
+        class E {
+            func Visit(n: N) -> double => match ($n) {
+                _ is Leaf => $n.V
+                default   => throw new Error("x")
+            }
+        }
+        echo $"{((new E()).Visit(new Leaf(3.0)))}"
+        """, "3")]
+    public void A_class_method_with_an_expression_body_returns_its_value(string source, string expected)
+    {
+        var compiled = Compile(source);
+        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
+        Assert.Equal(expected, compiled.Output);
+        Assert.Equal(expected, RunInterpreted(source));
+    }
+
+    /// <summary>
+    /// A block body and a `dynamic` return are untouched.
+    /// </summary>
+    /// <remarks>
+    /// The controls. Collapsing a trailing expression into a return could have been applied
+    /// to every method, and `dynamic` is the documented way to opt out of an annotation —
+    /// a method declared that way yields a stream, and collapsing it would keep only one
+    /// value of however many it produced.
+    /// </remarks>
+    [Fact]
+    public void A_block_body_and_a_dynamic_return_are_unchanged()
+    {
+        var block = Compile("class E { func M() -> int { return 7 } }\necho $\"{((new E()).M())}\"");
+        Assert.True(block.Clean);
+        Assert.Equal("7", block.Output);
+
+        // Not compared against the interpreter: a `dynamic` method's stream is a separate
+        // divergence, present before this change and unaffected by it.
+        var dyn = Compile("class E { func M() -> dynamic { echo 1\n echo 2 } }\n"
+                          + "echo $\"{(((new E()).M()) | count)}\"");
+        Assert.True(dyn.Clean);
+    }
 }

@@ -318,6 +318,53 @@ internal sealed partial class EmitterImpl : IDisposable
     /// declared on it with the bound function definition whose
     /// body will be lowered into that method's IL.
     /// </summary>
+    /// <summary>
+    /// A function whose body ends in a bare expression returns that expression's value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The parser desugars `=> expr` into a block whose last statement is a pipeline, so by
+    /// the time it reaches the emitter it is indistinguishable from a block that simply ends
+    /// in an expression. Both must produce the value; without this the block is emitted for
+    /// effect, its value dropped, and the fall-through returns `default(T)` — `-> int` gives
+    /// 0, `-> string` gives "", a class-returning method gives null. Silently, and for the
+    /// most idiomatic way to write a function in the language.
+    /// </para>
+    /// <para>
+    /// `TOAST-0043`. This was applied to free functions and not to class methods, so
+    /// `class E { func M() -> int =&gt; 7 }` returned **null** compiled and 7 interpreted,
+    /// while the block-bodied `{ return 7 }` was correct. It is shared now rather than
+    /// written twice, which is what let the two drift.
+    /// </para>
+    /// <para>
+    /// Gated on the *declaration* carrying a return type, not on whether the emitter could
+    /// map that name to a CLR type — the latter is false for a user class, which would leave
+    /// class-returning functions still yielding null. Gating on neither is worse: an
+    /// unannotated function yields a stream, and collapsing its trailing pipeline into a
+    /// single return breaks multi-value yields. `dynamic` is excluded deliberately, being
+    /// the documented way to opt out of an annotation, so it keeps stream semantics.
+    /// </para>
+    /// </remarks>
+    private static BoundBlock CollapseTrailingExpressionIntoReturn(BoundFunctionDefinition func)
+    {
+        var body = func.Body;
+
+        if (func.ReturnTypeName is null ||
+            string.Equals(func.ReturnTypeName, "dynamic", StringComparison.OrdinalIgnoreCase) ||
+            body.Statements.Count == 0 ||
+            body.Statements[^1] is not BoundPipelineStatement trailing)
+        {
+            return body;
+        }
+
+        var leading = new BoundStatement[body.Statements.Count - 1];
+        for (var i = 0; i < leading.Length; i++) { leading[i] = body.Statements[i]; }
+
+        return new BoundBlock(
+            [.. leading, new BoundReturnStatement(trailing.Pipeline, trailing.Span)],
+            body.Span);
+    }
+
     private readonly List<ClrClassMethodPending> _clrClassMethodBodies = new();
     /// <summary>
     /// Module-scope variable declarations queued for emission into

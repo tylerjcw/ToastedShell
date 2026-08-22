@@ -946,7 +946,11 @@ internal sealed partial class EmitterImpl
                 {
                     _paramSlots[pending.Definition.Parameters[i].Symbol] = i + argBase;
                 }
-                EmitBlock(pending.Definition.Body);
+                // `TOAST-0043`. The same rule free functions get: a body ending in a bare
+                // expression returns it. Without this a class method with an expression
+                // body fell through to the implicit `return null` below, so
+                // `func M() -> int => 7` answered null compiled and 7 interpreted.
+                EmitBlock(CollapseTrailingExpressionIntoReturn(pending.Definition));
 
                 // Fall-through: implicit `return null`.
                 _il.Emit(OpCodes.Ldnull);

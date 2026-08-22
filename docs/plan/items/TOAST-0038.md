@@ -104,11 +104,18 @@ changes is that they get the reason.
 `default => throw …` is how an arm says it cannot happen, and it was refused in value
 context — which is what produced the crash above.
 
-### 5. Filed, not fixed — `TOAST-0043`
+### 5. A compiled class method with an expression body returned null — `TOAST-0043`
 
-A compiled `match` arm reads a member off the *declared* type rather than the narrowed one,
-so `_ is Leaf => $n.V` gives `null` compiled and `3` interpreted where `$n: N`. That is the
-visitor pattern, and it is what a tree-walking pass is made of.
+Filed as a narrowing bug and it was not one: `class E { func M() -> int => 7 }` answered
+null compiled, with no `match` and no members involved. Free functions collapse a trailing
+expression into a return; class methods never did. Fixed, and the rule is now shared.
+
+### 6. Still blocking — `TOAST-0044`
+
+With that fixed the probe compiles *and* gets further, then fails because `new Token(…)`
+resolves to `System.Runtime.InteropServices.PosixSignalRegistration+Token` rather than the
+class the probe declares. A user's own type name captured by a host implementation detail,
+which is why it is priority 1.
 
 ### One local left unannotated, on purpose
 
@@ -123,7 +130,7 @@ source rather than only here.
       no `dynamic`. One *local* is deliberately unannotated, with the reason in the source
 - [x] `tosh --compile` accepts it with no flags
 - [ ] The compiled probe produces the same output as the interpreted probe — **blocked by
-      `TOAST-0043`**
+      `TOAST-0044`**
 - [ ] It runs without an interpreter dependency — the Phase B exit sentence, checked
       explicitly rather than assumed from a successful compile
 - [x] Whatever fights back is filed, not worked around — four fixed, one filed
