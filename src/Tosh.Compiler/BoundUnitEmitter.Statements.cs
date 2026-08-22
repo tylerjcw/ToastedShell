@@ -1136,13 +1136,25 @@ internal sealed partial class EmitterImpl
         _il.Emit(OpCodes.Leave, afterLoopLabel);
 
         _il.BeginFinallyBlock();
-        // enumerator?.Dispose();
-        var skipDispose = _il.DefineLabel();
+
+        // `enumerator?.Dispose()`, with no label marked at the end of the handler —
+        // `TOAST-0044`.
+        //
+        // Marking one there binds it *past* the `endfinally` that `EndExceptionBlock`
+        // appends, and the handler's recorded end runs past it too — so whatever follows
+        // becomes the handler's last instruction. When the loop is a method's final
+        // statement that is the epilogue `ret`, and a `ret` inside a finally is invalid IL.
+        //
+        // Branching *into* the dispose puts the only label in the middle of the handler,
+        // which is the ordinary case, and lets `EndExceptionBlock` place the trailing
+        // `endfinally` itself.
+        var doDispose = _il.DefineLabel();
         _il.Emit(OpCodes.Ldloc, enumeratorLocal);
-        _il.Emit(OpCodes.Brfalse_S, skipDispose);
+        _il.Emit(OpCodes.Brtrue_S, doDispose);
+        _il.Emit(OpCodes.Endfinally);
+        _il.MarkLabel(doDispose);
         _il.Emit(OpCodes.Ldloc, enumeratorLocal);
         _il.Emit(OpCodes.Callvirt, s_disposableDispose);
-        _il.MarkLabel(skipDispose);
         _il.EndExceptionBlock();
         _il.MarkLabel(afterLoopLabel);
     }
@@ -1600,11 +1612,19 @@ internal sealed partial class EmitterImpl
                     }
                     _il.Emit(OpCodes.Ldc_I4_0);
                     _il.Emit(OpCodes.Call, s_opMatches);
+                    // `TOAST-0044`. Through a local: a single-byte instruction between two
+                    // labels is dropped when the assembly is persisted.
+                    var rangeResult = _il.DeclareLocal(typeof(object));
+                    _il.Emit(OpCodes.Stloc, rangeResult);
                     _il.Emit(OpCodes.Br, doneLabel);
 
                     _il.MarkLabel(falseLabel);
                     _il.Emit(OpCodes.Ldc_I4_0);
+                    _il.Emit(OpCodes.Box, typeof(int));
+                    _il.Emit(OpCodes.Stloc, rangeResult);
+
                     _il.MarkLabel(doneLabel);
+                    _il.Emit(OpCodes.Ldloc, rangeResult);
                 }
                 return true;
 

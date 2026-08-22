@@ -235,6 +235,39 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "an-ordinary-class-is-not-an-error",
             "class DiffPlain { }\necho ((new DiffPlain()) is Error)");
 
+        // ── `TOAST-0044`: short-circuit operators inside a loop condition ──
+        //
+        // `EmitLogicalOr` ended `br.s done / truthy: ldc.i4.1 / done:` — two labels one byte
+        // apart. That single-byte instruction was **dropped when the assembly was
+        // persisted**, so every branch after it was one byte off and the code branched into
+        // the middle of an instruction. The program compiled cleanly and died with
+        // `InvalidProgramException`.
+        //
+        // These run the loop rather than testing the operator in isolation, because the
+        // defect needed the condition to be re-entered.
+        yield return Case(
+            "or-in-a-loop-condition",
+            "class DiffOr {\n"
+            + "    prop N: int = 0\n"
+            + "    func Run() -> int {\n"
+            + "        while (($this.N < 3) or ($this.N < 0)) { $this.N = $this.N + 1 }\n"
+            + "        return $this.N\n"
+            + "    }\n"
+            + "}\necho ((new DiffOr()).Run())");
+
+        yield return Case(
+            "and-in-a-loop-condition",
+            "class DiffAnd {\n"
+            + "    prop N: int = 0\n"
+            + "    func Run() -> int {\n"
+            + "        while (($this.N < 3) and ($this.N >= 0)) { $this.N = $this.N + 1 }\n"
+            + "        return $this.N\n"
+            + "    }\n"
+            + "}\necho ((new DiffAnd()).Run())");
+
+        // A chained comparison had the same shape and the same defect.
+        yield return Case("chained-comparison", "var n = 5\necho (1 < $n and $n < 10)");
+
         // ── Portable semantics: the eight `TOAST-0018` concerns ───────────
         //
         // Phase A's exit asks that the core behaviour be "enforced by a backend-neutral
@@ -465,36 +498,18 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
 
         var assembly = Assembly.Load(stream.ToArray());
 
-        // `TOAST-0044`. Every emitted method is JIT-compiled before the program runs.
+        // `TOAST-0044`. The emitted IL is checked structurally before the program runs.
         //
-        // Invalid IL surfaces as `InvalidProgramException` at the *caller's* frame, because
-        // the method that failed to compile never gets one. So a defect in a class method is
-        // reported as "at Program.Main", which is where an afternoon went: the named method
-        // was not the broken one. Preparing each method attributes a failure to the method
-        // that actually holds the bad IL, whether or not the case calls it.
-        //
-        // **It is not a guarantee.** `TOAST-0044`'s own reproduction passes this check and
-        // still throws when the program runs — same bytes, in-process and on disk. So this
-        // catches some invalid IL early and names it well; it does not prove an assembly
-        // sound, and a case passing here can still fail as a compiled binary.
-        foreach (var type in assembly.GetTypes())
-        {
-            foreach (var method in type.GetMethods(
-                         BindingFlags.Public | BindingFlags.NonPublic |
-                         BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-            {
-                if (method.IsAbstract || method.ContainsGenericParameters) { continue; }
-
-                try
-                {
-                    RuntimeHelpers.PrepareMethod(method.MethodHandle);
-                }
-                catch (InvalidProgramException)
-                {
-                    Assert.Fail($"emitted invalid IL for {type.Name}.{method.Name}");
-                }
-            }
-        }
+        // Not with `RuntimeHelpers.PrepareMethod`: that reports success for IL which throws
+        // `InvalidProgramException` when the program actually runs, verified on this item's
+        // own reproduction. `EmittedIl.Faults` decodes the bodies instead and asserts what
+        // the runtime requires — branches landing on instruction boundaries, and `finally`
+        // handlers ending with `endfinally`. Two real emitter defects violated exactly
+        // those and nothing else caught either.
+        var ilFaults = EmittedIl.Faults(assembly);
+        Assert.True(
+            ilFaults.Count == 0,
+            "the emitter produced unsound IL:\n  " + string.Join("\n  ", ilFaults));
 
         var program = assembly.GetType($"{assemblyName}.Program");
         Assert.NotNull(program);

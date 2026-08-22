@@ -1337,11 +1337,20 @@ internal sealed partial class EmitterImpl
             previous = next;
         }
 
+        // `TOAST-0044`. Through a local, so no single-byte instruction sits between two
+        // labels — one written that way is dropped when the assembly is persisted, and
+        // every branch after it lands one byte off.
+        var chainResult = _il.DeclareLocal(typeof(bool));
         _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stloc, chainResult);
         _il.Emit(OpCodes.Br, done);
+
         _il.MarkLabel(falsey);
         _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stloc, chainResult);
+
         _il.MarkLabel(done);
+        _il.Emit(OpCodes.Ldloc, chainResult);
         return typeof(bool);
     }
 
@@ -1435,19 +1444,26 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private Type? EmitLogicalAnd(BoundBinaryOperator binOp)
     {
+        // `TOAST-0044`, as for `or` above: accumulated in a local so no two labels sit one
+        // byte apart with a single-byte instruction between them.
         var leftType = EmitExpression(binOp.Left);
         if (leftType is null) return null;
         EmitConvertToBoolean(leftType);
-        var falsey = _il.DefineLabel();
-        var done = _il.DefineLabel();
-        _il.Emit(OpCodes.Brfalse_S, falsey);
+
+        var result = _il.DeclareLocal(typeof(bool));
+        _il.Emit(OpCodes.Stloc, result);
+
+        var settled = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldloc, result);
+        _il.Emit(OpCodes.Brfalse, settled);
+
         var rightType = EmitExpression(binOp.Right);
         if (rightType is null) return null;
         EmitConvertToBoolean(rightType);
-        _il.Emit(OpCodes.Br_S, done);
-        _il.MarkLabel(falsey);
-        _il.Emit(OpCodes.Ldc_I4_0);
-        _il.MarkLabel(done);
+        _il.Emit(OpCodes.Stloc, result);
+
+        _il.MarkLabel(settled);
+        _il.Emit(OpCodes.Ldloc, result);
         return typeof(bool);
     }
 
@@ -1458,19 +1474,36 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private Type? EmitLogicalOr(BoundBinaryOperator binOp)
     {
+        // `TOAST-0044`. Accumulated in a local rather than joined at a label.
+        //
+        // The natural spelling ends `… br.s done / truthy: ldc.i4.1 / done:` — two labels
+        // one byte apart, with a single-byte instruction between them. That instruction is
+        // **dropped when the assembly is persisted**: the generator reports emitting it at
+        // 0x40 and the written body has the next instruction there instead, with every
+        // later branch operand off by exactly one byte. The result branches into the middle
+        // of an instruction, which is why a program using `or` inside a loop condition
+        // could compile cleanly and then die with `InvalidProgramException`.
+        //
+        // Writing the answer to a local removes the join entirely: one label, marked before
+        // a two-byte `ldloc`, and nothing between two labels to lose.
         var leftType = EmitExpression(binOp.Left);
         if (leftType is null) return null;
         EmitConvertToBoolean(leftType);
-        var truthy = _il.DefineLabel();
-        var done = _il.DefineLabel();
-        _il.Emit(OpCodes.Brtrue_S, truthy);
+
+        var result = _il.DeclareLocal(typeof(bool));
+        _il.Emit(OpCodes.Stloc, result);
+
+        var settled = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldloc, result);
+        _il.Emit(OpCodes.Brtrue, settled);
+
         var rightType = EmitExpression(binOp.Right);
         if (rightType is null) return null;
         EmitConvertToBoolean(rightType);
-        _il.Emit(OpCodes.Br_S, done);
-        _il.MarkLabel(truthy);
-        _il.Emit(OpCodes.Ldc_I4_1);
-        _il.MarkLabel(done);
+        _il.Emit(OpCodes.Stloc, result);
+
+        _il.MarkLabel(settled);
+        _il.Emit(OpCodes.Ldloc, result);
         return typeof(bool);
     }
 
