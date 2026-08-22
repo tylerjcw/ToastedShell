@@ -776,7 +776,11 @@ backend-neutral corpus.
 ### Phase B — Make compiler-shaped code production-ready
 
 - Complete type-system support needed by compiler data structures —
-  [`TOAST-0034`](plan/items/TOAST-0034.md).
+  [`TOAST-0034`](plan/items/TOAST-0034.md) (inference, mostly done),
+  [`TOAST-0048`](plan/items/TOAST-0048.md) (the audit),
+  [`TOAST-0050`](plan/items/TOAST-0050.md) (tuple annotations),
+  [`TOAST-0046`](plan/items/TOAST-0046.md) (`void`),
+  [`TOAST-0047`](plan/items/TOAST-0047.md) (a bottom type).
 - Remove compiler-subset source replay and implicit dynamic fallbacks —
   [`TOAST-0035`](plan/items/TOAST-0035.md).
 - Make higher-order calls, interfaces, unions, narrowing, generics, and method
@@ -785,6 +789,11 @@ backend-neutral corpus.
   [`TOAST-0037`](plan/items/TOAST-0037.md).
 - Establish the typed portable readiness probe —
   [`TOAST-0038`](plan/items/TOAST-0038.md).
+- **Make deep recursion possible** — [`TOAST-0049`](plan/items/TOAST-0049.md). Added
+  2026-08-22, and not one of the five the phase was written with: recursion is capped at
+  128 frames, so the probe's own parser fails on forty nested parentheses. Recursive
+  descent is the shape this phase exists to support, and no amount of type-system work
+  reaches it.
 
 **Exit:** the probe compiles and runs through the normal IL path without an
 interpreter dependency.
@@ -800,6 +809,12 @@ all.
 Compiled-backend semantics were separately corrected under
 [`TOAST-0030`](plan/items/TOAST-0030.md), which took the differential corpus from
 nine recorded divergences to three.
+
+The exit's first half is met: the readiness probe compiles with no flags and produces output
+byte-identical to the interpreted run, pinned by
+`DifferentialExecutionTests.The_readiness_probe_agrees_across_backends`. The second half —
+*without an interpreter dependency* — is not: the emitted assembly still references
+`Tosh.Compiler.Runtime`, which bridges to `Tosh.Language`. `TOAST-0035` owns that.
 
 ### Phase C — Establish backend-neutral compilation
 
