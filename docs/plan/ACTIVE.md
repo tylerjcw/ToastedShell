@@ -13,6 +13,7 @@
 | [`TOAST-0034`](items/TOAST-0034.md) | P2 | partial | 7/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
+| [`TOAST-0049`](items/TOAST-0049.md) | P2 | open | 0/5 | Recursion is capped at 128 frames, and compiled code inherits a limit it does not need |
 | [`TOAST-0038`](items/TOAST-0038.md) | P2 | partial | 5/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0046`](items/TOAST-0046.md) | P2 | open | 0/4 | `-> void` is unspecified, and disagrees with `-> nothing` for the same declared type |

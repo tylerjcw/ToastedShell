@@ -39,6 +39,12 @@ build it. That makes the item smaller than filed.
 
 **`StreamType`** is the same story: `stream<int>` resolves to `dynamic`.
 
+**`TupleType` is reachable from the resolver and not from the parser.** `(int, string)`
+resolves to a proper `TupleType` — but `func f() -> (int, string)` and
+`var t: (int, string)` are both parse errors (`tosh.parser.expected_type_name`). So the type
+exists, resolves, and cannot be written in either position where it would be used. Multiple
+returns are a compiler staple: a value and its diagnostics, a token and its position.
+
 **`func` resolves to `System.Func\`1`.** Not an alias — the platform-index fallback added in
 `TOAST-0034` finds the CLR type by simple name. So `var f: func` is *concrete and wrong*,
 which is worse than dynamic. Almost certainly not intended.
@@ -61,9 +67,18 @@ actually needs, and it needed exactly two things the model lacks:
 2. **A bottom type**, so `default => throw …` does not poison an inferred result —
    `TOAST-0047`.
 
+3. **Tuple annotations**, for the two-value returns a compiler makes constantly. The type
+   exists; only the parser is missing.
+4. **Record update** — `node with { Left = $newLeft }` is how a tree transform is written,
+   and it is a parse error today. A compiler rebuilds trees more than it mutates them.
+
 Unions, intersections and literal types are further off. A compiler's AST is a *closed* set
 of node kinds, which Tōast's declared `union` already expresses; anonymous unions would be
 convenience rather than capability.
+
+**Bigger than any of these is `TOAST-0049`** — recursion is capped at 128 frames, so the
+probe's own parser fails on forty nested parentheses. A type system gap makes code awkward;
+that one makes a class of input impossible.
 
 ## Acceptance
 
