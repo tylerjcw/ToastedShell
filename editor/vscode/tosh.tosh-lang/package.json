@@ -2,7 +2,7 @@
 	"name": "tosh-lang",
 	"displayName": "TōSh (ToastedShell)",
 	"description": "Syntax highlighting, language server, and debugging for TōSh (.tosh) scripts",
-	"version": "26.8.34",
+	"version": "26.8.40",
 	"publisher": "tosh",
 	"engines": {
 		"vscode": "^1.82.0"
