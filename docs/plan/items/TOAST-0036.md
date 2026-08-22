@@ -44,6 +44,22 @@ So the bullet is mostly already satisfied, and what remains is not a reliability
 but a **missing piece of the type system**: a signature type, something like
 `func(int) -> int`, that says what a function value accepts and returns.
 
+## Correction — 2026-08-21
+
+**`FunctionType` already exists.** `BoundType.cs` declares it, with a `DisplayName` of
+`(int, string) -> bool`. What is missing is narrower than this item states:
+
+- nothing constructs one — no `new FunctionType` anywhere in the tree
+- `TypeNameResolver` never mentions it, and the type-name grammar has no function node, so
+  `func(int) -> int` cannot parse
+
+So the representation is done and the *surface* and *inference* are not. Found by the audit
+in `TOAST-0048`.
+
+One thing to fix regardless of the spelling chosen: **`func` currently resolves to
+`System.Func\`1`** — the platform-index fallback added in `TOAST-0034` finds the CLR type by
+simple name. `var f: func` is therefore concrete and wrong rather than merely vague.
+
 ## The decision this needs
 
 What is the spelling, and how much does it have to express?
