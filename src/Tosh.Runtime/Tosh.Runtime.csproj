@@ -1,6 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!--
+      `TOAST-0064`. The cross-run platform-type cache is a sorted record file searched by
+      binary search, and a binary search that is wrong returns the *wrong type* rather than
+      failing. It cannot be exercised from the test host through the public surface: the
+      cache is keyed to the trusted-platform assembly set, and `dotnet test` has a different
+      one from a published shell, so the file is simply never read there. A negative control
+      proved that — skewing the search by one record failed nothing.
+
+      This is for the search, not a general opening of the assembly.
+    -->
+    <InternalsVisibleTo Include="Tosh.Tests" />
   </ItemGroup>
 
   <PropertyGroup>

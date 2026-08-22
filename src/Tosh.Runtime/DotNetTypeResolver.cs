@@ -309,8 +309,364 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     /// one `Resolve` consults, so the operator and an import cannot come to disagree about
     /// what a name means.
     /// </remarks>
-    public static bool TryResolveKnownType(string name, out Type? type) =>
-        PlatformTypes.Value.TryGet(name, out type);
+    public static bool TryResolveKnownType(string name, out Type? type)
+    {
+        // `TOAST-0064`. A qualified name is a direct instruction about where to look, and
+        // every loaded assembly can answer it with a dictionary lookup of its own. Building
+        // the index to answer it instead costs ~100 ms of start-up the first time anything
+        // names a CLR type — measured: a one-line script annotating a parameter `string`
+        // starts in 111 ms and the same script annotating it `System.Text.StringBuilder`
+        // took 221 ms, all of the difference being the wait.
+        //
+        // The index is still what answers a *simple* name, which is the case that genuinely
+        // needs a whole-world view, and whose answers `TS-P2-66` measured and pinned.
+        if (name.Contains('.', StringComparison.Ordinal) &&
+            TryResolveQualifiedFromLoadedAssemblies(name, out type))
+        {
+            return true;
+        }
+
+        // `TOAST-0064`. The cached index, which answers a *miss* as authoritatively as a
+        // hit — and the miss is the case that was costing 150 ms of start-up. Proving that
+        // `ToastLib.Shell.ZClearScreen` is not a CLR type meant loading every assembly on
+        // the trusted-platform list and enumerating its types; against a cache built for
+        // that exact list it is a dictionary lookup that fails.
+        if (PlatformTypeCache.Value is { } cached)
+        {
+            if (!cached.TryGet(name, out var entry) || entry is null)
+            {
+                type = null;
+                return false;
+            }
+
+            type = Type.GetType(entry, throwOnError: false, ignoreCase: true);
+            if (type is not null)
+            {
+                return true;
+            }
+
+            // The cache named a type the loader will not produce — a trimmed assembly, a
+            // file removed since. Fall through and let the live index answer rather than
+            // reporting a type that was there when the cache was written.
+        }
+
+        return PlatformTypes.Value.TryGet(name, out type);
+    }
+
+    /// <summary>
+    /// The platform index as it was left on disk by an earlier process.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Held as the raw bytes of a **sorted** record file and searched in place, rather than
+    /// parsed into a dictionary. That distinction is the whole value of the cache: building
+    /// a 32,000-entry dictionary costs about 60 ms, which is most of what the cache exists
+    /// to save. Reading the bytes costs a few, and a lookup is a binary search over them.
+    /// </para>
+    /// <para>
+    /// Keyed to the framework description and the trusted-platform assembly list, so it is
+    /// only ever read for the same set of assemblies it was written from. Anything
+    /// unreadable, stale or malformed is ignored rather than repaired — the live index is
+    /// always correct, and a cache that cannot be trusted is worth nothing.
+    /// </para>
+    /// </remarks>
+    private static readonly Lazy<PlatformTypeCacheFile?> PlatformTypeCache = new(LoadPlatformTypeCache);
+
+    private const string PlatformCacheVersion = "2";
+
+    internal sealed class PlatformTypeCacheFile(byte[] body, string[] assemblies)
+    {
+        /// <summary>Builds the on-disk form from sorted records — used by the writer and by tests.</summary>
+        /// <remarks>
+        /// Records are lower-cased keys sorted ordinally, so a test builds exactly what the
+        /// writer builds rather than an approximation of it.
+        /// </remarks>
+        internal static PlatformTypeCacheFile FromRecords(IEnumerable<string> sortedRecords, string[] assemblies) =>
+            new(System.Text.Encoding.UTF8.GetBytes(string.Join('\n', sortedRecords) + "\n"), assemblies);
+
+        /// <summary>Finds <paramref name="name"/>, returning its assembly-qualified name.</summary>
+        /// <remarks>
+        /// Records are `key\tassemblyIndex\ttypeFullName\n`, sorted by key, with keys
+        /// lower-cased so an ordinal comparison is the case-insensitive one the dictionary
+        /// used to provide.
+        /// </remarks>
+        public bool TryGet(string name, out string? assemblyQualifiedName)
+        {
+            assemblyQualifiedName = null;
+
+            var needle = name.ToLowerInvariant();
+            var low = 0;
+            var high = body.Length;
+
+            while (low < high)
+            {
+                var middle = low + ((high - low) / 2);
+
+                // Land on a record boundary: walk back to the newline before `middle`.
+                var start = middle;
+                while (start > 0 && body[start - 1] != (byte)'\n')
+                {
+                    start--;
+                }
+
+                var end = start;
+                while (end < body.Length && body[end] != (byte)'\n')
+                {
+                    end++;
+                }
+
+                var line = body.AsSpan(start, end - start);
+                var firstTab = line.IndexOf((byte)'\t');
+                if (firstTab < 0)
+                {
+                    return false;
+                }
+
+                var key = System.Text.Encoding.UTF8.GetString(line[..firstTab]);
+                var comparison = string.CompareOrdinal(key, needle);
+
+                if (comparison == 0)
+                {
+                    var rest = line[(firstTab + 1)..];
+                    var secondTab = rest.IndexOf((byte)'\t');
+                    if (secondTab < 0)
+                    {
+                        return false;
+                    }
+
+                    if (!int.TryParse(System.Text.Encoding.UTF8.GetString(rest[..secondTab]), out var index) ||
+                        index < 0 || index >= assemblies.Length)
+                    {
+                        return false;
+                    }
+
+                    assemblyQualifiedName =
+                        string.Concat(System.Text.Encoding.UTF8.GetString(rest[(secondTab + 1)..]), ", ", assemblies[index]);
+                    return true;
+                }
+
+                if (comparison < 0)
+                {
+                    low = end + 1;
+                }
+                else
+                {
+                    // `start` is the beginning of this record; everything at or after it is
+                    // too large, so the answer is strictly before it.
+                    if (start == 0)
+                    {
+                        return false;
+                    }
+
+                    high = start - 1;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    private static string? PlatformCachePath(string extension)
+    {
+        try
+        {
+            var root = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
+
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (string.IsNullOrWhiteSpace(home))
+                {
+                    return null;
+                }
+
+                root = Path.Combine(home, ".cache");
+            }
+
+            return Path.Combine(root, "tosh", $"platform-types-{PlatformSetFingerprint()}{extension}");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Identifies the exact set of assemblies an index would be built from.</summary>
+    private static string PlatformSetFingerprint()
+    {
+        var material =
+            PlatformCacheVersion + "\n" +
+            System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + "\n" +
+            (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? string.Empty);
+
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material));
+        return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
+    }
+
+    private static PlatformTypeCacheFile? LoadPlatformTypeCache()
+    {
+        var bodyPath = PlatformCachePath(".idx");
+        var assemblyPath = PlatformCachePath(".asm");
+
+        if (bodyPath is null || assemblyPath is null || !File.Exists(bodyPath) || !File.Exists(assemblyPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var body = File.ReadAllBytes(bodyPath);
+            var assemblies = File.ReadAllLines(assemblyPath);
+
+            if (body.Length == 0 || assemblies.Length == 0)
+            {
+                return null;
+            }
+
+            // The watermark the rescan loops read, which the index would otherwise have set.
+            //
+            // Without this it stays 0, and every lookup that misses rescans *every* loaded
+            // assembly with `Assembly.GetTypes()` — the exact defect the negative cache above
+            // was written to stop, arriving by a new route. It cost 113 ms on one library
+            // file that names a dozen `System.Drawing` types.
+            //
+            // The cache covers the whole trusted-platform set, so anything loaded now is in
+            // it; only assemblies loaded after this point need scanning.
+            _platformIndexedAssemblyCount = LoadedAssemblyCount;
+
+            return new PlatformTypeCacheFile(body, assemblies);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Writes the freshly built index so the next process need not build one.</summary>
+    /// <remarks>
+    /// Called from the background warm-up, never from a lookup: a process already paying for
+    /// the index should not also pay to record it on the critical path. Written to temporary
+    /// files and moved into place, so a reader never sees half a cache.
+    /// </remarks>
+    private static void WritePlatformTypeCache(
+        IReadOnlyDictionary<string, Type> fullNames,
+        IReadOnlyDictionary<string, Type> simpleNames)
+    {
+        var bodyPath = PlatformCachePath(".idx");
+        var assemblyPath = PlatformCachePath(".asm");
+
+        if (bodyPath is null || assemblyPath is null || File.Exists(bodyPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(bodyPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var assemblyIndexes = new Dictionary<string, int>(StringComparer.Ordinal);
+            var records = new List<string>(fullNames.Count + simpleNames.Count);
+
+            void Collect(IReadOnlyDictionary<string, Type> source)
+            {
+                foreach (var (key, type) in source)
+                {
+                    var typeName = type.FullName;
+                    var assemblyName = type.Assembly.FullName;
+
+                    if (string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(assemblyName) ||
+                        key.Contains('\t', StringComparison.Ordinal) ||
+                        key.Contains('\n', StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (!assemblyIndexes.TryGetValue(assemblyName, out var index))
+                    {
+                        index = assemblyIndexes.Count;
+                        assemblyIndexes[assemblyName] = index;
+                    }
+
+                    records.Add($"{key.ToLowerInvariant()}\t{index}\t{typeName}");
+                }
+            }
+
+            Collect(fullNames);
+            Collect(simpleNames);
+            records.Sort(StringComparer.Ordinal);
+
+            var suffix = "." + Environment.ProcessId + ".tmp";
+            File.WriteAllLines(assemblyPath + suffix, assemblyIndexes.OrderBy(pair => pair.Value).Select(pair => pair.Key));
+            File.WriteAllText(bodyPath + suffix, string.Join('\n', records) + "\n");
+
+            File.Move(assemblyPath + suffix, assemblyPath, overwrite: true);
+            File.Move(bodyPath + suffix, bodyPath, overwrite: false);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            // A shell that will not start because it could not write a cache would be a
+            // far worse outcome than one that rebuilds an index.
+        }
+    }
+
+    /// <summary>
+    /// Asks each loaded assembly for a qualified name — <c>TOAST-0064</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Assembly.GetType(string, bool, bool)"/> is a lookup rather than a scan, so
+    /// this costs one hash probe per loaded assembly and does not enumerate types. That is
+    /// what makes it worth trying before the index rather than after.
+    /// </para>
+    /// <para>
+    /// Results are cached per name, including the assembly generation they were found at, so
+    /// a repeated annotation does not repeat even this.
+    /// </para>
+    /// </remarks>
+    private static bool TryResolveQualifiedFromLoadedAssemblies(string name, out Type? type)
+    {
+        if (_qualifiedNameCache.TryGetValue(name, out var cached) && cached.Generation == LoadedAssemblyCount)
+        {
+            type = cached.Type;
+            return type is not null;
+        }
+
+        Type? found = null;
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            if (assembly.IsDynamic)
+            {
+                continue;
+            }
+
+            try
+            {
+                found = assembly.GetType(name, throwOnError: false, ignoreCase: true);
+            }
+            catch (Exception exception) when (exception is FileLoadException or BadImageFormatException or TypeLoadException)
+            {
+                continue;
+            }
+
+            if (found is not null)
+            {
+                break;
+            }
+        }
+
+        _qualifiedNameCache[name] = (found, LoadedAssemblyCount);
+        type = found;
+        return found is not null;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (Type? Type, int Generation)>
+        _qualifiedNameCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Resolves a type name the way Tōast means it — `TOAST-0030`.
@@ -724,11 +1080,32 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         type = Type.GetType(name, throwOnError: false, ignoreCase: true);
         if (type is not null) return true;
 
-        // Use the platform type index (O(1) dictionary lookup).
-        // If the background warm-up task hasn't finished yet this blocks once until it does,
-        // after which all subsequent calls are instant.  The index covers all assemblies
-        // present at startup; only newly loaded ones (load-assembly) need a direct scan.
-        if (PlatformTypes.Value.TryGet(name, out type)) return true;
+        // `TOAST-0064`. The cache first, and a miss in it is a miss in the index — it was
+        // written from the same trusted-platform set, which the file name pins. Skipping
+        // the live index on a miss is what keeps a *runtime* type lookup from building it:
+        // the binder's path was cached first, and the cost simply moved to `profile.tosh`,
+        // which resolves types through here instead.
+        //
+        // The scans below still run, because they cover assemblies loaded since — which
+        // neither the index nor the cache knows about.
+        var cachedIndex = PlatformTypeCache.Value;
+
+        if (cachedIndex is not null)
+        {
+            if (cachedIndex.TryGet(name, out var cachedEntry) && cachedEntry is not null)
+            {
+                type = Type.GetType(cachedEntry, throwOnError: false, ignoreCase: true);
+                if (type is not null) return true;
+            }
+        }
+        else
+        {
+            // Use the platform type index (O(1) dictionary lookup).
+            // If the background warm-up task hasn't finished yet this blocks once until it does,
+            // after which all subsequent calls are instant.  The index covers all assemblies
+            // present at startup; only newly loaded ones (load-assembly) need a direct scan.
+            if (PlatformTypes.Value.TryGet(name, out type)) return true;
+        }
 
         var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
         var indexedCount = _platformIndexedAssemblyCount;
@@ -993,6 +1370,9 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
                 .ToArray());
 
         _platformIndexedAssemblyCount = indexedCount;
+
+        // `TOAST-0064`. Record it for the next process.
+        WritePlatformTypeCache(fullNames, simpleNames);
 
         return index;
     }
