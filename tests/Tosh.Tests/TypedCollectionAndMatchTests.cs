@@ -233,4 +233,54 @@ public sealed class TypedCollectionAndMatchTests
                           + "echo $\"{(((new E()).M()) | count)}\"");
         Assert.True(dyn.Clean);
     }
+
+    /// <summary>
+    /// A class this program declares wins over a CLR type of the same name — `TOAST-0044`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `Token` is a name a compiler-shaped program is very likely to choose, and the CLR has
+    /// a nested `System.Runtime.InteropServices.PosixSignalRegistration+Token`. Compiled,
+    /// `new Token(…)` found *that one*, and said so as a constructor-arity complaint about a
+    /// type the author has never heard of.
+    /// </para>
+    /// <para>
+    /// It needs a class the emitter cannot shell — a computed property is enough — because
+    /// such a class stays on source replay, and replayed source resolves through the engine.
+    /// The engine knew nothing about the shells emitted beside it, so the name fell through
+    /// to the platform index.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_declared_class_wins_over_a_clr_type_of_the_same_name()
+    {
+        const string Source = """
+            class Token(k: string) { prop K: string = $k }
+            class Mk {
+                prop N: int = 1
+                prop Computed: bool => $this.N > 0
+                func Make() -> Token { return new Token("a") }
+            }
+            echo $"{((new Mk()).Make().K)}"
+            """;
+
+        var compiled = Compile(Source);
+        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
+        Assert.Equal("a", compiled.Output);
+        Assert.Equal("a", RunInterpreted(Source));
+    }
+
+    /// <summary>A CLR type the program does *not* declare still resolves.</summary>
+    /// <remarks>
+    /// The control. Making declared names win could have been done by disabling the
+    /// platform-index fallback, which would take `Error`, `StringBuilder` and every other
+    /// bare CLR name with it.
+    /// </remarks>
+    [Fact]
+    public void An_undeclared_clr_type_still_resolves()
+    {
+        var compiled = Compile("var sb = new StringBuilder()\necho $\"{$sb.Length}\"");
+        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
+        Assert.Equal("0", compiled.Output);
+    }
 }

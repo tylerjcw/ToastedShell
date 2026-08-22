@@ -2847,6 +2847,9 @@ public static class ToshHost
         catch (ReflectionTypeLoadException ex) { types = ex.Types; }
         catch { return; }
 
+        if (s_runtime is null) Initialize();
+        var resolver = s_runtime?.TypeResolver as DotNetTypeResolver;
+
         lock (s_lock)
         {
             s_compiledAssemblies.Remove(asm);
@@ -2858,6 +2861,34 @@ public static class ToshHost
                 var attr = type.GetCustomAttribute<ToshModuleShellAttribute>();
                 if (attr is not null)
                     s_compiledModuleTypes[attr.QualifiedName] = type;
+
+                // `TOAST-0044`. Teach the *interpreter's* resolver the names this assembly
+                // emitted, so a class declared in this program wins over an unrelated CLR
+                // type that happens to share its simple name.
+                //
+                // A class the emitter could not shell — a computed property is enough to
+                // disqualify one — stays on source replay, and replayed source resolves
+                // through the engine. The engine knew nothing about emitted shells, so
+                // `new Token(…)` inside a replayed class reached the platform index and
+                // found `System.Runtime.InteropServices.PosixSignalRegistration+Token`,
+                // reported as a constructor-arity complaint about a type the author has
+                // never heard of.
+                //
+                // Registering here rather than teaching the engine about compiled shells
+                // keeps the dependency pointing the right way: `Tosh.Language` does not
+                // learn about `Tosh.Compiler.Runtime`.
+                if (resolver is not null &&
+                    type.GetCustomAttribute<ToshTypeAttribute>() is not null &&
+                    type.FullName is { Length: > 0 } fullName)
+                {
+                    var toshName = type.GetCustomAttribute<ToshOriginalNameAttribute>()?.OriginalName;
+                    if (string.IsNullOrWhiteSpace(toshName)) { toshName = type.Name; }
+
+                    if (!string.IsNullOrWhiteSpace(toshName))
+                    {
+                        resolver.AddAlias(toshName, fullName);
+                    }
+                }
             }
         }
     }
