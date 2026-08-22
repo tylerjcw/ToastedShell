@@ -5,6 +5,7 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
+| [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
@@ -27,11 +28,13 @@
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
 | [`TOAST-0018`](items/TOAST-0018.md) | P2 | complete | 10/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
+| [`TOAST-0040`](items/TOAST-0040.md) | P2 | complete | 6/6 | Two forms the parser accepts do not lower, and one of them takes the whole file with it |
 | [`TOAST-0021`](items/TOAST-0021.md) | P2 | complete | 6/6 | DisplayEngine walks values itself, so a table cell shows an enum's implementation |
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
+| [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |

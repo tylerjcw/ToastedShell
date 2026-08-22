@@ -4,16 +4,16 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
+| [`TOAST-0042`](items/TOAST-0042.md) | P2 | partial | 5/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 2/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | partial | 6/7 | Suite reliability on a clean checkout: four flakes named, two fixed, one rare abort left |
-| [`TOAST-0039`](items/TOAST-0039.md) | P2 | open | 0/4 | A function and a method returning the same collection have different pipeline shapes |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
-| [`TOAST-0034`](items/TOAST-0034.md) | P2 | open | 0/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
+| [`TOAST-0034`](items/TOAST-0034.md) | P2 | partial | 7/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
-| [`TOAST-0038`](items/TOAST-0038.md) | P2 | open | 0/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
+| [`TOAST-0038`](items/TOAST-0038.md) | P2 | partial | 3/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | partial | 7/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
@@ -22,6 +22,7 @@
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | open | 0/6 | There is no concrete function type, so no higher-order value can be typed |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0035`](items/TOAST-0035.md) | P2 | open | 0/5 | Source replay and implicit dynamic are how the compiler handles what it cannot emit |
+| [`TOAST-0044`](items/TOAST-0044.md) | P1 | partial | 4/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
 | [`PLAN-0003`](items/PLAN-0003.md) | P2 | research | 0/5 | MSBuild node accumulation is a candidate cause for the unexplained development-time memory exhaustion |
