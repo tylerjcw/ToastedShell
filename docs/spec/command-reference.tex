@@ -5738,7 +5738,7 @@ Sorts the current pipeline objects.
 
 \begin{signature}
 sort [-r|--reverse] [-n|--numeric] [-u|--unique] [-h|--human-numeric] \\
-\quad [-o|--ordinal] [member-path|callable|block]
+\quad [-i|--ignore-case] [-o|--ordinal] [member-path|callable|block]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -5758,7 +5758,8 @@ key & A member path, callable, or block to extract the sort key. (optional) \tex
 -n, --numeric & Use numeric comparison. \\
 -u, --unique & Remove duplicate values after sorting. \\
 -h, --human-numeric & Human-numeric sort (understands storage sizes). \\
--o, --ordinal & Compare by code point, case-sensitively. \\
+-i, --ignore-case & Order letters without regard to case. \\
+-o, --ordinal & Compare by code point, case-sensitively. This is the default; accepted so existing scripts keep working. \\
 \bottomrule
 \end{tabular}
 
@@ -5771,7 +5772,7 @@ key & A member path, callable, or block to extract the sort key. (optional) \tex
 ps | sort Memory  # Sort by property
 ls -la | sort Modified | reverse  # Sort then reverse
 ps | sort func(p) => ($p.Name.Length)  # Lambda sort key
-$codes | sort --ordinal  # Code-point order, for generated output
+$names | sort -i  # Case-insensitive order, for reading
 \end{lstlisting}
 
 \end{cmdbox}
