@@ -1,3 +1,6 @@
+using System
+using System.Console
+
 export class Particle<T>
 {
     proud prop Position : ToastLib.Math.Point2D<double> = ToastLib.Math.Point2D.Empty<double>()

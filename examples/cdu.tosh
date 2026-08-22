@@ -44,9 +44,7 @@ func build-cdu-records(targetPath: string, calculateDirSizes: bool, excludePatte
 
     var entryCount = ($entries | count)
 
-    if ($entryCount == 0) {
-        return []
-    }
+    if ($entryCount == 0) { return [] }
 
     var maxBytes = 1
     var totalBytes = 0
@@ -65,9 +63,7 @@ func build-cdu-records(targetPath: string, calculateDirSizes: bool, excludePatte
 
         $rawSizes = [...$rawSizes, $bytes]
         $totalBytes = $totalBytes + $bytes
-        if ($bytes > $maxBytes) {
-            $maxBytes = $bytes
-        }
+        if ($bytes > $maxBytes) { $maxBytes = $bytes }
     }
 
     if ($maxBytes == 0) { $maxBytes = 1 }
@@ -94,10 +90,12 @@ func build-cdu-records(targetPath: string, calculateDirSizes: bool, excludePatte
         }
 
         # Dynamic color coding based on size ratio
-        var styledBar = (if ($ratio > 0.5) { styled $bar --fg bright-red --bold }
-                    else if ($ratio > 0.2) { styled $bar --fg yellow }
-                    else if ($ratio > 0.05) { styled $bar --fg bright-cyan }
-                    else { styled $bar --fg green })
+        var styledBar = match ($ratio) {
+            _ > 0.5  => styled $bar --fg bright-red --bold
+            _ > 0.2  => styled $bar --fg yellow
+            _ > 0.05 => styled $bar --fg bright-cyan
+            default  => styled $bar --fg green
+        }
 
         var pct = Math.Round((($bytes * 100.0) / ($totalBytes * 1.0)), 1)
         var isDir = $item.IsDirectory
@@ -131,9 +129,7 @@ subcommand scan {
     flag sort: bool = false
 
     var records = (build-cdu-records $path $deep $exclude)
-    if ($sort) {
-        return $records | sort -d Size
-    }
+    if ($sort) { return $records | sort -d Size }
     return $records
 }
 
@@ -182,16 +178,4 @@ subcommand info {
         TotalItems = ($entries | count),
         TotalSize = (new Tosh.Runtime.StorageSize($totalBytes))
     |}
-}
-
-## @summary Print usage help for the cdu command.
-subcommand help {
-    echo "cdu — Color Disk Usage Analyzer for TōSh"
-    echo ""
-    echo "Subcommands:"
-    echo "  scan [--path DIR] [--exclude PAT1,PAT2] [--deep] [--sort]  Scan directory disk usage"
-    echo "  top  [--path DIR] [--exclude PAT1,PAT2] [--count N]        Display top N largest items"
-    echo "  info [--path DIR] [--exclude PAT1,PAT2]                    Display summary directory statistics"
-    echo "  help                                                       Show this help text"
-    echo ""
 }

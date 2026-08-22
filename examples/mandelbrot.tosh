@@ -70,11 +70,13 @@ for frame in 0..$frames {
     $yMin = $targetY - ($rangeY * $zoomFactor) / 2
     $yMax = $targetY + ($rangeY * $zoomFactor) / 2
 
-    sleep 0.1
+    sleep 100`ms
 
     # Increase max iterations slightly as we zoom in to reveal more detail
     int initialMaxIterations = $maxIterations;
-    if (($frame % 10 == 0) and ($maxIterations < $initialMaxIterations * 5)) {
+    int multMaxIterations    = $initialMaxIterations * 5
+    int modFrame = $frame % 10
+    if (($modFrame == 0) and ($maxIterations < $multMaxIterations)) {
         $maxIterations += $initialMaxIterations / 10;
     }
 }
