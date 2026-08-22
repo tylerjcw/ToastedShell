@@ -454,10 +454,27 @@ public sealed partial class ToshEngine
             value = selfReference.Unwrap();
         }
 
+        // `TOAST-0046`. Before the null check, because for `void` a null is the *only*
+        // acceptable value rather than a special case of one. This lives in the shared
+        // converter rather than beside the interpreter's return handling because the
+        // compiled backend checks its returns through here — without it, a compiled void
+        // function still contributed a value to the pipeline while the interpreted one
+        // contributed none, which the differential corpus caught.
+        if (IsNothingAnnotation(normalizedTypeName))
+        {
+            converted = null;
+            return value is null;
+        }
+
         if (value is null)
         {
             converted = null;
-            return allowsNull;
+
+            // `TOAST-0050`. `()` is the empty tuple type, and the empty tuple *literal*
+            // evaluates to null — so without this the type could be written and never
+            // satisfied by the one expression that produces it.
+            return allowsNull ||
+                   (TryParseTupleAnnotation(normalizedTypeName, out var unit) && unit.Count == 0);
         }
 
         if (TryResolveRefinementTypeForAnnotation(normalizedTypeName, out var refinementType))
@@ -486,6 +503,85 @@ public sealed partial class ToshEngine
 
             activeRefinements.Remove(refinementType.Name);
             converted = refinedValue;
+            return true;
+        }
+
+        // `TOAST-0036`. What can be checked when the value arrives is that it is callable,
+        // and that it can be called with this many arguments. The parameter *types* are a
+        // promise the compiler checks; at run time there is nothing to compare them against
+        // until the call happens, and rejecting on them here would be guessing.
+        if (TryParseFunctionAnnotation(normalizedTypeName, out var wantedParameters, out _))
+        {
+            if (value is not IShellCallable callable)
+            {
+                converted = null;
+                return false;
+            }
+
+            if (wantedParameters is not null && !AcceptsArgumentCount(callable, wantedParameters.Count))
+            {
+                converted = null;
+                return false;
+            }
+
+            converted = value;
+            return true;
+        }
+
+        if (TryUnwrapParenthesisedType(normalizedTypeName, out var parenthesisedType))
+        {
+            return TryConvertAnnotatedValue(parenthesisedType, value, out converted, activeRefinements);
+        }
+
+        if (TryParseTupleArrayAnnotation(normalizedTypeName, out var arrayElementAnnotation))
+        {
+            if (value is not System.Collections.IEnumerable sequence || value is string)
+            {
+                converted = null;
+                return false;
+            }
+
+            var items = new List<object?>();
+            foreach (var item in sequence)
+            {
+                if (!TryConvertAnnotatedValue(arrayElementAnnotation, item, out var convertedItem, activeRefinements))
+                {
+                    converted = null;
+                    return false;
+                }
+
+                items.Add(convertedItem);
+            }
+
+            converted = items.ToArray();
+            return true;
+        }
+
+        // `TOAST-0050`. Arity first, then each element, and a fresh tuple is built from the
+        // converted parts rather than the original being waved through — otherwise
+        // `var t: (int, string) = ("1", "a")` would keep a string in Item1 while claiming
+        // to be an `int` there.
+        if (TryParseTupleAnnotation(normalizedTypeName, out var tupleElements))
+        {
+            if (value is not IReadOnlyList<object?> tupleValue || tupleValue.Count != tupleElements.Count)
+            {
+                converted = null;
+                return false;
+            }
+
+            var convertedItems = new object?[tupleElements.Count];
+            for (var index = 0; index < tupleElements.Count; index++)
+            {
+                if (!TryConvertAnnotatedValue(tupleElements[index], tupleValue[index], out var item, activeRefinements))
+                {
+                    converted = null;
+                    return false;
+                }
+
+                convertedItems[index] = item;
+            }
+
+            converted = new ToshTuple(convertedItems);
             return true;
         }
 
@@ -1043,6 +1139,277 @@ public sealed partial class ToshEngine
             Help: help));
     }
 
+    /// <summary>
+    /// Splits `(a, b)` into its elements — <c>TOAST-0050</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Annotations are text at this layer, so the tuple form has to be recognised here as
+    /// well as in the binder's <c>TypeNameResolver</c>. Splitting is on top-level commas
+    /// only: `(int, dict&lt;string, int&gt;)` is two elements, not three.
+    /// </para>
+    /// <para>
+    /// A single element is not a tuple. `(int)` is the parenthesised type `int`, which is
+    /// what the resolver already decides, and disagreeing with it here would mean
+    /// `var x: (int)` bound to one thing and checked against another.
+    /// </para>
+    /// </remarks>
+    private static bool TryParseTupleAnnotation(string typeName, out List<string> elements)
+    {
+        elements = [];
+
+        if (typeName.Length < 2 || typeName[0] != '(' || typeName[^1] != ')')
+        {
+            return false;
+        }
+
+        var inner = typeName[1..^1];
+        var depth = 0;
+        var start = 0;
+
+        for (var index = 0; index < inner.Length; index++)
+        {
+            switch (inner[index])
+            {
+                case '(' or '<' or '[':
+                    depth++;
+                    break;
+
+                case ')' or '>' or ']':
+                    depth--;
+                    // A closing bracket below the top level means the parentheses this
+                    // started with are not the outermost pair — `(a), (b)` is not a tuple.
+                    if (depth < 0)
+                    {
+                        return false;
+                    }
+                    break;
+
+                case ',' when depth == 0:
+                    elements.Add(inner[start..index].Trim());
+                    start = index + 1;
+                    break;
+            }
+        }
+
+        if (depth != 0)
+        {
+            return false;
+        }
+
+        var tail = inner[start..].Trim();
+        if (tail.Length > 0 || elements.Count > 0)
+        {
+            elements.Add(tail);
+        }
+
+        if (elements.Any(string.IsNullOrWhiteSpace))
+        {
+            return false;
+        }
+
+        // `(int)` is a parenthesised type, not a one-tuple.
+        return elements.Count != 1;
+    }
+
+    /// <summary>Whether a callable can be invoked with this many arguments.</summary>
+    /// <remarks>
+    /// A rest parameter reports no maximum, and optional parameters make the required count
+    /// lower than the declared one — so this is a range test rather than an equality one.
+    /// </remarks>
+    private static bool AcceptsArgumentCount(IShellCallable callable, int count) =>
+        callable.RequiredParameterCount <= count &&
+        (callable.MaximumParameterCount is null || count <= callable.MaximumParameterCount);
+
+    /// <summary>Whether a return annotation says "no value".</summary>
+    private static bool IsNothingAnnotation(string typeName) =>
+        string.Equals(typeName, "nothing", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(typeName, "void", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Recognises `func(a, b) -> r`, and bare `func` — <c>TOAST-0036</c>.
+    /// </summary>
+    /// <remarks>
+    /// A bare `func` yields a null <paramref name="parameters"/>: it says "some callable"
+    /// and nothing about the shape, which is a different claim from `func() -> nothing`.
+    /// Before this it resolved to the CLR's <c>System.Func`1</c> through the platform-index
+    /// fallback, so `var f: func` was concrete and *wrong* rather than merely vague.
+    /// </remarks>
+    private static bool TryParseFunctionAnnotation(
+        string typeName,
+        out List<string>? parameters,
+        out string returnType)
+    {
+        parameters = null;
+        returnType = string.Empty;
+
+        var text = typeName.Trim();
+
+        if (string.Equals(text, "func", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!text.StartsWith("func", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var rest = text[4..].TrimStart();
+        if (rest.Length == 0 || rest[0] != '(')
+        {
+            return false;
+        }
+
+        // Find the `)` that closes the parameter list.
+        var depth = 0;
+        var close = -1;
+        for (var index = 0; index < rest.Length; index++)
+        {
+            switch (rest[index])
+            {
+                case '(':
+                    depth++;
+                    break;
+                case ')':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        close = index;
+                    }
+                    break;
+            }
+
+            if (close >= 0)
+            {
+                break;
+            }
+        }
+
+        if (close < 0)
+        {
+            return false;
+        }
+
+        var arrow = rest[(close + 1)..].TrimStart();
+        if (!arrow.StartsWith("->", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        returnType = arrow[2..].Trim();
+        if (returnType.Length == 0)
+        {
+            return false;
+        }
+
+        parameters = [];
+        var inner = rest[1..close];
+        depth = 0;
+        var start = 0;
+
+        for (var index = 0; index < inner.Length; index++)
+        {
+            switch (inner[index])
+            {
+                case '(' or '<' or '[':
+                    depth++;
+                    break;
+                case ')' or '>' or ']':
+                    depth--;
+                    break;
+                case ',' when depth == 0:
+                    parameters.Add(inner[start..index].Trim());
+                    start = index + 1;
+                    break;
+            }
+        }
+
+        var tail = inner[start..].Trim();
+        if (tail.Length > 0)
+        {
+            parameters.Add(tail);
+        }
+
+        return true;
+    }
+
+    /// <summary>Recognises `(X)` — a parenthesised type rather than a one-tuple.</summary>
+    /// <remarks>
+    /// `TOAST-0050`. The resolver reads `(int)` as `int`, so the runtime check has to as
+    /// well: otherwise `var x: (int) = 5` binds as one type and is checked against a name
+    /// the CLR loader has never heard of.
+    /// </remarks>
+    private static bool TryUnwrapParenthesisedType(string typeName, out string inner)
+    {
+        inner = string.Empty;
+
+        if (typeName.Length < 3 || typeName[0] != '(' || typeName[^1] != ')')
+        {
+            return false;
+        }
+
+        // Reuse the tuple splitter by asking it about the same text: it returns false for a
+        // single element, so a `false` with exactly one parsed element is what `(X)` is.
+        var candidate = typeName[1..^1].Trim();
+        if (candidate.Length == 0 || candidate.Contains(','))
+        {
+            return false;
+        }
+
+        // Balanced, so `(list<int>)` unwraps and `(a` does not.
+        var depth = 0;
+        foreach (var character in candidate)
+        {
+            switch (character)
+            {
+                case '(' or '<' or '[':
+                    depth++;
+                    break;
+                case ')' or '>' or ']':
+                    depth--;
+                    if (depth < 0)
+                    {
+                        return false;
+                    }
+                    break;
+            }
+        }
+
+        if (depth != 0)
+        {
+            return false;
+        }
+
+        inner = candidate;
+        return true;
+    }
+
+    /// <summary>Recognises `(a, b)[]` and yields the element annotation.</summary>
+    /// <remarks>
+    /// Only tuple elements, deliberately. Every other `X[]` already resolves through the CLR
+    /// type loader — `string[]` is `System.String[]` — and a tuple is the one annotation with
+    /// no name for that lookup to find.
+    /// </remarks>
+    private static bool TryParseTupleArrayAnnotation(string typeName, out string elementAnnotation)
+    {
+        elementAnnotation = string.Empty;
+
+        if (!typeName.EndsWith("[]", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var element = typeName[..^2];
+        if (!TryParseTupleAnnotation(element, out _))
+        {
+            return false;
+        }
+
+        elementAnnotation = element;
+        return true;
+    }
+
     private bool IsKnownAnnotatedType(string typeName, HashSet<string> activeRefinements)
     {
         var allowsNull = typeName.EndsWith("?", StringComparison.Ordinal);
@@ -1058,6 +1425,47 @@ public sealed partial class ToshEngine
             var known = IsKnownAnnotatedType(refinementType.BaseTypeName, activeRefinements);
             activeRefinements.Remove(refinementType.Name);
             return known;
+        }
+
+        // `TOAST-0046`. `void` and `nothing` name the same thing, and the runtime resolver
+        // knew neither: `void` reached the CLR's `System.Void` and `nothing` reached nothing
+        // at all. Both are known, and neither is a conversion target.
+        if (IsNothingAnnotation(normalizedTypeName))
+        {
+            return true;
+        }
+
+        // `TOAST-0036`. Ahead of the CLR fallback, which otherwise answers `func` with
+        // `System.Func`1`.
+        if (TryParseFunctionAnnotation(normalizedTypeName, out var signatureParameters, out var signatureReturn))
+        {
+            if (signatureParameters is null)
+            {
+                return true;
+            }
+
+            return signatureParameters.All(parameter => IsKnownAnnotatedType(parameter, activeRefinements)) &&
+                   (IsNothingAnnotation(signatureReturn) || IsKnownAnnotatedType(signatureReturn, activeRefinements));
+        }
+
+        if (TryUnwrapParenthesisedType(normalizedTypeName, out var parenthesised))
+        {
+            return IsKnownAnnotatedType(parenthesised, activeRefinements);
+        }
+
+        // `TOAST-0050`. `(int, string)[]` parses, and a tuple has no CLR spelling for the
+        // array lookup to find — so without this it is a type that can be written and never
+        // satisfied, which is the defect this item exists to remove rather than relocate.
+        if (TryParseTupleArrayAnnotation(normalizedTypeName, out var tupleArrayElement))
+        {
+            return IsKnownAnnotatedType(tupleArrayElement, activeRefinements);
+        }
+
+        // `TOAST-0050`. Every element has to be a type this engine knows, or the annotation
+        // would be accepted and then fail to check against anything.
+        if (TryParseTupleAnnotation(normalizedTypeName, out var tupleElements))
+        {
+            return tupleElements.All(element => IsKnownAnnotatedType(element, activeRefinements));
         }
 
         if (TryGetNamedType(normalizedTypeName, out _))

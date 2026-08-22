@@ -53,8 +53,18 @@ public static class ToshHost
     public static IDisposable EnterExecutionFrame(string frameName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(frameName);
+
+        // `TOAST-0049`. The limit derived from this process's stack, which both backends
+        // share.
+        //
+        // A compiled frame looked far cheaper than an interpreted one — direct compiled
+        // recursion survives depth 50,000 — but that is the *best* compiled path. The
+        // worst is construction: `new` on an emitted class goes through reflection, and
+        // measured by bisection it aborts between depth 200 and 300, which is where the
+        // interpreter aborts too. A ceiling has to hold for the worst path, so the two
+        // backends get the same number rather than compiled getting the flattering one.
         return ToshExecutionDepthGuard.Enter(
-            Runtime.Config.Shell.MaxRecursionDepth,
+            ToshExecutionDepthGuard.DefaultMaximumDepth,
             frameName);
     }
 

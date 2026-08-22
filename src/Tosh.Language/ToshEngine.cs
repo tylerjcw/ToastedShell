@@ -5402,7 +5402,24 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
     private Type? ResolveTypeName(string name)
     {
-        return CreateScopedTypeResolver().Resolve(name);
+        try
+        {
+            return CreateScopedTypeResolver().Resolve(name);
+        }
+        catch (Exception exception) when (
+            exception is FileLoadException or FileNotFoundException or TypeLoadException or
+                         BadImageFormatException or ArgumentException)
+        {
+            // `TOAST-0050`. The CLR type-name parser *throws* on a name it cannot tokenise
+            // rather than declining it — `(int, string)` arrives as "The given assembly name
+            // was invalid" — and every caller here is asking "is this a CLR type?", to which
+            // the answer is no. A `Try…` that throws is the defect; the tuple annotation
+            // merely reached it first. `IsKnownAnnotatedType` already had a comment saying
+            // the loader "can throw on angle-bracketed names containing commas" and worked
+            // around it by checking generics earlier, which is the same bug avoided rather
+            // than fixed.
+            return null;
+        }
     }
 
     /// <summary>
@@ -6793,6 +6810,27 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         if (definition.ReturnTypeName is null)
         {
             return value;
+        }
+
+        // `TOAST-0046`. `void` and `nothing` are the same bound type and now behave the
+        // same, which they did not: `-> void` tried to convert the value to the CLR's
+        // `System.Void` and failed with "could not be converted to 'void'", while
+        // `-> nothing` was not a type the runtime resolver had heard of at all.
+        //
+        // Neither is a conversion question. A void function declares that it produces
+        // nothing, so the only thing to check is whether it did.
+        if (IsNothingAnnotation(definition.ReturnTypeName))
+        {
+            if (value is null)
+            {
+                return null;
+            }
+
+            throw context.CreateDiagnostic(
+                code: "tosh.runtime.void_function_produced_value",
+                title: $"Function '{definition.Name}' returns 'void' but produced a value.",
+                label: $"'{definition.Name}' declares that it produces nothing",
+                span: definition.Span);
         }
 
         try

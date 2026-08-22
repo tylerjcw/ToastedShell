@@ -66,6 +66,13 @@ public sealed class TypeInferencePropagationTests
     [InlineData("var b = new StringBuilder()\nvar n = $b.Length\necho $\"{$n}\"")]
     [InlineData("var b = new StringBuilder()\nvar s = $b.ToString()\necho $\"{$s}\"")]
     [InlineData("var v = Math.Sqrt(2.0)\necho $\"{$v}\"")]
+    // A record literal. The last row of the item's table, and the one that needed a type
+    // rather than a lookup: a record is an `ExpandoObject` on both backends — the
+    // interpreter builds one and the emitter emits one — so that is what it infers to,
+    // rather than a structural type invented for the occasion that nothing else would know.
+    [InlineData("var r = {| a = 1 |}\necho $\"{$r.a}\"")]
+    [InlineData("var r = {| a = 1, b = \"x\" |}\necho $\"{$r.b}\"")]
+    [InlineData("var r = {| a = {| b = 2 |} |}\necho $\"{$r.a.b}\"")]
     // The shape the readiness probe is made of: a class method returning a collection,
     // consumed by a local with no annotation of its own.
     [InlineData("""
@@ -107,4 +114,27 @@ public sealed class TypeInferencePropagationTests
     [InlineData("var v = Math.Round(1.5, 0)\necho $\"{$v}\"")]
     public void Where_nothing_is_declared_nothing_is_invented(string source)
         => Assert.NotEmpty(StrictDiagnostics(source));
+
+    /// <summary>
+    /// Inferring a record's type does not make its members static.
+    /// </summary>
+    /// <remarks>
+    /// The risk this row carried, and the reason the type was measured before being chosen.
+    /// A record's fields are not CLR properties, so giving the literal a *concrete* type
+    /// could have turned `$r.a` into a static member lookup that fails — trading one
+    /// `implicit_dynamic` for a worse failure than the one being fixed. `ExpandoObject`
+    /// keeps member access dynamic, and this asserts it by reading the field back rather
+    /// than by trusting that.
+    /// </remarks>
+    [Theory]
+    [InlineData("var r = {| a = 1 |}\necho $r.a", "1")]
+    [InlineData("var r = {| a = 1, b = \"x\" |}\necho $r.b", "x")]
+    [InlineData("var r = {| a = {| b = 2 |} |}\necho $r.a.b", "2")]
+    public async Task An_inferred_record_still_reads_its_fields(string source, string expected)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(source);
+
+        Assert.Equal(expected, results[^1]?.ToString());
+    }
 }

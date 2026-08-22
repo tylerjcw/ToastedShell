@@ -1,10 +1,11 @@
 ---
 id: TOAST-0034
 title: "A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-21
+closed: 2026-08-22
 ---
 
 ## Problem
@@ -97,11 +98,34 @@ Proved directly rather than inferred from the count — a compiler-shaped progra
 class, a declared method return, a local taking that method's result, and a function with a
 declared return now compiles with **no annotations on any local**, and runs.
 
-### Still open
+### The last row — 2026-08-22
 
-A record literal has no record `BoundType` to infer to, which is a different kind of change
-from the four above: it needs a type, not a lookup. Left for a follow-up rather than
-guessed at.
+**A record literal infers `System.Dynamic.ExpandoObject`.** It needed a type rather than a
+lookup, and the type it needed already existed: a record *is* an `ExpandoObject` on both
+backends — the interpreter builds one and `EmitRecordLiteral` emits one. Inventing a
+structural record type here would have introduced a fifth opinion about what a record is,
+which is the mistake the four changes above were written to avoid.
+
+The risk was real and was measured before choosing rather than after. A record's fields are
+not CLR properties, so giving the literal a **concrete** type could have turned `$r.a` into a
+static member lookup and traded one `implicit_dynamic` for a worse failure. Annotating a
+variable with the concrete `ExpandoObject` and reading a field back off it compiles and
+prints on both backends, so the concrete type is safe — and the tests read the field back
+rather than trusting that.
+
+| Expression | before | after |
+|---|---|---|
+| `var r = {\| a = 1 \|}` | no | **yes** |
+| `var r = {\| a = 1, b = "x" \|}` | no | **yes** |
+| `var r = {\| a = {\| b = 2 \|} \|}` — nested | no | **yes** |
+
+### What it turned up
+
+The first differential case for this was written `echo $r.a $r.b`, and it diverged — because
+**`echo` with several arguments** emits one value per argument interpreted and a single
+joined string compiled. Nothing to do with records, and not previously recorded: every corpus
+case had used a single argument. Filed as `TOAST-0067` and added to `KnownDivergences()`; the
+record case was rewritten with interpolation, since it is about inference.
 
 ## Acceptance
 
@@ -109,7 +133,7 @@ guessed at.
 - [x] A method call on a value of known type infers the method's declared return type
 - [x] A property read infers the property's declared type
 - [x] `new SomeClrType()` infers that type
-- [ ] A record literal infers a record type — **still open**
+- [x] A record literal infers a record type
 - [x] A CLR static call infers its return type when its overloads agree on one — and
       declines when they do not, which is not the same as failing
 - [x] The table above becomes a test, including the rows that already pass as controls

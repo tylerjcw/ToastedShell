@@ -45,6 +45,60 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case("arithmetic", "echo (1 + 2 * 3)");
         yield return Case("interpolation", "var n = 4\necho $\"n is {$n}\"");
 
+        // ── Record literal inference: TOAST-0034 ──────────────────────────
+        yield return Case(
+            "record-literal-fields",
+            "var r = {| a = 1, b = \"x\" |}\necho $\"{$r.a}-{$r.b}\"");
+
+        yield return Case(
+            "record-literal-nested",
+            "var r = {| a = {| b = 2 |} |}\necho $r.a.b");
+
+        // ── void / nothing: TOAST-0046 ────────────────────────────────────
+        yield return Case(
+            "void-return-writes-without-producing",
+            "func f() -> void { writeline \"hi\" }\nf\necho \"after\"");
+
+        yield return Case(
+            "nothing-return-writes-without-producing",
+            "func f() -> nothing { writeline \"hi\" }\nf\necho \"after\"");
+
+        // ── Function types: TOAST-0036 ────────────────────────────────────
+        yield return Case(
+            "function-type-parameter",
+            "func dbl(x: int) -> int => $x * 2\n"
+            + "func apply(g: func(int) -> int, v: int) -> int => $g($v)\n"
+            + "echo (apply &dbl 21)");
+
+        yield return Case(
+            "function-type-variable",
+            "func dbl(x: int) -> int => $x * 2\nvar f: func(int) -> int = &dbl\necho $f(21)");
+
+        yield return Case(
+            "function-type-inferred-lambda",
+            "var lam = func(x: int) -> int => $x + 1\necho $lam(41)");
+
+        yield return Case(
+            "function-type-returning-function",
+            "func adder(n: int) -> func(int) -> int {\n"
+            + "    return func(x: int) -> int => $x + $n\n"
+            + "}\n"
+            + "var a: func(int) -> int = (adder 10)\n"
+            + "echo $a(32)");
+
+        // ── Tuple annotations: TOAST-0050 ─────────────────────────────────
+        yield return Case(
+            "tuple-annotation-var",
+            "var t: (int, string) = (1, \"a\")\necho $t.Item1");
+
+        yield return Case(
+            "tuple-annotation-return",
+            "func two() -> (int, string) {\n return (2, \"b\")\n}\nvar r = two\necho $r.Item2");
+
+        yield return Case(
+            "tuple-annotation-nested",
+            "var t: (int, (string, bool)) = (1, (\"x\", true))\necho $t.Item2.Item1");
+
         // ── Typed functions: the TS-P2-109 family ─────────────────────────
         yield return Case(
             "typed-expression-body",
@@ -379,6 +433,40 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A variable annotated with a base class rejects a subclass value when
         // compiled. Parameters and returns take a different path and accept it,
         // so this is specific to the variable annotation.
+
+        // `echo` with more than one argument emits one value per argument interpreted and a
+        // single joined string compiled — `TOAST-0067`. Nothing to do with records; found
+        // because a record case was written with two arguments.
+        yield return Divergence(
+            "TOAST-0067", "echo-multiple-arguments",
+            "echo 1 2");
+
+        // A compiled function whose result is null still contributes one value to the
+        // pipeline; the interpreted one contributes none — `TOAST-0066`. Reached here
+        // through `-> void`, which is simply the case where the null is guaranteed, but the
+        // difference is general and has nothing to do with `void`.
+        yield return Divergence(
+            "TOAST-0066", "null-result-pipeline-contribution",
+            "func f() -> void { writeline \"hi\" }\necho (f | count)");
+
+        // `match` with type-pattern arms over a declared hierarchy yields null compiled and
+        // the arm's value interpreted — `TOAST-0065`. `match` itself is fine: the same
+        // statement over an `int` with literal arms agrees on both backends. It is narrowing
+        // by type that does not survive emission.
+        //
+        // Found by *running* one of `TOAST-0036`'s control shapes rather than only compiling
+        // it. That item recorded this shape as "compiles", which was true and was the
+        // question it asked.
+        yield return Divergence(
+            "TOAST-0065", "match-type-pattern-narrowing",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\n"
+            + "var r: dynamic = match ($s) {\n"
+            + "    Circle => \"circle\"\n"
+            + "    Shape => \"shape\"\n"
+            + "}\n"
+            + "echo $r");
 
         // A compiled class is a real emitted CLR type rather than a ToshClassInstance, so
         // it never answers `TryGetOwnRendering` and its `Display` implementation is not

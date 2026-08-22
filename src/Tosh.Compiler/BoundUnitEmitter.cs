@@ -506,6 +506,19 @@ internal sealed partial class EmitterImpl : IDisposable
     /// host to read configuration from, so it guards at the documented default
     /// instead — the same ceiling, minus the ability to lower it per session.
     /// </remarks>
+    /// <summary>
+    /// Reads the limit rather than baking one in — `TOAST-0049`.
+    /// </summary>
+    /// <remarks>
+    /// The limit is derived from the stack the process has, which a pure artifact cannot
+    /// know at emit time. Emitting the number as a literal would freeze whatever the
+    /// compiling machine happened to have.
+    /// </remarks>
+    private static readonly MethodInfo s_guardDefaultMaximumDepth =
+        typeof(global::Tosh.Runtime.ToshExecutionDepthGuard)
+            .GetProperty(nameof(global::Tosh.Runtime.ToshExecutionDepthGuard.DefaultMaximumDepth))!
+            .GetGetMethod()!;
+
     private static readonly MethodInfo s_guardEnterExecutionFrame =
         typeof(global::Tosh.Runtime.ToshExecutionDepthGuard).GetMethod(
             nameof(global::Tosh.Runtime.ToshExecutionDepthGuard.Enter),

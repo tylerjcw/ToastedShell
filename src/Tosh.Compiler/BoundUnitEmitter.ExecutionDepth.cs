@@ -39,7 +39,9 @@ internal sealed partial class EmitterImpl
     {
         if (_profile == CompileProfile.Pure)
         {
-            il.Emit(OpCodes.Ldc_I4, global::Tosh.Runtime.ToshExecutionDepthGuard.DefaultMaximumDepth);
+            // `TOAST-0049`. Read at run time, because the limit is derived from the stack
+            // the process was given and a literal would freeze the compiling machine's.
+            il.Emit(OpCodes.Call, s_guardDefaultMaximumDepth);
             il.Emit(OpCodes.Ldstr, frameName);
             il.Emit(OpCodes.Ldnull);                     // sourceName
             il.Emit(OpCodes.Ldnull);                     // sourceText

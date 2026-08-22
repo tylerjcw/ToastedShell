@@ -1654,6 +1654,76 @@ func make() -> Shape => new Circle()   # a Circle is a Shape
 raises \code{tosh.type.mismatch}: every Circle is a Shape, and no Shape is
 necessarily a Circle.
 
+\textbf{A function type is written \code{func(...) -> r}}, naming what a
+callable accepts and returns.  Parameters are types rather than
+\code{name: type} pairs, because this describes a signature rather than
+declaring one:
+
+\begin{lstlisting}
+func dbl(x: int) -> int => $x * 2
+
+func apply(g: func(int) -> int, v: int) -> int => $g($v)
+apply &dbl 21                          # 42
+
+var f: func(int) -> int = &dbl
+\end{lstlisting}
+
+\noindent The return may itself be a function, and the form is
+right-associative --- \code{func(int) -> func(int) -> int} is a function
+returning a function:
+
+\begin{lstlisting}
+func adder(n: int) -> func(int) -> int {
+    return func(x: int) -> int => $x + $n
+}
+var add10: func(int) -> int = (adder 10)
+add10(32)                              # 42
+\end{lstlisting}
+
+\noindent When the value arrives it is checked for being callable and for
+accepting that many arguments; a value that is not callable, or whose arity
+cannot match, is rejected with
+\code{tosh.runtime.annotation\_conversion\_failed}.  The parameter \emph{types}
+are checked where the call is compiled rather than where the value is stored.
+
+A bare \ikw{func} is the vaguer claim ``some callable'', and accepts any
+callable regardless of shape.  A lambda that annotates its own parameters and
+return needs no second description:
+
+\begin{lstlisting}
+var lam = func(x: int) -> int => $x + 1    # typed: func(int) -> int
+var any = func(x) => $x + 1                # untyped: stays dynamic
+\end{lstlisting}
+
+\textbf{A tuple type is a parenthesised list} of element types, and may be
+written wherever any other annotation may:
+
+\begin{lstlisting}
+var pair: (int, string) = (1, "a")
+
+func split() -> (int, string) {
+    return (2, "b")
+}
+
+func second(p: (int, string)) -> string => $p.Item2
+\end{lstlisting}
+
+\noindent Arity and elements are both checked: a tuple of the wrong length, or
+one whose element cannot become the declared element type, is rejected with
+\code{tosh.runtime.annotation\_conversion\_failed}.  Elements may be any type,
+including another tuple, and the \code{[]} and \code{?} suffixes apply to the
+whole:
+
+\begin{lstlisting}
+var nested: (int, (string, bool)) = (1, ("x", true))
+var rows: (int, string)[]         = [(1, "a"), (2, "b")]
+var maybe: (int, string)?         = null
+\end{lstlisting}
+
+\noindent A single parenthesised type is that type rather than a one-element
+tuple --- \code{(int)} is \code{int} --- and \code{()} is the empty tuple type,
+satisfied by the empty tuple \code{()}.
+
 \textbf{An interface or trait names a contract}, and an annotation naming one
 accepts any class that declares it with \ikw{fulfills} or \ikw{uses}.  A
 contract declared on a base class counts for its subclasses:
@@ -3788,6 +3858,35 @@ func add(a: int, b: int) -> int {
 func get-name() -> string { return "TōSh" }
 \end{lstlisting}
 
+\subsection*{Functions that produce nothing}
+
+\ikw{void} and \ikw{nothing} are two spellings of one type, and both declare
+that the function produces no value.  Because a function's output \emph{is} its
+value (see the note below), that is a claim about output rather than about a
+return slot:
+
+\begin{lstlisting}
+func log(m: string) -> void {
+    writeline $"[log] {$m}"     # writes to the console, yields nothing
+}
+
+log "starting"                  # prints; contributes nothing
+(log "x") | count               # 0
+\end{lstlisting}
+
+\noindent A \ikw{void} function may not say what it evaluates to.  Writing
+\code{echo}, \ikw{yield}, or \code{return} with an operand inside one is
+reported as \code{tosh.compile.void\_function\_produces\_output}, in the same
+way a C\# \code{void} method may not \code{return} a value.  \code{echo} emits
+a pipeline value and is therefore the shell's form of that statement, while
+\code{writeline} writes to the console and yields nothing --- so a
+\ikw{void} function still prints, it simply does not produce.
+
+If a \ikw{void} function produces a value by some route the compiler cannot
+see, it is reported when it runs, as
+\code{tosh.runtime.void\_function\_produced\_value}.  Nothing is discarded
+silently.
+
 \begin{notebox}[Implicit Pipeline Return]
 A function does not need an explicit \code{return} to produce a value.
 All pipeline output emitted by the function body is collected and yielded
@@ -3826,11 +3925,17 @@ kind "hi"          # string
 \section{Recursion Depth}
 
 TōSh protects the host process with a limit on active ToastScript
-execution frames. The default and highest supported limit are 128
-frames. Functions, methods, lambdas, constructors, and nested
+execution frames. Functions, methods, lambdas, constructors, and nested
 \code{eval}/\code{source} execution participate in the same
 asynchronous-flow-local count; compiled ToastScript uses the same
-protocol.
+protocol and the same limit.
+
+The limit is not a fixed number. A ToastScript frame costs a chain of
+asynchronous state-machine frames on the host stack, so the depth that
+fits is a property of the stack the process was given: one frame is
+budgeted per 64\,KB, with a floor of 128 and a ceiling of 10{,}000. On
+the 8\,MB stack a thread gets by default this yields 128, which is the
+limit unless the stack has been enlarged.
 
 Exceeding the limit raises the stable
 \code{tosh.runtime.recursion\_limit\_exceeded} diagnostic. It does not
@@ -3844,9 +3949,23 @@ The limit may be lowered for a session or persisted in
 $tosh.Config.Shell.MaxRecursionDepth = 64
 \end{lstlisting}
 
-Accepted values are 1 through 128. TōSh does not currently perform
-tail-call elimination, so deeply recursive algorithms should be
-rewritten as loops when practical.
+Accepted values run from 1 to whatever the current stack allows, and
+the diagnostic names the range when a larger value is refused.
+
+To raise the limit rather than lower it, enlarge the stack every thread
+is created with. The .NET runtime reads this before any ToastScript
+runs, so it is an environment variable rather than a setting:
+
+\begin{lstlisting}
+DOTNET_Thread_DefaultStackSize=0x4000000 tosh script.tosh
+\end{lstlisting}
+
+64\,MB raises the limit to 1{,}024. The value is hexadecimal, and the
+cost is reserved address space rather than memory, so a script that does
+not recurse deeply pays nothing for it.
+
+TōSh does not currently perform tail-call elimination, so deeply
+recursive algorithms should be rewritten as loops when practical.
 
 \section{Operator Overloading}
 \label{sec:operator-overloading}

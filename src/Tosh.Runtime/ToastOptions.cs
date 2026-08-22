@@ -39,7 +39,7 @@ public sealed class ToastOptions
         get => _maxRecursionDepth;
         set
         {
-            ToshExecutionDepthGuard.ValidateMaximumDepth(value);
+            ToshExecutionDepthGuard.ValidateConfiguredDepth(value);
             _maxRecursionDepth = value;
         }
     }

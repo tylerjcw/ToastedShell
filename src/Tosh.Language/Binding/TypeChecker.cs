@@ -313,6 +313,16 @@ public static class TypeChecker
     {
         public BoundUnit Unit { get; } = unit;
         public List<ToshDiagnostic> Diagnostics { get; } = new();
+        /// <summary>
+        /// The `-> void` function being walked, if any — <c>TOAST-0046</c>.
+        /// </summary>
+        /// <remarks>
+        /// Cleared when a nested function or lambda is entered: an `echo` inside a callback
+        /// declared within a void function belongs to the callback, and flagging it would be
+        /// blaming the wrong declaration.
+        /// </remarks>
+        public string? VoidFunctionName { get; set; }
+
         public Dictionary<string, BoundFunctionDefinition> UserFunctions { get; } =
             new(StringComparer.Ordinal);
         public BoundType? CurrentReturnType { get; set; }
@@ -432,9 +442,17 @@ public static class TypeChecker
             case BoundFunctionDefinition fn:
                 {
                     var prev = ctx.CurrentReturnType;
+                    var prevVoid = ctx.VoidFunctionName;
                     ctx.CurrentReturnType = fn.ReturnType;
+
+                    // `TOAST-0046`. `void` and `nothing` are one bound type, so both arrive
+                    // here as `BoundTypeKind.Void` and neither can behave differently from
+                    // the other by construction.
+                    ctx.VoidFunctionName = fn.ReturnType.Kind == BoundTypeKind.Void ? fn.Name : null;
+
                     Walk(fn.Body, ctx);
                     ctx.CurrentReturnType = prev;
+                    ctx.VoidFunctionName = prevVoid;
                 }
                 break;
 
@@ -444,7 +462,16 @@ public static class TypeChecker
                 break;
 
             case BoundReturnStatement ret:
+                if (ret.Value is not null)
+                {
+                    ReportVoidProduces(ctx, "return a value", ret.Span);
+                }
+
                 CheckReturn(ret, ctx);
+                break;
+
+            case BoundYieldStatement yield when yield.Value is not null:
+                ReportVoidProduces(ctx, "yield a value", yield.Span);
                 break;
 
             case BoundIfStatement i:
@@ -587,6 +614,35 @@ public static class TypeChecker
         }
     }
 
+    /// <summary>
+    /// Reports a `-> void` function producing a value — <c>TOAST-0046</c>.
+    /// </summary>
+    /// <remarks>
+    /// The C# rule, in a language where output is the return value: a void function may not
+    /// say what it evaluates to. Only what is syntactically visible is caught — `echo`, an
+    /// explicit `yield`, and `return expr`. A command whose own output happens to be
+    /// non-empty cannot be recognised here, and is caught when it runs.
+    /// </remarks>
+    private static void ReportVoidProduces(CheckContext ctx, string what, TextSpan span)
+    {
+        if (ctx.VoidFunctionName is not { } name)
+        {
+            return;
+        }
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.compile.void_function_produces_output",
+            Title: $"Function '{name}' returns 'void' and cannot {what}.",
+            SourceName: (ctx.Unit.ParseResult as ParseResult)?.SourceName,
+            SourceText: (ctx.Unit.ParseResult as ParseResult)?.SourceText,
+            Span: span,
+            Label: $"'{name}' declares that it produces nothing",
+            Help: "use 'writeline' to print without producing a value, or give the function a return type.",
+            Severity: ToshDiagnosticSeverity.Error,
+            Category: ToshDiagnosticCategory.Type,
+            Lifecycle: ToshDiagnosticLifecycle.Preview));
+    }
+
     private static void CheckPipeline(BoundPipeline pipeline, CheckContext ctx)
     {
         BoundType? previousStageOutput = null;
@@ -595,6 +651,15 @@ public static class TypeChecker
             var stage = pipeline.Stages[i];
             if (stage is BoundCommandCall call)
             {
+                // `TOAST-0046`. `echo` emits a pipeline value, and a function's output *is*
+                // its value here — so an `echo` in a `-> void` body is the shell's version
+                // of `return expr;` in a C# void method. `writeline` writes straight to the
+                // console and yields nothing, which is what a void function prints with.
+                if (string.Equals(call.Name, "echo", StringComparison.Ordinal))
+                {
+                    ReportVoidProduces(ctx, "echo a value", call.Span);
+                }
+
                 // A stage after the first receives its subject from the pipe,
                 // so one declared argument is already supplied.
                 CheckCommandCall(call, ctx, receivesPipedInput: i > 0);

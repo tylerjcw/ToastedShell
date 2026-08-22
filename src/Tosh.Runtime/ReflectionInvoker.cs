@@ -536,8 +536,12 @@ public sealed class ReflectionInvoker
     /// <see cref="ExceptionDispatchInfo"/> rethrows the inner exception with its
     /// original stack trace intact; a bare <c>throw inner</c> would overwrite the
     /// one place that says where the fault actually happened.
+    ///
+    /// Shared with property and field assignment, which reflection wraps the same way —
+    /// `TOAST-0049`. Setting `$tosh.Config.Shell.MaxRecursionDepth` above the limit
+    /// reported that same useless sentence instead of the range it had rejected.
     /// </remarks>
-    private static object? InvokeUnwrapped(Func<object?> invoke)
+    public static object? InvokeUnwrapped(Func<object?> invoke)
     {
         try
         {

@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 538 diagnostic codes currently emitted by the
+This chapter lists all 540 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -56,6 +56,7 @@ regenerated whenever new diagnostics are added.
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
 \item[\texttt{\small tosh.compile.implicit\_dynamic}] Variable '\{decl.Symbol.Name\}' has no type annotation and the inferrer could not pin down a concrete type.
 \item[\texttt{\small tosh.compile.missing\_type\_annotation}] Function '\{fn.Name\}' is missing a return-type annotation.
+\item[\texttt{\small tosh.compile.void\_function\_produces\_output}] Function '\{name\}' returns 'void' and cannot \{what\}.
 \end{description}
 
 \section{\texttt{tosh.config.*}}
@@ -623,6 +624,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.using\_not\_supported}] This runtime does not support 'using' statements.
 \item[\texttt{\small tosh.runtime.value\_not\_callable}] The provided value is not callable.
 \item[\texttt{\small tosh.runtime.variable\_reference\_requires\_dollar}] Variable '\{variableName\}' exists, but variable references must start with '\$'.
+\item[\texttt{\small tosh.runtime.void\_function\_produced\_value}] Function '\{definition.Name\}' returns 'void' but produced a value.
 \item[\texttt{\small tosh.runtime.window\_requires\_positive\_integer}] 'window' requires a positive integer size.
 \item[\texttt{\small tosh.runtime.window\_requires\_size}] 'window' requires a size and an optional callable or block.
 \item[\texttt{\small tosh.runtime.zip\_requires\_sequence}] 'zip' requires a second sequence and an optional combiner block.

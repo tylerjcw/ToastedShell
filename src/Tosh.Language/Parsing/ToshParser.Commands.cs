@@ -553,6 +553,25 @@ public static partial class ToshParser
 
         private string ParseTypeName(string label)
         {
+            // `TOAST-0050`. A tuple type is a parenthesised list — `(int, string)`. The
+            // annotation grammar is textual: what is produced here is handed to
+            // `TypeNameResolver`, which already parses `(a, b)` into a `TupleNode` and
+            // already applies `[]` and `?` to it. So the type existed, resolved, and had a
+            // display form; the only thing missing was a way to write it.
+            // `TOAST-0036`. `func(int) -> int`. Only with a parameter list: a bare `func`
+            // stays the vague "some callable", so the two remain distinguishable.
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "func", StringComparison.Ordinal) &&
+                Peek(1).Kind == SyntaxTokenKind.OpenParen)
+            {
+                return ParseFunctionTypeName(label);
+            }
+
+            if (Current.Kind == SyntaxTokenKind.OpenParen)
+            {
+                return ParseTypeNameSuffix(ParseTupleTypeName(label)) ?? string.Empty;
+            }
+
             if (Current.Kind == SyntaxTokenKind.Bareword)
             {
                 return ParseTypeNameSuffix(NextToken().Text) ?? string.Empty;
@@ -564,6 +583,121 @@ public static partial class ToshParser
                 Span: Current.Span,
                 Label: $"write a CLR type name for the {label}"));
             return string.Empty;
+        }
+
+        /// <summary>
+        /// Parses `func(a, b) -> r` — <c>TOAST-0036</c>.
+        /// </summary>
+        /// <remarks>
+        /// Parameters are types, not `name: type` pairs: this describes a signature rather
+        /// than declaring one, and a name here would be decoration nothing could read.
+        ///
+        /// The return is parsed by the ordinary return-type production, so it is greedy and
+        /// therefore right-associative — `func(int) -> func(int) -> int` is a function
+        /// returning a function, which is the only reading that makes currying writable.
+        /// </remarks>
+        private string ParseFunctionTypeName(string label)
+        {
+            NextToken();            // func
+            var open = NextToken(); // (
+
+            var parameters = new List<string>();
+
+            if (Current.Kind != SyntaxTokenKind.CloseParen)
+            {
+                while (true)
+                {
+                    parameters.Add(ParseTypeName(label));
+
+                    if (Current.Kind == SyntaxTokenKind.Comma)
+                    {
+                        NextToken();
+                        continue;
+                    }
+
+                    break;
+                }
+            }
+
+            if (Current.Kind == SyntaxTokenKind.CloseParen)
+            {
+                NextToken();
+            }
+            else
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_closing_paren",
+                    Title: $"Expected ')' to close the parameter list of the {label}.",
+                    Span: Current.Span,
+                    Label: "a function type is written 'func(int, string) -> bool'",
+                    Help: $"close the parameter list opened at column {open.Span.Start}."));
+            }
+
+            var returnType = TryParseReturnTypeAnnotation();
+
+            if (string.IsNullOrWhiteSpace(returnType))
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_type_name",
+                    Title: $"Expected '->' and a return type for the {label}.",
+                    Span: Current.Span,
+                    Label: "a function type must say what it returns, e.g. 'func(int) -> int'",
+                    Help: "use 'nothing' for a function that returns no value."));
+                returnType = "dynamic";
+            }
+
+            return $"func({string.Join(", ", parameters)}) -> {returnType}";
+        }
+
+        /// <summary>
+        /// Parses `(`, a comma-separated list of types, `)` — <c>TOAST-0050</c>.
+        /// </summary>
+        /// <remarks>
+        /// Rebuilds the text rather than a node, because that is what an annotation is at
+        /// this layer. Elements recurse through <see cref="ParseTypeName"/>, so nesting and
+        /// each element's own suffixes come for free.
+        ///
+        /// A one-element `(int)` is deliberately not special-cased here. The resolver reads
+        /// it as the parenthesised type `int` rather than a one-tuple, which is what every
+        /// other language with this syntax does, and saying so in two places would be one
+        /// place too many.
+        /// </remarks>
+        private string ParseTupleTypeName(string label)
+        {
+            var open = NextToken();
+            var elements = new List<string>();
+
+            if (Current.Kind != SyntaxTokenKind.CloseParen)
+            {
+                while (true)
+                {
+                    elements.Add(ParseTypeName(label));
+
+                    if (Current.Kind == SyntaxTokenKind.Comma)
+                    {
+                        NextToken();
+                        continue;
+                    }
+
+                    break;
+                }
+            }
+
+            if (Current.Kind == SyntaxTokenKind.CloseParen)
+            {
+                NextToken();
+            }
+            else
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_closing_paren",
+                    Title: $"Expected ')' to close the tuple {label}.",
+                    Span: Current.Span,
+                    Label: "a tuple type is a parenthesised list, like '(int, string)'",
+                    Help: $"close the tuple type opened at column {open.Span.Start}."));
+            }
+
+            return $"({string.Join(", ", elements)})";
         }
 
         private string? ParseTypeNameSuffix(string? initialTypeName)
@@ -1311,6 +1445,36 @@ public static partial class ToshParser
 
         private bool TryGetTypeNameEndOffset(int offset, out int endOffset)
         {
+            // `TOAST-0050`. A tuple type starts with `(`, and this lookahead is what decides
+            // whether `var` begins a declaration at all. It knew `<…>`, `[]` and `?` and not
+            // `(…)`, so `var t: (int, string) = …` fell through to command dispatch and
+            // reported *"Command 'var' is not a registered builtin"* — a message about `var`
+            // for a defect in the type annotation, which is exactly the shape `TS-P2-69`
+            // fixed below for the array suffix. Two predicates, same bug, two years apart:
+            // `TOAST-0002` is about why they have to agree by hand.
+            if (Peek(offset).Kind == SyntaxTokenKind.OpenParen)
+            {
+                if (!TryGetTupleTypeEndOffset(offset, out endOffset))
+                {
+                    endOffset = offset;
+                    return false;
+                }
+
+                return ExtendPastTypeNameSuffixes(ref endOffset);
+            }
+
+            // `TOAST-0036`. `func(int) -> int` is a type name several tokens long, and this
+            // predicate decides whether `var` starts a declaration. Without it `var f:
+            // func(int) -> int = …` stops at `func`, finds `(` where it wants `=`, and the
+            // statement falls through to command dispatch — the same failure `TOAST-0050`
+            // had for tuples and `TS-P2-69` had for `[]`.
+            if (Peek(offset).Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Peek(offset).Text, "func", StringComparison.Ordinal) &&
+                Peek(offset + 1).Kind == SyntaxTokenKind.OpenParen)
+            {
+                return TryGetFunctionTypeEndOffset(offset, out endOffset);
+            }
+
             if (Peek(offset).Kind != SyntaxTokenKind.Bareword ||
                 !LooksLikePotentialTypeName(Peek(offset).Text))
             {
@@ -1368,6 +1532,17 @@ public static partial class ToshParser
             // fell through to command dispatch and reported "Command 'var' was not found"
             // — a message about `var` for a defect in the type annotation. Repeats for
             // jagged arrays, and matches the suffix loop in `ParseTypeNameSuffix`.
+            return ExtendPastTypeNameSuffixes(ref endOffset);
+        }
+
+        /// <summary>Walks the `[]` and `?` suffixes a type name may carry.</summary>
+        /// <remarks>
+        /// Shared by the bareword and tuple forms — `TOAST-0050` — because a suffix rule
+        /// that applies to one and not the other is the kind of disagreement this file
+        /// already has too much of.
+        /// </remarks>
+        private bool ExtendPastTypeNameSuffixes(ref int endOffset)
+        {
             while (Peek(endOffset + 1).Kind == SyntaxTokenKind.OpenBracket &&
                    Peek(endOffset + 2).Kind == SyntaxTokenKind.CloseBracket)
             {
@@ -1381,6 +1556,126 @@ public static partial class ToshParser
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Finds the end of `func(…) -> r` at <paramref name="offset"/> — <c>TOAST-0036</c>.
+        /// </summary>
+        /// <remarks>
+        /// The return type is measured by recursing, so a function returning a function is
+        /// spanned in full rather than stopping at the first arrow.
+        /// </remarks>
+        private bool TryGetFunctionTypeEndOffset(int offset, out int endOffset)
+        {
+            endOffset = offset;
+
+            var depth = 0;
+            var position = offset + 1;
+
+            while (true)
+            {
+                var token = Peek(position);
+
+                if (token.Kind == SyntaxTokenKind.OpenParen)
+                {
+                    depth++;
+                }
+                else if (token.Kind == SyntaxTokenKind.CloseParen)
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        break;
+                    }
+                }
+                else if (token.Kind == SyntaxTokenKind.EndOfFile)
+                {
+                    return false;
+                }
+
+                position++;
+            }
+
+            // The arrow arrives in three shapes, the same three the return-type production
+            // already has to handle: `-` `>`, a single `->`, and `->` glued to the type.
+            var afterList = position + 1;
+
+            if (Peek(afterList).Kind == SyntaxTokenKind.Bareword &&
+                Peek(afterList).Text == "-" &&
+                Peek(afterList + 1).Kind == SyntaxTokenKind.GreaterThan)
+            {
+                return TryGetTypeNameEndOffset(afterList + 2, out endOffset);
+            }
+
+            if (Peek(afterList).Kind == SyntaxTokenKind.Bareword &&
+                Peek(afterList).Text == "->")
+            {
+                return TryGetTypeNameEndOffset(afterList + 1, out endOffset);
+            }
+
+            if (Peek(afterList).Kind == SyntaxTokenKind.Bareword &&
+                Peek(afterList).Text.StartsWith("->", StringComparison.Ordinal) &&
+                Peek(afterList).Text.Length > 2)
+            {
+                endOffset = afterList;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Finds the `)` closing a parenthesised type at <paramref name="offset"/>.
+        /// </summary>
+        /// <remarks>
+        /// Only the tokens a type can be made of are allowed through, so an ordinary
+        /// parenthesised *expression* after a colon does not get mistaken for a type and
+        /// silently change what statement this is.
+        /// </remarks>
+        private bool TryGetTupleTypeEndOffset(int offset, out int endOffset)
+        {
+            endOffset = offset;
+            var depth = 0;
+            var position = offset;
+
+            while (true)
+            {
+                var token = Peek(position);
+
+                switch (token.Kind)
+                {
+                    case SyntaxTokenKind.OpenParen:
+                        depth++;
+                        break;
+
+                    case SyntaxTokenKind.CloseParen:
+                        depth--;
+                        break;
+
+                    case SyntaxTokenKind.Comma:
+                    case SyntaxTokenKind.LessThan:
+                    case SyntaxTokenKind.GreaterThan:
+                    case SyntaxTokenKind.GreaterThanGreaterThan:
+                    case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.CloseBracket:
+                        break;
+
+                    case SyntaxTokenKind.Bareword
+                        when token.Text == "?" || LooksLikePotentialTypeName(token.Text):
+                        break;
+
+                    default:
+                        return false;
+                }
+
+                if (depth == 0)
+                {
+                    endOffset = position;
+                    return true;
+                }
+
+                position++;
+            }
         }
 
         private static bool IsPipelineTerminator(

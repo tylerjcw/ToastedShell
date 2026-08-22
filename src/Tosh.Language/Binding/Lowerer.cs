@@ -1515,7 +1515,7 @@ public static class Lowerer
                     Body: body,
                     Captures: captures.ToImmutableList(),
                     Span: lambda.Span,
-                    Type: BoundType.Dynamic);
+                    Type: InferLambdaType(lambda, bound, ctx));
             }
             finally
             {
@@ -1526,6 +1526,64 @@ public static class Lowerer
         {
             ctx.ExitLambda();
         }
+    }
+
+    /// <summary>
+    /// The signature a lambda declares about itself — <c>TOAST-0036</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `func(x: int) -> int => $x + 1` already states its parameter and return types, so
+    /// requiring the same signature again on the variable holding it would be asking the
+    /// author to repeat themselves to tell the compiler something it was told.
+    /// </para>
+    /// <para>
+    /// Everything or nothing: a lambda with one unannotated parameter, or no declared
+    /// return, stays <see cref="BoundType.Dynamic"/>. A half-known signature would be a
+    /// worse thing to emit against than an honest unknown, and `dynamic` is exactly the
+    /// answer for "this was not stated".
+    /// </para>
+    /// <para>
+    /// A rest or optional parameter also declines. What its arity *means* is a rule this
+    /// item did not settle, and inferring a fixed shape for a callable that does not have
+    /// one would put a wrong type where there had merely been no type.
+    /// </para>
+    /// </remarks>
+    private static BoundType InferLambdaType(
+        AnonymousFunctionArgumentSyntax lambda,
+        IReadOnlyList<BoundParameter> parameters,
+        LowerContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(lambda.ReturnTypeName))
+        {
+            return BoundType.Dynamic;
+        }
+
+        var parameterTypes = new List<BoundType>(parameters.Count);
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.IsRest || parameter.IsOptional || string.IsNullOrWhiteSpace(parameter.TypeName))
+            {
+                return BoundType.Dynamic;
+            }
+
+            var resolved = ctx.ResolveType(parameter.TypeName);
+            if (resolved.Kind != BoundTypeKind.Concrete)
+            {
+                return BoundType.Dynamic;
+            }
+
+            parameterTypes.Add(resolved);
+        }
+
+        var returnType = ctx.ResolveType(lambda.ReturnTypeName);
+        if (returnType.Kind == BoundTypeKind.Dynamic)
+        {
+            return BoundType.Dynamic;
+        }
+
+        return new FunctionType(parameterTypes, returnType);
     }
 
     private static IReadOnlyList<BoundArgument> BuildArgumentList(
@@ -1675,7 +1733,18 @@ public static class Lowerer
                     break;
             }
         }
-        return new BoundRecordLiteral(entries, record.Span, BoundType.Dynamic);
+        // `TOAST-0034`. A record literal is an `ExpandoObject` on both backends — the
+        // interpreter builds one and `EmitRecordLiteral` emits one — so that is what it
+        // infers to, rather than a structural type invented here that nothing else knows.
+        //
+        // Member reads stay dynamic, which was measured rather than hoped for: annotating a
+        // variable with the concrete `ExpandoObject` and reading `$r.a` off it compiles and
+        // prints, on both backends. A concrete type that broke member access would have
+        // traded one `implicit_dynamic` for a worse failure.
+        return new BoundRecordLiteral(
+            entries,
+            record.Span,
+            BoundType.FromClr(typeof(System.Dynamic.ExpandoObject)));
     }
 
     private static BoundDictLiteral BuildDictLiteral(

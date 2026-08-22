@@ -101,6 +101,11 @@ public sealed class TypeNameResolver
             case TupleNode t:
                 return new TupleType(t.Elements.Select(e => ResolveNode(e, sourceText)).ToList());
 
+            case FunctionNode f:
+                return new FunctionType(
+                    f.Parameters.Select(parameter => ResolveNode(parameter, sourceText)).ToList(),
+                    ResolveNode(f.Return, sourceText));
+
             case GenericNode g:
                 return ResolveGeneric(g, sourceText);
 
@@ -303,6 +308,16 @@ public sealed class TypeNameResolver
     internal sealed record NullableNode(TypeNameNode Inner) : TypeNameNode;
     internal sealed record TupleNode(IReadOnlyList<TypeNameNode> Elements) : TypeNameNode;
 
+    /// <summary>`func(int) -> int` — <c>TOAST-0036</c>.</summary>
+    /// <remarks>
+    /// The grammar had no function node at all, which is why <see cref="FunctionType"/>
+    /// existed in the bound tree and was never constructed: the representation was done and
+    /// there was no way to write one.
+    /// </remarks>
+    internal sealed record FunctionNode(
+        IReadOnlyList<TypeNameNode> Parameters,
+        TypeNameNode Return) : TypeNameNode;
+
     private sealed class TypeNameParser
     {
         private readonly string _src;
@@ -365,6 +380,16 @@ public sealed class TypeNameResolver
         {
             node = null!;
             SkipWs();
+
+            // `TOAST-0036`. `func(a, b) -> r`, right-associative so that
+            // `func(int) -> func(int) -> int` is a function returning a function: the return
+            // is parsed with the full type parser, which consumes as much as it can.
+            if (TryParseFunctionType(out var functionNode))
+            {
+                node = functionNode;
+                return true;
+            }
+
             if (Peek('('))
             {
                 _pos++;
@@ -418,6 +443,91 @@ public sealed class TypeNameResolver
             }
 
             node = new NamedNode(qname);
+            return true;
+        }
+
+        /// <summary>Parses `func(…) -> r`, or declines without consuming.</summary>
+        /// <remarks>
+        /// A bare `func` is deliberately not a function type here — it is left to the named
+        /// path, so that "some callable" and "a callable of this shape" stay distinguishable.
+        /// </remarks>
+        private bool TryParseFunctionType(out TypeNameNode node)
+        {
+            node = null!;
+            var start = _pos;
+
+            if (!TryParseIdent())
+            {
+                _pos = start;
+                return false;
+            }
+
+            if (!_src.AsSpan(start, _pos - start).Equals("func", StringComparison.OrdinalIgnoreCase))
+            {
+                _pos = start;
+                return false;
+            }
+
+            SkipWs();
+            if (!Peek('('))
+            {
+                _pos = start;
+                return false;
+            }
+
+            _pos++;
+            var parameters = new List<TypeNameNode>();
+            SkipWs();
+
+            if (!Peek(')'))
+            {
+                while (true)
+                {
+                    if (!TryParseType(out var parameter))
+                    {
+                        _pos = start;
+                        return false;
+                    }
+
+                    parameters.Add(parameter);
+                    SkipWs();
+
+                    if (Peek(','))
+                    {
+                        _pos++;
+                        SkipWs();
+                        continue;
+                    }
+
+                    break;
+                }
+            }
+
+            if (!Peek(')'))
+            {
+                _pos = start;
+                return false;
+            }
+
+            _pos++;
+            SkipWs();
+
+            if (!Peek('-') || _pos + 1 >= _src.Length || _src[_pos + 1] != '>')
+            {
+                _pos = start;
+                return false;
+            }
+
+            _pos += 2;
+            SkipWs();
+
+            if (!TryParseType(out var returnType))
+            {
+                _pos = start;
+                return false;
+            }
+
+            node = new FunctionNode(parameters, returnType);
             return true;
         }
 

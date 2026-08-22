@@ -377,6 +377,7 @@ async Task ExecuteAndPrintAsync(string source)
 async Task ExecuteFileAndPrintAsync(string path, IReadOnlyList<object?> arguments)
 {
     runtime.RecordHistory(path);
+
     await using var sink = new BufferingDisplaySink(runtime, renderTuiOutcome: false);
     await foreach (var value in engine.ExecuteScriptFileAsync(path, arguments))
     {

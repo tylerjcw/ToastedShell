@@ -411,7 +411,11 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
                         throw new InvalidOperationException($"Property '{segment}' on type '{targetType.FullName}' is read-only.");
                     }
 
-                    property.SetValue(target, ConvertAssignedValue(value, property.PropertyType, segment, targetType));
+                    ReflectionInvoker.InvokeUnwrapped(() =>
+                    {
+                        property.SetValue(target, ConvertAssignedValue(value, property.PropertyType, segment, targetType));
+                        return null;
+                    });
                     return;
                 }
 
@@ -422,7 +426,11 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
                         throw new InvalidOperationException($"Field '{segment}' on type '{targetType.FullName}' is read-only.");
                     }
 
-                    field.SetValue(target, ConvertAssignedValue(value, field.FieldType, segment, targetType));
+                    ReflectionInvoker.InvokeUnwrapped(() =>
+                    {
+                        field.SetValue(target, ConvertAssignedValue(value, field.FieldType, segment, targetType));
+                        return null;
+                    });
                     return;
                 }
         }
@@ -442,7 +450,11 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
                     $"Static property '{segment}' on type '{staticType.FullName}' is read-only.");
             }
 
-            property.SetValue(null, ConvertAssignedValue(value, property.PropertyType, segment, staticType));
+            ReflectionInvoker.InvokeUnwrapped(() =>
+            {
+                property.SetValue(null, ConvertAssignedValue(value, property.PropertyType, segment, staticType));
+                return null;
+            });
             return;
         }
 
@@ -459,7 +471,11 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
                     $"Static field '{segment}' on type '{staticType.FullName}' is read-only.");
             }
 
-            field.SetValue(null, ConvertAssignedValue(value, field.FieldType, segment, staticType));
+            ReflectionInvoker.InvokeUnwrapped(() =>
+            {
+                field.SetValue(null, ConvertAssignedValue(value, field.FieldType, segment, staticType));
+                return null;
+            });
             return;
         }
 
