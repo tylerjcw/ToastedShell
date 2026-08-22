@@ -852,7 +852,7 @@ internal sealed partial class EmitterImpl
     /// can evaluate the predicate; for simple (non-refinement) aliases the CLR
     /// shell is the complete representation.
     /// </summary>
-    private void DeclareClrAliasShell(BoundTypeAliasStatement ta)
+    private void DeclareClrAliasShell(BoundTypeAliasStatement ta, string? moduleQualifier = null)
     {
         if (_clrAliasTypes.Contains(ta.Name)) return;
 
@@ -874,7 +874,18 @@ internal sealed partial class EmitterImpl
         typeBuilder.AddInterfaceImplementation(ifaceType);
 
         StampToshTypeAttribute(typeBuilder, "alias", ta.Span);
-        StampOriginalNameIfMangled(typeBuilder, ta.Name);
+
+        // `TOAST-0035`. Stamped during declaration, like an enum: the builder is closed with
+        // `CreateType()` below, so a stamp afterwards would throw.
+        if (moduleQualifier is null)
+        {
+            StampOriginalNameIfMangled(typeBuilder, ta.Name);
+        }
+        else
+        {
+            typeBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+                s_toshOriginalNameCtor, new object[] { $"{moduleQualifier}.{ta.Name}" }));
+        }
 
         // Explicit interface implementation for IShellRefinementTypeDescriptor.Name
         var getNameGetter = ifaceType.GetProperty(nameof(global::Tosh.Runtime.IShellRefinementTypeDescriptor.Name))!.GetGetMethod()!;

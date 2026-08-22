@@ -234,6 +234,58 @@ The measured library is unchanged at 2 of 16 — `Git` and `Math`. Enum being li
 move it, because the files using enums (`Gl` 4, `Gtk` 5, `Sdl` 2) each carry other blockers
 as well. Refinement types remain the largest single one at 18 uses, and are decision 3.
 
+### Decision 3 measured — what a refinement actually needs — 2026-08-22
+
+The user chose "emit the predicate as a method", following
+`docs/refinement-types-dotnet-implementation.md`. Measuring first turned up a prerequisite
+that document does not discuss, and it is not about predicates at all.
+
+**A `type` alias inside a module was never on the module path** — neither
+`DeclareClrShellsInsideModule` nor `ModuleNeedsSourceReplay` mentioned
+`BoundTypeAliasStatement` — so both a refinement alias *and a plain one* replayed. Adding the
+plain case is a two-line change and it emits. It then fails:
+
+```
+var d: M.Meters = 5
+  -> 'd' produced a value that could not be converted to 'M.Meters'
+```
+
+`RegisterCompiledAssembly` registers a `[ToshType]` shell as a **type alias** — the name
+`M.Meters` mapped to the shell class `p.Meters`. Converting `5` to that class is meaningless;
+what the annotation needs is `M.Meters` meaning `int`. The alias shell already implements
+`IShellRefinementTypeDescriptor` and carries `BaseTypeName`, and nothing reads it back.
+
+So before a predicate can be emitted, **the runtime has to learn an alias from its compiled
+shell rather than from replayed source**: name, base type, and — for a refinement — where its
+check lives. That is the same registration a compiled refinement will need, so it is the
+first piece of decision 3 rather than a detour from it.
+
+The lift was reverted: an alias that emits and then cannot be assigned to is worse than one
+that replays and works.
+
+### What the document gets right, and what it assumes
+
+Its core principle matches this item exactly — predicates and coercers become bound IR and
+ordinary methods, and the artifact needs no interpreter. Its canonical algorithm was already
+worth acting on: the missing base-type re-conversion it predicts in §3 was a live defect,
+fixed as `TOAST-0068`.
+
+Two of its assumptions do not hold here and are worth writing down before building on it:
+
+- **§1 assumes a statically-typed binder** (`BindExpression(expectedType:)`,
+  `RequireImplicitConversion`) and asks that `_` become a real bound parameter symbol.
+  `BoundTypeAliasStatement` already carries a lowered `BoundExpression`, so this is closer
+  than it looks — but `_` is bound by the interpreter's refinement machinery today, not as a
+  parameter.
+- **"Closed except for `_`" would reject the library it was written about.**
+  `Math.Clamp(_, 0, 100)` and `Math.abs(_)` are free references to module functions, so
+  `EnsureClosedExpression(..., except: valueParameter)` as specified throws out
+  `MathTypes.tosh` wholesale. The rule wants relaxing to "closed except `_` and resolvable
+  module functions" — newly practical, since module methods began emitting in this item.
+
+It also omits the constraint this repository enforces: a compiled `IsValid` and the
+interpreter's engine-run predicate must agree on the same value, in the differential corpus.
+
 ### Where the measured library stands
 
 Two of sixteen files now emit with no source replay, against one before. The remaining
