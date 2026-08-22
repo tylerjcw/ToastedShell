@@ -83,21 +83,42 @@ What none of them had was **two classes where one is replayed and the other is s
 
 ## Still open — the failure this was masking
 
-With names resolving, the readiness probe fails differently:
-`System.InvalidProgramException: Common Language Runtime detected an invalid program`,
-reported at `Main`.
+`System.InvalidProgramException` from the readiness probe, and the hunt narrowed it a long
+way without reaching a minimal case. What is now known, so the next attempt does not repeat
+it:
 
-Narrowed: the lexer alone runs (`tokens=4`). Constructing a `Parser` runs. **Calling
-`Parser.ParseExpr()` from `Main` does not**, for every input tried — `1`, `x`, `-1`, `(1)`,
-`1 + 2` — and whether the result is bound to a typed local, a `dynamic` local, or used
-inline. So it is neither the input nor the local.
+**Only `Program.Main` holds the invalid IL.** Established by force-JIT-ing every emitted
+method with `RuntimeHelpers.PrepareMethod` rather than by reading the stack trace — which
+says "at Main" whether or not Main is the broken method, because a method that fails to
+compile never gets a frame.
 
-Also ruled out as the cause: a public method calling a private one, a recursive private
-chain, a method returning a user class, and a constructor taking `list<Token>` — all emit
-and run.
+**An earlier round of this reported `Parser.ParseSum` as well, and that was wrong.** It came
+from preparing methods in a loop over every type; prepared on its own, and in either order
+relative to `Main`, `ParseSum` compiles. `ParseSum` and `ParseProduct` differ by six bytes —
+two string tokens and the callee token — and are otherwise byte-identical, which is what
+prompted checking it in isolation.
 
-The next step is reading the emitted IL for `ParseExpr` rather than bisecting the source
-further; six rounds of source bisection have stopped paying.
+**What triggers it:** `Main` calling the top-level `Compile(…)`. A `for` loop over a list,
+alone, is fine. The lexer alone is fine. Constructing a `Parser` is fine.
+
+**What does not matter:** the return type (`record` and `dynamic` both fail), the parameter
+types, `export`, whether the caller annotates the local, or the input string.
+
+**Not reproduced** by a synthetic function of the same shape — one, two or three parameters,
+with or without `export`, returning `string`, `record` or a user class. It needs the probe's
+full header present.
+
+**Ruled out as the cause:** the `for` loop's `enumerator?.Dispose()` finally. Its skip label
+is marked immediately before `EndExceptionBlock`, which does bind past the appended
+`endfinally` — but restructuring it three ways left the probe failing identically, and a
+plain `for` loop as a method's last statement compiles and runs.
+
+### The tooling this produced, which is the durable part
+
+`DifferentialExecutionTests` now force-JITs **every** emitted method before running a case.
+Invalid IL is attributed to the method that holds it rather than to whichever caller
+happened to touch it first, and it is caught whether or not the case calls that method. All
+70 cases pass with it on.
 
 ## Acceptance
 

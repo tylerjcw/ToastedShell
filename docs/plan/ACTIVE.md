@@ -27,3 +27,4 @@
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
 | [`PLAN-0003`](items/PLAN-0003.md) | P2 | research | 0/5 | MSBuild node accumulation is a candidate cause for the unexplained development-time memory exhaustion |
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | in-progress | — | A lexical scope allocated ten collections it almost never used |
+| [`TOAST-0045`](items/TOAST-0045.md) | P2 | open | 0/4 | A compiled function returning `record` cannot return a record literal |

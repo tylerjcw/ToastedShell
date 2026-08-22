@@ -15,6 +15,9 @@ namespace Tosh.Tests;
 /// to find out which parts of ToastScript fight back when you write compiler-shaped code,
 /// and these are what it caught.
 /// </remarks>
+// Captures `Console.Out` to read a compiled program's output, so it must not run beside
+// another test doing the same — the symptom is an empty capture, not a wrong one.
+[Collection(ConsoleSerialCollection.Name)]
 public sealed class TypedCollectionAndMatchTests
 {
     private static string RunInterpreted(string source)

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Tosh.Compiler;
 using Tosh.Language;
 using Tosh.Language.Binding;
@@ -463,6 +464,34 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             $"unexpected emit diagnostics: {string.Join(", ", result.UnsupportedShapes)}");
 
         var assembly = Assembly.Load(stream.ToArray());
+
+        // `TOAST-0044`. Every emitted method is JIT-compiled before the program runs.
+        //
+        // Invalid IL surfaces as `InvalidProgramException` at the *caller's* frame, because
+        // the method that failed to compile never gets one. So a real defect in a class
+        // method is reported as "at Program.Main", which is where an afternoon went: the
+        // named method was not the broken one. Preparing each method attributes the failure
+        // to the method that actually holds the bad IL, and does it whether or not the case
+        // happens to call it.
+        foreach (var type in assembly.GetTypes())
+        {
+            foreach (var method in type.GetMethods(
+                         BindingFlags.Public | BindingFlags.NonPublic |
+                         BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            {
+                if (method.IsAbstract || method.ContainsGenericParameters) { continue; }
+
+                try
+                {
+                    RuntimeHelpers.PrepareMethod(method.MethodHandle);
+                }
+                catch (InvalidProgramException)
+                {
+                    Assert.Fail($"emitted invalid IL for {type.Name}.{method.Name}");
+                }
+            }
+        }
+
         var program = assembly.GetType($"{assemblyName}.Program");
         Assert.NotNull(program);
 
