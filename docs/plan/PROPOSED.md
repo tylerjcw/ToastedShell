@@ -5,24 +5,41 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
+| [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
+| [`TOAST-0053`](items/TOAST-0053.md) | P1 | proposed | 0/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
+| [`TOAST-0056`](items/TOAST-0056.md) | P2 | proposed | 0/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
+| [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
+| [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/7 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
 | [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
 | [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 0/6 | Replace the switch-based evaluator with a bound-tree evaluator |
+| [`TOAST-0064`](items/TOAST-0064.md) | P2 | proposed | 3/6 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
+| [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
+| [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
+| [`TOAST-0066`](items/TOAST-0066.md) | P2 | proposed | 0/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
+| [`TOAST-0067`](items/TOAST-0067.md) | P2 | proposed | 0/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
+| [`TOAST-0052`](items/TOAST-0052.md) | P1 | proposed | 0/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
+| [`TOAST-0051`](items/TOAST-0051.md) | P1 | proposed | 0/7 | Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3` |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
+| [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
 | [`TS-P3-21`](items/TS-P3-21.md) | P3 | proposed | — | Native runtime: GC, object layout, and startup budget |
 | [`TOSH-0002`](items/TOSH-0002.md) | P2 | proposed | 0/4 | Tosh.DevCompanion floats its Microsoft.Data.Sqlite reference, so its dependency set is whatever restore last chose |
+| [`TOAST-0054`](items/TOAST-0054.md) | P1 | proposed | 0/8 | A `match` over a closed union is not checked for exhaustiveness |
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
+| [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
+| [`TOAST-0065`](items/TOAST-0065.md) | P2 | proposed | 0/5 | A compiled `match` over a class hierarchy yields null, so type-pattern narrowing works interpreted and not compiled |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | proposed | — | Reverse/static operator hooks |
+| [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
 | [`TS-P3-19`](items/TS-P3-19.md) | P3 | proposed | — | Annotated, fixed and refinement variable writes at Tier 1 |

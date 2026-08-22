@@ -17,12 +17,15 @@
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
+| [`TOAST-0034`](items/TOAST-0034.md) | P2 | complete | 8/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
+| [`TOAST-0049`](items/TOAST-0049.md) | P2 | complete | 5/5 | Recursion is capped at 128 frames, and the cap is a stack size nobody can change |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | complete | 9/9 | The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways |
 | [`TOSH-0007`](items/TOSH-0007.md) | P1 | complete | 4/4 | The marshalled struct statvfs was 24 bytes short, corrupting memory on every call |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 7/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
+| [`TOAST-0046`](items/TOAST-0046.md) | P2 | complete | 4/4 | `-> void` is unspecified, and disagrees with `-> nothing` for the same declared type |
 | [`TOAST-0026`](items/TOAST-0026.md) | P3 | complete | 5/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
@@ -33,11 +36,13 @@
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
+| [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
 | [`TOAST-0044`](items/TOAST-0044.md) | P1 | complete | 5/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
+| [`TOAST-0050`](items/TOAST-0050.md) | P2 | complete | 8/8 | A tuple type resolves but cannot be written in an annotation |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | complete | 1/1 | Class and member doc comments never reach `help` |
