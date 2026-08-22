@@ -129,12 +129,14 @@ source rather than only here.
 - [x] Every function, method, parameter and return in the probe is annotated concretely —
       no `dynamic`. One *local* is deliberately unannotated, with the reason in the source
 - [x] `tosh --compile` accepts it with no flags
-- [ ] The compiled probe produces the same output as the interpreted probe — **blocked by
-      `TOAST-0044`**
-- [ ] It runs without an interpreter dependency — the Phase B exit sentence, checked
-      explicitly rather than assumed from a successful compile
+- [x] The compiled probe produces the same output as the interpreted probe — byte-identical,
+      and pinned by `The_readiness_probe_agrees_across_backends`
+- [ ] It runs **without an interpreter dependency** — the second half of Phase B's exit
+      sentence, and deliberately still open. The probe runs through the IL path and agrees
+      with the interpreter, which is asserted; the emitted assembly still references
+      `Tosh.Compiler.Runtime`, which bridges to `Tosh.Language`. `TOAST-0035` owns that
 - [x] Whatever fights back is filed, not worked around — four fixed, one filed
-- [ ] A negative control
+- [x] A negative control
 
 ## Notes
 
@@ -145,3 +147,36 @@ rather than after.
 Blocks Phase C, which asks that the interpreter and IL pass the differential corpus; that
 corpus is `DifferentialExecutionTests`, now down to three recorded divergences after
 `TOAST-0030`.
+
+## The probe compiles and runs — 2026-08-21
+
+```
+$ tosh --compile bench/probes/compiler_shape.tosh -o ./rp
+$ ./rp
+1 + 2 * 3
+    tokens=6 nodes=5 value=7
+    (1 + (2 * 3))
+…
+```
+
+**Byte-identical to the interpreted run**, diffed rather than eyeballed, and pinned by
+`DifferentialExecutionTests.The_readiness_probe_agrees_across_backends`.
+
+### What it took
+
+Six errors became zero, then the compiled program had to be made to run:
+
+| | |
+|---|---|
+| `TOAST-0034` | inference through calls — four of the six errors |
+| this item | typing the probe, which found five defects |
+| `TOAST-0043` | a class method with an expression body returned null |
+| `TOAST-0044` | a declared class captured by a CLR name; a dropped instruction; a `ret` inside a finally; a private property that could not be assigned |
+| `TOAST-0045` | a record literal was a dict |
+
+### What is *not* claimed
+
+Phase B's exit sentence has two halves and only one is asserted here. The probe compiles and
+agrees with the interpreter; it does **not** yet run without an interpreter dependency — the
+emitted assembly still references `Tosh.Compiler.Runtime`, which bridges to `Tosh.Language`.
+`TOAST-0035` owns that, and the acceptance box above says so rather than reading as done.

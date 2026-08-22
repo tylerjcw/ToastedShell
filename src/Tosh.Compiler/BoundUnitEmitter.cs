@@ -746,7 +746,7 @@ internal sealed partial class EmitterImpl : IDisposable
             new[] { typeof(object[]), typeof(int) })!;
     private static readonly MethodInfo s_hostSpreadRecord =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.SpreadRecord),
-            new[] { typeof(Dictionary<string, object?>), typeof(object) })!;
+            new[] { typeof(IDictionary<string, object?>), typeof(object) })!;
 
     private static readonly Type s_listOfObject = typeof(List<object?>);
     private static readonly ConstructorInfo s_listCtor =
@@ -807,6 +807,21 @@ internal sealed partial class EmitterImpl : IDisposable
         s_dictOfStringObject.GetConstructor(Type.EmptyTypes)!;
     private static readonly MethodInfo s_dictSetItem =
         s_dictOfStringObject.GetMethod("set_Item", new[] { typeof(string), typeof(object) })!;
+
+    /// <summary>
+    /// A record literal is an <see cref="System.Dynamic.ExpandoObject"/> — `TOAST-0045`.
+    /// </summary>
+    /// <remarks>
+    /// The interpreter builds one, and the shell type of an `ExpandoObject` is `record`
+    /// while the shell type of a `Dictionary&lt;string, object?&gt;` is `dict`. The emitter
+    /// built the dictionary, so `{| a = 1 |}` was a record interpreted and a dict compiled —
+    /// which `func f() -> record` then refused, from a function returning a record literal.
+    /// </remarks>
+    private static readonly ConstructorInfo s_expandoCtor =
+        typeof(System.Dynamic.ExpandoObject).GetConstructor(Type.EmptyTypes)!;
+
+    private static readonly MethodInfo s_expandoSetItem =
+        typeof(IDictionary<string, object?>).GetMethod("set_Item", new[] { typeof(string), typeof(object) })!;
 
     private static readonly Type s_dictOfObjectObject = typeof(Dictionary<object, object?>);
     private static readonly ConstructorInfo s_dictObjCtor =

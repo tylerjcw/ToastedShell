@@ -1196,7 +1196,10 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private Type? EmitRecordLiteral(BoundRecordLiteral rec)
     {
-        _il.Emit(OpCodes.Newobj, s_dictCtor);
+        // `TOAST-0045`. An ExpandoObject, because that is what the interpreter builds and
+        // what the shell type `record` names. A `Dictionary<string, object?>` is `dict`, a
+        // different type to every part of the language that asks.
+        _il.Emit(OpCodes.Newobj, s_expandoCtor);
         foreach (var entry in rec.Fields)
         {
             switch (entry)
@@ -1207,7 +1210,7 @@ internal sealed partial class EmitterImpl
                     var vt = EmitExpression(field.Value);
                     if (vt is null) return null;
                     BoxIfValueType(vt);
-                    _il.Emit(OpCodes.Callvirt, s_dictSetItem);
+                    _il.Emit(OpCodes.Callvirt, s_expandoSetItem);
                     break;
 
                 case BoundComputedRecordField computed:
@@ -1219,7 +1222,7 @@ internal sealed partial class EmitterImpl
                     var cvt = EmitExpression(computed.Value);
                     if (cvt is null) return null;
                     BoxIfValueType(cvt);
-                    _il.Emit(OpCodes.Callvirt, s_dictSetItem);
+                    _il.Emit(OpCodes.Callvirt, s_expandoSetItem);
                     break;
 
                 case BoundRecordSpreadEntry spread:
@@ -1238,7 +1241,9 @@ internal sealed partial class EmitterImpl
                     return null;
             }
         }
-        return s_dictOfStringObject;
+        // `TOAST-0045`. The literal *is* an ExpandoObject, and saying so is what lets a
+        // `-> record` annotation and `type-of` agree with the interpreter.
+        return typeof(System.Dynamic.ExpandoObject);
     }
 
     /// <summary>

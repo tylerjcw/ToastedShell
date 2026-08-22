@@ -1,10 +1,11 @@
 ---
 id: TOAST-0044
 title: "A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name"
-status: partial
+status: complete
 area: toast
 priority: 1
 opened: 2026-08-21
+closed: 2026-08-21
 ---
 
 ## Problem
@@ -112,34 +113,47 @@ method and asserts branches land on instruction boundaries and `finally` handler
 success for the very IL that throws when run, which is why the check added in the previous
 commit was replaced rather than kept alongside.
 
-## Still open — a finally handler that ends on `ret`
+## The finally handler — fixed 2026-08-21
 
-The readiness probe still fails, and the verifier now names it precisely:
+The verifier named it: `handler ends 0x2A not endfinally`, `0x2A` being `ret`.
+
+And it was **the same one-byte drop**. The handler's own bytes gave it away:
 
 ```
-Program.Main: Finally try=0x00F9+317 handler=0x0236+13 :: handler ends 0x2A not endfinally
+0x0236: 11 08        ldloc.s 8
+0x0238: 2D 01        brtrue.s -> 0x023B
+0x023A: 11 08        ldloc.s 8      ← starts at 0x23A, not 0x23B
 ```
 
-`0x2A` is `ret`. The `for` loop's `enumerator?.Dispose()` handler has its recorded end one
-instruction past its `endfinally`, so when the loop is a method's last statement the
-epilogue `ret` falls inside the handler — which is invalid.
+The `endfinally` in the null-check's skip path — one byte, immediately before a marked
+label — was dropped, so the handler ran on into the epilogue `ret`.
 
-**Not reproduced in isolation.** Four controlled `Reflection.Emit` cases — a plain finally,
-a label marked at the handler's end, a branch into the work instead, and a label marked
-immediately after `EndExceptionBlock` — all produce handlers correctly ending in
-`endfinally`. So the framework is not at fault and neither is the shape on its own;
-something about the real loop (its `leave`s, break/continue labels, or size) is needed.
+The fix removes the branch rather than working around the drop: the null check was
+**unreachable**. The enumerator is obtained by `callvirt GetEnumerator` *before*
+`BeginExceptionBlock`, so control cannot be inside the `try` unless the local holds one. A
+null source throws at that call, outside the protected region. With no branch there is no
+label, and with no label there is nothing to lose.
 
-Restructuring the handler three ways did not move it, which is now explicable: those
-attempts were made while the dropped byte was still shifting every offset, so the
-measurement could not distinguish them.
+Three earlier attempts at this handler looked like they did nothing. They were measured
+while the dropped byte was still shifting every offset.
+
+## One more, found once the IL was sound — a class could not assign its own private property
+
+`shy prop` is emitted as a private field. Member *reads* had a direct `ldfld` fast path;
+*writes* always went through `ToshHost.SetMember`, which resolves by reflection over
+**public** members. So `$this.n_ = …` failed at runtime with "Member 'index_' was not found
+on type 'Parser'" — from inside the class that declares it.
+
+Widening the reflective accessor to private members would have fixed the symptom by making
+every CLR object's internals reachable from script, which is a much larger decision.
+Emitting `stfld` when the emitter knows the field keeps the member private to everyone
+except the code compiled alongside it.
 
 ## Acceptance
 
 - [x] A minimal reproduction — six lines, and the mechanism is named
 - [x] A declared class always wins over a same-named CLR type, compiled and interpreted
-- [ ] The readiness probe (`TOAST-0038`) runs compiled and matches the interpreted output —
-      **still blocked**, by a different failure this one was masking
+- [x] The readiness probe (`TOAST-0038`) runs compiled and matches the interpreted output
 - [x] A control: a CLR type that the program does *not* declare still resolves
 - [x] A negative control
 

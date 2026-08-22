@@ -833,7 +833,12 @@ public static class ToshHost
     /// Later spread/field entries overwrite earlier ones, mirroring
     /// the interpreter's left-to-right merge order.
     /// </summary>
-    public static void SpreadRecord(Dictionary<string, object?> bag, object? value)
+    /// <remarks>
+    /// Takes the interface rather than `Dictionary&lt;string, object?&gt;` — `TOAST-0045`.
+    /// A record literal is an `ExpandoObject` now, matching what the interpreter builds, and
+    /// an `ExpandoObject` is an `IDictionary&lt;string, object?&gt;` but not a `Dictionary`.
+    /// </remarks>
+    public static void SpreadRecord(IDictionary<string, object?> bag, object? value)
     {
         if (value is null)
         {

@@ -268,6 +268,31 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A chained comparison had the same shape and the same defect.
         yield return Case("chained-comparison", "var n = 5\necho (1 < $n and $n < 10)");
 
+        // ── `TOAST-0045`: a record literal is a record, not a dict ────────
+        //
+        // The emitter built a `Dictionary<string, object?>`, whose shell type is `dict`,
+        // where the interpreter builds an `ExpandoObject`, whose shell type is `record`. So
+        // `{| a = 1 |}` was a record interpreted and a dict compiled, and
+        // `func f() -> record` refused a function returning a record literal.
+        yield return Case("record-literal-is-a-record", "echo ({| a = 1 |} | type-of | get Name)");
+        yield return Case(
+            "record-return-annotation",
+            "func mk(a: string) -> record { return {| A = $a |} }\necho (mk \"x\").A");
+        // The control: a dict literal is still a dict.
+        yield return Case("dict-literal-is-a-dict", "echo ({% \"a\" => 1 %} | type-of | get Name)");
+
+        // ── `TOAST-0044`: a class assigns its own private property ────────
+        //
+        // `shy prop` is emitted as a private field, and member *writes* went through
+        // reflection over public members — so a class could not assign its own private
+        // property, compiled, from inside the class that declares it.
+        yield return Case(
+            "shy-property-is-assignable",
+            "class DiffShy {\n"
+            + "    shy prop n_: int = 0\n"
+            + "    func Bump() -> int { $this.n_ = $this.n_ + 1\n        return $this.n_ }\n"
+            + "}\necho ((new DiffShy()).Bump())");
+
         // ── Portable semantics: the eight `TOAST-0018` concerns ───────────
         //
         // Phase A's exit asks that the core behaviour be "enforced by a backend-neutral
@@ -532,5 +557,42 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
 
         return Canonicalize(
             capture.ToString().Replace("\r", "").Split('\n'));
+    }
+
+    /// <summary>
+    /// Phase B's exit: the readiness probe compiles and runs through the IL path,
+    /// producing what the interpreter produces.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The RFC's sentence is "the probe compiles and runs through the normal IL path
+    /// without an interpreter dependency". This asserts the observable half of it — the
+    /// same program, both backends, identical output — because that is the part a
+    /// regression would silently break.
+    /// </para>
+    /// <para>
+    /// Reaching it took `TOAST-0034` (inference), `TOAST-0038` (typing the probe, which
+    /// found five defects), `TOAST-0043`, `TOAST-0044` and `TOAST-0045`. It is pinned here
+    /// rather than left as a thing someone remembers to try.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void The_readiness_probe_agrees_across_backends()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+        var path = Path.Combine(root, "bench/probes/compiler_shape.tosh");
+        Assert.True(File.Exists(path), $"missing {path}");
+
+        var source = File.ReadAllText(path);
+        var interpreted = Attempt(() => RunInterpreted(source));
+        var compiled = Attempt(() => RunCompiled(source));
+
+        Assert.True(
+            interpreted == compiled,
+            "the readiness probe diverges between backends.\n" +
+            $"  interpreted: {Show(interpreted)}\n" +
+            $"  compiled:    {Show(compiled)}");
+
+        Assert.DoesNotContain("threw", interpreted, StringComparison.Ordinal);
     }
 }

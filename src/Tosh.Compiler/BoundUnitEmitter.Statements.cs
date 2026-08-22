@@ -755,6 +755,30 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Stloc, valueLocal);
         }
 
+        // `TOAST-0044`. A field the emitter declared is stored directly.
+        //
+        // Reads already had this fast path; writes always went through
+        // `ToshHost.SetMember`, which resolves by reflection over *public* members. A
+        // `shy prop` is emitted as a private field, so a class assigning its own private
+        // property failed at runtime with "Member 'index_' was not found on type
+        // 'Parser'" — from inside the very class that declares it.
+        //
+        // Widening the reflective accessor to private members would fix the symptom by
+        // making every CLR object's internals reachable from script, which is a different
+        // and much larger decision. Emitting `stfld` keeps the member private to everyone
+        // except the code that compiled alongside it.
+        if (!target.NullSafe &&
+            !target.MemberPath.Contains('.') &&
+            _clrShellsByType.TryGetValue(targetType, out var storeShell) &&
+            storeShell.Fields.TryGetValue(target.MemberPath, out var storeField))
+        {
+            _il.Emit(OpCodes.Ldloc, targetLocal);
+            _il.Emit(OpCodes.Castclass, storeShell.Type);
+            _il.Emit(OpCodes.Ldloc, valueLocal);
+            _il.Emit(OpCodes.Stfld, storeField);
+            return;
+        }
+
         _il.Emit(OpCodes.Ldloc, targetLocal);
         _il.Emit(OpCodes.Ldstr, target.MemberPath);
         _il.Emit(OpCodes.Ldloc, valueLocal);
@@ -1137,22 +1161,18 @@ internal sealed partial class EmitterImpl
 
         _il.BeginFinallyBlock();
 
-        // `enumerator?.Dispose()`, with no label marked at the end of the handler —
-        // `TOAST-0044`.
+        // `enumerator.Dispose()`, with no branch and so no label — `TOAST-0044`.
         //
-        // Marking one there binds it *past* the `endfinally` that `EndExceptionBlock`
-        // appends, and the handler's recorded end runs past it too — so whatever follows
-        // becomes the handler's last instruction. When the loop is a method's final
-        // statement that is the epilogue `ret`, and a `ret` inside a finally is invalid IL.
+        // The null check this used to carry was unreachable: the enumerator is obtained by
+        // `callvirt GetEnumerator` *before* `BeginExceptionBlock`, so control cannot be
+        // inside the `try` unless the local holds one. A null source would have thrown at
+        // that call, before the protected region began.
         //
-        // Branching *into* the dispose puts the only label in the middle of the handler,
-        // which is the ordinary case, and lets `EndExceptionBlock` place the trailing
-        // `endfinally` itself.
-        var doDispose = _il.DefineLabel();
-        _il.Emit(OpCodes.Ldloc, enumeratorLocal);
-        _il.Emit(OpCodes.Brtrue_S, doDispose);
-        _il.Emit(OpCodes.Endfinally);
-        _il.MarkLabel(doDispose);
+        // Removing it removes a label from the handler, and a label here is a hazard: a
+        // single-byte instruction immediately before one is dropped when the assembly is
+        // persisted. Written with the check, the handler's `endfinally` disappeared and the
+        // method's epilogue `ret` became the handler's last instruction, which is invalid
+        // IL. The same drop is what `EmitLogicalOr` was corrected for.
         _il.Emit(OpCodes.Ldloc, enumeratorLocal);
         _il.Emit(OpCodes.Callvirt, s_disposableDispose);
         _il.EndExceptionBlock();
