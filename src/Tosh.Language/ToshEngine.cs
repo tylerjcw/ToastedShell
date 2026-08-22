@@ -5965,7 +5965,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         ToshDiagnosticException? Failure)> TryApplyRefinementWithOptionalCoercionAsync(
         RefinementAnnotation? refinement,
         object? value,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? baseTypeName = null)
     {
         if (refinement is null)
         {
@@ -6032,6 +6033,28 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     refinement.SourceText,
                     fallbackClause.Coercer,
                     exception));
+        }
+
+        // `TOAST-0068`. The coercer's result is converted back to the refinement's base type
+        // before the predicate is asked again.
+        //
+        // Without this a coercer can put another type in a refined slot and the predicate
+        // will not notice, because a predicate tests the *value* and says nothing about its
+        // type: `type TimeoutMs = int where (_ > 0 and _ <= 300000) coerce Math.Clamp(_, 0,
+        // 300000)` accepted 999999 and left a `System.Double` in a slot declared `int`,
+        // while the uncoerced path held an `Int32`. Two values, one annotation, two types.
+        //
+        // Only for a *named* refinement type, which is the case that has a declared base to
+        // convert to. An inline `where` on a variable has already been converted against its
+        // own annotation before reaching here.
+        if (baseTypeName is not null)
+        {
+            if (!TryConvertAnnotatedValue(baseTypeName, coerced, out var reconverted))
+            {
+                return (false, coerced, null);
+            }
+
+            coerced = reconverted;
         }
 
         predicate = await TryEvaluateRefinementPredicateAsync(

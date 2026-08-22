@@ -492,7 +492,12 @@ public sealed partial class ToshEngine
                 return false;
             }
 
-            if (!TryApplyRefinementWithOptionalCoercion(refinementType.Refinement, baseConverted, out var refinedValue, out var failure))
+            if (!TryApplyRefinementWithOptionalCoercion(
+                    refinementType.Refinement,
+                    baseConverted,
+                    out var refinedValue,
+                    out var failure,
+                    refinementType.BaseTypeName))
             {
                 activeRefinements.Remove(refinementType.Name);
                 converted = failure is not null
@@ -1061,7 +1066,8 @@ public sealed partial class ToshEngine
             var refinement = await TryApplyRefinementWithOptionalCoercionAsync(
                 refinementType.Refinement,
                 baseConversion.Converted,
-                cancellationToken);
+                cancellationToken,
+                refinementType.BaseTypeName);
             if (!refinement.Success)
             {
                 return (
@@ -1547,12 +1553,14 @@ public sealed partial class ToshEngine
         RefinementAnnotation? refinement,
         object? value,
         out object? refinedValue,
-        out ToshDiagnosticException? failure)
+        out ToshDiagnosticException? failure,
+        string? baseTypeName = null)
     {
         var (success, refined, applyFailure) = TryApplyRefinementWithOptionalCoercionAsync(
                 refinement,
                 value,
-                CancellationToken.None)
+                CancellationToken.None,
+                baseTypeName)
             .AsTask()
             .GetAwaiter()
             .GetResult();

@@ -1946,6 +1946,37 @@ A \emph{refinement type} constrains an existing type with one or more
 predicates.  Values that fail a predicate are either repaired via a
 \code{coerce} clause or rejected at runtime.
 
+\subsection*{How a value is admitted}
+
+Conversion into a refined slot follows one algorithm, and every step of it
+is normative:
+
+\begin{enumerate}
+  \item Convert the value to the refinement's base type.
+  \item Run any guarded \code{if <guard> coerce} clauses, in declaration
+        order, threading each result into the next.
+  \item Test the predicates.  If they hold, the value is admitted.
+  \item Otherwise run the unguarded \code{coerce} clause, if there is one.
+  \item \textbf{Convert the coercer's result to the base type again.}
+  \item Test the predicates again.  If they hold the value is admitted;
+        otherwise it is rejected with
+        \code{tosh.runtime.refinement\_failed}.
+\end{enumerate}
+
+\noindent Step 5 is what keeps the base type a guarantee rather than a
+hope.  A predicate tests the \emph{value} and says nothing about its type,
+so without it a coercer returning another type would be admitted:
+\code{Math.Clamp} resolves to an overload returning a floating-point
+number, and \code{type TimeoutMs = int where (\_ > 0 and \_ <= 300000)
+coerce Math.Clamp(\_, 0, 300000)} would leave a \code{double} in a slot
+declared \code{int} --- but only on the coerced path, so the ordinary case
+looked correct.
+
+\noindent Step 6 is equally load-bearing: a coercer is not trusted merely
+because it returned.  A coercer that cannot repair a value leaves it
+rejected, which is the correct outcome for \code{TimeoutMs = 0} above,
+whose coercer clamps to a lower bound the predicate still refuses.
+
 \subsection*{Block Form}
 
 \begin{lstlisting}

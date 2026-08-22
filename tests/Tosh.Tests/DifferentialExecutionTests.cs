@@ -45,6 +45,12 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case("arithmetic", "echo (1 + 2 * 3)");
         yield return Case("interpolation", "var n = 4\necho $\"n is {$n}\"");
 
+        // ── Refinement coercion: TOAST-0068 ───────────────────────────────
+        yield return Case(
+            "refinement-coerced-value-has-base-type",
+            "type TimeoutMs = int where (_ > 0 and _ <= 300000) coerce Math.Clamp(_, 0, 300000)\n"
+            + "var t: TimeoutMs = 999999\necho $t.GetType().FullName");
+
         // ── Module methods without source replay: TOAST-0035 ──────────────
         // These are the shapes that stopped being replayed. They are here as well as in
         // SourceReplaySurfaceTests because that one asserts a module *emits* and this one

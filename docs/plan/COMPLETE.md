@@ -34,6 +34,7 @@
 | [`TOAST-0040`](items/TOAST-0040.md) | P2 | complete | 6/6 | Two forms the parser accepts do not lower, and one of them takes the whole file with it |
 | [`TOAST-0021`](items/TOAST-0021.md) | P2 | complete | 6/6 | DisplayEngine walks values itself, so a table cell shows an enum's implementation |
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
+| [`TOAST-0068`](items/TOAST-0068.md) | P2 | complete | 5/5 | A refinement's coercer can put the wrong CLR type in a refined slot |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |

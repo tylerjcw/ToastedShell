@@ -12,7 +12,7 @@
 | [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/7 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
 | [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
 | [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 0/6 | Replace the switch-based evaluator with a bound-tree evaluator |
-| [`TOAST-0064`](items/TOAST-0064.md) | P2 | proposed | 3/6 | A CLR type annotation blocks start-up on a 17,000-name platform index |
+| [`TOAST-0064`](items/TOAST-0064.md) | P2 | proposed | 5/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
