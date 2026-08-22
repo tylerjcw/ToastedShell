@@ -189,13 +189,18 @@ type is called, so there is nothing to compare against.
 | class | **works** — `new M.Box()` gives 5, matching interpreted |
 | interface | **works** — a class fulfilling it answers 9 |
 | enum | **works** — `M.Colour.Green` renders `Green`, after one more fix below |
+| record | **works** — `new M.Point(3, 4)`, read back as 4 |
+| struct | the property read comes back `null` — shell defaults are not initialised |
+| trait | *"Member 'Name' was not found"* — trait members are not injected into the using class |
+| union | `M.Result.Ok` dispatches as a static *method* on the base; variants are separate types with no factory |
 | record | `M.Point(3, 4)` is read as a static *method* on the module shell |
 | union | `M.Result.Ok` — static member not found on the module shell |
 | struct | the property read comes back as something `int` will not take |
 | trait | the class using it still resolves to nothing |
 
-`union` is a member chain like the enum and may well fall out of the same fallback once its
-variant shells are stamped; the other three are different routes.
+Union was tried: stamping the base and every variant with the qualified name makes the type
+resolve, and the call then fails one step later because `Ok` is looked up as a static method
+on the base while the variant is a separate type. It needs factories, not names.
 
 ### Enum needed a second piece, and it names the general shape
 
@@ -213,8 +218,15 @@ actually uses has been taught. That is why "mirror the switch" could not have wo
 is the question to ask of each remaining kind: `record` is reached as a *call*
 (`M.Point(3, 4)`), `union` as a member chain like the enum, `struct` through `new`.
 
-So the stamp is necessary and not sufficient: three kinds are lifted, three need their own
-construction or member path taught about a module-qualified shell. The four are **left
+So the stamp is necessary and not sufficient: **four kinds are lifted — class, interface,
+enum and record** — and three need work of their own. `struct` and `trait` have incomplete
+shells rather than a resolution problem, and `union` needs variant factories.
+
+One of the three was a **bad probe rather than a defect**, and it is worth recording because
+it nearly cost the record case. `M.Point(3, 4)` was written where a record wants
+`new M.Point(3, 4)`, and the compiled program answered *"Construct instances with
+'new M.Point(...)'"* — the compiler was right and the test was wrong. Every remaining
+failure above was re-checked with the syntax the interpreter accepts. The four are **left
 replaying** and are tripwires — a kind that emits and fails is worse than one that replays
 and works, which is the lesson this item keeps teaching.
 
@@ -234,7 +246,8 @@ used blocking construct at 18.
       `SourceReplaySurfaceTests`, as a corpus plus tripwires
 - [ ] Each is either implemented, or recorded as a deliberate and documented exclusion —
       **implemented**: default, rest and optional parameters; module-scoped classes,
-      interfaces and enums. **Remaining**: record, struct, trait, union, and refinement types
+      interfaces, enums and records. **Remaining**: struct, trait, union, and refinement
+      types, each recorded above with what it reported
 - [ ] `--compile-allow-dynamic` is not needed by any program in `examples/` or `bench/`
 - [ ] A strict profile fails the build rather than replaying source
 - [ ] A negative control

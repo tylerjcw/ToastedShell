@@ -91,7 +91,6 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// `record` 1, and `trait` / `union` / `struct` not at all.
     /// </remarks>
     [Theory]
-    [InlineData("a record", "    export record R(A: int, B: string)")]
     [InlineData("a trait", "    export trait T {\n        prop N: string = \"x\"\n    }")]
     [InlineData("a union", "    export union U {\n        Ok(value)\n        Err(message)\n    }")]
     [InlineData("a struct", "    export struct S {\n        prop X: int = 0\n    }")]
@@ -219,6 +218,12 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     [InlineData(
         "export module M {\n    export enum Colour {\n        Red\n        Green\n    }\n}\n" +
         "var r: string = $\"{M.Colour.Green}\"\necho $r", "Green")]
+    // A record constructs with `new`, so the type-alias route the stamp populates is the one
+    // it uses. The first probe for this wrote `M.Point(3, 4)` and the engine answered
+    // "Construct instances with 'new M.Point(...)'" — the test was wrong, not the compiler.
+    [InlineData(
+        "export module M {\n    export record Point(X: int, Y: int)\n}\n" +
+        "var p: dynamic = new M.Point(3, 4)\nvar r: int = $p.Y\necho $r", "4")]
     public void A_module_scoped_type_answers_without_replay(string source, string expected)
         => Assert.Equal(expected, RunWithoutReplay(source));
 
@@ -238,7 +243,6 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// shell. When one starts emitting, this fails and says to verify it by running it.
     /// </remarks>
     [Theory]
-    [InlineData("a record", "    export record Point(X: int, Y: int)")]
     [InlineData("a struct", "    export struct Vec {\n        prop X: int = 7\n    }")]
     [InlineData("a trait", "    export trait Named {\n        prop Name = \"anon\"\n    }")]
     [InlineData("a union", "    export union Result {\n        Ok(value)\n        Err(message)\n    }")]

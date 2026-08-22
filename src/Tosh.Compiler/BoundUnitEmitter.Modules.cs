@@ -45,6 +45,11 @@ internal sealed partial class EmitterImpl
                     && !_clrEnumTypes.ContainsKey(en.Name):
                     DeclareClrEnumType(en, moduleQualifier);
                     break;
+                case BoundRecordDefinition rec when CanEmitClrRecordShell(rec)
+                    && !_clrTypeShells.ContainsKey(rec.Name):
+                    DeclareClrRecordShell(rec);
+                    StampModuleQualifiedName(rec.Name, moduleQualifier);
+                    break;
                 case BoundInterfaceDefinition iface when !_clrTypeShells.ContainsKey(iface.Name):
                     DeclareClrInterfaceShell(iface);
                     StampModuleQualifiedName(iface.Name, moduleQualifier);
@@ -124,6 +129,8 @@ internal sealed partial class EmitterImpl
                 // first attempt accepted six kinds on the strength of emitting, and all six
                 // failed at run time.
                 case BoundEnumDefinition en when CanEmitClrEnumType(en):
+                    continue;
+                case BoundRecordDefinition rec when CanEmitClrRecordShell(rec):
                     continue;
                 case BoundInterfaceDefinition:
                     continue;

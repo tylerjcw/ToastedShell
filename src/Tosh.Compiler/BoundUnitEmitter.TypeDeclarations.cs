@@ -541,7 +541,7 @@ internal sealed partial class EmitterImpl
     /// <see cref="EmitExpression"/> can lower <c>Result.Ok(v)</c> /
     /// <c>Color.Red</c> to direct <c>newobj</c> / <c>ldsfld</c>.
     /// </summary>
-    private void DeclareClrUnionShell(BoundUnionDefinition union)
+    private void DeclareClrUnionShell(BoundUnionDefinition union, string? moduleQualifier = null)
     {
         if (_clrUnionShells.ContainsKey(union.Name)) return;
 
@@ -552,7 +552,21 @@ internal sealed partial class EmitterImpl
             baseAttrs,
             MetadataType(typeof(object)));
         StampToshTypeAttribute(baseType, "union", union.Span);
-        StampOriginalNameIfMangled(baseType, union.Name);
+
+        // `TOAST-0035`. A union declared inside a module is stamped with the name tosh calls
+        // it, base and variants alike — `M.Result` and `M.Result.Ok`. Without the qualifier
+        // the variant is registered as `Result.Ok`, and nothing can ask for `M.Result.Ok`.
+        var unionToshName = moduleQualifier is null ? union.Name : $"{moduleQualifier}.{union.Name}";
+
+        if (moduleQualifier is null)
+        {
+            StampOriginalNameIfMangled(baseType, union.Name);
+        }
+        else
+        {
+            baseType.SetCustomAttribute(new CustomAttributeBuilder(
+                s_toshOriginalNameCtor, new object[] { unionToshName }));
+        }
 
         // Public read-only "Variant" string field on the base.
         var variantField = baseType.DefineField(
@@ -590,7 +604,15 @@ internal sealed partial class EmitterImpl
                 TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed,
                 baseType);
             StampToshTypeAttribute(variantType, "union_variant", variant.Span);
-            StampOriginalNameIfMangled(variantType, $"{union.Name}.{variant.Name}");
+            if (moduleQualifier is null)
+            {
+                StampOriginalNameIfMangled(variantType, $"{union.Name}.{variant.Name}");
+            }
+            else
+            {
+                variantType.SetCustomAttribute(new CustomAttributeBuilder(
+                    s_toshOriginalNameCtor, new object[] { $"{unionToshName}.{variant.Name}" }));
+            }
 
             // Variant-specific data fields
             var variantFields = new Dictionary<string, FieldBuilder>(StringComparer.OrdinalIgnoreCase);
