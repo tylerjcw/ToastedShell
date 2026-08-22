@@ -1578,13 +1578,17 @@ internal sealed partial class EmitterImpl : IDisposable
         {
             _il.Emit(OpCodes.Ret);
         }
-        _program.CreateType();
-
-        // Emit module-method bodies (collected during DeclareClrModuleShell)
-        // and close every module's static constructor. Done after
-        // _program is finalized so cross-references between Program
-        // members and module members are well-defined.
+        // `TOAST-0035`. Module-method bodies are emitted *before* `Program` is closed,
+        // because a body may need a `Program`-level helper: a block argument emits one
+        // through `EmitBlockBodyMethod`, and adding it to a created type throws "Unable to
+        // change after type has been created". That was unreachable while such modules were
+        // replayed, and became a hard crash the moment they were not.
+        //
+        // Cross-references stay well-defined: both directions resolve against
+        // `MethodBuilder` tokens, which are usable before either type is created.
         EmitClrModuleMethodBodies();
+
+        _program.CreateType();
         FinalizeClrModuleCctors();
         FinalizeClrModuleTypes();
         EmitClrClassMethodBodies();

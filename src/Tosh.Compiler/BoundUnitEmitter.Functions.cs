@@ -492,6 +492,145 @@ internal sealed partial class EmitterImpl
         il.Emit(OpCodes.Castclass, target);
     }
 
+    /// <summary>
+    /// Binds a packed <c>object[]</c> argument to one local per parameter —
+    /// <c>TOAST-0035</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The shape a function takes when any parameter is optional, rest, or defaulted: one
+    /// array, a sentinel for what the caller omitted, and the default expression evaluated
+    /// here rather than at the call site — which is the only place it can be, since a
+    /// default may be any expression and the dynamic invoke path cannot know it.
+    /// </para>
+    /// <para>
+    /// Extracted so a module method can use it too. It was inline in
+    /// <see cref="EmitUserFunctionBody"/>, which is why a module method with a default
+    /// parameter fell back to source replay while the identical top-level function emitted:
+    /// the machinery existed one level up and could not be reached. It reads the array from
+    /// <c>ldarg_0</c>, which holds for any static method whose single parameter is the pack.
+    /// </para>
+    /// </remarks>
+    private void EmitPackedArgumentPrologue(IReadOnlyList<BoundParameter> parameters)
+    {
+            // Resolve named-argument wrappers into their positional
+            // slots before the positional prologue binds anything
+            // (TS-P1-05): `f(1, c = 99)` must land 99 in c's slot,
+            // leaving b's slot to its declared default. The result
+            // lives in a local rather than overwriting arg 0, so the
+            // prologue below reads one stable array.
+            var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
+            var argsLocal = _il.DeclareLocal(typeof(object[]));
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4, parameters.Count);
+            _il.Emit(OpCodes.Newarr, typeof(string));
+            for (var i = 0; i < parameters.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                _il.Emit(OpCodes.Ldstr, parameters[i].Name);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(hasRestParameter ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Call, s_hostNormalizePackedArguments);
+            _il.Emit(OpCodes.Stloc, argsLocal);
+
+            for (var i = 0; i < parameters.Count; i++)
+            {
+                var parameter = parameters[i];
+                var local = _il.DeclareLocal(typeof(object));
+
+                if (parameter.IsRest)
+                {
+                    var restLocal = _il.DeclareLocal(s_listOfObject);
+                    var idxLocal = _il.DeclareLocal(typeof(int));
+                    var loop = _il.DefineLabel();
+                    var done = _il.DefineLabel();
+
+                    _il.Emit(OpCodes.Newobj, s_listCtor);
+                    _il.Emit(OpCodes.Stloc, restLocal);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Stloc, idxLocal);
+
+                    _il.MarkLabel(loop);
+                    _il.Emit(OpCodes.Ldloc, idxLocal);
+                    _il.Emit(OpCodes.Ldloc, argsLocal);
+                    _il.Emit(OpCodes.Ldlen);
+                    _il.Emit(OpCodes.Conv_I4);
+                    _il.Emit(OpCodes.Bge_S, done);
+
+                    _il.Emit(OpCodes.Ldloc, restLocal);
+                    _il.Emit(OpCodes.Ldloc, argsLocal);
+                    _il.Emit(OpCodes.Ldloc, idxLocal);
+                    _il.Emit(OpCodes.Ldelem_Ref);
+                    _il.Emit(OpCodes.Callvirt, s_listAdd);
+
+                    _il.Emit(OpCodes.Ldloc, idxLocal);
+                    _il.Emit(OpCodes.Ldc_I4_1);
+                    _il.Emit(OpCodes.Add);
+                    _il.Emit(OpCodes.Stloc, idxLocal);
+                    _il.Emit(OpCodes.Br_S, loop);
+
+                    _il.MarkLabel(done);
+                    _il.Emit(OpCodes.Ldloc, restLocal);
+                    _il.Emit(OpCodes.Stloc, local);
+                }
+                else
+                {
+                    var hasArg = _il.DefineLabel();
+                    var loaded = _il.DefineLabel();
+
+                    _il.Emit(OpCodes.Ldloc, argsLocal);
+                    _il.Emit(OpCodes.Ldlen);
+                    _il.Emit(OpCodes.Conv_I4);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Bgt_S, hasArg);
+
+                    _il.Emit(OpCodes.Ldsfld, s_compiledLambdaMissingArgument);
+                    _il.Emit(OpCodes.Stloc, local);
+                    _il.Emit(OpCodes.Br_S, loaded);
+
+                    _il.MarkLabel(hasArg);
+                    _il.Emit(OpCodes.Ldloc, argsLocal);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Ldelem_Ref);
+                    _il.Emit(OpCodes.Stloc, local);
+
+                    _il.MarkLabel(loaded);
+                }
+
+                if (!parameter.IsRest && (parameter.IsOptional || parameter.Default is not null))
+                {
+                    var hasValue = _il.DefineLabel();
+                    _il.Emit(OpCodes.Ldloc, local);
+                    _il.Emit(OpCodes.Ldsfld, s_compiledLambdaMissingArgument);
+                    _il.Emit(OpCodes.Bne_Un, hasValue);
+
+                    if (parameter.Default is not null)
+                    {
+                        var defaultType = EmitPipelineAsValue(parameter.Default);
+                        if (defaultType is null)
+                        {
+                            _il.Emit(OpCodes.Ldnull);
+                        }
+                        else
+                        {
+                            BoxIfValueType(defaultType);
+                        }
+                    }
+                    else
+                    {
+                        _il.Emit(OpCodes.Ldnull);
+                    }
+
+                    _il.Emit(OpCodes.Stloc, local);
+                    _il.MarkLabel(hasValue);
+                }
+
+                _typedParamLocals[parameter.Symbol] = local;
+            }
+    }
+
     private void EmitUserFunctionBody(BoundFunctionDefinition func)
     {
         if (!_userFunctions.TryGetValue(func.Name, out var entries)) return;
@@ -531,122 +670,7 @@ internal sealed partial class EmitterImpl
             var executionFrame = EmitExecutionFrameEntry($"func {func.Name}");
             if (entry.UsesPackedArguments)
             {
-                // Resolve named-argument wrappers into their positional
-                // slots before the positional prologue binds anything
-                // (TS-P1-05): `f(1, c = 99)` must land 99 in c's slot,
-                // leaving b's slot to its declared default. The result
-                // lives in a local rather than overwriting arg 0, so the
-                // prologue below reads one stable array.
-                var hasRestParameter = func.Parameters.Count > 0 && func.Parameters[^1].IsRest;
-                var argsLocal = _il.DeclareLocal(typeof(object[]));
-                _il.Emit(OpCodes.Ldarg_0);
-                _il.Emit(OpCodes.Ldc_I4, func.Parameters.Count);
-                _il.Emit(OpCodes.Newarr, typeof(string));
-                for (var i = 0; i < func.Parameters.Count; i++)
-                {
-                    _il.Emit(OpCodes.Dup);
-                    _il.Emit(OpCodes.Ldc_I4, i);
-                    _il.Emit(OpCodes.Ldstr, func.Parameters[i].Name);
-                    _il.Emit(OpCodes.Stelem_Ref);
-                }
-                _il.Emit(hasRestParameter ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                _il.Emit(OpCodes.Call, s_hostNormalizePackedArguments);
-                _il.Emit(OpCodes.Stloc, argsLocal);
-
-                for (var i = 0; i < func.Parameters.Count; i++)
-                {
-                    var parameter = func.Parameters[i];
-                    var local = _il.DeclareLocal(typeof(object));
-
-                    if (parameter.IsRest)
-                    {
-                        var restLocal = _il.DeclareLocal(s_listOfObject);
-                        var idxLocal = _il.DeclareLocal(typeof(int));
-                        var loop = _il.DefineLabel();
-                        var done = _il.DefineLabel();
-
-                        _il.Emit(OpCodes.Newobj, s_listCtor);
-                        _il.Emit(OpCodes.Stloc, restLocal);
-                        _il.Emit(OpCodes.Ldc_I4, i);
-                        _il.Emit(OpCodes.Stloc, idxLocal);
-
-                        _il.MarkLabel(loop);
-                        _il.Emit(OpCodes.Ldloc, idxLocal);
-                        _il.Emit(OpCodes.Ldloc, argsLocal);
-                        _il.Emit(OpCodes.Ldlen);
-                        _il.Emit(OpCodes.Conv_I4);
-                        _il.Emit(OpCodes.Bge_S, done);
-
-                        _il.Emit(OpCodes.Ldloc, restLocal);
-                        _il.Emit(OpCodes.Ldloc, argsLocal);
-                        _il.Emit(OpCodes.Ldloc, idxLocal);
-                        _il.Emit(OpCodes.Ldelem_Ref);
-                        _il.Emit(OpCodes.Callvirt, s_listAdd);
-
-                        _il.Emit(OpCodes.Ldloc, idxLocal);
-                        _il.Emit(OpCodes.Ldc_I4_1);
-                        _il.Emit(OpCodes.Add);
-                        _il.Emit(OpCodes.Stloc, idxLocal);
-                        _il.Emit(OpCodes.Br_S, loop);
-
-                        _il.MarkLabel(done);
-                        _il.Emit(OpCodes.Ldloc, restLocal);
-                        _il.Emit(OpCodes.Stloc, local);
-                    }
-                    else
-                    {
-                        var hasArg = _il.DefineLabel();
-                        var loaded = _il.DefineLabel();
-
-                        _il.Emit(OpCodes.Ldloc, argsLocal);
-                        _il.Emit(OpCodes.Ldlen);
-                        _il.Emit(OpCodes.Conv_I4);
-                        _il.Emit(OpCodes.Ldc_I4, i);
-                        _il.Emit(OpCodes.Bgt_S, hasArg);
-
-                        _il.Emit(OpCodes.Ldsfld, s_compiledLambdaMissingArgument);
-                        _il.Emit(OpCodes.Stloc, local);
-                        _il.Emit(OpCodes.Br_S, loaded);
-
-                        _il.MarkLabel(hasArg);
-                        _il.Emit(OpCodes.Ldloc, argsLocal);
-                        _il.Emit(OpCodes.Ldc_I4, i);
-                        _il.Emit(OpCodes.Ldelem_Ref);
-                        _il.Emit(OpCodes.Stloc, local);
-
-                        _il.MarkLabel(loaded);
-                    }
-
-                    if (!parameter.IsRest && (parameter.IsOptional || parameter.Default is not null))
-                    {
-                        var hasValue = _il.DefineLabel();
-                        _il.Emit(OpCodes.Ldloc, local);
-                        _il.Emit(OpCodes.Ldsfld, s_compiledLambdaMissingArgument);
-                        _il.Emit(OpCodes.Bne_Un, hasValue);
-
-                        if (parameter.Default is not null)
-                        {
-                            var defaultType = EmitPipelineAsValue(parameter.Default);
-                            if (defaultType is null)
-                            {
-                                _il.Emit(OpCodes.Ldnull);
-                            }
-                            else
-                            {
-                                BoxIfValueType(defaultType);
-                            }
-                        }
-                        else
-                        {
-                            _il.Emit(OpCodes.Ldnull);
-                        }
-
-                        _il.Emit(OpCodes.Stloc, local);
-                        _il.MarkLabel(hasValue);
-                    }
-
-                    _typedParamLocals[parameter.Symbol] = local;
-                }
+                EmitPackedArgumentPrologue(func.Parameters);
             }
             else for (var i = 0; i < func.Parameters.Count; i++)
             {

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Tosh.Compiler;
 using Tosh.Language;
 using Tosh.Language.Binding;
@@ -64,6 +65,11 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("a nested module", "    export module Inner {\n        export func G() -> int => 1\n    }")]
     [InlineData("a pipeline body", "    export func F(a: list<int>) -> int {\n        return ($a | count)\n    }")]
     [InlineData("an interpolation", "    export func F(a: int) -> string => $\"{$a}\"")]
+    // Lifted out of replay by TOAST-0035 on 2026-08-22, by giving a module method the same
+    // packed-argument shape a top-level function already had.
+    [InlineData("a defaulted parameter", "    export func F(a: int, b: int = 2) -> int => $a + $b")]
+    [InlineData("a rest parameter", "    export func F(rest...) -> int => 1")]
+    [InlineData("a block argument", "    export func F(xs: list<int>) -> int {\n        return ($xs | each { $_ * 2 } | count)\n    }")]
     public void A_module_member_that_emits(string what, string body)
     {
         Assert.True(EmitsWithoutReplay(InModule(body), out var reasons), $"{what}: {reasons}");
@@ -87,7 +93,6 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     [Theory]
     [InlineData("a record", "    export record R(A: int, B: string)")]
     [InlineData("an enum", "    export enum E {\n        One\n        Two\n    }")]
-    [InlineData("an interface", "    export interface I {\n        func M() -> int\n    }")]
     [InlineData("a trait", "    export trait T {\n        prop N: string = \"x\"\n    }")]
     [InlineData("a union", "    export union U {\n        Ok(value)\n        Err(message)\n    }")]
     [InlineData("a struct", "    export struct S {\n        prop X: int = 0\n    }")]
@@ -114,15 +119,130 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// arguments and `EmitUserFunctionBody` substitutes a missing-argument sentinel,
     /// evaluating the default expression in the body. The module path does not use it.
     /// </remarks>
+    /// <summary>
+    /// Emitting is not behaving, and these assert only the first.
+    /// </summary>
+    /// <remarks>
+    /// Worth stating where it can be read next to the corpus above. Every row here was
+    /// verified to *emit*, and a module method that emitted cleanly still returned `null`
+    /// for an expression body — it computed the value, discarded it, and fell out through
+    /// the implicit `return null`. That is the same trap `TOAST-0065` records for compiled
+    /// `match`: a compiled backend can accept a shape and produce a different answer.
+    ///
+    /// What each shape *does* is asserted by `DifferentialExecutionTests`, which runs both
+    /// backends and compares. A row belongs in both.
+    /// </remarks>
+    [Fact]
+    public void Emitting_is_not_the_same_as_behaving()
+    {
+        // A module method with an expression body: emitted, and for a while returned null.
+        Assert.True(
+            EmitsWithoutReplay(InModule("    export func F(a: int) -> int => $a + 1"), out var reasons),
+            reasons);
+    }
+
+    /// <summary>
+    /// Emits, loads and runs under the `runtime` profile, returning what it printed.
+    /// </summary>
+    private string RunWithoutReplay(string source)
+    {
+        var engine = new ToshEngine(_runtime);
+        var parse = engine.Parse(source, "<replay-surface-run>");
+        Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
+
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+        var assemblyName = $"ToshTest_{Guid.NewGuid():N}";
+        using var stream = new MemoryStream();
+        var result = BoundUnitEmitter.Emit(unit, assemblyName, stream, CompileProfile.Runtime);
+        Assert.True(result.IsClean, string.Join("; ", result.UnsupportedShapes));
+
+        var program = Assembly.Load(stream.ToArray()).GetType($"{assemblyName}.Program");
+        var main = program!.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)!;
+
+        var originalOut = Console.Out;
+        var capture = new StringWriter();
+        try
+        {
+            Console.SetOut(capture);
+            main.Invoke(null, new object?[] { Array.Empty<string>() });
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        return capture.ToString().Trim();
+    }
+
+    /// <summary>
+    /// A module method emits *and answers* without replay — `TOAST-0035`.
+    /// </summary>
+    /// <remarks>
+    /// The half of this item that is finished. Defaulted, rest and block-argument shapes all
+    /// go through the packed-argument path, and the answers are pinned in
+    /// `DifferentialExecutionTests` as well.
+    /// </remarks>
     [Theory]
-    [InlineData("a defaulted parameter", "    export func F(a: int, b: int = 2) -> int => $a + $b")]
-    [InlineData("a rest parameter", "    export func F(rest...) -> int => 1")]
-    public void A_function_shape_that_still_replays(string what, string body)
+    [InlineData("export module M {\n    export func Add(a: int, b: int) -> int => $a + $b\n}\nvar r: int = M.Add(1, 5)\necho $r", "6")]
+    [InlineData("export module M {\n    export func Add(a: int, b: int = 2) -> int => $a + $b\n}\nvar r: int = M.Add(1)\necho $r", "3")]
+    public void A_module_method_answers_without_replay(string source, string expected)
+        => Assert.Equal(expected, RunWithoutReplay(source));
+
+    /// <summary>
+    /// A module-scoped type answers without replay — `TOAST-0035`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These run the emitted program rather than checking that it emitted, and the
+    /// distinction is the whole history of this item. A module-scoped class was accepted by
+    /// `ModuleNeedsSourceReplay` from "step 1" onward, emitted with no source carried, and
+    /// the emitted program then could not find the type — *"unknown type 'M.Box'"* — on the
+    /// pushed commit as much as here. Nothing noticed, because nothing ran it.
+    /// </para>
+    /// <para>
+    /// The cause was one line: a shell for a type declared inside a module is emitted as a
+    /// top-level CLR type under its bare name, and `RegisterCompiledAssembly` aliases it by
+    /// `ToshOriginalNameAttribute`, which was stamped only when the CLR could not spell the
+    /// name. `Box` inside `M` was therefore registered as `Box`.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(
+        "export module M {\n    export class Box {\n        prop X: int = 5\n    }\n}\n" +
+        "var b: dynamic = new M.Box()\nvar r: int = $b.X\necho $r", "5")]
+    [InlineData(
+        "export module M {\n    export interface IShape {\n        func Area() -> int\n    }\n" +
+        "    export class Square fulfills IShape {\n        func Area() -> int => 9\n    }\n}\n" +
+        "var s: dynamic = new M.Square()\nvar r: int = $s.Area()\necho $r", "9")]
+    public void A_module_scoped_type_answers_without_replay(string source, string expected)
+        => Assert.Equal(expected, RunWithoutReplay(source));
+
+    /// <summary>
+    /// The kinds a stamp alone does not lift out of replay.
+    /// </summary>
+    /// <remarks>
+    /// Tripwires. Each was measured with the stamp in place and each failed differently,
+    /// which is why they are not simply "the rest of the switch":
+    ///
+    ///   record  `M.Point(3, 4)` — read as a static *method* on the module shell
+    ///   union   `M.Result.Ok`   — static member not found on the module shell
+    ///   struct  the property read came back as something `int` would not take
+    ///   trait   the class using it still resolved to nothing
+    ///
+    /// Each needs its own construction or member path taught about a module-qualified
+    /// shell. When one starts emitting, this fails and says to verify it by running it.
+    /// </remarks>
+    [Theory]
+    [InlineData("a record", "    export record Point(X: int, Y: int)")]
+    [InlineData("a struct", "    export struct Vec {\n        prop X: int = 7\n    }")]
+    [InlineData("a trait", "    export trait Named {\n        prop Name = \"anon\"\n    }")]
+    [InlineData("a union", "    export union Result {\n        Ok(value)\n        Err(message)\n    }")]
+    public void A_declaration_kind_a_stamp_does_not_lift(string what, string body)
     {
         Assert.False(
             EmitsWithoutReplay(InModule(body), out _),
-            $"{what} no longer falls back to source replay — move it into the corpus above " +
-            "and record it on TOAST-0035.");
+            $"{what} now emits without replay — run the emitted program and check it gives " +
+            "the interpreted answer before moving it into the corpus (TOAST-0035).");
     }
 
     /// <summary>

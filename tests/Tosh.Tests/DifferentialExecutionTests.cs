@@ -45,6 +45,39 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case("arithmetic", "echo (1 + 2 * 3)");
         yield return Case("interpolation", "var n = 4\necho $\"n is {$n}\"");
 
+        // ── Module methods without source replay: TOAST-0035 ──────────────
+        // These are the shapes that stopped being replayed. They are here as well as in
+        // SourceReplaySurfaceTests because that one asserts a module *emits* and this one
+        // asserts it answers — a module method emitted cleanly and returned null for an
+        // expression body until the trailing-expression collapse was applied to it.
+        yield return Case(
+            "module-method-expression-body",
+            "export module M {\n    export func Add(a: int, b: int) -> int => $a + $b\n}\n"
+            + "var r: int = M.Add(1, 5)\necho $r");
+
+        yield return Case(
+            "module-method-default-parameter",
+            "export module M {\n    export func Add(a: int, b: int = 2) -> int => $a + $b\n}\n"
+            + "var r: int = M.Add(1)\necho $r");
+
+        // A block argument inside a module method emits a helper on `Program`, and a module
+        // shell is a different type. Both the ordering and the visibility of that helper
+        // were wrong, and neither was reachable while such modules were replayed: the first
+        // threw "Unable to change after type has been created" at compile time, the second a
+        // MethodAccessException at the first call.
+        yield return Case(
+            "module-method-block-argument",
+            "export module M {\n"
+            + "    export func Doubled(items: list<int>, factor: int = 2) -> int {\n"
+            + "        return ($items | each { $_ * $factor } | count)\n"
+            + "    }\n}\n"
+            + "var r: int = M.Doubled([1, 2, 3])\necho $r");
+
+        yield return Case(
+            "module-method-rest-parameter",
+            "export module M {\n    export func Count(items...) -> int => ($items | count)\n}\n"
+            + "var r: int = M.Count(1, 2, 3)\necho $r");
+
         // ── Record literal inference: TOAST-0034 ──────────────────────────
         yield return Case(
             "record-literal-fields",

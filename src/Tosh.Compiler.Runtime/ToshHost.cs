@@ -1452,6 +1452,27 @@ public static class ToshHost
     private static (object? Last, List<object?> All) InvokeAndDrain(
         string name, object?[] args, bool printItems)
     {
+        // `TOAST-0035`. A dotted name in command position is how `Probe.Add 1` is written,
+        // and it used to reach the engine's command table by way of the module's replayed
+        // source. A module that no longer replays has no entry there, so the compiled shell
+        // is asked first — the same order `InvokeQualifiedMethod` already uses for
+        // `Probe.Add(1)`. Without this the two spellings of one call disagree: the
+        // parenthesised form resolves and the command form reports "unknown command".
+        if (name.Contains('.', StringComparison.Ordinal) &&
+            !Runtime.Commands.TryGet(name, out _) &&
+            TryInvokeCompiledModuleMethod(name, args, out var moduleResult))
+        {
+            var produced = new List<object?>();
+
+            if (moduleResult is not null)
+            {
+                produced.Add(moduleResult);
+                if (printItems) Console.WriteLine(ToastRenderer.Render(moduleResult));
+            }
+
+            return (moduleResult, produced);
+        }
+
         var command = ResolveCommand(name);
         var ctx = new CommandContext(Runtime, EmptyInput(), args, default);
         return DrainEnumerator(command.ExecuteAsync(ctx), printItems);
@@ -2939,6 +2960,27 @@ public static class ToshHost
         return false;
     }
 
+    /// <summary>
+    /// Finds a module method that takes its arguments packed — <c>TOAST-0035</c>.
+    /// </summary>
+    private static MethodInfo? TryFindPackedModuleMethod(Type moduleType, string methodName)
+    {
+        foreach (var candidate in moduleType.GetMethods(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (!string.Equals(candidate.Name, methodName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (candidate.GetCustomAttribute<global::Tosh.Runtime.ToshPackedArgumentsAttribute>() is not null)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private static bool TryInvokeCompiledModuleMethod(string path, object?[] args, out object? value)
     {
         var lastDot = path.LastIndexOf('.');
@@ -2957,9 +2999,28 @@ public static class ToshHost
 
             try
             {
+                // `TOAST-0035`. A method whose parameters are packed takes the whole
+                // argument list as one array, so the caller's arguments are wrapped rather
+                // than spread. The marker is needed because the shape is not inferable: a
+                // tosh function of one array parameter emits the same signature.
+                if (TryFindPackedModuleMethod(moduleType, methodName) is { } packed)
+                {
+                    value = packed.Invoke(null, new object?[] { args });
+                    return true;
+                }
+
                 var invocation = Runtime.Invoker.InvokeStatic(moduleType, methodName, args);
                 value = invocation.ReturnedVoid ? null : invocation.Value;
                 return true;
+            }
+            catch (TargetInvocationException wrapper) when (wrapper.InnerException is not null)
+            {
+                // The callee failed, which is the callee's answer and not a reason to look
+                // for another module: rethrow it rather than falling through to the engine
+                // and running the body a second time.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo
+                    .Capture(wrapper.InnerException).Throw();
+                throw;
             }
             catch { }
         }

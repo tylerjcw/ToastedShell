@@ -473,7 +473,12 @@ internal sealed partial class EmitterImpl
         var methodName = $"__block_{block.Body.Span.Start}";
         var blockMethod = _program.DefineMethod(
             methodName,
-            MethodAttributes.Private | MethodAttributes.Static,
+            // `TOAST-0035`. Assembly-visible rather than private: a block argument written
+            // inside a *module* method emits its helper here, on `Program`, and a module
+            // shell is a different type. Private made that a `MethodAccessException` at the
+            // first call — which only became reachable when such modules stopped being
+            // replayed. Everything this can be called from is in the emitted assembly.
+            MethodAttributes.Assembly | MethodAttributes.Static,
             typeof(List<object>),
             new[] { typeof(object), typeof(object[]) });
 
