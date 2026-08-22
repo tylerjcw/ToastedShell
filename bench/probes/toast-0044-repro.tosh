@@ -1,0 +1,229 @@
+#!/usr/bin/env tosh
+## @summary `TOAST-0044` reproduction: compiled `Parser.ParseSum` emits invalid IL.
+## @remarks
+##   Reduced from `compiler_shape.tosh` by bisection. Runs correctly interpreted;
+##   compiled, it throws `System.InvalidProgramException` at `g3.Parser.ParseSum`.
+##
+##   **Compile into an empty directory.** A directory holding runtime DLLs staged by an
+##   earlier compile misattributes the failure to `Program.Main`, which cost most of one
+##   session.
+##
+##   What the emitted IL contains, hand-decoded from the 104-byte body:
+##
+##       IL_0027: 2D 17        brtrue.s -> IL_0040     the `or`'s true arm
+##       IL_0029: ...          right operand
+##       IL_003E: 2B 01        br.s     -> IL_0041     "done"
+##       IL_0040: 39 FF 0B ..  brfalse                 the while's exit test
+##
+##   `EmitLogicalOr` marks `truthy`, emits `ldc.i4.1`, then marks `done` — so `truthy`
+##   should be the constant at 0x40 and `done` the next instruction at 0x41. The constant
+##   is **not in the stream**: the while's `brfalse` occupies 0x40, and `br.s` therefore
+##   targets 0x41, the middle of it. Branching into an instruction is the invalid part.
+##
+##   Known and ruled out:
+##     * The bytes are byte-identical whether emitted to a MemoryStream in-process or
+##       written to a file by `toshc`.
+##     * `RuntimeHelpers.PrepareMethod` reports **ok** for this method in both cases, so
+##       force-JIT does not detect it. Only running the standalone program does.
+##     * `while (A or B)` on its own compiles and runs, as a class method and as a free
+##       function. It needs this file's surrounding shape.
+##     * Inserting a `nop` between the two labels changes the failure to
+##       `BadImageFormatException: Bad IL range` rather than fixing it.
+
+export class Token(kind: string, text: string, pos: int) {
+    prop Kind: string = $kind
+    prop Text: string = $text
+    prop Pos: int = $pos
+
+    func ToString() -> string => $"{$this.Kind}:{$this.Text}"
+}
+
+export class Lexer(source: string) {
+    prop Source: string = $source
+    shy prop pos_: int = 0
+
+    shy prop DIGITS: string = "0123456789"
+    shy prop ALPHA: string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+
+    prop AtEnd: bool => $this.pos_ >= $this.Source.Length
+
+    shy func Peek() -> string => $this.AtEnd ? "" : $this.Source.Substring($this.pos_, 1)
+
+    shy func Advance() -> string {
+        var c = $this.Peek()
+        $this.pos_ = $this.pos_ + 1
+        return $c
+    }
+
+    shy func IsDigit(c: string) -> bool => ($c != "") and ($this.DIGITS.Contains($c))
+    shy func IsAlpha(c: string) -> bool => ($c != "") and ($this.ALPHA.Contains($c))
+
+    shy func ReadNumber() -> Token {
+        var start = $this.pos_
+        var text = ""
+
+        while ($this.IsDigit($this.Peek())) { $text = $text + $this.Advance() }
+
+        if ($this.Peek() == ".") {
+            $text = $text + $this.Advance()
+            while ($this.IsDigit($this.Peek())) { $text = $text + $this.Advance() }
+        }
+
+        return new Token("number", $text, $start)
+    }
+
+    shy func ReadWord() -> Token {
+        var start = $this.pos_
+        var text = ""
+
+        while ($this.IsAlpha($this.Peek()) or $this.IsDigit($this.Peek())) {
+            $text = $text + $this.Advance()
+        }
+
+        var kind = (($text == "let") or ($text == "in")) ? "keyword" : "ident"
+        return new Token($kind, $text, $start)
+    }
+
+    ## @summary Produces the full token list, ending with an `eof` token.
+    func Tokenize() -> list<Token> {
+        # Unannotated on purpose: an array literal already infers, and annotating it as
+        # `list<Token>` made `$tokens = $tokens + [...]` fail to convert back — `TOAST-0038`.
+        var tokens = []
+
+        while (not $this.AtEnd) {
+            var c = $this.Peek()
+
+            if (($c == " ") or ($c == "\t") or ($c == "\n")) {
+                $this.Advance() | ignore
+                continue
+            }
+
+            if ($this.IsDigit($c)) {
+                $tokens = $tokens + [$this.ReadNumber()]
+                continue
+            }
+
+            if ($this.IsAlpha($c)) {
+                $tokens = $tokens + [$this.ReadWord()]
+                continue
+            }
+
+            if ("+-*/()=".Contains($c)) {
+                var start = $this.pos_
+                $tokens = $tokens + [new Token("punct", $this.Advance(), $start)]
+                continue
+            }
+
+            throw new LexError($"unexpected character '{$c}'", $this.pos_)
+        }
+
+        return $tokens + [new Token("eof", "", $this.pos_)]
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AST — a small hierarchy, because that is the shape a real compiler has
+# ─────────────────────────────────────────────────────────────────────────────
+
+export class Node {
+    prop Kind: string = "node"
+}
+
+export class NumberNode(value: double) extends Node {
+    prop Kind: string = "number"
+    prop Value: double = $value
+}
+
+export class VarNode(name: string) extends Node {
+    prop Kind: string = "var"
+    prop Name: string = $name
+}
+
+export class UnaryNode(op: string, operand: Node) extends Node {
+    prop Kind: string = "unary"
+    prop Op: string = $op
+    prop Operand: Node = $operand
+}
+
+export class BinaryNode(op: string, left: Node, right: Node) extends Node {
+    prop Kind: string = "binary"
+    prop Op: string = $op
+    prop Left: Node = $left
+    prop Right: Node = $right
+}
+
+export class LetNode(name: string, value: Node, body: Node) extends Node {
+    prop Kind: string = "let"
+    prop Name: string = $name
+    prop Value: Node = $value
+    prop Body: Node = $body
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parser — recursive descent with precedence levels
+# ─────────────────────────────────────────────────────────────────────────────
+
+export class Parser(tokens: list<Token>) {
+    prop Tokens: list<Token> = $tokens
+    shy prop index_: int = 0
+
+    func Current() -> Token => $this.Tokens[$this.index_]
+
+    shy func Advance() -> Token {
+        var token = $this.Current()
+        $this.index_ = $this.index_ + 1
+        return $token
+    }
+
+    shy func Matches(kind: string, text: string) -> bool {
+        var token = $this.Current()
+        return ($token.Kind == $kind) and ($token.Text == $text)
+    }
+
+    shy func Expect(kind: string, text: string) -> Token {
+        if (not $this.Matches($kind, $text)) {
+            throw new ParseError($"expected '{$text}'", $this.Current())
+        }
+
+        return $this.Advance()
+    }
+
+    ## @summary expr := 'let' IDENT '=' expr 'in' expr | sum
+    func ParseExpr() -> Node {
+        if ($this.Matches("keyword", "let")) {
+            $this.Advance() | ignore
+
+            var name = $this.Current()
+            if ($name.Kind != "ident") { throw new ParseError("expected a name after 'let'", $name) }
+            $this.Advance() | ignore
+
+            $this.Expect("punct", "=") | ignore
+            var value = $this.ParseExpr()
+            $this.Expect("keyword", "in") | ignore
+            var body = $this.ParseExpr()
+
+            return new LetNode($name.Text, $value, $body)
+        }
+
+        return $this.ParseSum()
+    }
+
+    shy     shy func ParseSum() -> Node {
+        var left = $this.ParseProduct()
+        while ($this.Matches("punct", "+") or $this.Matches("punct", "-")) {
+            $left = new Node()
+        }
+        return $left
+    }
+    shy func ParseProduct() -> Node { return new Node() }
+}
+
+export func Compile(source: string, scope: Hashtable) -> record {
+    var tokens = (new Lexer($source)).Tokenize()
+    var p = new Parser($tokens)
+    var ast = $p.ParseExpr()
+    return {| Tokens = 1, Nodes = 2, Text = "a", Value = 3.0 |}
+}
+var g = new System.Collections.Hashtable()
+var r = Compile("1 + 2", $g)
+writeline $"t={$r.Tokens}"

@@ -468,11 +468,15 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // `TOAST-0044`. Every emitted method is JIT-compiled before the program runs.
         //
         // Invalid IL surfaces as `InvalidProgramException` at the *caller's* frame, because
-        // the method that failed to compile never gets one. So a real defect in a class
-        // method is reported as "at Program.Main", which is where an afternoon went: the
-        // named method was not the broken one. Preparing each method attributes the failure
-        // to the method that actually holds the bad IL, and does it whether or not the case
-        // happens to call it.
+        // the method that failed to compile never gets one. So a defect in a class method is
+        // reported as "at Program.Main", which is where an afternoon went: the named method
+        // was not the broken one. Preparing each method attributes a failure to the method
+        // that actually holds the bad IL, whether or not the case calls it.
+        //
+        // **It is not a guarantee.** `TOAST-0044`'s own reproduction passes this check and
+        // still throws when the program runs — same bytes, in-process and on disk. So this
+        // catches some invalid IL early and names it well; it does not prove an assembly
+        // sound, and a case passing here can still fail as a compiled binary.
         foreach (var type in assembly.GetTypes())
         {
             foreach (var method in type.GetMethods(

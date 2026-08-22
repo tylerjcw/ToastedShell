@@ -81,44 +81,48 @@ a property named `Token` of type `Token`, a computed property *alone*, a public 
 calling a private one, or a constructor taking `list<Token>`. Each was tried and passed.
 What none of them had was **two classes where one is replayed and the other is shelled**.
 
-## Still open — the failure this was masking
+## Still open — narrowed to one method and one instruction
 
-`System.InvalidProgramException` from the readiness probe, and the hunt narrowed it a long
-way without reaching a minimal case. What is now known, so the next attempt does not repeat
-it:
+`bench/probes/toast-0044-repro.tosh` reproduces it in 197 lines, reduced from the readiness
+probe by bisection. Interpreted it runs; compiled it throws
+`System.InvalidProgramException` at `Parser.ParseSum`.
 
-**Only `Program.Main` holds the invalid IL.** Established by force-JIT-ing every emitted
-method with `RuntimeHelpers.PrepareMethod` rather than by reading the stack trace — which
-says "at Main" whether or not Main is the broken method, because a method that fails to
-compile never gets a frame.
+### The defect, hand-decoded from the 104-byte body
 
-**An earlier round of this reported `Parser.ParseSum` as well, and that was wrong.** It came
-from preparing methods in a loop over every type; prepared on its own, and in either order
-relative to `Main`, `ParseSum` compiles. `ParseSum` and `ParseProduct` differ by six bytes —
-two string tokens and the callee token — and are otherwise byte-identical, which is what
-prompted checking it in isolation.
+```
+IL_0027: 2D 17        brtrue.s -> IL_0040     the `or`'s true arm
+IL_0029: …            right operand
+IL_003E: 2B 01        br.s     -> IL_0041     "done"
+IL_0040: 39 FF 0B …   brfalse                 the while's exit test
+```
 
-**What triggers it:** `Main` calling the top-level `Compile(…)`. A `for` loop over a list,
-alone, is fine. The lexer alone is fine. Constructing a `Parser` is fine.
+`EmitLogicalOr` marks `truthy`, emits `ldc.i4.1`, then marks `done`. So `truthy` should be
+that constant at `0x40` and `done` the instruction after it at `0x41`. **The constant is not
+in the stream.** The while's `brfalse` occupies `0x40`, so `br.s` targets `0x41` — the
+middle of it. Branching into an instruction is the invalid part, and one missing byte
+explains every other oddity: with it, the `brfalse` operand `0B` targets `0x51`, which is
+the loop exit.
 
-**What does not matter:** the return type (`record` and `dynamic` both fail), the parameter
-types, `export`, whether the caller annotates the local, or the input string.
+### Ruled out, each by measurement
 
-**Not reproduced** by a synthetic function of the same shape — one, two or three parameters,
-with or without `export`, returning `string`, `record` or a user class. It needs the probe's
-full header present.
+- **Not a difference between in-process and on-disk emission.** The bytes are identical.
+- **Not detectable by force-JIT.** `RuntimeHelpers.PrepareMethod` reports *ok* for this
+  method in both cases. Only running the standalone program fails. That is why the check
+  added to `DifferentialExecutionTests` is documented there as a help, not a guarantee.
+- **Not `while (A or B)` by itself.** That compiles and runs, as a class method and as a
+  free function. It needs the repro's surrounding shape.
+- **Not the `for` loop's `enumerator?.Dispose()` finally**, tried three ways.
+- **Not `ParseSum` in isolation** — an earlier round of mine said so and was wrong.
+- Inserting a `nop` between the two labels changes the failure to
+  `BadImageFormatException: Bad IL range` rather than fixing it, so the label accounting is
+  wrong rather than one instruction simply being dropped.
 
-**Ruled out as the cause:** the `for` loop's `enumerator?.Dispose()` finally. Its skip label
-is marked immediately before `EndExceptionBlock`, which does bind past the appended
-`endfinally` — but restructuring it three ways left the probe failing identically, and a
-plain `for` loop as a method's last statement compiles and runs.
+### The trap that cost the most
 
-### The tooling this produced, which is the durable part
-
-`DifferentialExecutionTests` now force-JITs **every** emitted method before running a case.
-Invalid IL is attributed to the method that holds it rather than to whichever caller
-happened to touch it first, and it is caught whether or not the case calls that method. All
-70 cases pass with it on.
+**Compile into an empty directory.** A directory holding runtime DLLs staged by an earlier
+compile reports the failure at `Program.Main` instead of the method that holds it. Every
+earlier round of this hunt ran in such a directory, which is why `Main` looked guilty for
+so long and why a chain of plausible-but-wrong causes got investigated.
 
 ## Acceptance
 
