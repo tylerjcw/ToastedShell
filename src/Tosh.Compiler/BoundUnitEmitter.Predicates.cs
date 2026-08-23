@@ -348,48 +348,64 @@ internal sealed partial class EmitterImpl
         }
         if (runeDefs is null) return false;
 
-        // Textual scan of the source text minus the rune definition
-        // spans. If any rune name appears as a whole word outside its
-        // own definition, we conservatively treat the program as
-        // having a rune call site and fall back to whole-script
-        // replay. Definition-only programs (no callers) compile to
-        // pure IL apart from the per-declaration source-replay that
-        // registers the rune itself.
+        // `TOAST-0070`. A *token* scan, not a text scan. Whether a rune has a call site is
+        // still approximated — the honest answer is a bound-tree walk, which arrives with
+        // `TOAST-0069` when rune calls are expanded at lowering and this predicate
+        // disappears — but approximating over tokens rather than raw characters removes the
+        // failure that mattered:
+        //
+        //     rune retry(count, body) { $body }
+        //     writeline "the word retry appears only in this string"
+        //
+        // has no call site, and the character scan reported one, sending the whole program
+        // to replay because a rune's name occurred inside a string literal. Nothing in the
+        // resulting message said so. A comment, a filename in a path, or an unrelated
+        // identifier ending in the rune's name did the same.
+        //
+        // A bareword token is what a call site is written with; a string literal is one
+        // token whose text is its content, and a comment is not a token at all.
         var src = ((ParseResult)_unit.ParseResult).SourceText;
         if (string.IsNullOrEmpty(src)) return false;
 
-        // Build a mask of byte positions that lie inside any rune
-        // definition span. Cheap O(n) scan; runeDefs is small.
-        var inDef = new bool[src.Length];
-        foreach (var (_, span) in runeDefs)
+        IReadOnlyList<SyntaxToken> tokens;
+        try
         {
-            var end = Math.Min(src.Length, span.Start + span.Length);
-            for (var i = Math.Max(0, span.Start); i < end; i++) inDef[i] = true;
+            tokens = new ToshLexer(src).Lex();
+        }
+        catch
+        {
+            // The source parsed once already to get here. If lexing it again fails, keep
+            // the conservative answer rather than compiling something on a guess.
+            return true;
         }
 
-        foreach (var (name, _) in runeDefs)
+        foreach (var token in tokens)
         {
-            if (string.IsNullOrEmpty(name)) continue;
-            var idx = 0;
-            while (true)
+            if (token.Kind != SyntaxTokenKind.Bareword)
             {
-                idx = src.IndexOf(name, idx, StringComparison.Ordinal);
-                if (idx < 0) break;
-                var endIdx = idx + name.Length;
-                var leftOk = idx == 0 || !IsRuneIdentChar(src[idx - 1]);
-                var rightOk = endIdx >= src.Length || !IsRuneIdentChar(src[endIdx]);
-                if (leftOk && rightOk && (idx >= inDef.Length || !inDef[idx]))
+                continue;
+            }
+
+            foreach (var (name, span) in runeDefs)
+            {
+                if (!string.Equals(token.Text, name, StringComparison.Ordinal))
                 {
-                    return true;
+                    continue;
                 }
-                idx = endIdx;
+
+                // Inside its own definition is the declaration, not a call.
+                if (token.Position >= span.Start && token.Position < span.Start + span.Length)
+                {
+                    continue;
+                }
+
+                return true;
             }
         }
+
         return false;
     }
 
-    private static bool IsRuneIdentChar(char c)
-        => char.IsLetterOrDigit(c) || c == '_' || c == '-';
 
     /// <summary>
     /// True if the bound unit declares any subcommand block or
