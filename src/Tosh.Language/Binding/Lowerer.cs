@@ -38,7 +38,10 @@ public static class Lowerer
             BuildLocalFunctionOverloads(parseResult.Statement),
             BuildLocalFunctionReturns(parseResult.Statement));
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
-        return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList());
+        return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList())
+        {
+            UnexpandedRuneCalls = ctx.UnexpandedRuneCalls.ToArray(),
+        };
     }
 
     /// <summary>
@@ -220,7 +223,9 @@ public static class Lowerer
     private static BoundStatement LowerStatement(StatementSyntax statement, LowerContext ctx) => statement switch
     {
         PipelineStatementSyntax pipeline =>
-            new BoundPipelineStatement(LowerPipeline(pipeline.Pipeline, ctx), pipeline.Span),
+            TryLowerRuneBodySplice(pipeline, ctx)
+                ?? TryLowerRuneExpansion(pipeline, ctx)
+                ?? new BoundPipelineStatement(LowerPipeline(pipeline.Pipeline, ctx), pipeline.Span),
 
         VariableDeclarationStatementSyntax decl =>
             LowerVariableDeclaration(decl, ctx),
@@ -1069,7 +1074,7 @@ public static class Lowerer
             new BoundLiteral(bareword.Value, bareword.Span, BoundType.FromClr(typeof(string)), IsBareword: true),
 
         VariableReferenceArgumentSyntax varRef =>
-            BuildVariableReference(varRef, ctx),
+            LowerRuneParameterOrVariable(varRef, ctx),
 
         // `TOAST-0040`. `...value` as a pipeline stage. A spread inside an array literal is
         // `BoundArrayLiteralItem.IsSpread` and argument position is a splat; this is the
@@ -1891,11 +1896,195 @@ public static class Lowerer
         }
     }
 
+    /// <summary>
+    /// Expands a rune call at lowering, or declines — <c>TOAST-0069</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A rune is a macro, and a macro belongs in the binder. Expanding the call here means
+    /// nothing rune-shaped survives to run time, so the program no longer falls back to
+    /// whole-script source replay — which is what a single rune call costs today.
+    /// </para>
+    /// <para>
+    /// Hygiene comes out of the scope stack rather than a renaming pass: pushing a scope
+    /// gives every declaration in the body a fresh <see cref="BoundSymbol"/>, which is what
+    /// `sealed` means. Arguments are substituted as *syntax* and lowered at each use site in
+    /// the caller's context, which is where `RuneThunk` evaluates them.
+    /// </para>
+    /// <para>
+    /// Deliberately narrow. Anything not handled — a `leaky` rune, a pipeline stage, a
+    /// mismatched argument count, a call above its declaration — declines and keeps the
+    /// existing runtime path, so this can only remove replay, never change what a program
+    /// means.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Lowers a reference that may name a rune parameter — <c>TOAST-0069</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Inside an expansion, a reference to a parameter *is* the argument written at the call
+    /// site. The argument is lowered **with that expansion's substitutions removed**, which
+    /// is not a detail: `RuneThunk` evaluates an argument in the caller's scope, and the
+    /// caller is outside the expansion.
+    /// </para>
+    /// <para>
+    /// Getting that wrong does not merely bind the wrong variable — it does not terminate.
+    /// `retry $count { … }` against `rune retry(count, body)` maps `count` to `$count`, and
+    /// lowering that with the substitution still in scope finds `count` again. It took the
+    /// test run down with a stack overflow rather than failing an assertion.
+    /// </para>
+    /// </remarks>
+    private static BoundExpression LowerRuneParameterOrVariable(
+        VariableReferenceArgumentSyntax varRef,
+        LowerContext ctx)
+    {
+        var frame = ctx.FindRuneSubstitutionFrame(varRef.Name);
+        if (frame < 0)
+        {
+            return BuildVariableReference(varRef, ctx);
+        }
+
+        var argument = ctx.RuneSubstitutions[frame][varRef.Name];
+        var suspended = ctx.SuspendRuneSubstitutionsFrom(frame);
+        try
+        {
+            return LowerExpression(argument, ctx);
+        }
+        finally
+        {
+            ctx.RestoreRuneSubstitutions(suspended);
+        }
+    }
+
+    private static BoundStatement? TryLowerRuneExpansion(
+        PipelineStatementSyntax statement,
+        LowerContext ctx)
+    {
+        const int MaximumRuneExpansionDepth = 32;
+
+        var pipeline = statement.Pipeline;
+
+        if (pipeline.Stages.Count != 1 ||
+            pipeline.IsBackground ||
+            pipeline.InputRedirection is not null ||
+            pipeline.Redirections is { Count: > 0 })
+        {
+            return null;
+        }
+
+        if (pipeline.Stages[0] is not CommandSyntax call ||
+            !ctx.Runes.TryGetValue(call.Name, out var rune))
+        {
+            return null;
+        }
+
+        // From here the call *is* a rune call. Every path that declines below leaves it to
+        // be expanded at run time, which is what the emitter needs to know about.
+        void Decline() => ctx.UnexpandedRuneCalls.Add(call.Name);
+
+        // `leaky` writes its declarations into the caller's scope and restores only the
+        // parameter bindings. That asymmetry is not what a pushed scope does, so it keeps
+        // the runtime path until it is implemented deliberately.
+        if (!rune.IsSealed ||
+            call.Arguments.Count != rune.Parameters.Count ||
+            ctx.RuneExpansionDepth >= MaximumRuneExpansionDepth)
+        {
+            Decline();
+            return null;
+        }
+
+        var substitution = new Dictionary<string, ArgumentSyntax>(StringComparer.Ordinal);
+        for (var index = 0; index < rune.Parameters.Count; index++)
+        {
+            substitution[rune.Parameters[index].Name] = call.Arguments[index];
+        }
+
+        ctx.RuneExpansionDepth++;
+        ctx.RuneSubstitutions.Add(substitution);
+        ctx.PushScope();
+        try
+        {
+            var statements = new List<BoundStatement>(rune.Body.Statements.Count);
+            foreach (var inner in rune.Body.Statements)
+            {
+                statements.Add(LowerStatement(inner, ctx));
+            }
+
+            return new BoundBlockStatement(new BoundBlock(statements, statement.Span), statement.Span);
+        }
+        finally
+        {
+            ctx.PopScope();
+            ctx.RuneSubstitutions.RemoveAt(ctx.RuneSubstitutions.Count - 1);
+            ctx.RuneExpansionDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Splices a rune's block parameter mentioned as a whole statement — <c>TOAST-0069</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `rune do-twice(body) { $body\n $body }` mentions its parameter as a statement, and the
+    /// argument is a block. Lowering `$body` as an *expression* there yields a block value that
+    /// is then discarded; splicing the block's statements is what evaluating the thunk does,
+    /// and it is what makes the body appear twice.
+    /// </para>
+    /// <para>
+    /// This hangs off the ordinary statement dispatch rather than off a pass over the rune
+    /// body's top level, because `rune r(n, body) { for i in (1..$n) { $body } }` mentions the
+    /// parameter *nested*. A top-level-only pass compiled that loop into three iterations that
+    /// each discarded a block and printed nothing — agreeing with no one, and quietly.
+    /// </para>
+    /// </remarks>
+    private static BoundStatement? TryLowerRuneBodySplice(
+        PipelineStatementSyntax statement,
+        LowerContext ctx)
+    {
+        if (ctx.RuneSubstitutions.Count == 0 ||
+            statement.Pipeline.Stages is not [ExpressionPipelineStageSyntax
+            {
+                Expression: VariableReferenceArgumentSyntax reference,
+            }])
+        {
+            return null;
+        }
+
+        var frame = ctx.FindRuneSubstitutionFrame(reference.Name);
+        if (frame < 0 || ctx.RuneSubstitutions[frame][reference.Name] is not BlockArgumentSyntax block)
+        {
+            return null;
+        }
+
+        // The block was written at the call site, so it lowers there — same rule as an
+        // ordinary argument, and the same reason.
+        var suspended = ctx.SuspendRuneSubstitutionsFrom(frame);
+        try
+        {
+            var spliced = new List<BoundStatement>(block.Block.Statements.Count);
+            foreach (var inner in block.Block.Statements)
+            {
+                spliced.Add(LowerStatement(inner, ctx));
+            }
+
+            return new BoundBlockStatement(new BoundBlock(spliced, statement.Span), statement.Span);
+        }
+        finally
+        {
+            ctx.RestoreRuneSubstitutions(suspended);
+        }
+    }
+
     private static BoundRuneDefinition LowerRuneDefinition(
         RuneDefinitionStatementSyntax runeDef,
         LowerContext ctx)
     {
         var runeSymbol = ctx.DeclareLocal(runeDef.Name, BoundSymbolKind.LocalVariable, BoundType.Dynamic);
+
+        // `TOAST-0069`. Registered before the body is lowered so a rune that calls itself is
+        // seen by the depth guard rather than silently recursing here.
+        ctx.Runes[runeDef.Name] = runeDef;
 
         var captures = ctx.EnterLambda();
         try
@@ -2446,6 +2635,54 @@ public static class Lowerer
         // directly rather than through PushScope.
         private readonly List<Dictionary<string, BoundType>> _rebinds =
             new() { new Dictionary<string, BoundType>(StringComparer.Ordinal) };
+
+        /// <summary>
+        /// Runes declared so far, by name — <c>TOAST-0069</c>.
+        /// </summary>
+        /// <remarks>
+        /// Registered as each declaration is lowered, so a call is expanded only when the
+        /// rune is already declared above it. A call that appears first keeps the existing
+        /// runtime path, which is the conservative answer rather than a new ordering rule.
+        /// </remarks>
+        public Dictionary<string, RuneDefinitionStatementSyntax> Runes { get; } =
+            new(StringComparer.Ordinal);
+
+        /// <summary>Argument syntax bound to rune parameters, innermost expansion last.</summary>
+        public List<Dictionary<string, ArgumentSyntax>> RuneSubstitutions { get; } = new();
+
+        /// <summary>Guards a rune that expands into itself.</summary>
+        public int RuneExpansionDepth { get; set; }
+
+        /// <summary>Rune calls left for run-time expansion — <c>TOAST-0069</c>.</summary>
+        public HashSet<string> UnexpandedRuneCalls { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Index of the innermost expansion binding <paramref name="name"/>, or -1.</summary>
+        public int FindRuneSubstitutionFrame(string name)
+        {
+            for (var index = RuneSubstitutions.Count - 1; index >= 0; index--)
+            {
+                if (RuneSubstitutions[index].ContainsKey(name))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Removes the expansion frames from <paramref name="frame"/> inward, so an argument
+        /// lowers in the context that wrote it.
+        /// </summary>
+        public List<Dictionary<string, ArgumentSyntax>> SuspendRuneSubstitutionsFrom(int frame)
+        {
+            var removed = RuneSubstitutions.GetRange(frame, RuneSubstitutions.Count - frame);
+            RuneSubstitutions.RemoveRange(frame, RuneSubstitutions.Count - frame);
+            return removed;
+        }
+
+        public void RestoreRuneSubstitutions(List<Dictionary<string, ArgumentSyntax>> suspended)
+            => RuneSubstitutions.AddRange(suspended);
 
         public void PushScope()
         {

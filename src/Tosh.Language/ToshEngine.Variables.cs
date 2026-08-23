@@ -838,6 +838,46 @@ public sealed partial class ToshEngine
         return _scopes.Reverse().ToArray();
     }
 
+    /// <summary>
+    /// Runs with <paramref name="scopes"/> as the entire visible stack, restoring it after.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="PushCapturedScopes"/>, which layers scopes *over* what is
+    /// already visible. That is right for a definition site, and wrong for a rune's argument:
+    /// what is already visible includes the rune's parameters, and an empty capture leaves
+    /// them exposed rather than shadowed.
+    /// </remarks>
+    private IDisposable UseScopes(IReadOnlyList<LexicalScope>? scopes)
+    {
+        var saved = _scopes.ToArray();
+        _scopes.Clear();
+
+        if (scopes is not null)
+        {
+            foreach (var scope in scopes)
+            {
+                _scopes.Push(scope);
+            }
+        }
+
+        return new RestoredScopes(_scopes, saved);
+    }
+
+    /// <summary>Puts back the stack <see cref="UseScopes"/> set aside.</summary>
+    private sealed class RestoredScopes(Stack<LexicalScope> scopes, LexicalScope[] saved) : IDisposable
+    {
+        public void Dispose()
+        {
+            scopes.Clear();
+
+            // `Stack{T}.ToArray` yields top-first, so it is refilled from the bottom up.
+            for (var index = saved.Length - 1; index >= 0; index--)
+            {
+                scopes.Push(saved[index]);
+            }
+        }
+    }
+
     private IDisposable PushCapturedScopes(IReadOnlyList<LexicalScope>? scopes)
     {
         if (scopes is null || scopes.Count == 0)

@@ -5478,7 +5478,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     arguments[i],
                     callerSourceName,
                     callerSourceText,
-                    rune.IsSealed ? CaptureVisibleScopes() : null);
+                    rune.IsSealed ? CaptureVisibleScopes() : null,
+                    rune.IsSealed);
             }
         }
 
@@ -5611,10 +5612,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         // Expression arguments: evaluate and return the single value
-        if (thunk.CallerScopes is not null)
+        if (thunk.IsSealed)
         {
-            // Sealed: evaluate in caller's captured scope
-            using var captured = PushCapturedScopes(thunk.CallerScopes);
+            // Sealed: evaluate in the caller's scope — *as* that stack, not layered over the
+            // current one. Layering leaves the rune's own parameter scope underneath, and an
+            // argument that names the parameter it is bound to then resolves to itself.
+            using var caller = UseScopes(thunk.CallerScopes);
             return await EvaluateArgumentAsync(
                 thunk.SourceName, thunk.SourceText, thunk.Syntax, cancellationToken);
         }
@@ -5631,7 +5634,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         {
             foreach (var (_, value) in scope.Variables)
             {
-                if (value is RuneThunk thunk && thunk.CallerScopes is null)
+                if (value is RuneThunk thunk && !thunk.IsSealed)
                     return true;
             }
         }

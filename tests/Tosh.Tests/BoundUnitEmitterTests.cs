@@ -780,13 +780,13 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Rune_definition_with_call_site_still_forces_whole_script_replay()
+    public void Rune_call_site_no_longer_forces_whole_script_replay()
     {
-        // Companion to the previous test: when a rune call site
-        // exists, whole-script replay is still required (until the
-        // dedicated macro-expansion pass lands). The textual
-        // call-site detector at ProgramNeedsWholeScriptReplay must
-        // notice the bare reference and emit the replay call.
+        // Companion to the previous test. A sealed rune call is expanded at
+        // lowering now (`TOAST-0069`), so the call site is gone by the time the
+        // emitter runs and no replay call is emitted. The emitter no longer
+        // scans for call sites at all — the lowerer reports the ones it
+        // declined, which is why this can be asserted rather than inferred.
         var (_, _, asm) = CompileLoadAndRun(
             "rune used_macro(x) { echo $x }\nused_macro hello");
 
@@ -794,9 +794,9 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         var main = program.GetMethod("Main",
             BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
         Assert.NotNull(main);
-        Assert.True(
+        Assert.False(
             CallsHostMethod(main!, nameof(global::Tosh.Compiler.Runtime.ToshHost.RunScriptFromSource)),
-            "rune call site should still emit whole-script replay until macro expansion lands.");
+            "an expanded rune call should not emit whole-script replay.");
     }
 
     [Fact]

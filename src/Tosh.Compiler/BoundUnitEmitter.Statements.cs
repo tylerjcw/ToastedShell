@@ -23,6 +23,12 @@ internal sealed partial class EmitterImpl
         MarkSeqPoint(statement.Span);
         switch (statement)
         {
+            // `TOAST-0069`. A rune call expands into the statements of its body; this is
+            // how they arrive in statement position.
+            case BoundBlockStatement blockStatement:
+                EmitBlock(blockStatement.Body);
+                return;
+
             case BoundPipelineStatement pipelineStmt:
                 if (_blockOutputLocal is not null)
                 {

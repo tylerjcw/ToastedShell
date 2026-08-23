@@ -490,6 +490,10 @@ public static class TypeChecker
                 Walk(w.Body, ctx);
                 break;
 
+            case BoundBlockStatement blockStatement:
+                Walk(blockStatement.Body, ctx);
+                break;
+
             case BoundPipelineStatement ps:
                 CheckPipeline(ps.Pipeline, ctx);
                 break;

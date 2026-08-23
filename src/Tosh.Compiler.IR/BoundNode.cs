@@ -81,6 +81,16 @@ public sealed record BoundVariableAssignment(
 public sealed record BoundBlock(IReadOnlyList<BoundStatement> Statements, TextSpan Span)
     : BoundNode(Span);
 
+/// <summary>A block executed in statement position — <c>TOAST-0069</c>.</summary>
+/// <remarks>
+/// Produced by rune expansion, which replaces one call statement with the several statements
+/// of the rune's body. Nothing in the surface language creates one: a `{ … }` written in
+/// source is a block *value* (<see cref="BoundBlockExpression"/>) or the body of a statement
+/// that already owns one.
+/// </remarks>
+public sealed record BoundBlockStatement(BoundBlock Body, TextSpan Span)
+    : BoundStatement(Span);
+
 /// <summary>An <c>if … else …</c> statement.</summary>
 public sealed record BoundIfStatement(
     BoundExpression Condition,
@@ -1206,4 +1216,18 @@ public enum BoundSymbolKind
 public sealed record BoundUnit(
     BoundScript Root,
     object ParseResult,
-    IReadOnlyList<BoundSymbol> Symbols);
+    IReadOnlyList<BoundSymbol> Symbols)
+{
+    /// <summary>
+    /// Rune calls the lowerer could not expand — <c>TOAST-0069</c>.
+    /// </summary>
+    /// <remarks>
+    /// A rune call is expanded at lowering, so an expanded one leaves nothing behind and the
+    /// program needs no source replay for it. What the emitter has to know is whether any
+    /// call was *declined* — a `leaky` rune, a pipeline stage, a mismatched argument count —
+    /// because those are still expanded at run time and do need the source.
+    ///
+    /// Empty is the common case and means the program can compile without carrying itself.
+    /// </remarks>
+    public IReadOnlyCollection<string> UnexpandedRuneCalls { get; init; } = Array.Empty<string>();
+}

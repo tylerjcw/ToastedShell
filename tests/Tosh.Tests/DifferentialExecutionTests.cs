@@ -453,6 +453,47 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case(
             "rebound-variable-still-reads-back",
             "var x = 10\n$x = \"hello\"\necho $x");
+
+        // ── Runes: expanded at lowering (`TOAST-0069`) ────────────────────
+        //
+        // A rune call used to send the whole program to the interpreter, so these
+        // agreed for the uninteresting reason that both sides *were* the interpreter.
+        // They compare two implementations now, which is the point of adding them.
+        yield return Case(
+            "rune-body-splice",
+            "rune do-twice(body) {\n    $body\n    $body\n}\n"
+            + "var n = 0\ndo-twice { $n = $n + 1 }\necho $n");
+
+        // The splice has to work at any depth, not just at the body's top level. A
+        // top-level-only pass compiled this into three iterations that each discarded
+        // a block value and printed nothing — agreeing with no one, and silently.
+        yield return Case(
+            "rune-splice-nested-in-a-loop",
+            "rune do-times(times, body) {\n    for i in (1..$times) { $body }\n}\n"
+            + "var n = 0\ndo-times 3 { $n = $n + 1 }\necho $n");
+
+        // An argument that names the parameter it is bound to. Lowering it with the
+        // substitution still in scope finds itself: not a wrong binding, a stack
+        // overflow that took the whole test run down rather than failing an assertion.
+        yield return Case(
+            "rune-argument-shadows-its-parameter",
+            "rune do-times(count, body) {\n    for i in (1..$count) { $body }\n}\n"
+            + "var count = 4\nvar n = 0\ndo-times $count { $n = $n + 1 }\necho $n");
+
+        yield return Case(
+            "rune-value-argument",
+            "rune show(x) {\n    echo $x\n}\nshow 42");
+
+        yield return Case(
+            "rune-two-call-sites",
+            "rune do-twice(body) {\n    $body\n    $body\n}\n"
+            + "var n = 0\ndo-twice { $n = $n + 1 }\ndo-twice { $n = $n + 10 }\necho $n");
+
+        // Declined by the expander, so this one still runs through replay — and must
+        // still agree. It is the case that proves the fallback is intact.
+        yield return Case(
+            "rune-leaky-still-replays",
+            "leaky rune bind-it(x) {\n    var bound = $x\n}\nbind-it 7\necho $bound");
     }
 
     /// <summary>

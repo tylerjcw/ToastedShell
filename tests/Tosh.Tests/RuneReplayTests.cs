@@ -11,9 +11,10 @@ namespace Tosh.Tests;
 /// <remarks>
 /// <para>
 /// A rune is ToastScript's macro: arguments captured lazily as syntax thunks. A program that
-/// *calls* one is not compiled at all — the emitted assembly embeds the whole source and
-/// hands it to the interpreter, which is the most severe fallback the emitter has. That is
-/// `TOAST-0069`'s to fix, by expanding rune calls at lowering.
+/// *called* one used not to be compiled at all — the emitted assembly embedded the whole
+/// source and handed it to the interpreter, the most severe fallback the emitter has.
+/// `TOAST-0069` expands sealed calls at lowering, so replay is now the exception rather than
+/// the rule, and the emitter is told which calls were left behind rather than guessing.
 /// </para>
 /// <para>
 /// What is asserted here is narrower: which programs are judged to *have* a call site. That
@@ -60,17 +61,31 @@ public sealed class RuneReplayTests : IClassFixture<ToshRuntimeFixture>
         => Assert.True(EmitsWithoutReplay(Definition + body), what);
 
     /// <summary>
-    /// A real call site still forces replay.
+    /// A real call site now compiles, because the rune is expanded away — `TOAST-0069`.
     /// </summary>
     /// <remarks>
-    /// The control, and a tripwire. A scan that answered "no call" for everything would pass
-    /// the theory above and be useless; this is what keeps it honest. When `TOAST-0069`
-    /// expands rune calls at lowering, this flips and should be moved rather than deleted —
-    /// the program will compile because the rune is gone, not because the scan missed it.
+    /// This is the flip the item above predicted. It asserts the opposite of what it used to,
+    /// and the distinction matters: the program compiles because expansion removed the call,
+    /// not because the scan failed to see it. The rows below are what keeps that honest — a
+    /// call the expander *declines* must still reach replay, or "compiles" would only mean
+    /// "the emitter stopped looking".
     /// </remarks>
     [Fact]
-    public void A_rune_call_still_forces_replay()
-        => Assert.False(EmitsWithoutReplay(Definition + "retry 3 { writeline \"hi\" }"));
+    public void An_expanded_rune_call_no_longer_forces_replay()
+        => Assert.True(EmitsWithoutReplay(Definition + "retry 3 { writeline \"hi\" }"));
+
+    /// <summary>A call the expander declines still forces replay.</summary>
+    /// <remarks>
+    /// The tripwire for the test above. `leaky` writes its declarations into the caller's
+    /// scope, which a pushed scope does not model, and a mismatched arity has no substitution
+    /// to build — both must fall back rather than compile to something that merely looks right.
+    /// </remarks>
+    [Theory]
+    [InlineData("leaky rune", "leaky rune spill(x) {\n    var leaked = $x\n}\nspill 1")]
+    [InlineData("too few arguments", "retry 3")]
+    [InlineData("too many arguments", "retry 3 { writeline \"hi\" } extra")]
+    public void A_declined_rune_call_still_forces_replay(string what, string body)
+        => Assert.False(EmitsWithoutReplay(Definition + body), what);
 
     /// <summary>A rune with no call site compiles, and one with a call still runs.</summary>
     /// <remarks>

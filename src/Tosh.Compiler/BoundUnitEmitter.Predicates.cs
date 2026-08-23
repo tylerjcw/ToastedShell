@@ -348,62 +348,15 @@ internal sealed partial class EmitterImpl
         }
         if (runeDefs is null) return false;
 
-        // `TOAST-0070`. A *token* scan, not a text scan. Whether a rune has a call site is
-        // still approximated — the honest answer is a bound-tree walk, which arrives with
-        // `TOAST-0069` when rune calls are expanded at lowering and this predicate
-        // disappears — but approximating over tokens rather than raw characters removes the
-        // failure that mattered:
+        // `TOAST-0069`. Rune calls are expanded at lowering, so a call that was expanded
+        // leaves nothing behind and needs no source. What is left to ask is whether any call
+        // was *declined* — a `leaky` rune, a pipeline stage, a mismatched argument count —
+        // and the lowerer records exactly those on the unit.
         //
-        //     rune retry(count, body) { $body }
-        //     writeline "the word retry appears only in this string"
-        //
-        // has no call site, and the character scan reported one, sending the whole program
-        // to replay because a rune's name occurred inside a string literal. Nothing in the
-        // resulting message said so. A comment, a filename in a path, or an unrelated
-        // identifier ending in the rune's name did the same.
-        //
-        // A bareword token is what a call site is written with; a string literal is one
-        // token whose text is its content, and a comment is not a token at all.
-        var src = ((ParseResult)_unit.ParseResult).SourceText;
-        if (string.IsNullOrEmpty(src)) return false;
-
-        IReadOnlyList<SyntaxToken> tokens;
-        try
-        {
-            tokens = new ToshLexer(src).Lex();
-        }
-        catch
-        {
-            // The source parsed once already to get here. If lexing it again fails, keep
-            // the conservative answer rather than compiling something on a guess.
-            return true;
-        }
-
-        foreach (var token in tokens)
-        {
-            if (token.Kind != SyntaxTokenKind.Bareword)
-            {
-                continue;
-            }
-
-            foreach (var (name, span) in runeDefs)
-            {
-                if (!string.Equals(token.Text, name, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                // Inside its own definition is the declaration, not a call.
-                if (token.Position >= span.Start && token.Position < span.Start + span.Length)
-                {
-                    continue;
-                }
-
-                return true;
-            }
-        }
-
-        return false;
+        // This replaces a scan of the source text (and then of its tokens, `TOAST-0070`) for
+        // the rune's name, which could only ever approximate the question. A name in a
+        // string literal used to send the whole program to replay.
+        return _unit.UnexpandedRuneCalls.Count > 0;
     }
 
 

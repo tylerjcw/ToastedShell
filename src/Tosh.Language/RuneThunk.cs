@@ -15,13 +15,25 @@ internal sealed class RuneThunk
         ArgumentSyntax syntax,
         string sourceName,
         string sourceText,
-        IReadOnlyList<LexicalScope>? callerScopes)
+        IReadOnlyList<LexicalScope>? callerScopes,
+        bool isSealed)
     {
         Syntax = syntax;
         SourceName = sourceName;
         SourceText = sourceText;
         CallerScopes = callerScopes;
+        IsSealed = isSealed;
     }
+
+    /// <summary>Whether the rune this argument belongs to is hygienic.</summary>
+    /// <remarks>
+    /// Recorded rather than inferred from <see cref="CallerScopes"/> being non-null. A sealed
+    /// rune called with no visible scopes captures nothing, and reading that absence as "leaky"
+    /// evaluated the argument in the scope where the *parameter* is bound — so `$count` passed
+    /// to a parameter named `count` found itself, forever. It did not fail an assertion: it
+    /// overflowed the stack and took the whole test host down.
+    /// </remarks>
+    public bool IsSealed { get; }
 
     /// <summary>The raw AST of the argument expression.</summary>
     public ArgumentSyntax Syntax { get; }

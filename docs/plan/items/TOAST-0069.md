@@ -1,7 +1,7 @@
 ---
 id: TOAST-0069
 title: "A rune call site forces whole-script source replay, so a program using a macro is not compiled at all"
-status: proposed
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -90,18 +90,54 @@ Both should be diagnosed rather than silently replayed:
 
 Recursive runes need an expansion depth limit.
 
+## Progress — 2026-08-22
+
+Expansion runs at lowering. `TryLowerRuneExpansion` builds a parameter-to-argument
+substitution, pushes a scope so the body's declarations get fresh `BoundSymbol`s, and
+returns a new `BoundBlockStatement`; a call it declines is recorded in
+`BoundUnit.UnexpandedRuneCalls`, which is what `ProgramNeedsWholeScriptReplay` now reads.
+The textual scan `TOAST-0070` narrowed to a token scan is gone entirely — whether a rune
+was left behind is a bound fact.
+
+Two mistakes are worth keeping, because both were silent in the way this item warns about.
+
+**The splice belongs on the statement dispatch, not on a pass over the body's top level.**
+`rune r(n, body) { for i in (1..$n) { $body } }` mentions the parameter *nested*, and a
+top-level pass compiled it into three iterations that each produced a block value and
+discarded it. No error, no output, and the differential corpus had no rune case to notice.
+
+**An argument is lowered with its own expansion's substitutions removed.** Otherwise
+`do-times $count { … }` against a parameter named `count` finds `count` while resolving
+`count`. That is not a wrong binding — it is a stack overflow that aborted the test run
+rather than failing a test, and it cost most of a session to read as a crash rather than a
+regression.
+
+The same confusion existed in the interpreter and is fixed here too: `RuneThunk.CallerScopes`
+was `null` for a leaky rune *and* for a sealed one with no visible scopes, and evaluation read
+that `null` as "leaky". A sealed thunk now records `IsSealed` and evaluates through `UseScopes`,
+which *replaces* the visible stack instead of layering over it — layering leaves the rune's own
+parameter scope underneath, which is what an empty capture exposed.
+
+`not` over a rune argument is wrong once a rune has two call sites, in a way this work does
+not touch and does not cause; filed as [`TOAST-0071`](TOAST-0071.md).
+
 ## Acceptance
 
-- [ ] A rune call whose target is declared in the unit is expanded during lowering
-- [ ] A program defining and calling a rune compiles under `--profile runtime`
+- [x] A rune call whose target is declared in the unit is expanded during lowering
+- [x] A program defining and calling a rune compiles under `--profile runtime`
 - [ ] `sealed` hygiene is preserved by renaming, and `leaky` still writes to the caller's
-      scope — asserted per modifier rather than for one example
-- [ ] The interpreted and compiled backends agree, in the differential corpus, including a
-      rune whose body evaluates its argument more than once
-- [ ] Recursive expansion terminates with a diagnostic rather than a stack overflow
+      scope — asserted per modifier rather than for one example — *interpreted side asserted
+      per modifier; `leaky` still declines to expand, so the compiled side is untested*
+- [x] The interpreted and compiled backends agree, in the differential corpus, including a
+      rune whose body evaluates its argument more than once — six cases, one of them a
+      declined `leaky` call proving the replay fallback is intact
+- [ ] Recursive expansion terminates with a diagnostic rather than a stack overflow —
+      *the compiled path declines past depth 32 and falls back; the interpreter still
+      overflows on a recursive rune, which needs its own guard*
 - [ ] `quote` and indirect invocation are each implemented or recorded as a deliberate
       exclusion
-- [ ] A negative control
+- [x] A negative control — removing the splice fails exactly the three splice-dependent
+      corpus cases; removing the argument suspension reproduces the original stack overflow
 
 ## Notes
 
