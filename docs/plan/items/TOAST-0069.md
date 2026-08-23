@@ -45,6 +45,40 @@ symbols, so renaming needs no new machinery.
 It also removes the textual call-site scan, which is its own defect (`TOAST-0070`): whether a
 rune is called becomes a bound fact rather than a regex over source text.
 
+## The semantics expansion must preserve — read 2026-08-22
+
+Read out of `ExpandRuneAsync` and `RuneThunk` rather than assumed, because two of these are
+not what "splice the body at the call site" implies on its own.
+
+**1. Hygiene is two-sided.** A `RuneThunk` carries `CallerScopes`, captured at the call site,
+and the *body* runs under `PushCapturedScopes(rune.CapturedScopes)` — the scopes captured
+where the rune was **declared** — plus a fresh scope. So an argument is evaluated where it
+was written, and the body sees where it was defined. Splicing the argument's syntax at each
+use site gets the first direction for free; the second needs the body's own declarations
+renamed to fresh symbols, and its free references resolved against the definition site rather
+than the call site.
+
+**2. `leaky` is not "skip renaming".** It executes the body in the caller's binding store
+with **no new scope**, so declarations inside the rune stay visible after it returns — and
+the parameter bindings are restored afterwards while the body's declarations are not. An
+expansion has to reproduce that asymmetry: parameters are temporary, the body's variables
+are not.
+
+**3. Pipeline input is a parameter.** `locals["_input"] = input` binds the stage's input for
+the body to read as `$_`. A rune used as a pipeline stage therefore has an implicit argument,
+and expansion has to thread the incoming stage rather than assume statement position.
+
+**4. Arity is checked at expansion.** Fewer arguments than parameters raises `RUNE001` naming
+both counts. At compile time that becomes a diagnostic rather than a runtime failure, which
+is an improvement worth keeping rather than dropping.
+
+### What is already in place
+
+`BoundRuneDefinition` carries a **lowered** `BoundBlock Body`, not syntax. Unlike refinement
+types — whose clause model falls through `LowerExpression`'s catch-all and reaches the
+emitter as a `BoundDynamicExpression` — the rune body is already bound IR. The groundwork
+this needs mostly exists; what does not exist is the substitution and the renaming.
+
 ## What expansion cannot cover
 
 Both should be diagnosed rather than silently replayed:
