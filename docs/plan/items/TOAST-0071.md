@@ -46,14 +46,33 @@ at each use — but the two backends must agree, so this blocks a differential c
 for a conditional rune. That is the shape the corpus exists to catch, and it currently has
 no rune case with `not` in it for exactly this reason.
 
-## Where to look
+## Cause — narrowed 2026-08-23
 
-The value is neither "the first argument" nor "the latest" — `(false, true)` yields
-`false, false`, which is *neither* call's correct answer. That rules out a plain
-last-write-wins cache and points at something keyed on the operand syntax node, which is
-shared across expansions because the rune body's AST is shared. Start at the unary `not`
-path in `OperatorEvaluator` and at whatever memoizes an operand on `ArgumentSyntax`; check
-both the engine and `OperatorEvaluator` paths, as the two disagree elsewhere.
+It is **constant folding writing its answer onto a shared syntax node**, not anything
+specific to `not`. Four measurements place it:
+
+| Program (two calls, `false` then `true`) | Result |
+|---|---|
+| `writeline (not $c)` | `false` `false` |
+| `writeline ($c == false)` | `false` `false` |
+| `writeline (not ($c))` | `true` `false` — **correct** |
+| the same body in two *different* runes | `true` `false` — **correct** |
+
+So it is any folded operator over the parameter, it is cured by parenthesising the
+operand, and it is per rune *definition*. `OperatorArgumentSyntax.FoldedConstant` and
+`UnaryOperatorArgumentSyntax.FoldedConstant` are mutable properties on the AST
+(`Parsing/ArgumentSyntax.cs:157` and `:209`), read at
+`ToshEngine.Arguments.cs:1522` and `:1607` to skip sub-evaluation. A rune body's AST is
+shared by every expansion of that rune, so the fold computed for one call site is returned
+verbatim to the next.
+
+`false false` rather than `true true` fits: both calls answer against the *last* argument
+bound, which is what a fold resolved once against a mutable parameter binding produces.
+
+**A rune parameter is not a constant.** The fix is to refuse to fold an operation whose
+operand resolves to a `RuneThunk` — or, more conservatively, to skip the fold cache while
+inside an expansion. Check both the engine and `OperatorEvaluator` paths, as the two
+disagree elsewhere.
 
 ## Acceptance
 
