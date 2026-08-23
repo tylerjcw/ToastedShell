@@ -5606,13 +5606,25 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         if (thunk.Syntax is BlockArgumentSyntax blockArg)
         {
-            // Block arguments: evaluate the block and collect results
+            // Block arguments: evaluate the block and collect results.
+            //
+            // A block runs where it was *written*, exactly as an expression argument does.
+            // This path used to ignore `CallerScopes` and run in whatever scope was current,
+            // which inside an expansion is the rune's own parameter scope — so a block
+            // forwarded through a second rune saw that rune's parameters instead of the ones
+            // it was written against. `rune f(b) { t { t $b } }` made `$b` mean `t`'s `b`
+            // rather than `f`'s, and re-entered until the recursion limit stopped it.
+            var pushNewScope = !IsInsideLeakyRune();
             var results = new List<object?>();
-            await foreach (var item in ExecuteBlockAsync(
-                thunk.SourceName, thunk.SourceText, blockArg.Block, cancellationToken,
-                pushNewScope: !IsInsideLeakyRune()))
+
+            using (thunk.IsSealed ? UseScopes(thunk.CallerScopes) : null)
             {
-                results.Add(item);
+                await foreach (var item in ExecuteBlockAsync(
+                    thunk.SourceName, thunk.SourceText, blockArg.Block, cancellationToken,
+                    pushNewScope: pushNewScope))
+                {
+                    results.Add(item);
+                }
             }
 
             return results.Count switch

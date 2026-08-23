@@ -357,4 +357,76 @@ public sealed class RuneTests
 
         Assert.Equal(new object[] { "deep" }, results);
     }
+
+    // --- A block argument runs where it was written (`TOAST-0072`) ---
+
+    /// <summary>A block forwarded through a second rune keeps its own meaning.</summary>
+    /// <remarks>
+    /// <para>
+    /// The block path of `EvaluateRuneThunkAsync` ignored `CallerScopes` and ran in whatever
+    /// scope was current — inside an expansion, that is the rune's own parameter scope. So a
+    /// block written in `f` and forwarded through `t` saw *`t`'s* `b` instead of `f`'s.
+    /// </para>
+    /// <para>
+    /// `rune f(b) { t { t $b } }` therefore re-entered `t` forever. It printed nothing at all
+    /// before the sealed-scope work, and reported the recursion limit after — a nested macro
+    /// calling another macro has never worked.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("one hop", "rune t(b) { $b }\nrune f(b) { t $b }\nf { echo \"z\" }", 1)]
+    [InlineData("two hops", "rune t(b) { $b }\nrune f(b) { t { t $b } }\nf { echo \"z\" }", 1)]
+    [InlineData("doubling twice", "rune tw(b) { $b\n$b }\nrune fr(b) { tw { tw $b } }\nfr { echo \"z\" }", 4)]
+    public async Task A_block_argument_forwarded_through_a_rune_keeps_its_own_scope(
+        string what, string source, int expected)
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync(source);
+
+        // A rune body that yields more than one value hands back an array, and nesting two of
+        // them nests the arrays, so the "z"s are not all at the top level.
+        static IEnumerable<object?> Flatten(IEnumerable<object?> values)
+        {
+            foreach (var value in values)
+            {
+                if (value is object?[] nested)
+                {
+                    foreach (var inner in Flatten(nested))
+                    {
+                        yield return inner;
+                    }
+                }
+                else
+                {
+                    yield return value;
+                }
+            }
+        }
+
+        Assert.Equal(expected, Flatten(results).Count(r => r?.ToString() == "z"));
+        _ = what;
+    }
+
+    /// <summary>A block still reaches the caller's variables.</summary>
+    /// <remarks>
+    /// The control. Running the block in the caller's scope is only right if the caller's
+    /// scope is where its assignments land — a fix that isolated the block instead would
+    /// satisfy the theory above and break every accumulating macro.
+    /// </remarks>
+    [Fact]
+    public async Task A_block_argument_still_mutates_the_callers_variables()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("""
+            rune do-twice(b) {
+                $b
+                $b
+            }
+            var n = 0
+            do-twice { $n = $n + 1 }
+            echo $n
+            """);
+
+        Assert.Equal("2", results[^1]?.ToString());
+    }
 }
