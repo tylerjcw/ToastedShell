@@ -318,4 +318,43 @@ public sealed class RuneTests
 
         Assert.True(stamped, "a constant expression outside a rune should still be stamped.");
     }
+
+    // --- Recursive expansion is bounded (`TOAST-0069`) ---
+
+    /// <summary>A rune that expands forever reports the recursion limit.</summary>
+    /// <remarks>
+    /// A recursive *function* already reported `tosh.runtime.recursion_limit_exceeded`; rune
+    /// expansion was simply not one of the paths the depth guard covered, so it overflowed the
+    /// stack instead — which does not throw, cannot be caught, and takes the process with it.
+    /// These assertions can only be written *because* it now throws.
+    /// </remarks>
+    [Theory]
+    [InlineData("direct", "rune spin(b) { spin $b }\nspin { echo \"x\" }")]
+    [InlineData("mutual", "rune ping(b) { pong $b }\nrune pong(b) { ping $b }\nping { echo \"x\" }")]
+    public async Task Runaway_rune_expansion_reports_the_recursion_limit(string what, string source)
+    {
+        var engine = new ToshEngine();
+        var thrown = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            async () => await engine.ExecuteToListAsync(source));
+
+        Assert.Contains(thrown.Diagnostics, d => d.Code == "tosh.runtime.recursion_limit_exceeded");
+        _ = what;
+    }
+
+    /// <summary>Nesting that terminates is not mistaken for runaway expansion.</summary>
+    /// <remarks>
+    /// The control. A guard that refused every nested expansion would satisfy the theory above
+    /// and make runes useless one level deep.
+    /// </remarks>
+    [Fact]
+    public async Task Deep_but_finite_rune_nesting_still_runs()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("""
+            rune a(b) { $b }
+            a { a { a { a { a { echo "deep" } } } } }
+            """);
+
+        Assert.Equal(new object[] { "deep" }, results);
+    }
 }

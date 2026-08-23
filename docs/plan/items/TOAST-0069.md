@@ -112,6 +112,11 @@ discarded it. No error, no output, and the differential corpus had no rune case 
 rather than failing a test, and it cost most of a session to read as a crash rather than a
 regression.
 
+Rune expansion was also not one of the paths `ToshExecutionDepthGuard` covered, so a
+recursive rune overflowed the stack while a recursive *function* reported the limit
+cleanly. An overflow does not throw and cannot be caught, so the tests asserting this are
+only writable once it does.
+
 The same confusion existed in the interpreter and is fixed here too: `RuneThunk.CallerScopes`
 was `null` for a leaky rune *and* for a sealed one with no visible scopes, and evaluation read
 that `null` as "leaky". A sealed thunk now records `IsSealed` and evaluates through `UseScopes`,
@@ -135,9 +140,11 @@ suppressed only while expanding.
 - [x] The interpreted and compiled backends agree, in the differential corpus, including a
       rune whose body evaluates its argument more than once — six cases, one of them a
       declined `leaky` call proving the replay fallback is intact
-- [ ] Recursive expansion terminates with a diagnostic rather than a stack overflow —
-      *the compiled path declines past depth 32 and falls back; the interpreter still
-      overflows on a recursive rune, which needs its own guard*
+- [x] Recursive expansion terminates with a diagnostic rather than a stack overflow — the
+      compiled path declines past depth 32 and falls back, and `ExpandRuneAsync` now enters
+      `ToshExecutionDepthGuard` so the interpreted path reports
+      `tosh.runtime.recursion_limit_exceeded` for both direct and mutual recursion. A
+      recursive *function* already did; expansion was simply not one of the guarded paths
 - [ ] `quote` and indirect invocation are each implemented or recorded as a deliberate
       exclusion
 - [x] A negative control — removing the splice fails exactly the three splice-dependent

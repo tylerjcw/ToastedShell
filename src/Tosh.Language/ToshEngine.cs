@@ -5463,6 +5463,18 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         IAsyncEnumerable<object?> input,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // `TOAST-0069`. A rune that calls itself expands forever, and expansion is not one of
+        // the paths the depth guard already covered — a recursive *function* reported
+        // `tosh.runtime.recursion_limit_exceeded`, while a recursive rune overflowed the stack
+        // and took the process with it. The compiled backend declines past its own expansion
+        // depth and falls back; this is the interpreted half of the same limit.
+        using var expansionFrame = ToshExecutionDepthGuard.Enter(
+            Runtime.Options.MaxRecursionDepth,
+            $"rune {rune.Name}",
+            callerSourceName,
+            callerSourceText,
+            rune.Span);
+
         // Bind arguments to parameters as thunks (unevaluated)
         var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
 
