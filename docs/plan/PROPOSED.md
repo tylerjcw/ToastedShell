@@ -20,6 +20,7 @@
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
+| [`TOAST-0069`](items/TOAST-0069.md) | P2 | proposed | 0/7 | A rune call site forces whole-script source replay, so a program using a macro is not compiled at all |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | proposed | 0/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
@@ -42,4 +43,5 @@
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
+| [`TOAST-0070`](items/TOAST-0070.md) | P3 | proposed | 0/4 | Whether a rune is called is decided by a textual scan, so a name in a string disables compilation |
 | [`TS-P3-19`](items/TS-P3-19.md) | P3 | proposed | — | Annotated, fixed and refinement variable writes at Tier 1 |
