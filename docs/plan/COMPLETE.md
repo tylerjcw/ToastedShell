@@ -4,6 +4,7 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
+| [`TOAST-0069`](items/TOAST-0069.md) | P2 | complete | 7/7 | A rune call site forces whole-script source replay, so a program using a macro is not compiled at all |
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
 | [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |

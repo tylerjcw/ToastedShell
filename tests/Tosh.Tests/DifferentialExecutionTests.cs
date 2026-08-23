@@ -489,11 +489,27 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "rune do-twice(body) {\n    $body\n    $body\n}\n"
             + "var n = 0\ndo-twice { $n = $n + 1 }\ndo-twice { $n = $n + 10 }\necho $n");
 
-        // Declined by the expander, so this one still runs through replay — and must
-        // still agree. It is the case that proves the fallback is intact.
+        // `leaky` expands too: the modifier is one pushed scope, and not pushing it is what
+        // "writes into the caller's scope" means. The parameter still cannot escape, and not
+        // because anything restores it — expansion substitutes syntax, so `x` never becomes a
+        // binding that could leak.
         yield return Case(
-            "rune-leaky-still-replays",
+            "rune-leaky-declaration-escapes",
             "leaky rune bind-it(x) {\n    var bound = $x\n}\nbind-it 7\necho $bound");
+
+        yield return Case(
+            "rune-leaky-mutates-the-callers-variable",
+            "leaky rune bump() {\n    $n = $n + 1\n}\nvar n = 1\nbump\necho $n");
+
+        yield return Case(
+            "rune-leaky-two-calls-last-wins",
+            "leaky rune bind-it(x) {\n    var bound = $x\n}\nbind-it 5\nbind-it 6\necho $bound");
+
+        // The counterpart, and the reason the pair is worth having: identical bodies, and the
+        // sealed one's declaration must *not* be visible afterwards.
+        yield return Case(
+            "rune-sealed-declaration-stays-hidden",
+            "rune keep-it(x) {\n    var kept = $x\n}\nkeep-it 7\necho \"done\"");
 
         // Two call sites, an operator over the parameter, and a *foldable* operand at each.
         // Expansion substitutes the argument's syntax, so the fold succeeds — and stamping

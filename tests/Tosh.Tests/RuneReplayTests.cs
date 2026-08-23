@@ -74,12 +74,26 @@ public sealed class RuneReplayTests : IClassFixture<ToshRuntimeFixture>
     public void An_expanded_rune_call_no_longer_forces_replay()
         => Assert.True(EmitsWithoutReplay(Definition + "retry 3 { writeline \"hi\" }"));
 
+    /// <summary>Both modifiers expand, so neither reaches the interpreter.</summary>
+    /// <remarks>
+    /// Asserted per modifier rather than for one example, because the differential corpus
+    /// compares *outputs*: a case that quietly replayed would agree with the interpreter for
+    /// the least interesting reason available — it would be the interpreter. This is what says
+    /// the compiled path is the one being compared.
+    /// </remarks>
+    [Theory]
+    [InlineData("sealed", "rune keep-it(x) {\n    var kept = $x\n}\nkeep-it 7")]
+    [InlineData("leaky", "leaky rune bind-it(x) {\n    var bound = $x\n}\nbind-it 7")]
+    public void Both_rune_modifiers_expand_without_replay(string modifier, string source)
+        => Assert.True(EmitsWithoutReplay(source), modifier);
+
     /// <summary>A call the expander declines still forces replay.</summary>
     /// <remarks>
     /// <para>
-    /// The tripwire for the test above. `leaky` writes its declarations into the caller's
-    /// scope, which a pushed scope does not model, and a mismatched arity has no substitution
-    /// to build — both must fall back rather than compile to something that merely looks right.
+    /// The tripwire for the test above. A mismatched arity has no substitution to build, so
+    /// it must fall back rather than compile to something that merely looks right. (`leaky`
+    /// used to be listed here; it expands now — the modifier is one pushed scope, and not
+    /// pushing it is exactly what "writes into the caller's scope" means.)
     /// </para>
     /// <para>
     /// The last four rows are shapes that *did* compile, and crashed. Declining was decided at
@@ -92,7 +106,6 @@ public sealed class RuneReplayTests : IClassFixture<ToshRuntimeFixture>
     /// </para>
     /// </remarks>
     [Theory]
-    [InlineData("leaky rune", "leaky rune spill(x) {\n    var leaked = $x\n}\nspill 1")]
     [InlineData("too few arguments", "retry 3")]
     [InlineData("too many arguments", "retry 3 { writeline \"hi\" } extra")]
     [InlineData("piped into a command", "retry 3 { writeline \"hi\" } | writeline")]

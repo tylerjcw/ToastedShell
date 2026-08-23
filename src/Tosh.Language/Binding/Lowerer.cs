@@ -2010,11 +2010,7 @@ public static class Lowerer
         // be expanded at run time, which is what the emitter needs to know about.
         void Decline() => ctx.UnexpandedRuneCalls.Add(call.Name);
 
-        // `leaky` writes its declarations into the caller's scope and restores only the
-        // parameter bindings. That asymmetry is not what a pushed scope does, so it keeps
-        // the runtime path until it is implemented deliberately.
-        if (!rune.IsSealed ||
-            call.Arguments.Count != rune.Parameters.Count ||
+        if (call.Arguments.Count != rune.Parameters.Count ||
             ctx.RuneExpansionDepth >= MaximumRuneExpansionDepth)
         {
             Decline();
@@ -2027,9 +2023,23 @@ public static class Lowerer
             substitution[rune.Parameters[index].Name] = call.Arguments[index];
         }
 
+        // Hygiene is the whole difference between the two modifiers here, and it is one
+        // scope. `sealed` pushes one, so the body's declarations get fresh `BoundSymbol`s and
+        // do not escape; `leaky` does not, so they land in the caller's scope, which is what
+        // it is for.
+        //
+        // The *parameters* cannot escape either way, and not because anything restores them:
+        // expansion substitutes an argument's syntax at each use, so a parameter never
+        // becomes a binding to leak. The interpreter has to bind them and put back what it
+        // displaced; there is nothing here to put back.
         ctx.RuneExpansionDepth++;
         ctx.RuneSubstitutions.Add(substitution);
-        ctx.PushScope();
+
+        if (rune.IsSealed)
+        {
+            ctx.PushScope();
+        }
+
         try
         {
             var statements = new List<BoundStatement>(rune.Body.Statements.Count);
@@ -2042,7 +2052,11 @@ public static class Lowerer
         }
         finally
         {
-            ctx.PopScope();
+            if (rune.IsSealed)
+            {
+                ctx.PopScope();
+            }
+
             ctx.RuneSubstitutions.RemoveAt(ctx.RuneSubstitutions.Count - 1);
             ctx.RuneExpansionDepth--;
         }

@@ -1,7 +1,7 @@
 ---
 id: TOAST-0069
 title: "A rune call site forces whole-script source replay, so a program using a macro is not compiled at all"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -132,6 +132,14 @@ thrown at run time by a program the compiler had called clean. Recording now hap
 `LowerCommand`, which every unexpanded call reaches whatever shape it was written in. Four
 shapes are asserted: piped, redirected, in an expression, and in a command substitution.
 
+**`leaky` turned out to be one pushed scope.** It was held back as the hard case — the
+interpreter binds its parameters into the caller's store and puts back what it displaced —
+but expansion never binds a parameter at all. It substitutes the argument's syntax at each
+use, so there is nothing to restore and nothing that could leak. The whole modifier is
+whether a scope is pushed around the spliced body: `sealed` pushes one and its declarations
+get fresh symbols, `leaky` does not and they land in the caller's scope, which is the point
+of it. The negative control — pushing for both — fails exactly the leaky corpus cases.
+
 `not` over a rune argument is wrong once a rune has two call sites. This was recorded here
 as "does not touch and does not cause" — **that was wrong**, and is corrected in
 [`TOAST-0071`](TOAST-0071.md): building the parent commit shows the defect arrives with
@@ -143,9 +151,10 @@ suppressed only while expanding.
 
 - [x] A rune call whose target is declared in the unit is expanded during lowering
 - [x] A program defining and calling a rune compiles under `--profile runtime`
-- [ ] `sealed` hygiene is preserved by renaming, and `leaky` still writes to the caller's
-      scope — asserted per modifier rather than for one example — *interpreted side asserted
-      per modifier; `leaky` still declines to expand, so the compiled side is untested*
+- [x] `sealed` hygiene is preserved by renaming, and `leaky` still writes to the caller's
+      scope — asserted per modifier on both backends, and each modifier is separately asserted
+      to *emit without replay*, so the corpus is comparing two implementations rather than the
+      interpreter against itself
 - [x] The interpreted and compiled backends agree, in the differential corpus, including a
       rune whose body evaluates its argument more than once — six cases, one of them a
       declined `leaky` call proving the replay fallback is intact
