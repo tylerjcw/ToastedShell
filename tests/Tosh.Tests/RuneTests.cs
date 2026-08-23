@@ -1,3 +1,4 @@
+using System.Linq;
 using Tosh.Runtime;
 using Tosh.Language;
 
@@ -246,5 +247,75 @@ public sealed class RuneTests
             """);
 
         Assert.Equal("7", results[^1]?.ToString());
+    }
+
+    // --- Constant folding is per call site, not per rune body (`TOAST-0071`) ---
+
+    /// <summary>An operator over a rune parameter answers for the call site it is in.</summary>
+    /// <remarks>
+    /// <para>
+    /// Expanding a rune substitutes the argument's *syntax*, so `not $c` against a literal
+    /// argument becomes foldable — and folding stamps its answer onto the syntax node as well
+    /// as the bound tree, because the interpreter reads that stamp to skip re-evaluating. The
+    /// rune body's AST is shared by every expansion, so the stamp from one call site was
+    /// handed to the next.
+    /// </para>
+    /// <para>
+    /// The give-away is that `false` then `true` printed `false false` — neither call's own
+    /// answer repeated, but the *last* fold answering both.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("not", "rune r(c) { echo (not $c) }\nr false\nr true", "True", "False")]
+    [InlineData("equality", "rune r(n) { echo ($n == 0) }\nr 0\nr 5", "True", "False")]
+    [InlineData("arithmetic", "rune r(n) { echo ($n + 1) }\nr 2\nr 4", "3", "5")]
+    public async Task Folded_operand_answers_for_its_own_call_site(
+        string what, string source, string first, string second)
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync(source);
+
+        Assert.Equal(first, results[^2]?.ToString());
+        Assert.Equal(second, results[^1]?.ToString());
+        Assert.NotEqual(results[^2]?.ToString(), results[^1]?.ToString());
+        _ = what;
+    }
+
+    /// <summary>The defect in condition position: the wrong arm runs, not just a wrong value.</summary>
+    [Fact]
+    public async Task Folded_condition_runs_the_arm_belonging_to_its_call_site()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("""
+            rune unless-it(c, body) {
+                if (not $c) { $body }
+            }
+            unless-it true  { echo "A" }
+            unless-it false { echo "B" }
+            """);
+
+        Assert.Equal(new object[] { "B" }, results);
+    }
+
+    /// <summary>Folding outside a rune is untouched.</summary>
+    /// <remarks>
+    /// The control. Suppressing the stamp everywhere would pass every test above and quietly
+    /// cost the interpreter its constant folding, which nothing else here would notice.
+    /// </remarks>
+    [Fact]
+    public async Task Constant_folding_outside_a_rune_still_happens()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+        var parse = engine.Parse("echo (3 + 4)", "<fold>");
+        _ = Tosh.Language.Binding.Lowerer.Lower(parse, runtime.Commands);
+
+        var stamped = parse.Pipeline.Stages
+            .OfType<Tosh.Language.Parsing.CommandSyntax>()
+            .SelectMany(command => command.Arguments)
+            .OfType<Tosh.Language.Parsing.OperatorArgumentSyntax>()
+            .Any(op => op.FoldedConstant is not null);
+
+        Assert.True(stamped, "a constant expression outside a rune should still be stamped.");
     }
 }

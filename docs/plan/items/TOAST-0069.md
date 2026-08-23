@@ -118,8 +118,12 @@ that `null` as "leaky". A sealed thunk now records `IsSealed` and evaluates thro
 which *replaces* the visible stack instead of layering over it — layering leaves the rune's own
 parameter scope underneath, which is what an empty capture exposed.
 
-`not` over a rune argument is wrong once a rune has two call sites, in a way this work does
-not touch and does not cause; filed as [`TOAST-0071`](TOAST-0071.md).
+`not` over a rune argument is wrong once a rune has two call sites. This was recorded here
+as "does not touch and does not cause" — **that was wrong**, and is corrected in
+[`TOAST-0071`](TOAST-0071.md): building the parent commit shows the defect arrives with
+expansion. Expansion substitutes an argument's syntax, which makes `not $c` foldable, and
+folding stamps its answer onto the rune body's *shared* AST. Fixed there, with the fold
+suppressed only while expanding.
 
 ## Acceptance
 

@@ -20,7 +20,6 @@
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
-| [`TOAST-0071`](items/TOAST-0071.md) | P2 | proposed | 0/5 | `not` over a rune argument returns a stale answer once a rune has two call sites |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | proposed | 0/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |

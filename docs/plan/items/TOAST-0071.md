@@ -1,7 +1,7 @@
 ---
 id: TOAST-0071
-title: "`not` over a rune argument returns a stale answer once a rune has two call sites"
-status: proposed
+title: "Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next"
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -34,17 +34,20 @@ r false { writeline "B" }   # not false → true  → should run
 prints **`A` and `B`**. Reversing the two calls prints nothing at all — the first call's
 correct output disappears as well, with exit code 0 and no diagnostic.
 
-## Why this is filed separately from TOAST-0069
+## It is a regression from TOAST-0069, not a pre-existing defect
 
-`TOAST-0069` is about compiling runes, and its scope fix (a sealed thunk evaluating in the
-caller's scope rather than layered over the rune's own parameter scope) cured a stack
-overflow in the same area. This one is untouched by that fix and reproduces identically
-before and after it, so it is its own defect with its own cause.
+**Filed wrongly on 2026-08-22 and corrected on 2026-08-23.** The original filing said this
+was "untouched and uncaused by" the rune-expansion work, and `TOAST-0069`'s notes and commit
+message repeat that claim. It was an assumption, not a measurement.
 
-The compiled backend is not obviously affected — expansion substitutes the argument syntax
-at each use — but the two backends must agree, so this blocks a differential corpus case
-for a conditional rune. That is the shape the corpus exists to catch, and it currently has
-no rune case with `not` in it for exactly this reason.
+Building the parent commit (`e9d968e`, immediately before rune expansion landed) and running
+the three failing programs returns `true false`, `true false`, and `A` — all correct. The
+defect arrives with expansion and nothing else, which is exactly what the cause below
+predicts: before expansion a rune body's `$c` lowered to a variable reference and never
+folded, so nothing was ever stamped.
+
+The lesson is narrow and worth keeping: "this survives my fix" was checked, and "this
+predates my change" was not. Those are different claims, and only the second one exonerates.
 
 ## Cause — narrowed 2026-08-23
 
@@ -74,10 +77,24 @@ operand resolves to a `RuneThunk` — or, more conservatively, to skip the fold 
 inside an expansion. Check both the engine and `OperatorEvaluator` paths, as the two
 disagree elsewhere.
 
+## Resolution — 2026-08-23
+
+`BuildBinary` and `BuildUnary` still replace the bound node with a literal — that fold is
+computed per expansion and is correct — but they no longer write `FoldedConstant` onto the
+syntax node while `LowerContext.IsExpandingRune` holds. The bound tree is built fresh for
+each expansion; the syntax tree is shared, and only the shared one could carry an answer
+across call sites.
+
+Suppressing the stamp *everywhere* would also have passed every assertion below, and would
+have quietly cost the interpreter its constant folding, so a control asserts that an
+expression outside a rune is still stamped.
+
 ## Acceptance
 
-- [ ] `not $param` returns each call site's own answer, for two or more call sites
-- [ ] `if (not $param)` runs exactly the arms it should, in either call order
-- [ ] The first call's output is never lost when a later call is added
-- [ ] A differential corpus case for a conditional rune — the one this currently blocks
-- [ ] A negative control: revert the fix and confirm the two-call-site case fails
+- [x] `not $param` returns each call site's own answer, for two or more call sites
+- [x] `if (not $param)` runs exactly the arms it should, in either call order
+- [x] The first call's output is never lost when a later call is added
+- [x] A differential corpus case for a conditional rune — three, covering a unary operator,
+      a comparison, and a condition
+- [x] A negative control: reverting the fix fails all seven new assertions, while the
+      folding-still-happens control keeps passing

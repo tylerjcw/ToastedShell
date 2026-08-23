@@ -1305,7 +1305,11 @@ public static class Lowerer
         var folded = ConstantFolder.TryFoldBinary(left, binary.Operator, right);
         if (!ReferenceEquals(folded, ConstantFolder.Sentinel.NoFold))
         {
-            binary.FoldedConstant = new ConstantFold(folded);
+            if (!ctx.IsExpandingRune)
+            {
+                binary.FoldedConstant = new ConstantFold(folded);
+            }
+
             var foldedType = folded is null ? BoundType.Dynamic : BoundType.FromClr(folded.GetType());
             return new BoundLiteral(folded, binary.Span, foldedType);
         }
@@ -1321,7 +1325,11 @@ public static class Lowerer
         var folded = ConstantFolder.TryFoldUnary(unary.Operator, operand);
         if (!ReferenceEquals(folded, ConstantFolder.Sentinel.NoFold))
         {
-            unary.FoldedConstant = new ConstantFold(folded);
+            if (!ctx.IsExpandingRune)
+            {
+                unary.FoldedConstant = new ConstantFold(folded);
+            }
+
             var foldedType = folded is null ? BoundType.Dynamic : BoundType.FromClr(folded.GetType());
             return new BoundLiteral(folded, unary.Span, foldedType);
         }
@@ -2655,6 +2663,23 @@ public static class Lowerer
 
         /// <summary>Rune calls left for run-time expansion — <c>TOAST-0069</c>.</summary>
         public HashSet<string> UnexpandedRuneCalls { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Whether lowering is currently inside a rune expansion — `TOAST-0071`.</summary>
+        /// <remarks>
+        /// <para>
+        /// Folding stamps its answer onto the *syntax* node as well as replacing the bound
+        /// node, because the interpreter reads that stamp to skip re-evaluating. A rune body's
+        /// AST is shared by every expansion of that rune, so a fold computed while a parameter
+        /// stood for one call site's argument is handed to the next call site verbatim.
+        /// </para>
+        /// <para>
+        /// `rune r(c) { writeline (not $c) }` called with `false` and then `true` printed
+        /// `false false` — not the first answer repeated, but the *last* fold answering both.
+        /// The bound literal is still correct per expansion and is kept; only the stamp on the
+        /// shared tree is suppressed.
+        /// </para>
+        /// </remarks>
+        public bool IsExpandingRune => RuneSubstitutions.Count > 0;
 
         /// <summary>Index of the innermost expansion binding <paramref name="name"/>, or -1.</summary>
         public int FindRuneSubstitutionFrame(string name)

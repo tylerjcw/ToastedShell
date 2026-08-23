@@ -494,6 +494,26 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case(
             "rune-leaky-still-replays",
             "leaky rune bind-it(x) {\n    var bound = $x\n}\nbind-it 7\necho $bound");
+
+        // Two call sites, an operator over the parameter, and a *foldable* operand at each.
+        // Expansion substitutes the argument's syntax, so the fold succeeds — and stamping
+        // that answer onto the rune body's shared AST let the second call site's fold answer
+        // the first one too. `false` then `true` printed `false false`: not a repeated first
+        // answer, the *last* fold answering both (`TOAST-0071`).
+        yield return Case(
+            "rune-folded-operand-per-call-site",
+            "rune negate(c) {\n    echo (not $c)\n}\nnegate false\nnegate true");
+
+        yield return Case(
+            "rune-folded-comparison-per-call-site",
+            "rune is-zero(n) {\n    echo ($n == 0)\n}\nis-zero 0\nis-zero 5");
+
+        // The same defect in condition position, which is how it stops being a wrong value
+        // and starts running the wrong code.
+        yield return Case(
+            "rune-condition-per-call-site",
+            "rune unless-it(c, body) {\n    if (not $c) { $body }\n}\n"
+            + "unless-it true { echo \"A\" }\nunless-it false { echo \"B\" }");
     }
 
     /// <summary>
