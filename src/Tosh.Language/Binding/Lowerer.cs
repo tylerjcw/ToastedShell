@@ -787,6 +787,22 @@ public static class Lowerer
 
     private static BoundCommandCall LowerCommand(CommandSyntax command, LowerContext ctx)
     {
+        // `TOAST-0069`. Every rune call that expansion did not consume arrives here, whatever
+        // shape it was written in — a pipeline stage, a subexpression, a command substitution
+        // — because this is where a `CommandSyntax` becomes a call. Recording it is what tells
+        // the emitter the program still needs the interpreter.
+        //
+        // Doing it at the decline sites instead missed two shapes. `twice { … } | writeline`
+        // was rejected by a pipeline-shape test that ran *before* the call was identified as
+        // a rune, and `writeline (one 5)` never reached the expansion pass at all. Both
+        // compiled to a dangling dispatch that threw "must be expanded by the engine, not
+        // executed as a regular command" — a crash produced by deciding a program was fully
+        // compiled when it was not.
+        if (ctx.Runes.ContainsKey(command.Name))
+        {
+            ctx.UnexpandedRuneCalls.Add(command.Name);
+        }
+
         var resolved = ctx.Commands.TryGet(command.Name, out var registered) ? registered : null;
 
         var arguments = new List<BoundArgument>(command.Arguments.Count);
@@ -1973,6 +1989,9 @@ public static class Lowerer
 
         var pipeline = statement.Pipeline;
 
+        // Shapes this pass will not expand. Declining here is safe without recording it,
+        // because a call that is not expanded is lowered as an ordinary command and
+        // `LowerCommand` records every rune it sees — see the note there.
         if (pipeline.Stages.Count != 1 ||
             pipeline.IsBackground ||
             pipeline.InputRedirection is not null ||

@@ -123,6 +123,15 @@ that `null` as "leaky". A sealed thunk now records `IsSealed` and evaluates thro
 which *replaces* the visible stack instead of layering over it — layering leaves the rune's own
 parameter scope underneath, which is what an empty capture exposed.
 
+**Declining had to be recorded where calls actually arrive, not where expansion gives up.**
+The shape test rejected a piped rune *before* identifying it as a rune, and a rune written
+inside an expression never reached the expansion pass at all. Neither was recorded, so
+`ProgramNeedsWholeScriptReplay` stayed false and the emitted program dispatched a rune as an
+ordinary command — "must be expanded by the engine, not executed as a regular command",
+thrown at run time by a program the compiler had called clean. Recording now happens in
+`LowerCommand`, which every unexpanded call reaches whatever shape it was written in. Four
+shapes are asserted: piped, redirected, in an expression, and in a command substitution.
+
 `not` over a rune argument is wrong once a rune has two call sites. This was recorded here
 as "does not touch and does not cause" — **that was wrong**, and is corrected in
 [`TOAST-0071`](TOAST-0071.md): building the parent commit shows the defect arrives with
@@ -145,8 +154,10 @@ suppressed only while expanding.
       `ToshExecutionDepthGuard` so the interpreted path reports
       `tosh.runtime.recursion_limit_exceeded` for both direct and mutual recursion. A
       recursive *function* already did; expansion was simply not one of the guarded paths
-- [ ] `quote` and indirect invocation are each implemented or recorded as a deliberate
-      exclusion
+- [x] `quote` and indirect invocation are each implemented or recorded as a deliberate
+      exclusion — both decline and reach replay, verified by compiling each; `quote` values
+      are genuine run-time AST data and stay excluded until they have a representation in
+      the artifact
 - [x] A negative control — removing the splice fails exactly the three splice-dependent
       corpus cases; removing the argument suspension reproduces the original stack overflow
 

@@ -76,14 +76,29 @@ public sealed class RuneReplayTests : IClassFixture<ToshRuntimeFixture>
 
     /// <summary>A call the expander declines still forces replay.</summary>
     /// <remarks>
+    /// <para>
     /// The tripwire for the test above. `leaky` writes its declarations into the caller's
     /// scope, which a pushed scope does not model, and a mismatched arity has no substitution
     /// to build — both must fall back rather than compile to something that merely looks right.
+    /// </para>
+    /// <para>
+    /// The last four rows are shapes that *did* compile, and crashed. Declining was decided at
+    /// the expansion pass, which only ever sees a single-stage pipeline statement — so a rune
+    /// piped, redirected, or written inside an expression was never recorded as surviving, and
+    /// the emitted program dispatched a rune as an ordinary command: "must be expanded by the
+    /// engine, not executed as a regular command", at run time, from a program the compiler
+    /// had called clean. Recording moved to `LowerCommand`, which every unexpanded call
+    /// reaches whatever shape it was written in.
+    /// </para>
     /// </remarks>
     [Theory]
     [InlineData("leaky rune", "leaky rune spill(x) {\n    var leaked = $x\n}\nspill 1")]
     [InlineData("too few arguments", "retry 3")]
     [InlineData("too many arguments", "retry 3 { writeline \"hi\" } extra")]
+    [InlineData("piped into a command", "retry 3 { writeline \"hi\" } | writeline")]
+    [InlineData("with a redirection", "retry 3 { writeline \"hi\" } > /dev/null")]
+    [InlineData("in an expression", "writeline (retry 3 { writeline \"hi\" })")]
+    [InlineData("in a command substitution", "var v = $(retry 3 { writeline \"hi\" })")]
     public void A_declined_rune_call_still_forces_replay(string what, string body)
         => Assert.False(EmitsWithoutReplay(Definition + body), what);
 
