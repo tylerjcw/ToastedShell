@@ -105,6 +105,34 @@ public static class ToastRenderer
     /// explicit instruction, and silently ignoring one — which is what happens today —
     /// produces text nobody asked for from a program that reports success.
     /// </exception>
+    /// <summary>
+    /// Renders an interpolation hole: the format clause, then the alignment — `TOAST-0022`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One entry point for both backends, for the same reason <see cref="Render(object?, string?)"/>
+    /// is one: the compiled side reached the renderer but never passed the hole's clauses to
+    /// it, so `$"{42:X}"` was `2A` interpreted and `42` compiled. A second implementation is
+    /// how that happened; a shared one is what stops it happening again.
+    /// </para>
+    /// <para>
+    /// Alignment pads the rendered text and is applied after formatting, so a clause that
+    /// changes the text's length is padded at its final width. Zero means no padding, which
+    /// lets the compiled caller pass a plain <c>int</c> rather than a nullable.
+    /// </para>
+    /// </remarks>
+    public static string RenderHole(object? value, string? format, int alignment)
+        => Align(Render(value, format), alignment);
+
+    /// <summary>Pads rendered text to an interpolation hole's alignment.</summary>
+    /// <remarks>Positive pads on the left, negative on the right, zero not at all.</remarks>
+    public static string Align(string text, int alignment) => alignment switch
+    {
+        0 => text,
+        > 0 => text.PadLeft(alignment),
+        _ => text.PadRight(-alignment),
+    };
+
     public static string Render(object? value, string? format)
     {
         var builder = new StringBuilder();

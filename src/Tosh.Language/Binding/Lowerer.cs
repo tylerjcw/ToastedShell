@@ -1419,7 +1419,9 @@ public static class Lowerer
                             expr.Expression,
                             expr.ExpressionSpan,
                             ctx),
-                        Span: expr.ExpressionSpan));
+                        Span: expr.ExpressionSpan,
+                        Format: expr.Format,
+                        Alignment: expr.Alignment));
                     break;
             }
         }

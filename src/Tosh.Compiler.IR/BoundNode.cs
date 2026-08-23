@@ -267,10 +267,20 @@ public sealed record BoundInterpolatedLiteral(string Text, TextSpan Span)
 /// re-parsing if the embedded expression isn't yet representable in
 /// the bound IR.
 /// </summary>
+/// <param name="Format">
+/// The hole's format clause — the `X` in <c>$"{42:X}"</c> — or null. Carried here because
+/// the emitter reached the renderer without it, so a clause the interpreter honoured was
+/// silently dropped from compiled output (`TOAST-0022`).
+/// </param>
+/// <param name="Alignment">
+/// The hole's alignment — the `6` in <c>$"{$n,6}"</c> — or null for none.
+/// </param>
 public sealed record BoundInterpolatedExpression(
     string SourceText,
     BoundExpression? Expression,
-    TextSpan Span)
+    TextSpan Span,
+    string? Format = null,
+    int? Alignment = null)
     : BoundInterpolatedPart(Span);
 
 /// <summary>An interpolated string literal: <c>$"hello, $name!"</c>.</summary>

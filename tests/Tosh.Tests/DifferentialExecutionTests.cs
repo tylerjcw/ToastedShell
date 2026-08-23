@@ -170,6 +170,18 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // *fresh* DisplayPreferences, while the interpreter used the shell's live one.
         // The two agreed only while nothing was configured, and nothing compared them —
         // which is the exact shape TS-P2-109 had, and the reason this file exists.
+        // `TOAST-0022`, moved up from `KnownDivergences`. The emitter reached the renderer but
+        // never handed it the hole's clauses, so `$"{42:X}"` was `2A` interpreted and `42`
+        // compiled — a clause the language refuses to ignore, silently ignored. Both backends
+        // now call `ToastRenderer.RenderHole`, which is one implementation rather than two.
+        yield return Case("render-format-clause", "echo $\"{42:X} {3.14159:F2}\"");
+        yield return Case("render-alignment-right", "var n = 7\necho $\"[{$n,6}]\"");
+        yield return Case("render-alignment-left", "var n = 7\necho $\"[{$n,-6}]\"");
+        // Alignment precedes the format clause, as it does in .NET: `{42,6:X}` is hex padded
+        // to six. Written the other way round, `X,6` is simply the format string and both
+        // backends agree on the nonsense — which is why this row spells the real one.
+        yield return Case("render-format-and-alignment", "echo $\"[{42,6:X}]\"");
+
         yield return Case("render-list", "echo $\"{[1, 2, 3]}\"");
         yield return Case("render-nested-list", "echo $\"{[[1, 2], [3]]}\"");
         yield return Case("render-record", "echo $\"{{| N = 5, S = \\\"a b\\\" |}}\"");
@@ -604,12 +616,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             + "    func render() -> string => $\"{$this.C}deg\"\n"
             + "}\n"
             + "echo $\"{(new DiffTemp())}\"");
-
-        // The emitter drops an interpolation hole's format clause entirely, so
-        // `$"{42:X}"` is `2A` interpreted and `42` compiled.
-        yield return Divergence(
-            "TOAST-0022", "render-format-clause",
-            "echo $\"{42:X} {3.14159:F2}\"");
 
         // ── `TOAST-0018`'s specified semantics, not yet implemented compiled ──
         //

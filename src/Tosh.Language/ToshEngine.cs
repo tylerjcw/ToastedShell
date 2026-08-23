@@ -4262,13 +4262,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// has it — <c>$"{$n,8}"</c> right-aligns in eight columns, <c>$"{$n,-8}"</c>
     /// left-aligns. A value wider than the field is never truncated.
     /// </remarks>
+    /// <summary>Applies an interpolation hole's alignment, through the shared renderer.</summary>
+    /// <remarks>
+    /// `TOAST-0022`. The padding rule lives in `ToastRenderer` so the compiled backend applies
+    /// the same one rather than a copy of it.
+    /// </remarks>
     private static string ApplyInterpolationClauses(string text, int? alignment)
-        => alignment switch
-        {
-            null or 0 => text,
-            > 0 => text.PadLeft(alignment.Value),
-            _ => text.PadRight(-alignment.Value),
-        };
+        => ToastRenderer.Align(text, alignment ?? 0);
 
     private static string FormatTraceArgument(object? value)
     {

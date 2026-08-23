@@ -1,7 +1,7 @@
 ---
 id: TOAST-0022
 title: "Compiled interpolation drops format clauses and cannot reach a class's Display"
-status: open
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-17
@@ -24,14 +24,35 @@ renderer falls through to its CLR-object path.
 
 ## Acceptance
 
-- [ ] A format clause reaches the renderer from compiled code — `$"{42:X}"` is `2A` on both
+- [x] A format clause reaches the renderer from compiled code — `$"{42:X}"` is `2A` on both
       backends
-- [ ] Alignment (`$"{$n,6}"`) likewise
+- [x] Alignment (`$"{$n,6}"`) likewise — left, right, and combined with a format clause
 - [ ] A compiled class implementing `Display` renders through it
 - [ ] A compiled class with a `ToString` renders through that, as the interpreter's does
 - [ ] Both cases move from `KnownDivergences()` into `Corpus()`, which is the mechanism's
       own signal that they are fixed
 - [ ] A negative control: reverting fails the moved cases
+
+## Progress — 2026-08-23
+
+**The format clause was lost at lowering, not at emission.** The problem statement blamed the
+emitter for not passing the hole's `Format` and `Alignment` to `ConvertToString`, but
+`BoundInterpolatedExpression` had no such fields to pass: the parser captured them and the
+bound IR dropped them on the floor. They are carried through the IR now and populated by the
+lowerer.
+
+Both backends call one new entry point, `ToastRenderer.RenderHole(value, format, alignment)`,
+rather than each applying the rule itself — the interpreter's own padding helper delegates to
+the shared `Align`. Two implementations are how the two backends came to disagree; one is
+what stops it recurring, which is the same move `TOAST-0030` made for `new` and `is`.
+
+The plain path still goes through `ConvertToString`. It is the overwhelmingly common case and
+the clauses are exactly what it has nothing to say about, so nothing was gained by routing it
+through a wider call.
+
+Worth recording: a first corpus row spelled the clauses `{42:X,6}`, where `X,6` is simply the
+format string — both backends agreed on the nonsense, so it would have passed while asserting
+nothing. Alignment precedes the format clause, as in .NET: `{42,6:X}`.
 
 ## Notes
 

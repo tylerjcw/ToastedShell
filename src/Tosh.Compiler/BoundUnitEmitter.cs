@@ -469,6 +469,10 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(ToshValueFormatter).GetMethod(
             nameof(ToshValueFormatter.Format),
             new[] { typeof(object) })!;
+    private static readonly MethodInfo s_renderHole =
+        typeof(ToastRenderer).GetMethod(
+            nameof(ToastRenderer.RenderHole),
+            new[] { typeof(object), typeof(string), typeof(int) })!;
     private static readonly MethodInfo s_stringJoin =
         typeof(string).GetMethod(nameof(string.Join), new[] { typeof(string), typeof(string[]) })!;
     private static readonly MethodInfo s_objectToString =

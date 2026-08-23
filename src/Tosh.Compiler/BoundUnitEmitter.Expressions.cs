@@ -516,9 +516,29 @@ internal sealed partial class EmitterImpl
                         {
                             _il.Emit(OpCodes.Ldstr, string.Empty);
                         }
-                        else
+                        else if (hole.Format is null && hole.Alignment is null)
                         {
                             ConvertToString(holeType);
+                        }
+                        else
+                        {
+                            // `TOAST-0022`. A hole carrying clauses goes through the shared
+                            // renderer entry point that applies them. The plain path is left
+                            // alone: it is the overwhelmingly common one, and the clauses are
+                            // exactly what it has nothing to say about.
+                            BoxIfValueType(holeType);
+
+                            if (hole.Format is null)
+                            {
+                                _il.Emit(OpCodes.Ldnull);
+                            }
+                            else
+                            {
+                                _il.Emit(OpCodes.Ldstr, hole.Format);
+                            }
+
+                            _il.Emit(OpCodes.Ldc_I4, hole.Alignment ?? 0);
+                            _il.Emit(OpCodes.Call, s_renderHole);
                         }
                     }
                     break;
