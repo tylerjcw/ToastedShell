@@ -135,7 +135,16 @@ internal sealed partial class EmitterImpl
                 case BoundClassPropertyMember prop:
                     if (prop.IsStatic) return false;
                     if (prop.IsLazy) return false;
-                    if (prop.GetterBody is not null) return false;
+
+                    // `TOAST-0038`. A computed property — `prop Label: string => …` — is a
+                    // getter whose body is an ordinary expression, and it is emitted as a
+                    // real CLR property backed by one. This was the *only* thing standing
+                    // between the readiness probe and Phase B's exit: the probe declares
+                    // three of them and nothing else it uses was unsupported.
+                    //
+                    // A settable computed property is still replayed. A setter body has to
+                    // agree with the getter about where the value lives, and a computed
+                    // property has no field to agree about.
                     if (prop.SetterBody is not null) return false;
                     continue;
                 case BoundClassMethodMember method:

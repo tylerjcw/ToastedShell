@@ -237,6 +237,47 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
         => Assert.Equal(expected, RunWithoutReplay(source));
 
     /// <summary>
+    /// A computed property emits and answers — `TOAST-0038`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `prop Label: string => …` is a getter whose body is an ordinary expression. It was
+    /// refused by the class-shell guard, so any class declaring one was replayed whole —
+    /// and this was the **only** thing between the readiness probe and a strict compile.
+    /// The probe declares three of them and uses no other unsupported shape.
+    /// </para>
+    /// <para>
+    /// Emitted as a real CLR property with a getter and no backing field, so reflection
+    /// finds it the ordinary way. A field would be one nothing ever writes, shadowing the
+    /// getter for any reader that looks at fields first.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(
+        "export class Item(pos: int) {\n    prop Position: int = $pos\n" +
+        "    prop Label: string => $\"at offset {$this.Position}\"\n}\n" +
+        "var i: dynamic = new Item(7)\nvar r: string = $i.Label\necho $r", "at offset 7")]
+    [InlineData(
+        "export class Counter(n: int) {\n    prop N: int = $n\n" +
+        "    prop Doubled: int => $this.N * 2\n}\n" +
+        "var c: dynamic = new Counter(21)\nvar r: int = $c.Doubled\necho $r", "42")]
+    public void A_computed_property_answers_without_replay(string source, string expected)
+        => Assert.Equal(expected, RunWithoutReplay(source));
+
+    /// <summary>A settable computed property is still replayed, deliberately.</summary>
+    /// <remarks>
+    /// A setter body has to agree with the getter about where the value lives, and a
+    /// computed property has no field to agree about. Left for whoever needs it.
+    /// </remarks>
+    [Fact]
+    public void A_settable_computed_property_still_replays()
+        => Assert.False(
+            EmitsWithoutReplay(
+                "export class Item {\n    prop Label: string {\n        get => \"x\"\n" +
+                "        set { }\n    }\n}\n",
+                out _));
+
+    /// <summary>
     /// The kinds a stamp alone does not lift out of replay.
     /// </summary>
     /// <remarks>

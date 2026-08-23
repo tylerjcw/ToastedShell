@@ -132,11 +132,34 @@ source rather than only here.
 - [x] The compiled probe produces the same output as the interpreted probe — byte-identical,
       and pinned by `The_readiness_probe_agrees_across_backends`
 - [ ] It runs **without an interpreter dependency** — the second half of Phase B's exit
-      sentence, and deliberately still open. The probe runs through the IL path and agrees
-      with the interpreter, which is asserted; the emitted assembly still references
-      `Tosh.Compiler.Runtime`, which bridges to `Tosh.Language`. `TOAST-0035` owns that
+      sentence, and still open, though closer. **The probe now compiles under the `runtime`
+      profile**, which refuses source replay, so the artifact no longer carries ToastScript
+      for an evaluator to re-read — asserted by
+      `The_readiness_probe_compiles_without_source_replay`. What remains is the reference:
+      the emitted assembly still names `Tosh.Compiler.Runtime`, which bridges to
+      `Tosh.Language`, and the `pure` profile still refuses four tier-2 features —
+      host-dispatched `new`, dynamic member access, and two command-dispatch shapes.
+      Those four are the whole of the distance left
 - [x] Whatever fights back is filed, not worked around — four fixed, one filed
 - [x] A negative control
+
+## Progress — 2026-08-22
+
+**The probe stopped needing source replay, and one feature did it.**
+
+Measured rather than assumed: the probe declares 14 classes and *no* records, enums,
+interfaces, traits, unions, structs or refinement types. Its single blocker was
+`prop Label: string => …` — the class-shell guard refused any property carrying a getter
+body, so three computed properties sent every class declaring one to Tier 3.
+
+They are now emitted as real CLR properties with a getter and no backing field, the body
+driven through the shared method emitter by the same synthetic-function device trait default
+bodies use. A field would have been one nothing ever writes, shadowing the getter for any
+reader that looks at fields first.
+
+Worth recording for planning: a long stretch of `TOAST-0035` went into lifting record, enum,
+interface and alias declarations out of replay, and **none of them were what this item
+needed**. Asking what the probe actually contains would have found this in one command.
 
 ## Notes
 

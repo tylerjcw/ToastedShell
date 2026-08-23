@@ -157,6 +157,12 @@ internal sealed partial class EmitterImpl
         {
             if (member is BoundClassPropertyMember prop)
             {
+                // `TOAST-0038`. A computed property has no storage: its value is produced by
+                // the getter every time. Emitting a field for it would be a field nothing
+                // ever writes, shadowing the getter for any reader that looks at fields
+                // first.
+                if (prop.GetterBody is not null) continue;
+
                 if (fields.ContainsKey(prop.Name)) continue;
                 var fieldAttrs = MapPropertyVisibility(prop);
                 if (prop.IsFixed) fieldAttrs |= FieldAttributes.InitOnly;
@@ -667,6 +673,74 @@ internal sealed partial class EmitterImpl
         foreach (var (member, builder) in pendingMethods)
         {
             _clrClassMethodBodies.Add(new ClrClassMethodPending(shell, builder, member.Method));
+        }
+
+        DeclareComputedProperties(cls, typeBuilder, shell);
+    }
+
+    /// <summary>
+    /// Emits a CLR property per computed tosh property — <c>TOAST-0038</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `prop Label: string => $"at offset {$this.Position}"` becomes a real property with a
+    /// getter and no backing field, so reflection — which is how a compiled instance's
+    /// members are read — finds it in the ordinary way.
+    /// </para>
+    /// <para>
+    /// The body is driven through the shared method emitter by wrapping it in a synthetic
+    /// <see cref="BoundFunctionDefinition"/> of no parameters, the same device trait default
+    /// bodies use. That also means it gets
+    /// <c>CollapseTrailingExpressionIntoReturn</c> for free, which is what makes an
+    /// expression body return its value rather than fall through to `return null`.
+    /// </para>
+    /// </remarks>
+    private void DeclareComputedProperties(
+        BoundClassDefinition cls,
+        TypeBuilder typeBuilder,
+        ClrTypeShell shell)
+    {
+        foreach (var member in cls.Members)
+        {
+            if (member is not BoundClassPropertyMember { GetterBody: not null } prop)
+            {
+                continue;
+            }
+
+            var mangled = MangleClrIdentifier(prop.Name);
+
+            var getter = typeBuilder.DefineMethod(
+                $"get_{mangled}",
+                MethodAttributes.Public | MethodAttributes.HideBySig
+                    | MethodAttributes.SpecialName | MethodAttributes.Virtual,
+                MetadataType(typeof(object)),
+                Type.EmptyTypes);
+
+            var property = typeBuilder.DefineProperty(
+                mangled,
+                PropertyAttributes.None,
+                MetadataType(typeof(object)),
+                Type.EmptyTypes);
+            property.SetGetMethod(getter);
+
+            if (MangleClrIdentifier(prop.Name) != prop.Name)
+            {
+                property.SetCustomAttribute(new CustomAttributeBuilder(
+                    s_toshOriginalNameCtor, new object[] { prop.Name }));
+            }
+
+            var syntheticGetter = new BoundFunctionDefinition(
+                Name: prop.Name,
+                Symbol: new BoundSymbol(prop.Name, BoundSymbolKind.Parameter, ScopeDepth: 0, DeclaredType: BoundType.Dynamic),
+                Parameters: Array.Empty<BoundParameter>(),
+                ReturnTypeName: prop.TypeName,
+                Body: prop.GetterBody,
+                Captures: Array.Empty<BoundSymbol>(),
+                IsCommandWrapper: false,
+                Modifier: DeclarationModifier.Default,
+                Span: prop.Span);
+
+            _clrClassMethodBodies.Add(new ClrClassMethodPending(shell, getter, syntheticGetter));
         }
     }
 

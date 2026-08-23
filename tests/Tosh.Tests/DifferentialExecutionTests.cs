@@ -731,4 +731,54 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
 
         Assert.DoesNotContain("threw", interpreted, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The readiness probe compiles with no source replay — `TOAST-0038`, Phase B's exit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The first half of that exit — compiles and runs, byte-identical — has been pinned by
+    /// the test above for a while. This is the second: it compiles under the `runtime`
+    /// profile, which refuses source replay, so the artifact carries no ToastScript for an
+    /// evaluator to re-read.
+    /// </para>
+    /// <para>
+    /// One thing stood between the probe and this, and it was not a type-system feature:
+    /// `prop Label: string => …`. The class-shell guard refused any property with a getter
+    /// body, so three computed properties sent every class declaring one to replay. The
+    /// probe uses no records, enums, interfaces, traits, unions, structs or refinement
+    /// types — measured, after a long stretch spent lifting those kinds out of replay for
+    /// other reasons.
+    /// </para>
+    /// <para>
+    /// Not the same as needing no runtime at all: the assembly still references
+    /// `Tosh.Compiler.Runtime`, and the `pure` profile still refuses four tier-2 features —
+    /// host-dispatched `new`, dynamic member access, and two command-dispatch shapes.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void The_readiness_probe_compiles_without_source_replay()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+        var path = Path.Combine(root, "bench/probes/compiler_shape.tosh");
+        Assert.True(File.Exists(path), $"missing {path}");
+
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+        var parse = engine.Parse(File.ReadAllText(path), "<readiness-probe>");
+        Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
+
+        var unit = Lowerer.Lower(parse, runtime.Commands);
+        using var stream = new MemoryStream();
+        var result = BoundUnitEmitter.Emit(
+            unit,
+            $"ToshProbe_{Guid.NewGuid():N}",
+            stream,
+            CompileProfile.Runtime);
+
+        Assert.True(
+            result.IsClean,
+            "the readiness probe fell back to source replay: " +
+            string.Join(", ", result.UnsupportedShapes));
+    }
 }

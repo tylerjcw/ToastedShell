@@ -353,8 +353,9 @@ used blocking construct at 18.
       `SourceReplaySurfaceTests`, as a corpus plus tripwires
 - [ ] Each is either implemented, or recorded as a deliberate and documented exclusion —
       **implemented**: default, rest and optional parameters; module-scoped classes,
-      interfaces, enums and records. **Remaining**: struct, trait, union, and refinement
-      types, each recorded above with what it reported
+      interfaces, enums and records; plain `type` aliases; computed properties on class
+      shells. **Remaining**: struct, trait, union, and refinement types, each recorded above
+      with what it reported — none of them dropped, all of them still wanted
 - [ ] `--compile-allow-dynamic` is not needed by any program in `examples/` or `bench/`
 - [ ] A strict profile fails the build rather than replaying source
 - [ ] A negative control
