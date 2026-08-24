@@ -966,7 +966,9 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
 
     private string RunInterpreted(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        using var output = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(output);
+        var engine = new ToshEngine(runtime);
         var results = engine.ExecuteToListAsync(source).GetAwaiter().GetResult();
 
         // `TOAST-0018`. Rendered, not `ToString`d. The compiled side is captured *stdout*,
@@ -975,7 +977,15 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // the eight portable-semantics concerns reported fifteen divergences of which ten
         // were this. `ToastRenderer` is the contract both backends are supposed to meet, so
         // it is what both sides are reduced to.
-        return Canonicalize(results.Select(ToastRenderer.Render));
+        var yielded = Canonicalize(results.Select(ToastRenderer.Render));
+        var written = Canonicalize(
+            output.ToString().Replace("\r", "", StringComparison.Ordinal).Split('\n'));
+
+        // The differential corpus compares produced values. A few controls also
+        // write progress text while yielding their actual result, so yielded values
+        // remain authoritative when present. The readiness probe yields nothing and
+        // uses writeline exclusively; only that shape falls back to direct output.
+        return yielded.Length > 0 ? yielded : written;
     }
 
     private string RunCompiled(string source)
