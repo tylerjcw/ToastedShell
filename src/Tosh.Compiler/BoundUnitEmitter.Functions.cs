@@ -446,7 +446,8 @@ internal sealed partial class EmitterImpl
         Type target,
         string? annotationTypeName = null,
         TextSpan? span = null,
-        string? owner = null)
+        string? owner = null,
+        string? returnFunctionName = null)
     {
         if (target == typeof(object)) return;
 
@@ -481,8 +482,8 @@ internal sealed partial class EmitterImpl
         il.Emit(OpCodes.Ldstr, annotationTypeName ?? target.FullName ?? target.Name);
         il.Emit(OpCodes.Ldc_I4, span?.Start ?? 0);
         il.Emit(OpCodes.Ldc_I4, span?.Length ?? 0);
-        il.Emit(OpCodes.Ldstr, owner ?? "compiled typed boundary");
-        il.Emit(OpCodes.Call, s_hostCheckType);
+        il.Emit(OpCodes.Ldstr, returnFunctionName ?? owner ?? "compiled typed boundary");
+        il.Emit(OpCodes.Call, returnFunctionName is null ? s_hostCheckType : s_hostCheckReturnType);
 
         if (target.IsValueType)
         {
@@ -490,6 +491,43 @@ internal sealed partial class EmitterImpl
             return;
         }
         il.Emit(OpCodes.Castclass, target);
+    }
+
+    /// <summary>
+    /// Stack transition: <c>object -&gt; object</c>. Enforces a source annotation at an
+    /// emitted callable's entry point, where CLR reference types have erased nullability.
+    /// </summary>
+    private void EmitCheckCallableParameter(
+        ILGenerator il,
+        string typeName,
+        TextSpan span,
+        string callableKind,
+        string callableName,
+        string parameterName,
+        int argumentCount,
+        LocalBuilder? argumentCountLocal = null)
+    {
+        il.Emit(OpCodes.Ldstr, typeName);
+        il.Emit(OpCodes.Ldc_I4, span.Start);
+        il.Emit(OpCodes.Ldc_I4, span.Length);
+        il.Emit(OpCodes.Ldstr, callableKind);
+        il.Emit(OpCodes.Ldstr, callableName);
+        il.Emit(OpCodes.Ldstr, parameterName);
+        if (argumentCountLocal is not null)
+            il.Emit(OpCodes.Ldloc, argumentCountLocal);
+        else
+            il.Emit(OpCodes.Ldc_I4, argumentCount);
+        if (_profile == CompileProfile.Pure)
+        {
+            var parse = (ParseResult)_unit.ParseResult;
+            il.Emit(OpCodes.Ldstr, parse.SourceName);
+            il.Emit(OpCodes.Ldstr, parse.SourceText);
+            il.Emit(OpCodes.Call, s_portableCheckNonNullParameter);
+        }
+        else
+        {
+            il.Emit(OpCodes.Call, s_hostCheckCallableParameter);
+        }
     }
 
     /// <summary>
@@ -511,7 +549,10 @@ internal sealed partial class EmitterImpl
     /// <c>ldarg_0</c>, which holds for any static method whose single parameter is the pack.
     /// </para>
     /// </remarks>
-    private void EmitPackedArgumentPrologue(IReadOnlyList<BoundParameter> parameters)
+    private void EmitPackedArgumentPrologue(
+        IReadOnlyList<BoundParameter> parameters,
+        string functionName,
+        bool isOverloaded = false)
     {
             // Resolve named-argument wrappers into their positional
             // slots before the positional prologue binds anything
@@ -521,6 +562,11 @@ internal sealed partial class EmitterImpl
             // prologue below reads one stable array.
             var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
             var argsLocal = _il.DeclareLocal(typeof(object[]));
+            var argumentCountLocal = _il.DeclareLocal(typeof(int));
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldlen);
+            _il.Emit(OpCodes.Conv_I4);
+            _il.Emit(OpCodes.Stloc, argumentCountLocal);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldc_I4, parameters.Count);
             _il.Emit(OpCodes.Newarr, typeof(string));
@@ -627,6 +673,21 @@ internal sealed partial class EmitterImpl
                     _il.MarkLabel(hasValue);
                 }
 
+                if (!parameter.IsRest && parameter.TypeName is { } parameterTypeName)
+                {
+                    _il.Emit(OpCodes.Ldloc, local);
+                    EmitCheckCallableParameter(
+                        _il,
+                        parameterTypeName,
+                        parameter.Span,
+                        isOverloaded ? "function-overload" : "function",
+                        functionName,
+                        parameter.Name,
+                        parameters.Count,
+                        argumentCountLocal);
+                    _il.Emit(OpCodes.Stloc, local);
+                }
+
                 _typedParamLocals[parameter.Symbol] = local;
             }
     }
@@ -652,6 +713,7 @@ internal sealed partial class EmitterImpl
         var savedTypedLocals = _typedParamLocals;
         var savedReturnType = _currentFunctionReturnType;
         var savedReturnTypeName = _currentFunctionReturnTypeName;
+        var savedFunctionName = _currentFunctionName;
         var savedReturnRefinement = _currentFunctionReturnRefinement;
         var savedReturnEmissionFrame = _returnEmissionFrame;
         var savedDeferredCleanupFrames = _deferredCleanupFrames;
@@ -663,18 +725,21 @@ internal sealed partial class EmitterImpl
             _typedParamLocals = new();
             _currentFunctionReturnType = entry.IsTyped ? entry.ReturnClrType : null;
             _currentFunctionReturnTypeName = entry.IsTyped ? func.ReturnTypeName : null;
+            _currentFunctionName = entry.IsTyped ? func.Name : null;
             _currentFunctionReturnRefinement = entry.IsTyped ? func.ReturnType as RefinementType : null;
             _deferredCleanupFrames = new();
             var returnFrame = CreateReturnEmissionFrame(entry.ReturnClrType);
             _returnEmissionFrame = returnFrame;
             var executionFrame = EmitExecutionFrameEntry($"func {func.Name}");
+            var isOverloaded = entries.Count > 1;
             if (entry.UsesPackedArguments)
             {
-                EmitPackedArgumentPrologue(func.Parameters);
+                EmitPackedArgumentPrologue(func.Parameters, func.Name, isOverloaded);
             }
             else for (var i = 0; i < func.Parameters.Count; i++)
             {
-                if (entry.IsTyped)
+                var parameter = func.Parameters[i];
+                if (entry.IsTyped || parameter.TypeName is not null)
                 {
                     // Box typed value-type params (and pass through
                     // ref-type params) into an object-typed local so
@@ -683,27 +748,31 @@ internal sealed partial class EmitterImpl
                     // working without per-shape coercion.
                     var local = _il.DeclareLocal(typeof(object));
                     _il.Emit(OpCodes.Ldarg, i);
-                    var clr = entry.ParamClrTypes[i];
-                    if (clr.IsValueType) _il.Emit(OpCodes.Box, clr);
-                    // Refinement-check enforcement on parameter
-                    // entry: if the declared parameter type is a
-                    // refinement, route the boxed value through
-                    // ToshHost.CheckType. Throws a runtime
-                    // diagnostic when the annotation is violated.
-                    if (func.Parameters[i].Symbol.DeclaredType is RefinementType refParam)
+                    if (entry.IsTyped)
                     {
-                        _il.Emit(OpCodes.Ldstr, refParam.Name);
-                        _il.Emit(OpCodes.Ldc_I4, func.Parameters[i].Span.Start);
-                        _il.Emit(OpCodes.Ldc_I4, func.Parameters[i].Span.Length);
-                        _il.Emit(OpCodes.Ldstr, $"parameter '{func.Parameters[i].Name}'");
-                        _il.Emit(OpCodes.Call, s_hostCheckType);
+                        var clr = entry.ParamClrTypes[i];
+                        if (clr.IsValueType) _il.Emit(OpCodes.Box, clr);
+                    }
+                    // CLR parameter types erase ToastScript nullability, and reflection
+                    // entry can bypass call-site conversion. Enforce every annotation in
+                    // the prologue, including refinement aliases.
+                    if (parameter.TypeName is { } parameterTypeName)
+                    {
+                        EmitCheckCallableParameter(
+                            _il,
+                            parameterTypeName,
+                            parameter.Span,
+                            isOverloaded ? "function-overload" : "function",
+                            func.Name,
+                            parameter.Name,
+                            func.Parameters.Count);
                     }
                     _il.Emit(OpCodes.Stloc, local);
-                    _typedParamLocals[func.Parameters[i].Symbol] = local;
+                    _typedParamLocals[parameter.Symbol] = local;
                 }
                 else
                 {
-                    _paramSlots[func.Parameters[i].Symbol] = i;
+                    _paramSlots[parameter.Symbol] = i;
                 }
             }
             // A trailing bare expression is the function's result — that is what
@@ -740,6 +809,7 @@ internal sealed partial class EmitterImpl
             _typedParamLocals = savedTypedLocals;
             _currentFunctionReturnType = savedReturnType;
             _currentFunctionReturnTypeName = savedReturnTypeName;
+            _currentFunctionName = savedFunctionName;
             _currentFunctionReturnRefinement = savedReturnRefinement;
             _returnEmissionFrame = savedReturnEmissionFrame;
             _deferredCleanupFrames = savedDeferredCleanupFrames;

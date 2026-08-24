@@ -68,6 +68,33 @@ public sealed class CompiledPipelineValueTests : IClassFixture<ToshRuntimeFixtur
     }
 
     [Fact]
+    public void Multi_item_single_stage_command_subexpression_fails_with_the_interpreter_diagnostic()
+    {
+        // TOAST-0073: unlike a multi-stage pipeline, a single command used to go
+        // through InvokeValue, which packaged these two items into a List<object?>.
+        var execution = CompileAndRun("echo ((echo 1 2) | count)");
+
+        var diagnostic = Assert.IsType<ToshDiagnosticException>(execution.Failure);
+        Assert.Equal(
+            "tosh.runtime.subexpression_requires_single_value",
+            diagnostic.Diagnostics[0].Code);
+        Assert.Contains("produced 2 values", diagnostic.Diagnostics[0].Label, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("echo (echo)", "null")]
+    [InlineData("echo (echo 1)", "1")]
+    public void Zero_and_one_item_single_stage_command_subexpressions_keep_their_values(
+        string source,
+        string expected)
+    {
+        var execution = CompileAndRun(source);
+
+        Assert.Null(execution.Failure);
+        Assert.Equal(expected, execution.Output);
+    }
+
+    [Fact]
     public async Task Interpreted_and_compiled_agree_on_the_single_value_rule()
     {
         const string source =

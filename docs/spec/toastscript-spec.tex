@@ -2144,12 +2144,18 @@ Equality is decided by the first of these that applies:
         directions are attempted, so the answer never depends on which operand was
         written first, and a conversion that succeeds decides the result even when the
         converted values differ.
+  \item \textbf{CLR operator fallback.} If neither conversion applies, the values are
+        not language-native numbers, and an operand's CLR type declares a compatible
+        public static \code{op\_Equality} method, that method decides the result.
   \item \textbf{Otherwise} the values are compared with \code{Equals} --- a compiled
         \code{Equals} method, then record fields, then \code{object.Equals}.
 \end{enumerate}
 
-Comparison operators attempt \code{IComparable} first, then fall back to string
-comparison.
+Ordered comparison applies the language's enum, string, and conversion rules first,
+then \code{IComparable}.  If those rules do not support the pair, it consults the
+corresponding CLR operator method (\code{op\_LessThan},
+\code{op\_LessThanOrEqual}, \code{op\_GreaterThan}, or
+\code{op\_GreaterThanOrEqual}) before reporting that the values cannot be ordered.
 
 The conversion step is the one that surprises: \code{1 == "1"} is \code{true}. It
 applies only across \emph{different} types --- two strings compare exactly, so
@@ -4102,10 +4108,21 @@ When evaluating \code{a OP b} where either operand is a class instance:
     \item Otherwise, if the right operand defines an \code{OP} method, it
       is invoked with \code{a} as the argument (note: \code{\$this} is
       still the right operand).
-    \item Otherwise, the standard built-in operator semantics apply, which
-      typically raises a runtime error if neither side is a supported
-      type.
+    \item Otherwise, the standard built-in operator semantics apply.
+    \item If no built-in rule supports the operand pair, TōSh looks for the
+      corresponding compatible public static CLR \code{op\_*} method on the
+      left operand's type, then on the right operand's type when the types differ.
+    \item If neither operand supplies one, evaluation raises the ordinary
+      incompatible-operand diagnostic naming both types.
 \end{enumerate}
+
+The CLR fallback uses \code{op\_Addition}, \code{op\_Subtraction},
+\code{op\_Multiply}, \code{op\_Division}, and \code{op\_Modulus} for arithmetic,
+and the six conventional equality and ordering names for comparison.  The symbolic
+\code{**} and \code{//} operators have no standard CLR operator name and therefore
+retain TōSh's built-in and class-overload behavior.  This lookup is also the lookup
+used by the \code{Add}, \code{Sub}, \code{Mul}, and \code{Div} type constraints, so
+constraint satisfaction and execution cannot disagree about whether an operator exists.
 
 \subsection{Limitations}
 
@@ -5785,15 +5802,20 @@ return and parameter rules are the whole of it for them.
 \section{Union Definitions}
 \ikw{union}
 
-Unions define tagged variant types.  Unit variants (no fields) are accessed as
-static members.  Variants with fields are constructed as static calls.  Every
-union instance exposes \code{Variant} (also aliased as \code{Tag}) plus any
-fields declared on its variant.
+Unions define closed, tagged reference types.  The runtime representation is an
+abstract union base class with one sealed class per variant.  This representation
+is used for both flat and recursive unions; there is no implicit value-layout or
+\code{struct union} form.  A future value-layout form, if added, must be an explicit
+declaration kind rather than changing the layout of an existing \code{union}.
+
+Unit variants (no fields) are accessed as static members.  Variants with fields
+are constructed as static calls.  Every union instance exposes \code{Variant}
+(also aliased as \code{Tag}) plus any fields declared on its variant.
 
 \begin{lstlisting}
 union Result {
-    Ok(value)
-    Error(message)
+    Ok(value: int)
+    Error(message: string)
     None
 }
 
@@ -5806,6 +5828,44 @@ echo $failure.message        # not found
 
 var empty = Result.None
 echo $empty.Variant          # None
+\end{lstlisting}
+
+A named payload field uses the ordinary \code{name: Type} annotation.  A
+type-only positional payload is also accepted and receives the tuple-style name
+\code{Item1}, \code{Item2}, and so on.  Construction converts and checks every
+annotated payload before the value becomes observable; a refusal names the
+union, variant, and field.
+
+Unions may declare type parameters.  A direct type-parameter payload can be
+inferred from its value, or all union type arguments can be supplied on the
+variant constructor.  An explicit list is required when the selected variant
+does not carry enough information to infer every parameter (including a generic
+unit variant).  Nested type arguments use the same type-name grammar as generic
+classes.
+
+\begin{lstlisting}
+union Result<T, E> {
+    Ok(T)                 # positional field: Item1
+    Error(error: E)       # named field: error
+}
+
+union Option<T> { Some(T) None }
+
+var inferred = Option.Some(42) # T is int when every parameter can be inferred
+var nested = Result.Ok<list<int>, string>([1, 2])
+echo $nested.Item1[0]
+\end{lstlisting}
+
+A payload may name the union being declared, so recursive trees are ordinary
+union values rather than a special case:
+
+\begin{lstlisting}
+union Expr {
+    Lit(value: double)
+    Add(left: Expr, right: Expr)
+}
+
+var expression = Expr.Add(Expr.Lit(1), Expr.Lit(2))
 \end{lstlisting}
 
 \subsection*{Pattern Matching on Unions}

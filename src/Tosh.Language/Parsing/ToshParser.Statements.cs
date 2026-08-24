@@ -2001,6 +2001,7 @@ public static partial class ToshParser
             var modifier = ParseDeclarationModifier();
             NextToken(); // consume 'union'
             var nameToken = ExpectVariableName();
+            var typeParameters = ParseTypeParameterList();
 
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
@@ -2014,7 +2015,8 @@ public static partial class ToshParser
                     Array.Empty<UnionVariantSyntax>(),
                     modifier,
                     TextSpan.FromBounds(declarationStart, nameToken.Span.End),
-                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                    TypeParameters: typeParameters.Count > 0 ? typeParameters : null);
             }
 
             NextToken(); // consume '{'
@@ -2031,7 +2033,7 @@ public static partial class ToshParser
                 var variantStart = Current.Span.Start;
                 var variantName = ExpectVariableName();
                 var fields = Current.Kind == SyntaxTokenKind.OpenParen
-                    ? ParseFunctionParameters()
+                    ? ParseUnionVariantFields(typeParameters)
                     : Array.Empty<FunctionParameterSyntax>();
 
                 variants.Add(new UnionVariantSyntax(
@@ -2048,7 +2050,118 @@ public static partial class ToshParser
                 variants,
                 modifier,
                 TextSpan.FromBounds(declarationStart, closeBrace.Span.End),
-                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null);
+        }
+
+        /// <summary>
+        /// Parses a union variant's payload. Existing named fields remain function-parameter
+        /// shaped (<c>Some(value)</c> / <c>Lit(value: double)</c>), while an unmistakable type
+        /// in the field position creates a tuple-style field named <c>Item1</c>, <c>Item2</c>,
+        /// and so on (<c>Ok(T)</c>, <c>Pair(string, int)</c>).
+        /// </summary>
+        private IReadOnlyList<FunctionParameterSyntax> ParseUnionVariantFields(
+            IReadOnlyList<string> typeParameters)
+        {
+            var openParen = NextToken();
+            var fields = new List<FunctionParameterSyntax>();
+
+            while (Current.Kind is not SyntaxTokenKind.EndOfFile and not SyntaxTokenKind.CloseParen)
+            {
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.unexpected_union_field_separator",
+                        Title: "A union variant field is required between commas.",
+                        Span: Current.Span,
+                        Label: "remove this comma or add a field here"));
+                    NextToken();
+                    continue;
+                }
+
+                if (LooksLikePositionalUnionFieldType(typeParameters))
+                {
+                    var start = Current.Span.Start;
+                    var typeName = ParseTypeName("union variant field type");
+                    var end = _tokens[Math.Max(0, _position - 1)].Span.End;
+                    fields.Add(new FunctionParameterSyntax(
+                        $"Item{fields.Count + 1}",
+                        typeName,
+                        IsOptional: false,
+                        IsRest: false,
+                        DefaultValue: null,
+                        Span: TextSpan.FromBounds(start, end)));
+                }
+                else
+                {
+                    fields.Add(ParseFunctionParameter());
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.missing_union_field_separator",
+                        Title: "Union variant fields must be separated by ','.",
+                        Span: Current.Span,
+                        Label: "insert ',' between union variant fields"));
+                }
+            }
+
+            if (Current.Kind == SyntaxTokenKind.CloseParen)
+            {
+                NextToken();
+            }
+            else
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.missing_closing_parenthesis",
+                    Title: "A closing ')' is required here.",
+                    Span: openParen.Span,
+                    Label: "this union variant field list never closes"));
+            }
+
+            return fields;
+        }
+
+        private bool LooksLikePositionalUnionFieldType(IReadOnlyList<string> typeParameters)
+        {
+            if (Current.Kind != SyntaxTokenKind.Bareword)
+            {
+                return false;
+            }
+
+            // A colon makes this the compatible named form: `value: Type`.
+            if (Current.Text.Contains(':', StringComparison.Ordinal) ||
+                (Peek(1).Kind == SyntaxTokenKind.Bareword &&
+                 (Peek(1).Text == ":" || Peek(1).Text.StartsWith(":", StringComparison.Ordinal))))
+            {
+                return false;
+            }
+
+            var candidate = Current.Text.TrimEnd('?');
+            if (typeParameters.Contains(candidate, StringComparer.Ordinal))
+            {
+                return true;
+            }
+
+            if (Peek(1).Kind == SyntaxTokenKind.LessThan ||
+                candidate.Contains('.', StringComparison.Ordinal) ||
+                (candidate.Length > 0 && char.IsUpper(candidate[0])))
+            {
+                return true;
+            }
+
+            return candidate.ToLowerInvariant() is
+                "any" or "bool" or "boolean" or "byte" or "sbyte" or
+                "short" or "ushort" or "int" or "uint" or "long" or "ulong" or
+                "float" or "double" or "decimal" or "half" or "string" or "str" or
+                "char" or "object" or "list" or "array" or "dict" or "set";
         }
 
         private StatementSyntax ParseModuleDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)

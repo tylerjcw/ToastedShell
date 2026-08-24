@@ -961,6 +961,16 @@ public sealed partial class ToshEngine
                     {
                         var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, staticMethodCall.Arguments, cancellationToken);
 
+                        if (staticMethodCall.ExplicitTypeArguments is { } unionTypeArguments &&
+                            TryInvokeGenericUnionVariant(
+                                staticMethodCall.Path,
+                                methodArguments,
+                                unionTypeArguments,
+                                out var unionValue))
+                        {
+                            return unionValue;
+                        }
+
                         // `TS-P2-82`. Resolved here rather than in the invoker: the names need the
                         // scope, aliases and declared types the engine holds, and passing names
                         // down would mean a second, weaker resolver living there.

@@ -553,6 +553,7 @@ internal sealed partial class EmitterImpl
     private void DeclareClrUnionShell(BoundUnionDefinition union, string? moduleQualifier = null)
     {
         if (_clrUnionShells.ContainsKey(union.Name)) return;
+        if (union.TypeParameters is { Count: > 0 }) return;
 
         // ── 1. Abstract base class ────────────────────────────────────
         var baseAttrs = TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Abstract;
@@ -684,7 +685,7 @@ internal sealed partial class EmitterImpl
             _clrShellsByType[variantType] = variantShell;
 
             variants[variant.Name] = new ClrUnionVariantInfo(
-                variant.Name, variantType, variantCtor, variantFields, unitSingletonField);
+                variant.Name, variantType, variantCtor, variantFields, variant.Fields, unitSingletonField);
         }
 
         // Base class .cctor to pre-create unit-variant singletons
@@ -1221,6 +1222,7 @@ internal sealed partial class EmitterImpl
             ctorIl.Emit(OpCodes.Ldarg, i + 1);
             ctorIl.Emit(OpCodes.Stfld, fb);
         }
+
         ctorIl.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();

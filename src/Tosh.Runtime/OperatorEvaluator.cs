@@ -68,15 +68,15 @@ public static class OperatorEvaluator
             "%" => Modulo(left, right),
             "**" => Power(left, right),
             "==" => AreEqual(left, right),
-            "!=" => !AreEqual(left, right),
+            "!=" => AreNotEqual(left, right),
             "=~" => RegexMatch(left, right),
             "!~" => !RegexMatch(left, right),
             "in" => IsIn(left, right),
             "not-in" => !IsIn(left, right),
-            ">" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison > 0),
-            ">=" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison >= 0),
-            "<" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison < 0),
-            "<=" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison <= 0),
+            ">" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison > 0, "op_GreaterThan"),
+            ">=" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison >= 0, "op_GreaterThanOrEqual"),
+            "<" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison < 0, "op_LessThan"),
+            "<=" => EvaluateOrderedComparison(left, right, nullable: true, comparison => comparison <= 0, "op_LessThanOrEqual"),
             "contains" => Contains(left, right),
             "starts-with" => StartsWith(left, right),
             "ends-with" => EndsWith(left, right),
@@ -308,10 +308,10 @@ public static class OperatorEvaluator
             "contains" => Contains(actual, expected),
             "starts-with" => StartsWith(actual, expected),
             "ends-with" => EndsWith(actual, expected),
-            ">" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison > 0),
-            ">=" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison >= 0),
-            "<" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison < 0),
-            "<=" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison <= 0),
+            ">" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison > 0, "op_GreaterThan"),
+            ">=" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison >= 0, "op_GreaterThanOrEqual"),
+            "<" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison < 0, "op_LessThan"),
+            "<=" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison <= 0, "op_LessThanOrEqual"),
             "is" => IsType(actual, expected),
             "is-not" => !IsType(actual, expected),
             _ => throw new InvalidOperationException($"Unsupported operator '{@operator}'. Supported operators: ==, !=, =~, !~, in, not-in, >, >=, <, <=, contains, starts-with, ends-with, is, is-not."),
@@ -420,18 +420,31 @@ public static class OperatorEvaluator
         // `true == "true"` converted the other way and matched. Since the same
         // two conversions are attempted whichever operand comes first, testing
         // both makes the result independent of operand order by construction.
-        var expectedIsConvertible =
-            TypeConversion.TryConvert(expected, actual.GetType(), out var convertedExpected);
-        if (expectedIsConvertible && ObjectEquals(actual, convertedExpected))
-        {
-            return true;
-        }
+        var actualType = actual.GetType();
+        var expectedType = expected.GetType();
+        var sameType = actualType == expectedType;
+        var expectedIsConvertible = false;
+        var actualIsConvertible = false;
 
-        var actualIsConvertible =
-            TypeConversion.TryConvert(actual, expected.GetType(), out var convertedActual);
-        if (actualIsConvertible && ObjectEquals(convertedActual, expected))
+        // A value already having the other value's type is not a conversion rule; it is
+        // the point at which equality used to fall straight through to Equals. Keep the
+        // conversion semantics for genuinely mixed types, then let a CLR type describe
+        // its own same-type equality through op_Equality before the Equals tail.
+        if (!sameType)
         {
-            return true;
+            expectedIsConvertible =
+                TypeConversion.TryConvert(expected, actualType, out var convertedExpected);
+            if (expectedIsConvertible && ObjectEquals(actual, convertedExpected))
+            {
+                return true;
+            }
+
+            actualIsConvertible =
+                TypeConversion.TryConvert(actual, expectedType, out var convertedActual);
+            if (actualIsConvertible && ObjectEquals(convertedActual, expected))
+            {
+                return true;
+            }
         }
 
         // A successful conversion decides the answer, even when it produced
@@ -445,6 +458,15 @@ public static class OperatorEvaluator
             return false;
         }
 
+        // `TOAST-0051`. Records, sequences, enums, exact numeric equality and both
+        // conversion directions above remain the language's built-ins. Only when none of
+        // them decides the pair do we ask the CLR operands for op_Equality.
+        if (!IsNumeric(actual) && !IsNumeric(expected) &&
+            TryInvokeClrBinaryOperator(actual, "op_Equality", expected, out var clrEquality))
+        {
+            return RequireClrComparisonResult(clrEquality, "op_Equality");
+        }
+
         // TS-P1-14: no ToString()-based fallback. It previously made
         // mixed-type equality case-insensitive while string-to-string
         // equality stayed case-sensitive, so `E.Low == "LOW"` was true
@@ -452,6 +474,27 @@ public static class OperatorEvaluator
         // shared representation are simply unequal; compare a value's
         // text form explicitly when that is the intent.
         return ObjectEquals(actual, expected);
+    }
+
+    private static bool AreNotEqual(object? actual, object? expected)
+    {
+        // The equality cascade owns all language-defined domains. A same-type CLR value
+        // reaches its operator only at that cascade's fallback, so op_Inequality may be
+        // consulted here without pre-empting record, sequence, enum, or mixed-conversion
+        // semantics. C# requires == and != in pairs; using the requested method preserves
+        // a CLR type's actual contract rather than assuming the two bodies are complements.
+        if (actual is not null && expected is not null &&
+            actual.GetType() == expected.GetType() &&
+            actual is not IDictionary &&
+            actual is not IEnumerable &&
+            actual is not IShellEnumValue &&
+            !IsNumeric(actual) &&
+            TryInvokeClrBinaryOperator(actual, "op_Inequality", expected, out var clrInequality))
+        {
+            return RequireClrComparisonResult(clrInequality, "op_Inequality");
+        }
+
+        return !AreEqual(actual, expected);
     }
 
     /// <summary>
@@ -616,7 +659,12 @@ public static class OperatorEvaluator
         return actual.Equals(expected);
     }
 
-    public static bool EvaluateOrderedComparison(object? actual, object? expected, bool nullable, Func<int, bool> predicate)
+    public static bool EvaluateOrderedComparison(
+        object? actual,
+        object? expected,
+        bool nullable,
+        Func<int, bool> predicate,
+        string? clrOperatorMethodName = null)
     {
         if (actual is null || expected is null)
         {
@@ -691,6 +739,12 @@ public static class OperatorEvaluator
             convertedActual is IComparable comparableActual)
         {
             return predicate(comparableActual.CompareTo(expected));
+        }
+
+        if (clrOperatorMethodName is not null &&
+            TryInvokeClrBinaryOperator(actual, clrOperatorMethodName, expected, out var clrComparison))
+        {
+            return RequireClrComparisonResult(clrComparison, clrOperatorMethodName);
         }
 
         throw new InvalidOperationException(
@@ -1384,7 +1438,13 @@ public static class OperatorEvaluator
             return ToOperatorString(left) + rightText;
         }
 
-        return EvaluateNumeric(left, right, (lhs, rhs) => lhs + rhs, (lhs, rhs) => lhs + rhs, (lhs, rhs) => lhs + rhs);
+        return EvaluateNumeric(
+            left,
+            right,
+            "op_Addition",
+            (lhs, rhs) => lhs + rhs,
+            (lhs, rhs) => lhs + rhs,
+            (lhs, rhs) => lhs + rhs);
     }
 
     private static object? Subtract(object? left, object? right)
@@ -1480,12 +1540,19 @@ public static class OperatorEvaluator
             return StorageSize.FromBytes(checked(leftSize.Bytes - ((StorageSize)rightSize!).Bytes));
         }
 
-        return EvaluateNumeric(left, right, (lhs, rhs) => lhs - rhs, (lhs, rhs) => lhs - rhs, (lhs, rhs) => lhs - rhs);
+        return EvaluateNumeric(
+            left,
+            right,
+            "op_Subtraction",
+            (lhs, rhs) => lhs - rhs,
+            (lhs, rhs) => lhs - rhs,
+            (lhs, rhs) => lhs - rhs);
     }
 
     private static object EvaluateNumeric(
         object left,
         object right,
+        string? clrOperatorMethodName,
         Func<BigInteger, BigInteger, BigInteger> integral,
         Func<double, double, double> floating,
         Func<decimal, decimal, decimal> precise)
@@ -1511,6 +1578,12 @@ public static class OperatorEvaluator
             {
                 throw new InvalidOperationException("Arithmetic overflow.");
             }
+        }
+
+        if (clrOperatorMethodName is not null &&
+            TryInvokeClrBinaryOperator(left, clrOperatorMethodName, right, out var clrResult))
+        {
+            return clrResult!;
         }
 
         throw new InvalidOperationException(
@@ -1614,6 +1687,7 @@ public static class OperatorEvaluator
         return EvaluateNumeric(
             left,
             right,
+            "op_Multiply",
             (lhs, rhs) => lhs * rhs,
             (lhs, rhs) => lhs * rhs,
             (lhs, rhs) => lhs * rhs);
@@ -1693,6 +1767,7 @@ public static class OperatorEvaluator
         return EvaluateNumeric(
             left,
             right,
+            "op_Division",
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs,
             (lhs, rhs) => lhs / rhs,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs);
@@ -1709,6 +1784,7 @@ public static class OperatorEvaluator
         return EvaluateNumeric(
             left,
             right,
+            "op_Modulus",
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
             (lhs, rhs) => lhs % rhs,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs);
@@ -1730,6 +1806,7 @@ public static class OperatorEvaluator
         return EvaluateNumeric(
             left,
             right,
+            clrOperatorMethodName: null,
             (lhs, rhs) =>
             {
                 if (rhs == 0) throw new InvalidOperationException("Division by zero.");
@@ -1951,17 +2028,76 @@ public static class OperatorEvaluator
         };
     }
 
-    private static bool HasCompatibleOperator(Type type, string methodName)
+    private static MethodInfo? FindCompatibleOperator(
+        Type declaringType,
+        string methodName,
+        Type leftType,
+        Type rightType)
     {
-        return type
+        return declaringType
             .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
-            .Any(method =>
-            {
-                if (!string.Equals(method.Name, methodName, StringComparison.Ordinal)) return false;
-                var parameters = method.GetParameters();
-                return parameters.Length == 2 &&
-                    parameters[0].ParameterType.IsAssignableFrom(type) &&
-                    parameters[1].ParameterType.IsAssignableFrom(type);
-            });
+            .Where(method => string.Equals(method.Name, methodName, StringComparison.Ordinal))
+            .Select(method => (Method: method, Parameters: method.GetParameters()))
+            .Where(candidate =>
+                candidate.Parameters.Length == 2 &&
+                candidate.Parameters[0].ParameterType.IsAssignableFrom(leftType) &&
+                candidate.Parameters[1].ParameterType.IsAssignableFrom(rightType))
+            // Prefer the most specific overload deterministically. Exact parameter pairs
+            // beat assignable base/interface pairs; metadata order breaks a remaining tie.
+            .OrderByDescending(candidate =>
+                (candidate.Parameters[0].ParameterType == leftType ? 1 : 0) +
+                (candidate.Parameters[1].ParameterType == rightType ? 1 : 0))
+            .ThenBy(candidate => candidate.Method.MetadataToken)
+            .Select(candidate => candidate.Method)
+            .FirstOrDefault();
+    }
+
+    private static bool HasCompatibleOperator(Type type, string methodName) =>
+        FindCompatibleOperator(type, methodName, type, type) is not null;
+
+    private static bool TryInvokeClrBinaryOperator(
+        object left,
+        string methodName,
+        object right,
+        out object? result)
+    {
+        var leftType = left.GetType();
+        var rightType = right.GetType();
+        var method = FindCompatibleOperator(leftType, methodName, leftType, rightType);
+
+        // A CLR binary operator may be declared by either operand's type. Left remains
+        // preferred, matching both C# candidate discovery and TōSh's own overload order.
+        if (method is null && rightType != leftType)
+        {
+            method = FindCompatibleOperator(rightType, methodName, leftType, rightType);
+        }
+
+        if (method is null)
+        {
+            result = null;
+            return false;
+        }
+
+        try
+        {
+            result = method.Invoke(null, [left, right]);
+            return true;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private static bool RequireClrComparisonResult(object? result, string methodName)
+    {
+        if (result is bool comparison)
+        {
+            return comparison;
+        }
+
+        throw new InvalidOperationException(
+            $"CLR comparison operator '{methodName}' returned '{DescribeOperandType(result)}' instead of 'bool'.");
     }
 }

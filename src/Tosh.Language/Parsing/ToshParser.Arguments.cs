@@ -751,7 +751,10 @@ public static partial class ToshParser
                             Label: "insert ',' between generic type arguments"));
                     }
 
-                    builder.Append(ParseTypeNameSuffix(NextToken().Text));
+                    var typeToken = NextToken();
+                    builder.Append(Current.Kind == SyntaxTokenKind.LessThan
+                        ? typeToken.Text
+                        : ParseTypeNameSuffix(typeToken.Text));
                     expectArgument = false;
                     continue;
                 }
@@ -835,9 +838,13 @@ public static partial class ToshParser
                 if (Current.Kind == SyntaxTokenKind.GreaterThanGreaterThan)
                 {
                     // closes two depth levels
+                    var priorDepth = depth;
                     depth -= 2;
                     if (depth <= 0)
                     {
+                        // One closer belongs to the nested type argument and the other to
+                        // this list: `Outer<Inner<T>>` must retain `Inner<T>` as the argument.
+                        if (priorDepth == 2) current.Append('>');
                         if (current.Length > 0) { args.Add(current.ToString().Trim()); current.Clear(); sawAny = true; }
                         display.Append(">>");
                         NextToken();
@@ -851,7 +858,10 @@ public static partial class ToshParser
 
                 if (Current.Kind == SyntaxTokenKind.Bareword)
                 {
-                    var inner = ParseTypeNameSuffix(NextToken().Text) ?? string.Empty;
+                    var typeToken = NextToken();
+                    var inner = Current.Kind == SyntaxTokenKind.LessThan
+                        ? typeToken.Text
+                        : ParseTypeNameSuffix(typeToken.Text) ?? string.Empty;
                     current.Append(inner);
                     display.Append(inner);
                     continue;
@@ -1579,6 +1589,11 @@ public static partial class ToshParser
                     case SyntaxTokenKind.GreaterThan:
                         depth--;
                         if (depth == 0) return Peek(offset + 1).Kind == SyntaxTokenKind.OpenParen;
+                        break;
+                    case SyntaxTokenKind.GreaterThanGreaterThan:
+                        depth -= 2;
+                        if (depth == 0) return Peek(offset + 1).Kind == SyntaxTokenKind.OpenParen;
+                        if (depth < 0) return false;
                         break;
                     case SyntaxTokenKind.EndOfFile:
                     case SyntaxTokenKind.Pipe:

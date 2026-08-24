@@ -1957,12 +1957,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         var variants = union.Variants
             .Select(v => new UnionVariantDefinition(
                 v.Name,
-                v.Fields.Select(f => f.Name).ToArray()))
+                v.Fields.Select(f => new UnionVariantFieldDefinition(
+                    f.Name,
+                    f.TypeName,
+                    f.Span)).ToArray()))
             .ToArray();
 
         var definition = new ToshUnionDefinition(
+            this,
             union.Name,
             variants,
+            union.TypeParameters,
             sourceName,
             sourceText,
             union.Span);
@@ -3509,6 +3514,47 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </summary>
     public object? InvokeQualifiedMethodPublic(string path, IReadOnlyList<object?> arguments)
         => InvokeQualifiedMethod(path, arguments);
+
+    public object? InvokeQualifiedMethodWithTypeArgumentsPublic(
+        string path,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<string> typeArgumentNames)
+    {
+        if (TryInvokeGenericUnionVariant(path, arguments, typeArgumentNames, out var unionValue))
+        {
+            return unionValue;
+        }
+
+        var resolved = ResolveExplicitTypeArguments(
+            typeArgumentNames,
+            sourceName: "<compiled>",
+            sourceText: string.Empty,
+            span: new TextSpan(0, 0));
+        return InvokeQualifiedMethodAsync(path, arguments, CancellationToken.None, resolved)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    private bool TryInvokeGenericUnionVariant(
+        string path,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<string> typeArgumentNames,
+        out object? value)
+    {
+        var lastDot = path.LastIndexOf('.');
+        if (lastDot <= 0 || lastDot == path.Length - 1 ||
+            !TryGetNamedType(path[..lastDot], out var named) ||
+            named is not ToshUnionDefinition union)
+        {
+            value = null;
+            return false;
+        }
+
+        var invocation = union.InvokeGenericVariant(path[(lastDot + 1)..], arguments, typeArgumentNames);
+        value = invocation.ReturnedVoid ? null : invocation.Value;
+        return true;
+    }
 
     /// <summary>What a resolved dotted path turns out to name.</summary>
     private enum QualifiedInvocationKind
@@ -6905,8 +6951,10 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         throw context.CreateDiagnostic(
             code: "tosh.runtime.return_type_conversion_failed",
-            title: $"Function '{definition.Name}' returned a value that could not be converted to '{definition.ReturnTypeName}'.",
-            label: $"the returned value does not match '{definition.ReturnTypeName}'",
+            title: ToastMessages.FunctionReturnConversionFailure(
+                definition.Name,
+                definition.ReturnTypeName),
+            label: ToastMessages.FunctionReturnConversionLabel(definition.ReturnTypeName),
             span: definition.Span);
     }
 

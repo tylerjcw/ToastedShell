@@ -315,7 +315,8 @@ public sealed record UnionDefinitionStatementSyntax(
     IReadOnlyList<UnionVariantSyntax> Variants,
     DeclarationModifier Modifier,
     TextSpan Span,
-    DocComment? DocComment = null) : StatementSyntax(Span);
+    DocComment? DocComment = null,
+    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
 
 public sealed record ModuleDefinitionStatementSyntax(
     string Name,

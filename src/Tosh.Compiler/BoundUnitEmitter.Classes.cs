@@ -320,12 +320,38 @@ internal sealed partial class EmitterImpl
         ctorIl.Emit(OpCodes.Stloc, constructorExecutionFrame);
         ctorIl.BeginExceptionBlock();
 
+        // CLR constructor parameters are object-typed on class shells, so every source
+        // annotation is otherwise erased. Convert once into locals before a field,
+        // initializer, or explicit constructor body can observe the arguments.
+        var validatedCtorParameters = new LocalBuilder?[ctorSigParams.Count];
+        for (var i = 0; i < ctorSigParams.Count; i++)
+        {
+            var parameter = ctorSigParams[i];
+            if (parameter.TypeName is not { } parameterTypeName) continue;
+
+            var validated = ctorIl.DeclareLocal(typeof(object));
+            ctorIl.Emit(OpCodes.Ldarg, i + 1);
+            EmitCheckCallableParameter(
+                ctorIl,
+                parameterTypeName,
+                parameter.Span,
+                "constructor",
+                cls.Name,
+                parameter.Name,
+                ctorSigParams.Count);
+            ctorIl.Emit(OpCodes.Stloc, validated);
+            validatedCtorParameters[i] = validated;
+        }
+
         for (var i = 0; i < ctorSigParams.Count; i++)
         {
             var pname = ctorSigParams[i].Name;
             if (!fields.TryGetValue(pname, out var fb)) continue;
             ctorIl.Emit(OpCodes.Ldarg_0);
-            ctorIl.Emit(OpCodes.Ldarg, i + 1);
+            if (validatedCtorParameters[i] is { } validated)
+                ctorIl.Emit(OpCodes.Ldloc, validated);
+            else
+                ctorIl.Emit(OpCodes.Ldarg, i + 1);
             ctorIl.Emit(OpCodes.Stfld, fb);
         }
 
@@ -350,7 +376,10 @@ internal sealed partial class EmitterImpl
 
                 for (var i = 0; i < ctorSigParams.Count; i++)
                 {
-                    _paramSlots[ctorSigParams[i].Symbol] = i + 1;
+                    if (validatedCtorParameters[i] is { } validated)
+                        _typedParamLocals[ctorSigParams[i].Symbol] = validated;
+                    else
+                        _paramSlots[ctorSigParams[i].Symbol] = i + 1;
                 }
 
                 foreach (var prop in cls.Members.OfType<BoundClassPropertyMember>())
@@ -361,7 +390,10 @@ internal sealed partial class EmitterImpl
                     ctorIl.Emit(OpCodes.Ldarg_0);
                     if (TryResolveCtorInitializerParameterSlot(prop.Initializer, ctorSigParams, out var paramSlot))
                     {
-                        ctorIl.Emit(OpCodes.Ldarg, paramSlot);
+                        if (validatedCtorParameters[paramSlot - 1] is { } validated)
+                            ctorIl.Emit(OpCodes.Ldloc, validated);
+                        else
+                            ctorIl.Emit(OpCodes.Ldarg, paramSlot);
                     }
                     else
                     {
@@ -424,7 +456,10 @@ internal sealed partial class EmitterImpl
                 {
                     for (var i = 0; i < explicitCtor.Parameters.Count; i++)
                     {
-                        _paramSlots[explicitCtor.Parameters[i].Symbol] = i + 1;
+                        if (validatedCtorParameters[i] is { } validated)
+                            _typedParamLocals[explicitCtor.Parameters[i].Symbol] = validated;
+                        else
+                            _paramSlots[explicitCtor.Parameters[i].Symbol] = i + 1;
                     }
                     IReadOnlyList<BoundStatement> bodyStatements = superInitializer is null
                         ? explicitCtor.Body.Statements
@@ -1069,7 +1104,25 @@ internal sealed partial class EmitterImpl
                 var argBase = isStaticMethod ? 0 : 1;
                 for (var i = 0; i < pending.Definition.Parameters.Count; i++)
                 {
-                    _paramSlots[pending.Definition.Parameters[i].Symbol] = i + argBase;
+                    var parameter = pending.Definition.Parameters[i];
+                    if (parameter.TypeName is not { } parameterTypeName)
+                    {
+                        _paramSlots[parameter.Symbol] = i + argBase;
+                        continue;
+                    }
+
+                    var validated = _il.DeclareLocal(typeof(object));
+                    _il.Emit(OpCodes.Ldarg, i + argBase);
+                    EmitCheckCallableParameter(
+                        _il,
+                        parameterTypeName,
+                        parameter.Span,
+                        "method",
+                        $"{pending.Shell.Name}.{pending.Definition.Name}",
+                        parameter.Name,
+                        pending.Definition.Parameters.Count);
+                    _il.Emit(OpCodes.Stloc, validated);
+                    _typedParamLocals[parameter.Symbol] = validated;
                 }
                 // `TOAST-0043`. The same rule free functions get: a body ending in a bare
                 // expression returns it. Without this a class method with an expression

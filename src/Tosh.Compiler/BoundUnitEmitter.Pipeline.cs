@@ -14,12 +14,19 @@ internal sealed partial class EmitterImpl
 {
     /// <param name="asSequence">
     /// When true the pipeline's value is the full item sequence (an
-    /// iteration source). When false — every ordinary value context:
-    /// initializers, assignments, <c>return</c> operands, arguments,
-    /// defaults — the pipeline must yield exactly one value, matching
-    /// the interpreter's subexpression rule (TS-P1-20).
+    /// iteration source). Multi-stage value pipelines otherwise use the
+    /// interpreter's zero/one/many subexpression collapse (TS-P1-20).
     /// </param>
-    private Type? EmitPipeline(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
+    /// <param name="requireSingleSubexpressionValue">
+    /// Selects that same collapse for a single-stage built-in command. Set
+    /// only by <see cref="EmitPipelineAsSubexpressionValue"/>; other value
+    /// consumers retain their established collection materialization.
+    /// </param>
+    private Type? EmitPipeline(
+        BoundPipeline pipeline,
+        bool asStatement,
+        bool asSequence = false,
+        bool requireSingleSubexpressionValue = false)
     {
         if (pipeline.Stages.Count == 0)
         {
@@ -38,16 +45,28 @@ internal sealed partial class EmitterImpl
 
         if (!hasRedirections)
         {
-            return EmitPipelineCore(pipeline, asStatement, asSequence);
+            return EmitPipelineCore(
+                pipeline,
+                asStatement,
+                asSequence,
+                requireSingleSubexpressionValue);
         }
 
         // Redirection wrapping. Evaluate target expressions, build
         // streams/modes/targets arrays, call ToshHost.BeginRedirection,
         // then run the body inside try/finally.
-        return EmitPipelineWithRedirections(pipeline, asStatement, asSequence);
+        return EmitPipelineWithRedirections(
+            pipeline,
+            asStatement,
+            asSequence,
+            requireSingleSubexpressionValue);
     }
 
-    private Type? EmitPipelineCore(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
+    private Type? EmitPipelineCore(
+        BoundPipeline pipeline,
+        bool asStatement,
+        bool asSequence = false,
+        bool requireSingleSubexpressionValue = false)
     {
         if (pipeline.Stages.Count >= 2)
         {
@@ -74,7 +93,7 @@ internal sealed partial class EmitterImpl
                 return null;
 
             case BoundCommandCall call:
-                return EmitHostInvokeValue(call);
+                return EmitHostInvokeValue(call, requireSingleSubexpressionValue);
 
             default:
                 Diagnostics.Add($"unsupported pipeline stage: {stage.GetType().Name}");
@@ -82,7 +101,11 @@ internal sealed partial class EmitterImpl
         }
     }
 
-    private Type? EmitPipelineWithRedirections(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
+    private Type? EmitPipelineWithRedirections(
+        BoundPipeline pipeline,
+        bool asStatement,
+        bool asSequence = false,
+        bool requireSingleSubexpressionValue = false)
     {
         // Stream redirection requires opening files, swapping
         // Console.Out/Error/In, and tracking a disposable scope —
@@ -176,7 +199,11 @@ internal sealed partial class EmitterImpl
 
         _il.BeginExceptionBlock();
 
-        var bodyType = EmitPipelineCore(pipeline, asStatement, asSequence);
+        var bodyType = EmitPipelineCore(
+            pipeline,
+            asStatement,
+            asSequence,
+            requireSingleSubexpressionValue);
         if (!asStatement && bodyType is not null)
         {
             BoxIfValueType(bodyType);
@@ -204,6 +231,18 @@ internal sealed partial class EmitterImpl
     }
 
     private Type? EmitPipelineAsValue(BoundPipeline pipeline) => EmitPipeline(pipeline, asStatement: false);
+
+    /// <summary>
+    /// Emits a parenthesized pipeline in expression position. A single-stage
+    /// built-in command normally reaches <c>InvokeValue</c>, which packages
+    /// multiple yielded values into a collection; a subexpression instead uses
+    /// the same zero/one/many collapse as the interpreter and multi-stage emitter.
+    /// </summary>
+    private Type? EmitPipelineAsSubexpressionValue(BoundPipeline pipeline) =>
+        EmitPipeline(
+            pipeline,
+            asStatement: false,
+            requireSingleSubexpressionValue: true);
 
     /// <summary>
     /// Emits a pipeline whose value is consumed as a sequence (a

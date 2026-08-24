@@ -220,6 +220,18 @@ public static class ToshHost
     }
 
     /// <summary>
+    /// Value-context invocation for a command inside a parenthesized
+    /// subexpression. Unlike <see cref="InvokeValue"/>, this applies the
+    /// language's single-value subexpression rule instead of packaging multiple
+    /// yielded values into a collection.
+    /// </summary>
+    public static object? InvokeSubexpressionValue(string name, object?[] args)
+    {
+        var (_, all) = InvokeAndDrain(name, args, printItems: false);
+        return CollapseSubexpressionValue(all);
+    }
+
+    /// <summary>
     /// As <see cref="InvokeValue"/>, but reports "produced nothing" rather than null.
     /// </summary>
     /// <remarks>
@@ -2027,7 +2039,11 @@ public static class ToshHost
     public static object? DrainSubexpressionValue(IAsyncEnumerable<object?> input)
     {
         var (_, all) = DrainEnumerator(input, printItems: false);
+        return CollapseSubexpressionValue(all);
+    }
 
+    private static object? CollapseSubexpressionValue(IReadOnlyList<object?> all)
+    {
         if (all.Count <= 1)
         {
             return all.Count == 1 ? all[0] : null;
@@ -2097,6 +2113,96 @@ public static class ToshHost
             s_sourceName ?? "<compiled>",
             s_sourceText ?? string.Empty,
             owner);
+    }
+
+    /// <summary>
+    /// Compiled-function return boundary. It performs the same annotation conversion as
+    /// <see cref="CheckType(object?, string, int, int, string)"/>, then translates an
+    /// ordinary conversion refusal into the function-specific diagnostic used by the
+    /// interpreter. Refinement predicate/coercion diagnostics retain their own identity.
+    /// </summary>
+    public static object? CheckReturnType(
+        object? value,
+        string typeName,
+        int spanStart,
+        int spanLength,
+        string functionName)
+    {
+        if (s_engine is null) Initialize();
+
+        try
+        {
+            return s_engine!.ConvertValueToAnnotatedType(
+                typeName,
+                value,
+                spanStart,
+                spanLength,
+                s_sourceName ?? "<compiled>",
+                s_sourceText ?? string.Empty,
+                $"{functionName} return");
+        }
+        catch (ToshDiagnosticException exception) when (exception.Diagnostics.Any(diagnostic =>
+            string.Equals(
+                diagnostic.Code,
+                "tosh.runtime.annotation_conversion_failed",
+                StringComparison.Ordinal)))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.return_type_conversion_failed",
+                Title: ToastMessages.FunctionReturnConversionFailure(functionName, typeName),
+                SourceName: s_sourceName ?? "<compiled>",
+                SourceText: s_sourceText ?? string.Empty,
+                Span: new TextSpan(spanStart, spanLength),
+                Label: ToastMessages.FunctionReturnConversionLabel(typeName)));
+        }
+    }
+
+    /// <summary>
+    /// Compiled callable-parameter boundary. CLR reference parameters cannot encode
+    /// ToastScript's non-nullable/nullable distinction, and object-packed call paths erase
+    /// even more. Every emitted function, method, and constructor prologue routes annotated
+    /// values through this helper before the body can observe them.
+    /// </summary>
+    public static object? CheckCallableParameter(
+        object? value,
+        string typeName,
+        int spanStart,
+        int spanLength,
+        string callableKind,
+        string callableName,
+        string parameterName,
+        int argumentCount)
+    {
+        if (s_engine is null) Initialize();
+
+        try
+        {
+            return s_engine!.ConvertValueToAnnotatedType(
+                typeName,
+                value,
+                spanStart,
+                spanLength,
+                s_sourceName ?? "<compiled>",
+                s_sourceText ?? string.Empty,
+                $"{callableName}.{parameterName}");
+        }
+        catch (ToshDiagnosticException exception) when (exception.Diagnostics.Any(diagnostic =>
+            string.Equals(
+                diagnostic.Code,
+                "tosh.runtime.annotation_conversion_failed",
+                StringComparison.Ordinal)))
+        {
+            throw CallableParameterBoundary.CreateConversionFailure(
+                typeName,
+                spanStart,
+                spanLength,
+                callableKind,
+                callableName,
+                parameterName,
+                argumentCount,
+                s_sourceName ?? "<compiled>",
+                s_sourceText ?? string.Empty);
+        }
     }
 
     /// <summary>
@@ -2879,6 +2985,12 @@ public static class ToshHost
         if (TryInvokeCompiledModuleMethod(path, args, out var compiledResult))
             return compiledResult;
         return s_engine!.InvokeQualifiedMethodPublic(path, args);
+    }
+
+    public static object? InvokeQualifiedMethod(string path, object?[] args, string[] typeArguments)
+    {
+        if (s_engine is null) Initialize();
+        return s_engine!.InvokeQualifiedMethodWithTypeArgumentsPublic(path, args, typeArguments);
     }
 
     // ─── Compiled module CLR-shell registry ───────────────────────

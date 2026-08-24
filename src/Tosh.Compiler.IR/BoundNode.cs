@@ -511,7 +511,8 @@ public sealed record BoundStaticMethodCall(
     string Path,
     IReadOnlyList<BoundArgument> Arguments,
     TextSpan Span,
-    BoundType Type)
+    BoundType Type,
+    IReadOnlyList<string>? TypeArguments = null)
     : BoundExpression(Span, Type);
 
 /// <summary>
@@ -809,7 +810,8 @@ public sealed record BoundUnionDefinition(
     string Name,
     IReadOnlyList<BoundUnionVariant> Variants,
     DeclarationModifier Modifier,
-    TextSpan Span)
+    TextSpan Span,
+    IReadOnlyList<string>? TypeParameters = null)
     : BoundStatement(Span);
 
 public sealed record BoundEnumMember(

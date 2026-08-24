@@ -350,7 +350,9 @@ internal sealed partial class EmitterImpl
                 {
                     // `TOAST-0035`. The same prologue a top-level function uses, which is
                     // why it was lifted out of `EmitUserFunctionBody` rather than copied.
-                    EmitPackedArgumentPrologue(pending.Definition.Parameters);
+                    EmitPackedArgumentPrologue(
+                        pending.Definition.Parameters,
+                        pending.Definition.Name);
                 }
                 else
                 {

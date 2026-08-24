@@ -33,8 +33,8 @@ internal sealed partial class EmitterImpl
                 return EmitUnaryOperator(unOp);
 
             case BoundSubexpression sub:
-                // (expr) — unwrap to the inner pipeline.
-                return EmitPipelineAsValue(sub.Pipeline);
+                // Parentheses put the inner pipeline in a one-value context.
+                return EmitPipelineAsSubexpressionValue(sub.Pipeline);
 
             case BoundInterpolatedString interp:
                 return EmitInterpolatedString(interp);
@@ -766,6 +766,20 @@ internal sealed partial class EmitterImpl
                             var at = EmitExpression(arg.Value);
                             if (at is null) return null;
                             BoxIfValueType(at);
+
+                            if (variant.Parameters[i].TypeName is { Length: > 0 } fieldType)
+                            {
+                                var parameter = variant.Parameters[i];
+                                var parse = (ParseResult)_unit.ParseResult;
+                                RequireTier(2, "union field annotation conversion");
+                                _il.Emit(OpCodes.Ldstr, fieldType);
+                                _il.Emit(OpCodes.Ldc_I4, parameter.Span.Start);
+                                _il.Emit(OpCodes.Ldc_I4, parameter.Span.Length);
+                                _il.Emit(OpCodes.Ldstr, $"field '{unionName}.{variantName}.{parameter.Name}'");
+                                _il.Emit(OpCodes.Ldstr, parse.SourceName);
+                                _il.Emit(OpCodes.Ldstr, parse.SourceText);
+                                _il.Emit(OpCodes.Call, s_hostCheckTypeAtSource);
+                            }
                         }
 
                         _il.Emit(OpCodes.Newobj, variant.Ctor);
@@ -781,7 +795,23 @@ internal sealed partial class EmitterImpl
         _il.Emit(OpCodes.Ldstr, call.Path);
         if (!EmitArgsArrayCore($"static method '{call.Path}'", call.Arguments)) return null;
         RequireTier(2, "qualified-method invocation (Foo.bar(...))");
-        _il.Emit(OpCodes.Call, s_hostInvokeQualifiedMethod);
+        if (call.TypeArguments is { Count: > 0 } typeArguments)
+        {
+            _il.Emit(OpCodes.Ldc_I4, typeArguments.Count);
+            _il.Emit(OpCodes.Newarr, MetadataType(typeof(string)));
+            for (var i = 0; i < typeArguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                _il.Emit(OpCodes.Ldstr, typeArguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, s_hostInvokeQualifiedMethodGeneric);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Call, s_hostInvokeQualifiedMethod);
+        }
         return typeof(object);
     }
 

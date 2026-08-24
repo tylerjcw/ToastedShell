@@ -307,7 +307,8 @@ public static partial class ToshParser
             return MatchesKeywordAtOffset(offset, "union") &&
                    Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
                    IsValidIdentifier(Peek(offset + 1).Text) &&
-                   Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace;
+                   (Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace ||
+                    Peek(offset + 2).Kind == SyntaxTokenKind.LessThan);
         }
 
         private bool LooksLikeModuleDefinition()

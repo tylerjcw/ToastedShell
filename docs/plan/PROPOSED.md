@@ -4,8 +4,6 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TOAST-0074`](items/TOAST-0074.md) | P3 | proposed | 0/5 | The two backends refuse the same return conversion in different words |
-| [`TOAST-0073`](items/TOAST-0073.md) | P2 | proposed | 0/5 | A compiled subexpression argument is not held to the one-value rule the interpreter enforces |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0053`](items/TOAST-0053.md) | P1 | proposed | 0/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
@@ -25,10 +23,8 @@
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
-| [`TOAST-0052`](items/TOAST-0052.md) | P1 | proposed | 0/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
-| [`TOAST-0051`](items/TOAST-0051.md) | P1 | proposed | 0/7 | Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3` |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
 | [`TS-P3-21`](items/TS-P3-21.md) | P3 | proposed | — | Native runtime: GC, object layout, and startup budget |

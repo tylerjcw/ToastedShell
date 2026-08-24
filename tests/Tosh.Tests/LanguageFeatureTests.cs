@@ -1340,6 +1340,66 @@ public sealed class LanguageFeatureTests
         Assert.Equal("Option.Some(42)", results.Single()?.ToString());
     }
 
+    [Fact]
+    public async Task Union_variant_fields_accept_named_and_positional_type_annotations()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            union TypedResult<T> {
+                Ok(T)
+                Lit(value: double)
+            }
+            var ok = TypedResult.Ok(42)
+            var lit = TypedResult.Lit<double>(""2.5"")
+            echo $ok.Item1 $lit.value
+        ");
+
+        Assert.Equal(42, results[0]);
+        Assert.Equal(2.5, results[1]);
+    }
+
+    [Fact]
+    public async Task Generic_union_supports_nested_type_arguments()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            union NestedResult<T, E> { Ok(T) Error(E) }
+            var value: NestedResult<list<int>, string> = NestedResult.Ok<list<int>, string>([1, 2])
+            union NestedOption<T> { Some(T) None }
+            var inner = NestedOption.Some(7)
+            var outer: NestedOption<NestedOption<int>> = NestedOption.Some<NestedOption<int>>($inner)
+            echo $value.Item1[1] $outer.Item1.Item1
+        ");
+
+        Assert.Equal([2, 7], results);
+    }
+
+    [Fact]
+    public async Task Recursive_union_constructs_typed_children()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            union ExprTree {
+                Lit(value: double)
+                Add(left: ExprTree, right: ExprTree)
+            }
+            var tree = ExprTree.Add(ExprTree.Lit(1), ExprTree.Lit(2))
+            echo $tree.left.value $tree.right.value
+        ");
+
+        Assert.Equal([1.0, 2.0], results);
+    }
+
+    [Fact]
+    public async Task Union_field_type_failure_names_the_field()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var failure = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("union TypedLit { Lit(value: double) }\nTypedLit.Lit(\"bad\")"));
+
+        Assert.Contains("TypedLit.Lit.value", failure.Message, StringComparison.Ordinal);
+    }
+
     // ── Is / As Operators ──
 
     [Fact]

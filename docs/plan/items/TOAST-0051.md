@@ -1,7 +1,7 @@
 ---
 id: TOAST-0051
 title: "Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3`"
-status: proposed
+status: complete
 area: toast
 priority: 1
 opened: 2026-08-22
@@ -74,15 +74,37 @@ different defect; `TS-P3-03` presumes lookup already succeeds.
 
 ## Acceptance
 
-- [ ] Binary arithmetic and comparison fall back to the operand type's `op_*` static
+- [x] Binary arithmetic and comparison fall back to the operand type's `op_*` static
       method when no built-in rule matches
-- [ ] `$a + $b` works for `Vector3`, `Quaternion`, and `Matrix4x4` without a `using`-specific
+- [x] `$a + $b` works for `Vector3`, `Quaternion`, and `Matrix4x4` without a `using`-specific
       special case
-- [ ] The fallback reuses `HasCompatibleOperator`'s lookup rather than adding a second one —
+- [x] The fallback reuses `HasCompatibleOperator`'s lookup rather than adding a second one —
       one description of "does this type have this operator"
-- [ ] A `struct` from a `bind native` library with `op_Addition` participates
-- [ ] Interpreted and compiled agree, in the differential corpus
-- [ ] The failure message for a type with genuinely no operator still names both operand
+- [x] A `struct` from a `bind native` library with `op_Addition` participates
+- [x] Interpreted and compiled agree, in the differential corpus
+- [x] The failure message for a type with genuinely no operator still names both operand
       types, as it does now
-- [ ] `§Operators` records that CLR operator methods are consulted, and where in the
+- [x] `§Operators` records that CLR operator methods are consulted, and where in the
       resolution order
+
+## Resolution — 2026-08-24
+
+`OperatorEvaluator` now has one `FindCompatibleOperator` lookup. The existing `Add`/`Sub`/
+`Mul`/`Div` trait checks ask it whether an exact same-type operator exists, while runtime
+evaluation asks it for the actual operand pair and invokes the returned method. Built-in
+arithmetic, equality, collection, enum, conversion, and ordering rules remain ahead of the
+fallback; the left CLR type is consulted before a distinct right type.
+
+Arithmetic maps to the conventional `op_Addition`, `op_Subtraction`, `op_Multiply`,
+`op_Division`, and `op_Modulus` names. Equality consults CLR operators only after the
+language's structural, exact-numeric, and conversion rules, and explicitly preserves
+TōSh's reflexive `NaN` equality. Ordered comparisons reach the four CLR ordering names only
+after enum, string, conversion, and `IComparable` handling. Reflection invocation unwraps
+the operator body's exception so a `TargetInvocationException` never leaks into the
+language.
+
+Five direct runtime tests cover the three `System.Numerics` types, all comparison shapes, a
+native-layout struct, the unchanged missing-operator diagnostic, and exception identity.
+Three `System.Numerics` programs also run through the differential corpus. The focused CLR
+and differential selection passes 154 tests; the full suite passes 6,557 with the existing
+language-surface negative probe skipped.

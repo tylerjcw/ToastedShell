@@ -1,7 +1,7 @@
 ---
 id: TOAST-0073
 title: "A compiled subexpression argument is not held to the one-value rule the interpreter enforces"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-23
@@ -44,9 +44,35 @@ worse class of divergence than disagreeing about a value.
 
 ## Acceptance
 
-- [ ] A compiled subexpression argument producing more than one value is refused, with the
+- [x] A compiled subexpression argument producing more than one value is refused, with the
       same diagnostic code as the interpreter
-- [ ] The zero-value case is checked too, and behaves the same on both backends
-- [ ] A subexpression producing exactly one value is unaffected — the control
-- [ ] The case moves from `KnownDivergences()` into `Corpus()`
-- [ ] A negative control
+- [x] The zero-value case is checked too, and behaves the same on both backends
+- [x] A subexpression producing exactly one value is unaffected — the control
+- [x] The case moves from `KnownDivergences()` into `Corpus()`
+- [x] A negative control — restoring the old emitter call fails 1 of 11 focused tests; the
+      zero/one controls are among the 10 that stay green
+
+## Resolution — 2026-08-24
+
+The existing compiled multi-stage path was already right: it ended in
+`DrainSubexpressionValue`, which collapses zero items to `null`, returns one item, and refuses
+more than one. A single-stage built-in command never reached that drain. It used
+`InvokeValue`, whose deliberate general-purpose behaviour is to package multiple outputs in
+a list, so `(echo 1 2)` became one list-valued argument and the invalid program continued.
+
+`BoundSubexpression` now asks the pipeline emitter for a single subexpression value. That
+request is carried through the redirection wrapper and selects a new
+`InvokeSubexpressionValue` entry point only for a single-stage built-in command. Ordinary
+pipeline-valued assignments still use `InvokeValue`; the change does not turn every pipeline
+consumer into a one-value context.
+
+Both runtime-host entry points route through one `CollapseSubexpressionValue` helper, so the
+single-stage and multi-stage paths share the zero/one/many rule rather than maintaining two
+copies. The differential corpus gained zero-, one-, and multiple-value rows, and the original
+multiple-value case moved out of `KnownDivergences()`.
+
+The focused pipeline-value suite passes 11 tests, the differential suite passes 144, the
+compiler-emitter and sync/async inventory selection passes 350, and the full suite passes
+6,547 with the existing language-surface negative probe skipped. Reverting only the
+load-bearing `BoundSubexpression` emitter call fails the new multiple-value assertion and
+leaves the other 10 focused tests passing.

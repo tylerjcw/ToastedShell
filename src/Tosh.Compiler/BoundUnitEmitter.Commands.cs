@@ -100,16 +100,23 @@ internal sealed partial class EmitterImpl
 
     /// <summary>
     /// Emits a value-context dispatch through the runtime host shim.
-    /// Returns <see cref="object"/> (the unwrapped single value, the
-    /// list when multiple were yielded, or null).
+    /// By default returns <see cref="object"/> as the unwrapped single
+    /// value, the list when multiple were yielded, or null. A parenthesized
+    /// subexpression selects the strict zero/one/many collapse instead.
     /// </summary>
-    private Type? EmitHostInvokeValue(BoundCommandCall call)
+    private Type? EmitHostInvokeValue(
+        BoundCommandCall call,
+        bool requireSingleSubexpressionValue = false)
     {
         if (!EmitHostArgs(call)) return null;
         RequireTier(2, "command invocation (value)");
         _il.Emit(
             OpCodes.Call,
-            _emittingReturnValue ? s_hostInvokeValueOrNothing : s_hostInvokeValue);
+            requireSingleSubexpressionValue
+                ? s_hostInvokeSubexpressionValue
+                : _emittingReturnValue
+                    ? s_hostInvokeValueOrNothing
+                    : s_hostInvokeValue);
         return typeof(object);
     }
 

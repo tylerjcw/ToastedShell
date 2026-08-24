@@ -5,17 +5,22 @@ namespace Tosh.Language;
 
 public sealed class ToshUnionDefinition : IShellNamedType
 {
+    private readonly ToshEngine _owner;
     private readonly Dictionary<string, UnionVariantDefinition> _variantsByName;
 
     public ToshUnionDefinition(
+        ToshEngine owner,
         string name,
         IReadOnlyList<UnionVariantDefinition> variants,
+        IReadOnlyList<string>? typeParameters,
         string sourceName,
         string sourceText,
         TextSpan span)
     {
+        _owner = owner;
         Name = name;
         Variants = variants;
+        TypeParameterNames = typeParameters ?? Array.Empty<string>();
         SourceName = sourceName;
         SourceText = sourceText;
         Span = span;
@@ -25,6 +30,8 @@ public sealed class ToshUnionDefinition : IShellNamedType
     public string Name { get; }
 
     public IReadOnlyList<UnionVariantDefinition> Variants { get; }
+
+    public IReadOnlyList<string> TypeParameterNames { get; }
 
     public string SourceName { get; }
 
@@ -52,7 +59,7 @@ public sealed class ToshUnionDefinition : IShellNamedType
 
     public bool ShellIsAbstract => false;
 
-    public bool ShellIsGenericType => false;
+    public bool ShellIsGenericType => TypeParameterNames.Count > 0;
 
     public bool ShellIsArray => false;
 
@@ -65,36 +72,191 @@ public sealed class ToshUnionDefinition : IShellNamedType
     }
 
     public InvocationResult InvokeStaticMethod(string methodName, IReadOnlyList<object?> arguments)
+        => InvokeVariant(methodName, arguments, explicitTypeArguments: null);
+
+    /// <summary>Constructs a variant with an explicit closed generic argument list.</summary>
+    public InvocationResult InvokeGenericVariant(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<string> explicitTypeArguments)
+        => InvokeVariant(methodName, arguments, explicitTypeArguments);
+
+    private InvocationResult InvokeVariant(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<string>? explicitTypeArguments)
     {
         if (!_variantsByName.TryGetValue(methodName, out var variant))
         {
             throw new InvalidOperationException($"Union '{Name}' has no variant named '{methodName}'.");
         }
 
-        if (arguments.Count != variant.FieldNames.Count)
+        if (arguments.Count != variant.Fields.Count)
         {
             throw new InvalidOperationException(
-                $"Variant '{Name}.{variant.Name}' expects {variant.FieldNames.Count} argument(s), but got {arguments.Count}.");
+                $"Variant '{Name}.{variant.Name}' expects {variant.Fields.Count} argument(s), but got {arguments.Count}.");
         }
+
+        var typeArguments = BindTypeArguments(variant, arguments, explicitTypeArguments);
 
         var fields = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < variant.FieldNames.Count; i++)
+        for (var i = 0; i < variant.Fields.Count; i++)
         {
-            fields[variant.FieldNames[i]] = arguments[i];
+            var field = variant.Fields[i];
+            var value = arguments[i];
+            if (field.TypeName is { Length: > 0 } rawTypeName)
+            {
+                var typeName = SubstituteTypeParameters(rawTypeName, typeArguments);
+                value = _owner.ConvertValueToAnnotatedType(
+                    typeName,
+                    value,
+                    field.Span.Start,
+                    field.Span.Length,
+                    SourceName,
+                    SourceText,
+                    $"field '{Name}.{variant.Name}.{field.Name}'");
+            }
+
+            fields[field.Name] = value;
         }
 
-        var instance = new ToshUnionVariantInstance(this, variant.Name, fields);
+        var instance = new ToshUnionVariantInstance(this, variant.Name, fields, typeArguments);
         return new InvocationResult(instance, ReturnedVoid: false);
     }
+
+    private IReadOnlyDictionary<string, string>? BindTypeArguments(
+        UnionVariantDefinition variant,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<string>? explicitTypeArguments)
+    {
+        if (TypeParameterNames.Count == 0)
+        {
+            if (explicitTypeArguments is { Count: > 0 })
+            {
+                throw new InvalidOperationException($"Union '{Name}' is not generic and does not accept type arguments.");
+            }
+
+            return null;
+        }
+
+        var bindings = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (explicitTypeArguments is not null)
+        {
+            if (explicitTypeArguments.Count != TypeParameterNames.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Generic union '{Name}' expects {TypeParameterNames.Count} type argument(s) " +
+                    $"<{string.Join(", ", TypeParameterNames)}> but received {explicitTypeArguments.Count}.");
+            }
+
+            for (var i = 0; i < TypeParameterNames.Count; i++)
+            {
+                _owner.ValidateUnionTypeArgument(explicitTypeArguments[i], Span, SourceName, SourceText, Name);
+                bindings[TypeParameterNames[i]] = explicitTypeArguments[i];
+            }
+
+            return bindings;
+        }
+
+        // Match generic-class construction: infer a direct `T` payload from the value when
+        // possible, but require an explicit list for type parameters that do not occur in the
+        // selected variant (notably generic unit variants).
+        for (var i = 0; i < variant.Fields.Count; i++)
+        {
+            var declared = variant.Fields[i].TypeName;
+            if (declared is null || !TypeParameterNames.Contains(declared, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var inferred = InferTypeName(arguments[i]);
+            if (bindings.TryGetValue(declared, out var existing) &&
+                !TypeNamesEqual(existing, inferred))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot infer one type argument for '{declared}' from both '{existing}' and '{inferred}'.");
+            }
+            bindings[declared] = inferred;
+        }
+
+        var missing = TypeParameterNames.Where(name => !bindings.ContainsKey(name)).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Generic union '{Name}' requires explicit type arguments because " +
+                $"{string.Join(", ", missing.Select(name => $"'{name}'"))} cannot be inferred. " +
+                $"Call {Name}.{variant.Name}<{string.Join(", ", TypeParameterNames)}>(...).");
+        }
+
+        return bindings;
+    }
+
+    private static string SubstituteTypeParameters(
+        string typeName,
+        IReadOnlyDictionary<string, string>? bindings)
+    {
+        if (bindings is null || bindings.Count == 0) return typeName;
+
+        var result = typeName;
+        foreach (var (parameter, argument) in bindings)
+        {
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                $@"\b{System.Text.RegularExpressions.Regex.Escape(parameter)}\b",
+                argument,
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        }
+        return result;
+    }
+
+    private static string InferTypeName(object? value)
+    {
+        if (value is IShellTypedObject typed)
+        {
+            return typed.ShellTypeDescriptor.ShellTypeName;
+        }
+
+        return value switch
+        {
+            null => "any?",
+            bool => "bool",
+            byte => "byte",
+            sbyte => "sbyte",
+            short => "short",
+            ushort => "ushort",
+            int => "int",
+            uint => "uint",
+            long => "long",
+            ulong => "ulong",
+            float => "float",
+            double => "double",
+            decimal => "decimal",
+            string => "string",
+            char => "char",
+            _ => value.GetType().FullName ?? value.GetType().Name,
+        };
+    }
+
+    private static bool TypeNamesEqual(string left, string right) =>
+        string.Equals(RemoveWhitespace(left), RemoveWhitespace(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string RemoveWhitespace(string value) =>
+        string.Concat(value.Where(character => !char.IsWhiteSpace(character)));
 
     public bool TryGetStaticMember(string memberName, out object? value)
     {
         if (_variantsByName.TryGetValue(memberName, out var variant))
         {
-            if (variant.FieldNames.Count == 0)
+            if (variant.Fields.Count == 0)
             {
+                if (TypeParameterNames.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Generic unit variant '{Name}.{memberName}' requires explicit type arguments. " +
+                        $"Call {Name}.{memberName}<{string.Join(", ", TypeParameterNames)}>().");
+                }
                 // Unit variant — return the instance directly
-                value = new ToshUnionVariantInstance(this, variant.Name, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+                value = new ToshUnionVariantInstance(this, variant.Name, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase), typeArguments: null);
                 return true;
             }
 
@@ -158,29 +320,61 @@ public sealed class ToshUnionDefinition : IShellNamedType
 
 public sealed record UnionVariantDefinition(
     string Name,
-    IReadOnlyList<string> FieldNames);
+    IReadOnlyList<UnionVariantFieldDefinition> Fields)
+{
+    public IReadOnlyList<string> FieldNames => Fields.Select(payload => payload.Name).ToArray();
+}
 
-public sealed class ToshUnionVariantInstance : IShellRecordObject, IShellTypedObject
+public sealed record UnionVariantFieldDefinition(
+    string Name,
+    string? TypeName,
+    TextSpan Span);
+
+public sealed class ToshUnionVariantInstance : IShellRecordObject, IShellTypedObject, IShellTypeCheckable
 {
     private readonly Dictionary<string, object?> _fields;
 
     public ToshUnionVariantInstance(
         ToshUnionDefinition unionDefinition,
         string variantName,
-        Dictionary<string, object?> fields)
+        Dictionary<string, object?> fields,
+        IReadOnlyDictionary<string, string>? typeArguments)
     {
         UnionDefinition = unionDefinition;
         VariantName = variantName;
         _fields = fields;
+        TypeArguments = typeArguments;
     }
 
     public ToshUnionDefinition UnionDefinition { get; }
 
     public string VariantName { get; }
 
+    public IReadOnlyDictionary<string, string>? TypeArguments { get; }
+
     public string ShellTypeName => $"{UnionDefinition.Name}.{VariantName}";
 
-    public IShellTypeDescriptor ShellTypeDescriptor => UnionDefinition;
+    public IShellTypeDescriptor ShellTypeDescriptor => TypeArguments is { Count: > 0 }
+        ? new BoundGenericUnionTypeDescriptor(UnionDefinition, TypeArguments)
+        : UnionDefinition;
+
+    public bool IsInstanceOf(string typeName)
+    {
+        if (string.Equals(typeName, UnionDefinition.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (TypeArguments is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        return string.Equals(
+            string.Concat(typeName.Where(character => !char.IsWhiteSpace(character))),
+            string.Concat(ShellTypeDescriptor.ShellTypeName.Where(character => !char.IsWhiteSpace(character))),
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {
@@ -243,4 +437,63 @@ public sealed class ToshUnionVariantInstance : IShellRecordObject, IShellTypedOb
         }
         return hash;
     }
+}
+
+internal sealed class BoundGenericUnionTypeDescriptor : IShellTypeDescriptor
+{
+    private readonly ToshUnionDefinition _definition;
+    private readonly string _displayName;
+
+    public BoundGenericUnionTypeDescriptor(
+        ToshUnionDefinition definition,
+        IReadOnlyDictionary<string, string> bindings)
+    {
+        _definition = definition;
+        var arguments = definition.TypeParameterNames
+            .Select(name => bindings.TryGetValue(name, out var value) ? value : name);
+        _displayName = $"{definition.Name}<{string.Join(", ", arguments)}>";
+    }
+
+    public string ShellTypeName => _displayName;
+    public string ShellFullName => _displayName;
+    public string? ShellNamespace => _definition.ShellNamespace;
+    public string? ShellAssemblyName => _definition.ShellAssemblyName;
+    public string? ShellBaseTypeName => _definition.ShellBaseTypeName;
+    public bool ShellIsClass => _definition.ShellIsClass;
+    public bool ShellIsInterface => _definition.ShellIsInterface;
+    public bool ShellIsEnum => _definition.ShellIsEnum;
+    public bool ShellIsValueType => _definition.ShellIsValueType;
+    public bool ShellIsAbstract => _definition.ShellIsAbstract;
+    public bool ShellIsGenericType => true;
+    public bool ShellIsArray => _definition.ShellIsArray;
+    public bool ShellIsPublic => _definition.ShellIsPublic;
+    public IReadOnlyList<ShellMemberDescriptor> GetShellMembers(bool includeHidden = false) =>
+        _definition.GetShellMembers(includeHidden);
+    public IReadOnlyList<ShellMethodDescriptor> GetShellMethods(bool includeHidden = false) =>
+        _definition.GetShellMethods(includeHidden);
+    public IReadOnlyList<ShellConstructorDescriptor> GetShellConstructors() =>
+        _definition.GetShellConstructors();
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        if (string.Equals(name, "Name", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(name, "FullName", StringComparison.OrdinalIgnoreCase))
+        {
+            value = _displayName;
+            return true;
+        }
+
+        return _definition.TryGetMember(name, out value, includeHidden);
+    }
+    public bool TrySetMember(string name, object? value) => false;
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+    {
+        var members = _definition.GetMembers(includeHidden)
+            .Where(member => !string.Equals(member.Key, "Name", StringComparison.OrdinalIgnoreCase) &&
+                             !string.Equals(member.Key, "FullName", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        members.Insert(0, new KeyValuePair<string, object?>("FullName", _displayName));
+        members.Insert(0, new KeyValuePair<string, object?>("Name", _displayName));
+        return members;
+    }
+    public override string ToString() => _displayName;
 }

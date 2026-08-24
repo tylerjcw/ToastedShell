@@ -164,6 +164,11 @@ internal sealed partial class EmitterImpl : IDisposable
     /// </summary>
     private string? _currentFunctionReturnTypeName;
     /// <summary>
+    /// Source name of the typed function currently being emitted. Carried separately
+    /// from the CLR method name so return diagnostics name exactly what the author wrote.
+    /// </summary>
+    private string? _currentFunctionName;
+    /// <summary>
     /// When the active typed user function declares a refinement
     /// return type (e.g. <c>-> Positive</c>), this carries the
     /// refinement so <see cref="EmitReturnStatement"/> can emit a
@@ -557,6 +562,10 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostInvokeValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeValue),
             new[] { typeof(string), typeof(object[]) })!;
+    private static readonly MethodInfo s_hostInvokeSubexpressionValue =
+        s_toshHost.GetMethod(
+            nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeSubexpressionValue),
+            new[] { typeof(string), typeof(object[]) })!;
     private static readonly MethodInfo s_hostInvokeValueOrNothing =
         s_toshHost.GetMethod(
             nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeValueOrNothing),
@@ -681,6 +690,40 @@ internal sealed partial class EmitterImpl : IDisposable
         s_toshHost.GetMethod(
             nameof(global::Tosh.Compiler.Runtime.ToshHost.CheckType),
             new[] { typeof(object), typeof(string), typeof(int), typeof(int), typeof(string) })!;
+    private static readonly MethodInfo s_hostCheckReturnType =
+        s_toshHost.GetMethod(
+            nameof(global::Tosh.Compiler.Runtime.ToshHost.CheckReturnType),
+            new[] { typeof(object), typeof(string), typeof(int), typeof(int), typeof(string) })!;
+    private static readonly MethodInfo s_hostCheckCallableParameter =
+        s_toshHost.GetMethod(
+            nameof(global::Tosh.Compiler.Runtime.ToshHost.CheckCallableParameter),
+            new[]
+            {
+                typeof(object),
+                typeof(string),
+                typeof(int),
+                typeof(int),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(int),
+            })!;
+    private static readonly MethodInfo s_portableCheckNonNullParameter =
+        typeof(CallableParameterBoundary).GetMethod(
+            nameof(CallableParameterBoundary.CheckNonNull),
+            new[]
+            {
+                typeof(object),
+                typeof(string),
+                typeof(int),
+                typeof(int),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(int),
+                typeof(string),
+                typeof(string),
+            })!;
     private static readonly MethodInfo s_hostCheckTypeAtSource =
         s_toshHost.GetMethod(
             nameof(global::Tosh.Compiler.Runtime.ToshHost.CheckTypeAtSource),
@@ -736,6 +779,9 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostInvokeQualifiedMethod =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeQualifiedMethod),
             new[] { typeof(string), typeof(object?[]) })!;
+    private static readonly MethodInfo s_hostInvokeQualifiedMethodGeneric =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeQualifiedMethod),
+            new[] { typeof(string), typeof(object?[]), typeof(string[]) })!;
     private static readonly MethodInfo s_hostNewObject =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.NewObject),
             new[] { typeof(string), typeof(object?[]) })!;
@@ -1257,7 +1303,7 @@ internal sealed partial class EmitterImpl : IDisposable
                 case BoundEventDefinition ev:
                     DeclareClrEventTypeShell(ev);
                     break;
-                case BoundUnionDefinition un:
+                case BoundUnionDefinition un when un.TypeParameters is not { Count: > 0 }:
                     DeclareClrUnionShell(un);
                     break;
                 case BoundTraitDefinition trait:
@@ -1781,6 +1827,7 @@ internal sealed partial class EmitterImpl : IDisposable
         TypeBuilder Type,
         ConstructorBuilder Ctor,
         Dictionary<string, FieldBuilder> Fields,
+        IReadOnlyList<BoundParameter> Parameters,
         FieldBuilder? UnitSingletonField);
 
     /// <summary>

@@ -135,41 +135,15 @@ export class Lexer(source: string) {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AST — a small hierarchy, because that is the shape a real compiler has
+# AST — a typed recursive union, the natural closed shape for compiler nodes
 # ─────────────────────────────────────────────────────────────────────────────
 
-export class Node {
-    prop Kind: string = "node"
-}
-
-export class NumberNode(value: double) extends Node {
-    prop Kind: string = "number"
-    prop Value: double = $value
-}
-
-export class VarNode(name: string) extends Node {
-    prop Kind: string = "var"
-    prop Name: string = $name
-}
-
-export class UnaryNode(op: string, operand: Node) extends Node {
-    prop Kind: string = "unary"
-    prop Op: string = $op
-    prop Operand: Node = $operand
-}
-
-export class BinaryNode(op: string, left: Node, right: Node) extends Node {
-    prop Kind: string = "binary"
-    prop Op: string = $op
-    prop Left: Node = $left
-    prop Right: Node = $right
-}
-
-export class LetNode(name: string, value: Node, body: Node) extends Node {
-    prop Kind: string = "let"
-    prop Name: string = $name
-    prop Value: Node = $value
-    prop Body: Node = $body
+export union Node {
+    Number(Value: double)
+    Var(Name: string)
+    Unary(Op: string, Operand: Node)
+    Binary(Op: string, Left: Node, Right: Node)
+    Let(Name: string, Value: Node, Body: Node)
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -215,7 +189,7 @@ export class Parser(tokens: list<Token>) {
             $this.Expect("keyword", "in") | ignore
             var body = $this.ParseExpr()
 
-            return new LetNode($name.Text, $value, $body)
+            return Node.Let($name.Text, $value, $body)
         }
 
         return $this.ParseSum()
@@ -227,7 +201,7 @@ export class Parser(tokens: list<Token>) {
         while ($this.Matches("punct", "+") or $this.Matches("punct", "-")) {
             var op = $this.Advance()
             var right = $this.ParseProduct()
-            $left = new BinaryNode($op.Text, $left, $right)
+            $left = Node.Binary($op.Text, $left, $right)
         }
 
         return $left
@@ -239,7 +213,7 @@ export class Parser(tokens: list<Token>) {
         while ($this.Matches("punct", "*") or $this.Matches("punct", "/")) {
             var op = $this.Advance()
             var right = $this.ParseUnary()
-            $left = new BinaryNode($op.Text, $left, $right)
+            $left = Node.Binary($op.Text, $left, $right)
         }
 
         return $left
@@ -248,7 +222,7 @@ export class Parser(tokens: list<Token>) {
     shy func ParseUnary() -> Node {
         if ($this.Matches("punct", "-")) {
             $this.Advance() | ignore
-            return new UnaryNode("-", $this.ParseUnary())
+            return Node.Unary("-", $this.ParseUnary())
         }
 
         return $this.ParseAtom()
@@ -259,12 +233,12 @@ export class Parser(tokens: list<Token>) {
 
         if ($token.Kind == "number") {
             $this.Advance() | ignore
-            return new NumberNode($token.Text as double)
+            return Node.Number($token.Text as double)
         }
 
         if ($token.Kind == "ident") {
             $this.Advance() | ignore
-            return new VarNode($token.Text)
+            return Node.Var($token.Text)
         }
 
         if ($this.Matches("punct", "(")) {
@@ -284,13 +258,13 @@ export class Parser(tokens: list<Token>) {
 
 ## @summary Folds the tree to a value, carrying an environment.
 export class Evaluator {
-    func Visit(node: Node, scope: Hashtable) -> double => match ($node) {
-        _ is NumberNode => $node.Value
-        _ is VarNode    => $this.LookUp($node.Name, $scope)
-        _ is UnaryNode  => 0.0 - $this.Visit($node.Operand, $scope)
-        _ is BinaryNode => $this.Apply($node.Op, $this.Visit($node.Left, $scope), $this.Visit($node.Right, $scope))
-        _ is LetNode    => $this.VisitLet($node, $scope)
-        default         => throw new Error($"unhandled node kind '{$node.Kind}'")
+    func Visit(node: Node, scope: Hashtable) -> double => match ($node.Variant) {
+        "Number" => $node.Value
+        "Var"    => $this.LookUp($node.Name, $scope)
+        "Unary"  => 0.0 - $this.Visit($node.Operand, $scope)
+        "Binary" => $this.Apply($node.Op, $this.Visit($node.Left, $scope), $this.Visit($node.Right, $scope))
+        "Let"    => $this.VisitLet($node, $scope)
+        default  => throw new Error($"unhandled node variant '{$node.Variant}'")
     }
 
     shy func LookUp(name: string, scope: Hashtable) -> double {
@@ -298,7 +272,7 @@ export class Evaluator {
         return $scope[$name]
     }
 
-    shy func VisitLet(node: LetNode, scope: Hashtable) -> double {
+    shy func VisitLet(node: Node, scope: Hashtable) -> double {
         var inner = new System.Collections.Hashtable($scope)
         $inner[$node.Name] = $this.Visit($node.Value, $scope)
         return $this.Visit($node.Body, $inner)
@@ -315,25 +289,25 @@ export class Evaluator {
 
 ## @summary Renders the tree back to fully parenthesised source.
 export class Printer {
-    func Visit(node: Node) -> string => match ($node) {
-        _ is NumberNode => $"{$node.Value}"
-        _ is VarNode    => $node.Name
-        _ is UnaryNode  => $"(-{$this.Visit($node.Operand)})"
-        _ is BinaryNode => $"({$this.Visit($node.Left)} {$node.Op} {$this.Visit($node.Right)})"
-        _ is LetNode    => $"(let {$node.Name} = {$this.Visit($node.Value)} in {$this.Visit($node.Body)})"
-        default         => "?"
+    func Visit(node: Node) -> string => match ($node.Variant) {
+        "Number" => $"{$node.Value}"
+        "Var"    => $node.Name
+        "Unary"  => $"(-{$this.Visit($node.Operand)})"
+        "Binary" => $"({$this.Visit($node.Left)} {$node.Op} {$this.Visit($node.Right)})"
+        "Let"    => $"(let {$node.Name} = {$this.Visit($node.Value)} in {$this.Visit($node.Body)})"
+        default  => "?"
     }
 }
 
 ## @summary Counts nodes by walking the tree — a trivial analysis pass.
 export class Counter {
-    func Visit(node: Node) -> int => match ($node) {
-        _ is NumberNode => 1
-        _ is VarNode    => 1
-        _ is UnaryNode  => 1 + $this.Visit($node.Operand)
-        _ is BinaryNode => 1 + $this.Visit($node.Left) + $this.Visit($node.Right)
-        _ is LetNode    => 1 + $this.Visit($node.Value) + $this.Visit($node.Body)
-        default         => 0
+    func Visit(node: Node) -> int => match ($node.Variant) {
+        "Number" => 1
+        "Var"    => 1
+        "Unary"  => 1 + $this.Visit($node.Operand)
+        "Binary" => 1 + $this.Visit($node.Left) + $this.Visit($node.Right)
+        "Let"    => 1 + $this.Visit($node.Value) + $this.Visit($node.Body)
+        default  => 0
     }
 }
 

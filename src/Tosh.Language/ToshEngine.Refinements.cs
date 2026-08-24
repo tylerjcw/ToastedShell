@@ -633,6 +633,29 @@ public sealed partial class ToshEngine
             return true;
         }
 
+        if (value is ToshUnionVariantInstance unionInstance &&
+            TryGetGenericUnionAnnotation(normalizedTypeName, out var genericUnion, out var unionArguments) &&
+            ReferenceEquals(unionInstance.UnionDefinition, genericUnion) &&
+            unionInstance.TypeArguments is { Count: > 0 } instanceArguments &&
+            genericUnion.TypeParameterNames.Count == unionArguments.Count)
+        {
+            for (var index = 0; index < genericUnion.TypeParameterNames.Count; index++)
+            {
+                if (!instanceArguments.TryGetValue(genericUnion.TypeParameterNames[index], out var actual) ||
+                    !string.Equals(
+                        RemoveTypeNameWhitespace(actual),
+                        RemoveTypeNameWhitespace(unionArguments[index]),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    converted = null;
+                    return false;
+                }
+            }
+
+            converted = value;
+            return true;
+        }
+
         if (TryGetNamedType(normalizedTypeName, out var shellType))
         {
             var shellDescriptor = (IShellTypeDescriptor)shellType;
@@ -801,6 +824,17 @@ public sealed partial class ToshEngine
         string sourceText,
         string owner)
         => ConvertAnnotatedValue(typeName, value, new TextSpan(spanStart, spanLength), sourceName, sourceText, owner);
+
+    internal void ValidateUnionTypeArgument(
+        string typeName,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string unionName)
+    {
+        if (IsKnownAnnotatedType(typeName, new HashSet<string>(StringComparer.OrdinalIgnoreCase))) return;
+        ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, $"union '{unionName}'");
+    }
 
     internal object? ConvertAnnotatedValue(
         string? typeName,
@@ -1528,6 +1562,11 @@ public sealed partial class ToshEngine
             return true;
         }
 
+        if (TryGetGenericUnionAnnotation(normalizedTypeName, out _, out var unionArgs))
+        {
+            return unionArgs.All(argument => IsKnownAnnotatedType(argument, activeRefinements));
+        }
+
         // User-defined generic class instantiation: 'Foo<int, string>'. Accept
         // when the bare name resolves to a ToshClassDefinition whose
         // type-parameter arity matches the supplied argument count, and
@@ -1548,6 +1587,30 @@ public sealed partial class ToshEngine
 
         return ResolveTypeName(normalizedTypeName) is not null;
     }
+
+    private bool TryGetGenericUnionAnnotation(
+        string typeName,
+        out ToshUnionDefinition definition,
+        out IReadOnlyList<string> typeArguments)
+    {
+        definition = null!;
+        typeArguments = Array.Empty<string>();
+        if (!TrySplitGenericTypeName(typeName, out var bareName, out var arguments) ||
+            !TryGetNamedType(bareName, out var named) ||
+            named is not ToshUnionDefinition union ||
+            union.TypeParameterNames.Count == 0 ||
+            union.TypeParameterNames.Count != arguments.Count)
+        {
+            return false;
+        }
+
+        definition = union;
+        typeArguments = arguments;
+        return true;
+    }
+
+    private static string RemoveTypeNameWhitespace(string value) =>
+        string.Concat(value.Where(character => !char.IsWhiteSpace(character)));
 
     private string? ResolveNearestAnnotatedTypeSuggestion(string typeName)
     {

@@ -1,7 +1,7 @@
 ---
 id: TOAST-0052
 title: "A union variant has no field types, and a union cannot be generic"
-status: proposed
+status: complete
 area: toast
 priority: 1
 opened: 2026-08-22
@@ -70,13 +70,41 @@ a type-model gap.
 
 ## Acceptance
 
-- [ ] A variant field may carry a type annotation, positionally (`Ok(T)`) and by name
+- [x] A variant field may carry a type annotation, positionally (`Ok(T)`) and by name
       (`Lit(value: double)`)
-- [ ] A union may declare type parameters, and they are usable in variant field types
-- [ ] A union may be recursive — `Add(left: Expr, right: Expr)` declares and constructs
-- [ ] Constructing a variant checks its field types, and the diagnostic names the field
-- [ ] The representation decision is recorded here with its reasoning, and `§Union
+- [x] A union may declare type parameters, and they are usable in variant field types
+- [x] A union may be recursive — `Add(left: Expr, right: Expr)` declares and constructs
+- [x] Constructing a variant checks its field types, and the diagnostic names the field
+- [x] The representation decision is recorded here with its reasoning, and `§Union
       Definitions` states it
-- [ ] Generic unions instantiate the way generic classes already do, including nesting
-- [ ] Interpreted and compiled agree, in the differential corpus
-- [ ] `bench/probes/compiler_shape.tosh` declares its syntax-node union in the real form
+- [x] Generic unions instantiate the way generic classes already do, including nesting
+- [x] Interpreted and compiled agree, in the differential corpus
+- [x] `bench/probes/compiler_shape.tosh` declares its syntax-node union in the real form
+
+## Resolution — 2026-08-24
+
+`union` remains class-backed. In emitted CLR code a non-generic union is an abstract base
+class with a read-only `Variant` tag and one sealed subclass per variant; the interpreter
+uses the equivalent `ToshUnionVariantInstance` reference object. This is option 1 from the
+decision above. It preserves the representation already exposed by compiled assemblies,
+handles recursive payloads without boxing or an indirection exception, and avoids making
+the same declaration silently change memory model based on its fields. If profiling later
+justifies a flat value layout, it should be introduced explicitly as `struct union` rather
+than changing `union`'s ABI.
+
+The declaration parser now accepts `union Result<T, E>`. Named payloads retain
+`name: Type`; type-only positional payloads such as `Ok(T)` receive the conventional names
+`Item1`, `Item2`, and so on. Variant construction substitutes closed type arguments and
+runs every annotated payload through the canonical annotation converter before storing it.
+Failures consequently identify a concrete field such as `Result.Ok.Item1`.
+
+Direct type-parameter payloads infer their argument as generic class construction does.
+Explicit construction is written `Result.Ok<int, string>(42)`, and nested arguments such as
+`Result.Ok<list<int>, string>([1, 2])` use the existing generic type-name grammar. Generic
+unit variants require the explicit call form because their parameters cannot be inferred.
+
+The compiler applies payload conversion before its direct variant `newobj`. Generic union
+declarations currently retain the same class-backed runtime semantics through the existing
+source-registration tier, matching the way generic classes are compiled today. Differential
+coverage pins typed recursion, nested generic instantiation, and a field refusal; the
+compiler-shaped probe now uses a real recursive `Node` union for its syntax tree.

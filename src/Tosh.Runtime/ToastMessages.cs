@@ -38,4 +38,12 @@ public static class ToastMessages
     /// </remarks>
     public static string NullStringConcatenation =>
         NullOperand("+") + " Use '?? \"\"' to treat null as empty text.";
+
+    /// <summary>A function result refused by its declared return annotation.</summary>
+    public static string FunctionReturnConversionFailure(string functionName, string typeName) =>
+        $"Function '{functionName}' returned a value that could not be converted to '{typeName}'.";
+
+    /// <summary>The source label paired with <see cref="FunctionReturnConversionFailure"/>.</summary>
+    public static string FunctionReturnConversionLabel(string typeName) =>
+        $"the returned value does not match '{typeName}'";
 }

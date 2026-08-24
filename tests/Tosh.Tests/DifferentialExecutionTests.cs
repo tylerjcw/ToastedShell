@@ -60,6 +60,80 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "type TimeoutMs = int where (_ > 0 and _ <= 300000) coerce Math.Clamp(_, 0, 300000)\n"
             + "var t: TimeoutMs = 999999\necho $t.GetType().FullName");
 
+        // `TOAST-0074`. A refused function return names the function on both backends;
+        // nullable returns remain a successful negative control.
+        yield return Case(
+            "non-nullable-return-refusal-message",
+            "func g() -> string { return null }\necho (g())");
+        yield return Case(
+            "nullable-return-accepts-null",
+            "func g() -> string? { return null }\necho ((g()) is null)");
+
+        // `TOAST-0075`. CLR reference slots erase ToastScript nullability; every emitted
+        // callable prologue now re-applies the source annotation before its body runs.
+        yield return Case(
+            "non-nullable-parameter-refusal-direct",
+            "func ParamDirect(value: string) { echo $value }\nParamDirect null");
+        yield return Case(
+            "non-nullable-parameter-refusal-packed",
+            "func ParamPacked(value: string, suffix: string = \"x\") { echo $value }\n"
+            + "ParamPacked null");
+        yield return Case(
+            "non-nullable-parameter-refusal-overload-dispatch",
+            "func ParamOverload(value: string) { echo text }\n"
+            + "func ParamOverload(value: int) { echo number }\n"
+            + "ParamOverload null");
+        yield return Case(
+            "non-nullable-method-parameter-refusal",
+            "class ParamMethod { func f(value: string) { echo $value } }\n"
+            + "var paramMethod = new ParamMethod()\n$paramMethod.f(null)");
+        yield return Case(
+            "non-nullable-constructor-parameter-refusal",
+            "class ParamCtor(value: string) { }\nvar paramCtor = new ParamCtor(null)");
+        yield return Case(
+            "nullable-parameter-accepts-null",
+            "func ParamNullable(value: string?) { echo ($value is null) }\nParamNullable null");
+
+        // `TOAST-0052`. Non-generic unions use direct sealed-variant CLR classes; generic
+        // declarations retain the same class-backed value model through source replay.
+        yield return Case(
+            "typed-recursive-union",
+            "union DiffExprUnion { Lit(value: double) Add(left: DiffExprUnion, right: DiffExprUnion) }\n"
+            + "var tree = DiffExprUnion.Add(DiffExprUnion.Lit(1), DiffExprUnion.Lit(2))\n"
+            + "echo $tree.left.value $tree.right.value");
+        yield return Case(
+            "generic-union-nested-instantiation",
+            "union DiffResultUnion<T, E> { Ok(T) Error(E) }\n"
+            + "union DiffOptionUnion<T> { Some(T) None }\n"
+            + "var result: DiffResultUnion<list<int>, string> = DiffResultUnion.Ok<list<int>, string>([1, 2])\n"
+            + "var inner = DiffOptionUnion.Some(7)\n"
+            + "var outer: DiffOptionUnion<DiffOptionUnion<int>> = DiffOptionUnion.Some<DiffOptionUnion<int>>($inner)\n"
+            + "echo $result.Item1[1] $outer.Item1.Item1");
+        yield return Case(
+            "typed-union-field-refusal",
+            "union DiffLitUnion { Lit(value: double) }\nDiffLitUnion.Lit(\"bad\")");
+
+        // `TOAST-0051`. System.Numerics values have no shell-specific branches: both
+        // backends reach the shared CLR op_* fallback in OperatorEvaluator.
+        yield return Case(
+            "clr-operator-vector3-addition",
+            "using System.Numerics\n"
+            + "var a = new Vector3(1.0, 2.0, 3.0)\n"
+            + "var b = new Vector3(4.0, 5.0, 6.0)\n"
+            + "echo (($a + $b).X)");
+        yield return Case(
+            "clr-operator-quaternion-addition",
+            "using System.Numerics\n"
+            + "var a = new Quaternion(1.0, 2.0, 3.0, 4.0)\n"
+            + "var b = new Quaternion(4.0, 3.0, 2.0, 1.0)\n"
+            + "echo (($a + $b).W)");
+        yield return Case(
+            "clr-operator-matrix4x4-addition",
+            "using System.Numerics\n"
+            + "var a = Matrix4x4.CreateScale(2.0)\n"
+            + "var b = Matrix4x4.CreateScale(3.0)\n"
+            + "echo (($a + $b).M11)");
+
         // ── Module methods without source replay: TOAST-0035 ──────────────
         // These are the shapes that stopped being replayed. They are here as well as in
         // SourceReplaySurfaceTests because that one asserts a module *emits* and this one
@@ -343,6 +417,15 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Case("echo-no-arguments", "echo");
         yield return Case("echo-list-argument", "var items = [1, 2]\necho $items");
         yield return Case("echo-splatted-arguments", "var items = [1, 2]\necho ...$items");
+
+        // `TOAST-0073`, moved up from `KnownDivergences`. Parenthesized pipelines are
+        // one-value argument expressions: no output reads as null, one item is the value,
+        // and multiple items are the same structured refusal on both backends.
+        yield return Case("subexpression-argument-zero-values", "echo (echo)");
+        yield return Case("subexpression-argument-one-value", "echo (echo 1)");
+        yield return Case(
+            "subexpression-argument-multiple-values",
+            "echo ((echo 1 2) | count)");
 
         yield return Case("render-format-clause", "echo $\"{42:X} {3.14159:F2}\"");
         yield return Case("render-alignment-right", "var n = 7\necho $\"[{$n,6}]\"");
@@ -729,24 +812,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
     /// </summary>
     public static IEnumerable<object[]> KnownDivergences()
     {
-        // A subexpression used as an argument must produce exactly one value — the
-        // interpreter refuses `(echo 1 2)` there with `subexpression_requires_single_value`,
-        // and the compiled backend evaluates it happily. Found while moving `TOAST-0067`,
-        // whose fix made `echo 1 2` yield two values on both sides and so made this
-        // reachable. `TOAST-0073`.
-        // Both backends refuse a null return through a non-nullable annotation — the
-        // *behaviour* agrees. Only the wording differs: "Function 'g' returned a value that
-        // could not be converted to 'string'" against "'return value' produced a value that
-        // could not be converted to 'string'". Recorded because the corpus compares messages
-        // deliberately, and a message is part of the behaviour. `TOAST-0074`.
-        yield return Divergence(
-            "TOAST-0074", "non-nullable-return-refusal-message",
-            "func g() -> string { return null }\necho (g())");
-
-        yield return Divergence(
-            "TOAST-0073", "subexpression-argument-arity",
-            "echo ((echo 1 2) | count)");
-
         // The compiled backend represents an array literal as List<object>; the
         // interpreter produces a real array (System.Int32[] for this one). Every
         // member that differs between the two — .Length against .Count — differs

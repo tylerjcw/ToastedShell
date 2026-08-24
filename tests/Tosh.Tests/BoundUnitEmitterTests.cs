@@ -2569,6 +2569,30 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Typed_recursive_union_constructs_and_converts_fields_directly()
+    {
+        var (output, result, _) = CompileLoadAndRun(
+            "union EmitExpr { Lit(value: double) Add(left: EmitExpr, right: EmitExpr) }\n"
+            + "var tree = EmitExpr.Add(EmitExpr.Lit(\"1.5\"), EmitExpr.Lit(2))\n"
+            + "echo $tree.left.value\necho $tree.right.value");
+
+        Assert.True(result.IsClean,
+            $"expected clean emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+        Assert.Equal("1.5\n2", output.Trim());
+    }
+
+    [Fact]
+    public void Generic_union_replays_with_nested_type_arguments()
+    {
+        var (output, _, _) = CompileLoadAndRun(
+            "union EmitResult<T, E> { Ok(T) Error(E) }\n"
+            + "var result: EmitResult<list<int>, string> = EmitResult.Ok<list<int>, string>([1, 2])\n"
+            + "echo $result.Item1[1]");
+
+        Assert.Equal("2", output.Trim());
+    }
+
+    [Fact]
     public void Overloaded_functions_emit_distinct_clr_methods_with_shared_name()
     {
         // First-class .NET plan, step 4: overloaded user functions

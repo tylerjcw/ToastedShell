@@ -1274,8 +1274,8 @@ internal sealed partial class EmitterImpl
                 _il.Emit(OpCodes.Ldstr, refRet.Name);
                 _il.Emit(OpCodes.Ldc_I4, ret.Span.Start);
                 _il.Emit(OpCodes.Ldc_I4, ret.Span.Length);
-                _il.Emit(OpCodes.Ldstr, "return value");
-                _il.Emit(OpCodes.Call, s_hostCheckType);
+                _il.Emit(OpCodes.Ldstr, _currentFunctionName ?? "function");
+                _il.Emit(OpCodes.Call, s_hostCheckReturnType);
                 t = typeof(object);
             }
             // Coerce expression CLR type → declared return type through the
@@ -1288,7 +1288,8 @@ internal sealed partial class EmitterImpl
                     typedReturn,
                     _currentFunctionReturnTypeName,
                     ret.Span,
-                    "return value");
+                    "return value",
+                    returnFunctionName: _currentFunctionName);
             }
         }
         else

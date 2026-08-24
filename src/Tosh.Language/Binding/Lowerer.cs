@@ -1168,7 +1168,8 @@ public static class Lowerer
                 Path: staticCall.Path,
                 Arguments: BuildArgumentList(staticCall.Arguments, ctx),
                 Span: staticCall.Span,
-                Type: InferStaticCallReturn(staticCall.Path, ctx)),
+                Type: InferStaticCallReturn(staticCall.Path, ctx),
+                TypeArguments: staticCall.ExplicitTypeArguments),
 
         StaticMemberAccessArgumentSyntax staticMember =>
             new BoundStaticMemberAccess(
@@ -2353,7 +2354,8 @@ public static class Lowerer
             Name: unionDef.Name,
             Variants: variants,
             Modifier: unionDef.Modifier,
-            Span: unionDef.Span);
+            Span: unionDef.Span,
+            TypeParameters: unionDef.TypeParameters);
     }
 
     private static BoundEnumDefinition LowerEnumDefinition(
