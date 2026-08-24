@@ -58,24 +58,38 @@ public sealed class ScopeAndChannelTests
     public async Task Scope_kills_jobs_and_rethrows_when_block_throws()
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var spawnCommand = OperatingSystem.IsWindows()
+            ? "spawn ping -n 31 127.0.0.1"
+            : "spawn sleep 30";
 
-        await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+        var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(
-                """
+                $$"""
                 scope {
-                    var j1 = spawn dotnet --version
+                    var j1 = {{spawnCommand}}
+                    var j2 = {{spawnCommand}}
                     throw "scope block failed"
                 }
                 """);
         });
+        var diagnostic = Assert.Single(exception.Diagnostics);
+        Assert.Equal("tosh.runtime.throw", diagnostic.Code);
+        Assert.Equal("scope block failed", diagnostic.Title);
 
-        // After scope throws, the runtime should have no running jobs.
-        // (The job may have completed or been killed; either way it's gone from GetJobs())
-        var remaining = engine.Runtime.GetJobs()
-            .Where(j => j.Status == ShellJobStatus.Running)
-            .ToList();
-        Assert.Empty(remaining);
+        // Both commands deliberately outlive the block, so scope must signal them all
+        // before awaiting their monitors; sequential kill-and-wait would leave the
+        // second process running while the first one shuts down.
+        var jobs = engine.Runtime.GetJobsSnapshot();
+        Assert.Equal(2, jobs.Count);
+        Assert.All(jobs, job =>
+        {
+            Assert.Equal(ShellJobStatus.Cancelled, job.Status);
+            Assert.NotNull(job.EndedAt);
+        });
+
+        // The normal listing path can now reap the terminal job immediately.
+        Assert.Empty(engine.Runtime.GetJobs());
     }
 
     [Fact]

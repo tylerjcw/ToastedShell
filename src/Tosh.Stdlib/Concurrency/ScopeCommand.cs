@@ -53,12 +53,17 @@ public sealed class ScopeCommand : ShellCommand
         }
         catch
         {
-            // Block threw — collect scope-owned jobs and kill them before rethrowing.
+            // Block threw — collect scope-owned jobs, request cancellation for all of
+            // them first, then wait for every monitor to observe process exit before
+            // rethrowing. Kill() is intentionally synchronous and only signals the
+            // process; without the waits below, callers can still observe Running.
             scopedJobs = CollectScopedJobs(context.Runtime, preExistingIds);
             foreach (var job in scopedJobs)
             {
                 job.Kill();
             }
+
+            await Task.WhenAll(scopedJobs.Select(WaitForTerminationAfterKillAsync));
             throw;
         }
 
@@ -90,5 +95,22 @@ public sealed class ScopeCommand : ShellCommand
         return runtime.GetJobsSnapshot()
             .Where(j => !preExistingIds.Contains(j.Id))
             .ToList();
+    }
+
+    private static async Task WaitForTerminationAfterKillAsync(ShellJob job)
+    {
+        try
+        {
+            // Do not pass the command token: it may already be cancelled, while the
+            // scope contract requires teardown to finish before the block exception
+            // escapes. A monitor failure must not replace that original exception.
+            await job.WaitAsync(CancellationToken.None);
+        }
+        catch
+        {
+            // Kill() immediately makes suspended/unmonitored jobs terminal. Monitored
+            // jobs normally produce a Cancelled completion; if cleanup itself faults,
+            // preserve the exception that caused the scope to unwind.
+        }
     }
 }
