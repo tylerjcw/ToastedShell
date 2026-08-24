@@ -202,6 +202,62 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A `prop` that shadows a base class's is two CLR members, and reflection returns
         // both — this rendered `Circle { K = c, K = s }`, showing a member the reader cannot
         // reach and a duplicate key. Members are walked most-derived first and deduplicated.
+        // `TOAST-0065`, moved up from `KnownDivergences`. Recorded as a `match` narrowing
+        // defect; it was neither. The spec's type pattern is `_ is T` (§Match) and worked on
+        // both backends all along — the failing arm was spelled `Circle => …`, which the spec
+        // calls a *value* pattern matching by equality. It matched interpreted because
+        // converting a class instance to a string yields its type name, and an emitted class
+        // inherited `object.ToString()`, answering `p.Circle` — the assembly's namespace in a
+        // name the reader wrote.
+        yield return Case(
+            "class-instance-converts-to-its-type-name",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\necho ($s as string)");
+
+        yield return Case(
+            "class-instance-equals-its-type-name",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\necho ($s == \"Circle\")");
+
+        // The control: equality is against the *runtime* type's name, not a base's.
+        yield return Case(
+            "class-instance-does-not-equal-a-base-name",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\necho ($s == \"Shape\")");
+
+        yield return Case(
+            "match-value-pattern-over-a-hierarchy",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\n"
+            + "var r: dynamic = match ($s) {\n    Circle => \"circle\"\n    Shape => \"shape\"\n}\necho $r");
+
+        // And the spec's actual type pattern, which is what the item's title described.
+        // Included because nothing had asserted it, and it is the shape readers are told to
+        // write — a base type matches, unlike the value pattern above.
+        yield return Case(
+            "match-type-pattern-narrows",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\n"
+            + "echo (match ($s) {\n    _ is Circle => \"circle\"\n    default => \"other\"\n})");
+
+        yield return Case(
+            "match-type-pattern-matches-a-base",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\n"
+            + "echo (match ($s) {\n    _ is Shape => \"shape\"\n    default => \"other\"\n})");
+
+        // A `ToString` the author wrote still wins over the emitted default.
+        yield return Case(
+            "declared-tostring-beats-the-generated-one",
+            "class T {\n    prop N: int = 5\n    func ToString() -> string => $\"tag:{$this.N}\"\n}\n"
+            + "echo $\"{(new T())}\"");
+
         yield return Case(
             "render-class-with-a-shadowed-property",
             "class Shape { prop K: string = \"s\" }\n"
@@ -702,25 +758,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A variable annotated with a base class rejects a subclass value when
         // compiled. Parameters and returns take a different path and accept it,
         // so this is specific to the variable annotation.
-
-        // `match` with type-pattern arms over a declared hierarchy yields null compiled and
-        // the arm's value interpreted — `TOAST-0065`. `match` itself is fine: the same
-        // statement over an `int` with literal arms agrees on both backends. It is narrowing
-        // by type that does not survive emission.
-        //
-        // Found by *running* one of `TOAST-0036`'s control shapes rather than only compiling
-        // it. That item recorded this shape as "compiles", which was true and was the
-        // question it asked.
-        yield return Divergence(
-            "TOAST-0065", "match-type-pattern-narrowing",
-            "class Shape { prop K: string = \"s\" }\n"
-            + "class Circle extends Shape { prop K: string = \"c\" }\n"
-            + "var s: Shape = new Circle()\n"
-            + "var r: dynamic = match ($s) {\n"
-            + "    Circle => \"circle\"\n"
-            + "    Shape => \"shape\"\n"
-            + "}\n"
-            + "echo $r");
 
         // ── `TOAST-0018`'s specified semantics, not yet implemented compiled ──
         //

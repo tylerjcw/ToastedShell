@@ -676,6 +676,57 @@ internal sealed partial class EmitterImpl
         }
 
         DeclareComputedProperties(cls, typeBuilder, shell);
+        DeclareDefaultToString(cls, typeBuilder);
+    }
+
+    /// <summary>
+    /// Emits the <c>ToString</c> an emitted class would otherwise inherit — <c>TOAST-0065</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `ToshClassInstance.ToString()` answers a declared `ToString` if there is one and the
+    /// class's name otherwise. An emitted class inherited `object.ToString()`, which answers
+    /// the CLR type's full name — so `$s as string` was `Circle` interpreted and `p.Circle`
+    /// compiled, carrying the assembly's namespace into a value the reader wrote.
+    /// </para>
+    /// <para>
+    /// It reaches further than `as string`: equality converts, so `$s == "Circle"` was true
+    /// interpreted and false compiled, and a `match` value arm spelled `Circle => …` followed
+    /// it. That arm is what `TOAST-0065` recorded, which is why the item reads as a `match`
+    /// defect — the spec's type pattern, `_ is Circle`, worked on both backends all along.
+    /// </para>
+    /// <para>
+    /// Marked compiler-generated so the renderer can tell it from a `ToString` the author
+    /// wrote: one is a rendering declaration to be preferred over structural output, and this
+    /// is the fallback that structural output exists to beat.
+    /// </para>
+    /// </remarks>
+    private void DeclareDefaultToString(BoundClassDefinition cls, TypeBuilder typeBuilder)
+    {
+        var declaresOwn = cls.Members
+            .OfType<BoundClassMethodMember>()
+            .Any(static member => string.Equals(
+                member.Method.Name, nameof(ToString), StringComparison.OrdinalIgnoreCase));
+
+        if (declaresOwn)
+        {
+            return;
+        }
+
+        var builder = typeBuilder.DefineMethod(
+            nameof(ToString),
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            MetadataType(typeof(string)),
+            Type.EmptyTypes);
+
+        builder.SetCustomAttribute(new CustomAttributeBuilder(
+            typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute)
+                .GetConstructor(Type.EmptyTypes)!,
+            Array.Empty<object>()));
+
+        var il = builder.GetILGenerator();
+        il.Emit(OpCodes.Ldstr, cls.Name);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Tosh.Runtime;
 
 /// <summary>
@@ -34,13 +36,28 @@ public static class ShellTypeNaming
 
     /// <summary>The shell-level name of <paramref name="type"/>, when it has one.</summary>
     /// <remarks>
-    /// A <see cref="Type"/> alone cannot carry the shell name of the *instance* it describes —
-    /// every ToastScript class shares <c>ToshClassInstance</c> — so this answers the CLR display
-    /// name and callers holding a value should prefer <see cref="Describe(object?)"/>.
+    /// <para>
+    /// An *interpreted* class instance cannot be named from its <see cref="Type"/> alone —
+    /// every one of them is a <c>ToshClassInstance</c> — so callers holding a value should
+    /// prefer <see cref="Describe(object?)"/>, which asks the value.
+    /// </para>
+    /// <para>
+    /// A *compiled* class is different: the emitted type **is** the class, and it carries
+    /// <see cref="ToshTypeAttribute"/> saying so. Answering the CLR display name for one gave
+    /// it the assembly's namespace — `$s as string` was `Circle` interpreted and `p.Circle`
+    /// compiled, and since equality converts, `$s == "Circle"` was true on one backend and
+    /// false on the other (`TOAST-0065`).
+    /// </para>
     /// </remarks>
     public static string Describe(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
+
+        if (type.GetCustomAttribute<ToshTypeAttribute>() is not null)
+        {
+            return type.GetCustomAttribute<ToshOriginalNameAttribute>()?.OriginalName ?? type.Name;
+        }
+
         return ReflectionMetadataUtilities.GetDisplayName(type);
     }
 }

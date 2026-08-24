@@ -760,10 +760,19 @@ public static class ToastRenderer
             }
         }
 
-        // A declared `ToString`, which for an emitted type means one it declares itself
-        // rather than the one every object inherits.
+        // A declared `ToString` — one the author wrote. The compiler emits a default that
+        // answers the class's name (`TOAST-0065`), and that is the fallback structural
+        // rendering exists to beat rather than a rendering declaration to prefer over it, so
+        // it is told apart by the compiler-generated marker rather than by who declared it.
         var toString = type.GetMethod(nameof(ToString), Type.EmptyTypes);
-        return toString is not null && toString.DeclaringType == type ? toString : null;
+        if (toString is null ||
+            toString.DeclaringType != type ||
+            toString.GetCustomAttribute<System.Runtime.CompilerServices.CompilerGeneratedAttribute>() is not null)
+        {
+            return null;
+        }
+
+        return toString;
     }
 
     private static bool TryWriteDeclaredRendering(
