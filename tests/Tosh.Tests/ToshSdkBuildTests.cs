@@ -5,6 +5,7 @@ using System.Security;
 
 namespace Tosh.Tests;
 
+[Collection(SdkBuildSerialCollection.Name)]
 public sealed class ToshSdkBuildTests
 {
     [Fact]
@@ -126,44 +127,21 @@ public sealed class ToshSdkBuildTests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// **Skipped — flaky under parallel load** (`PLAN-0002`). The pack and build halves
-    /// succeed; the *run* step then exits **134 (SIGABRT)**. Observed once in a full
-    /// cold-checkout run, and it passes **3 of 3** when re-run alone on that same
-    /// worktree, so it is contention under xUnit's 8-way parallelism rather than
-    /// anything about a cold tree. Ruled out as a cause: memory — there were no kernel
-    /// OOM kills and no allocation failures in the log.
+    /// This test exposed two rare launch failures under full-suite load (`PLAN-0002`):
+    /// one SIGABRT and, later, Linux <c>ETXTBSY</c> for the GUID-named isolated copy.
+    /// Both occurred after successful pack and build steps, and both disappeared when
+    /// the test ran alone.
     /// </para>
     /// <para>
-    /// It was skipped for two reasons, and **one of them has expired**: the cause was not
-    /// understood, and it exercised "the compiled backend that Phase 0 freezes out of the
-    /// solution". That freeze was reversed on 2026-08-17 — the compiler is a target, not a
-    /// component leaving the build — so the trade that justified skipping no longer holds.
+    /// <c>ETXTBSY</c> means another process retained a write-open executable inode. The
+    /// test's temporary paths rule out two SDK builds targeting the same pathname, so
+    /// the complete SDK subprocess collection runs without overlapping other xUnit
+    /// collections. This preserves the end-to-end test instead of hiding the failure.
     /// </para>
     /// <para>
-    /// **Re-enabled 2026-08-17 on measurement, not on a fix.** 26 full-suite runs at
-    /// 8-way parallelism produced **one** failure, and 17 consecutive clean runs followed
-    /// it. The one failure was not captured by name, so it is not known whether it was
-    /// this test or `TtyCaptureTests.An_interpolation_hole_does_not_yet_capture`, which
-    /// this item also records as flaking under load. That gap is the reason `PLAN-0002`
-    /// stays open rather than closing.
-    /// </para>
-    /// <para>
-    /// A hypothesis worth recording, not a conclusion: the symptom was exit **134**
-    /// (SIGABRT), which is what an `AccessViolationException` produces — and `TOSH-0007`
-    /// fixed a `struct statvfs` declared 24 bytes short, corrupting memory past the buffer
-    /// on every call. Under parallel load, where the bytes after a buffer are more likely
-    /// to be live, that is exactly the shape of a rare abort. Nothing proves the link.
-    /// </para>
-    /// <para>
-    /// Enabled rather than left skipped because a skip is a permanent blind spot: if this
-    /// still flakes, the suite will now say so and name it, which is what closing the item
-    /// actually needs.
-    /// </para>
-    /// <para>
-    /// The sibling tests in this file still run and still cover the SDK path, including
-    /// `Dotnet_build_packaged_sdk_project_restores_stages_runs_and_publishes_package_references`,
-    /// which packs and publishes. So skipping this one does not leave the packaged-SDK
-    /// route untested.
+    /// The isolation was verified by three consecutive focused runs and a full 6,603-test
+    /// suite run. The suite-level collection setting, rather than a retry in this helper,
+    /// makes the concurrency contract explicit for all SDK process tests.
     /// </para>
     /// </remarks>
     [Fact]
