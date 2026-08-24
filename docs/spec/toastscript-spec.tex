@@ -2644,6 +2644,23 @@ depend on how much data follows it. A generator yielding one array and the same 
 yielding two hand downstream the same first item, so adding a second batch never changes
 what the first batch meant.
 
+\paragraph{How many values a command yields.}
+One per argument. \code{echo 1 2} yields two values, not one joined string, for the same
+reason \code{echo \$xs} yields one: each \emph{argument} is a value, and joining them
+would make the number of values depend on how they were spelled rather than on how many
+there were.
+
+\begin{lstlisting}
+echo (echo 1 2 | count)               # 2  -- two arguments, two values
+echo (echo 1 | count)                 # 1
+echo (echo $xs | count)               # 1  -- one argument, holding a collection
+echo (echo ...$xs | count)            # 3  -- spread, so one value per element
+\end{lstlisting}
+
+This is what keeps \code{echo} consistent with the producer rule above rather than an
+exception to it: a collection handed to a command is one argument and so one value, and
+\code{...} is how it becomes several.
+
 \code{...} (\S\ref{sec:pipeline-spread}) turns any value into a sequence, which is how a
 collection produced by a command is spread when that is what was wanted:
 

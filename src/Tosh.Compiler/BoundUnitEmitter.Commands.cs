@@ -61,15 +61,13 @@ internal sealed partial class EmitterImpl
             return;
         }
 
-        // Multi-arg: build a string[] and call String.Join(" ", arr).
-        _il.Emit(OpCodes.Ldstr, " ");
-        _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
-        _il.Emit(OpCodes.Newarr, typeof(string));
-
+        // `TOAST-0067`. One value per argument, each on its own line — not one joined
+        // string. `echo` is a value producer, and the interpreter yields an argument's worth
+        // of value for each: `echo 1 2 | count` is 2. Joining made the compiled backend
+        // disagree with the interpreter *and* with itself, since `echo $items` over a
+        // two-element list already contributed two.
         for (var i = 0; i < call.Arguments.Count; i++)
         {
-            _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Ldc_I4, i);
             var argType = EmitExpression(call.Arguments[i].Value);
             if (argType is null)
             {
@@ -80,11 +78,9 @@ internal sealed partial class EmitterImpl
                 BoxIfValueType(argType);
                 _il.Emit(OpCodes.Call, s_formatValue);
             }
-            _il.Emit(OpCodes.Stelem_Ref);
-        }
 
-        _il.Emit(OpCodes.Call, s_stringJoin);
-        _il.Emit(OpCodes.Call, s_writeLineString);
+            _il.Emit(OpCodes.Call, s_writeLineString);
+        }
     }
 
     /// <summary>

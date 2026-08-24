@@ -204,6 +204,17 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "class Sneaky {\n    prop N: int = 5\n    func render() -> string => \"sneaky\"\n}\n"
             + "echo $\"{(new Sneaky())}\"");
 
+        // `TOAST-0067`, moved up from `KnownDivergences`. `echo` yields one value per
+        // argument; the compiled backend joined them into one string, disagreeing with the
+        // interpreter and with itself — `echo $items` over two elements already contributed
+        // two. The splat row goes through a different emitter path than the fixed-arity one,
+        // which is why both are here.
+        yield return Case("echo-multiple-arguments", "echo 1 2");
+        yield return Case("echo-single-argument", "echo 1");
+        yield return Case("echo-no-arguments", "echo");
+        yield return Case("echo-list-argument", "var items = [1, 2]\necho $items");
+        yield return Case("echo-splatted-arguments", "var items = [1, 2]\necho ...$items");
+
         yield return Case("render-format-clause", "echo $\"{42:X} {3.14159:F2}\"");
         yield return Case("render-alignment-right", "var n = 7\necho $\"[{$n,6}]\"");
         yield return Case("render-alignment-left", "var n = 7\necho $\"[{$n,-6}]\"");
@@ -589,6 +600,15 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
     /// </summary>
     public static IEnumerable<object[]> KnownDivergences()
     {
+        // A subexpression used as an argument must produce exactly one value — the
+        // interpreter refuses `(echo 1 2)` there with `subexpression_requires_single_value`,
+        // and the compiled backend evaluates it happily. Found while moving `TOAST-0067`,
+        // whose fix made `echo 1 2` yield two values on both sides and so made this
+        // reachable. `TOAST-0073`.
+        yield return Divergence(
+            "TOAST-0073", "subexpression-argument-arity",
+            "echo ((echo 1 2) | count)");
+
         // The compiled backend represents an array literal as List<object>; the
         // interpreter produces a real array (System.Int32[] for this one). Every
         // member that differs between the two — .Length against .Count — differs
@@ -600,13 +620,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A variable annotated with a base class rejects a subclass value when
         // compiled. Parameters and returns take a different path and accept it,
         // so this is specific to the variable annotation.
-
-        // `echo` with more than one argument emits one value per argument interpreted and a
-        // single joined string compiled — `TOAST-0067`. Nothing to do with records; found
-        // because a record case was written with two arguments.
-        yield return Divergence(
-            "TOAST-0067", "echo-multiple-arguments",
-            "echo 1 2");
 
         // A compiled function whose result is null still contributes one value to the
         // pipeline; the interpreted one contributes none — `TOAST-0066`. Reached here

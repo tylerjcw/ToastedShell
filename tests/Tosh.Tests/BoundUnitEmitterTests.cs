@@ -29,8 +29,8 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("echo 42", "42")]
     [InlineData("echo hello", "hello")]
     [InlineData("echo true", "true")]
-    [InlineData("echo \"hi\" \"world\"", "hi world")]
-    [InlineData("echo 1 2 3", "1 2 3")]
+    [InlineData("echo \"hi\" \"world\"", "hi\nworld")]
+    [InlineData("echo 1 2 3", "1\n2\n3")]
     [InlineData("var x = 42\necho $x", "42")]
     [InlineData("var x = 5\nvar y = 10\necho ($x + $y)", "15")]
     [InlineData("echo (3 * 7)", "21")]
@@ -102,7 +102,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     // user functions
     [InlineData("func hello => echo hi\nhello", "hi")]
     [InlineData("func say(msg) => echo $msg\nsay hello", "hello")]
-    [InlineData("func say(a, b) => echo $a $b\nsay one two", "one two")]
+    [InlineData("func say(a, b) => echo $a $b\nsay one two", "one\ntwo")]
     [InlineData("func greet(name) { echo $\"Hi {$name}!\" }\ngreet World", "Hi World!")]
     [InlineData("func a => echo first\nfunc b => echo second\na\nb", "first\nsecond")]
     [InlineData("func inner => echo deep\nfunc outer => inner\nouter", "deep")]
@@ -131,7 +131,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("for i in (-1..1) { echo $i }", "-1\n0\n1")]
     [InlineData("for i in (0..2) { echo $i }", "0\n1\n2")]
     [InlineData("var sum = 0\nfor i in (1..5) { $sum = $sum + $i }\necho $sum", "15")]
-    [InlineData("for i in (1..3) { for j in (1..2) { echo $i $j } }", "1 1\n1 2\n2 1\n2 2\n3 1\n3 2")]
+    [InlineData("for i in (1..3) { for j in (1..2) { echo $i $j } }", "1\n1\n1\n2\n2\n1\n2\n2\n3\n1\n3\n2")]
     // compound assignment
     [InlineData("var x = 10\n$x += 5\necho $x", "15")]
     [InlineData("var x = 10\n$x -= 3\necho $x", "7")]
@@ -206,7 +206,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("func risky() { defer { echo cleanup }\nthrow \"boom\" }\ntry { risky } catch (e) { echo $e }", "boom")]
     // yield semantics (generator-style function bodies)
     [InlineData("func g() { yield 1\nyield 2 }\ng", "1\n2")]
-    [InlineData("func gy() { yield echo 7 8 }\ngy", "7 8")]
+    [InlineData("func gy() { yield echo 7 8 }\ngy", "7\n8")]
     // callable invocation ($fn(args)) via lambda expressions
     [InlineData("var f = func(x, y) => ($x + $y)\necho ($f(3, 4))", "7")]
     [InlineData("var greet = func(name) => $\"hello {$name}\"\necho ($greet(\"world\"))", "hello world")]
@@ -217,9 +217,9 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("var count_rest = func(first, rest...) => ($rest.Count)\necho ($count_rest(1, 2, 3))", "2")]
     [InlineData("var add3 = func(x, y, z) => ($x + $y + $z)\nvar xs = [2, 3]\necho ($add3(1, ...$xs))", "6")]
     // splat into echo
-    [InlineData("var xs = [1, 2, 3]\necho ...$xs", "1 2 3")]
-    [InlineData("var xs = [\"a\", \"b\"]\necho ...$xs done", "a b done")]
-    [InlineData("var xs = [10, 20, 30]\necho ...$xs", "10 20 30")]
+    [InlineData("var xs = [1, 2, 3]\necho ...$xs", "1\n2\n3")]
+    [InlineData("var xs = [\"a\", \"b\"]\necho ...$xs done", "a\nb\ndone")]
+    [InlineData("var xs = [10, 20, 30]\necho ...$xs", "10\n20\n30")]
     // user functions as pipeline stages
     [InlineData("func dbl(x) { return ($x * 2) }\nfor v in ([1, 2, 3] | dbl) { echo $v }", "2\n4\n6")]
     [InlineData("func add(x, y) { return ($x + $y) }\nfor v in ([1, 2, 3] | add 10) { echo $v }", "11\n12\n13")]
@@ -1849,7 +1849,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             "func label(label, value) => echo $label $value\n"
             + "var f = &label\n"
             + "$f(value = 42, label = \"answer\")");
-        Assert.Equal("answer 42", output.Trim());
+        Assert.Equal("answer\n42", output.Trim());
     }
 
     [Fact]
@@ -1864,7 +1864,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             + "var f = &pick\n"
             + "$f(1)\n"
             + "$f(1, 2)");
-        Assert.Equal("one 1\ntwo 1 2", output.Trim().Replace("\r", ""));
+        Assert.Equal("one\n1\ntwo\n1\n2", output.Trim().Replace("\r", ""));
     }
 
     [Fact]
@@ -1874,7 +1874,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             "var base = {| name: \"alice\", age: 30 |}\n"
             + "var ext = {| ...$base, age: 31, role: \"admin\" |}\n"
             + "echo $ext.name $ext.age $ext.role");
-        Assert.Equal("alice 31 admin", output.Trim());
+        Assert.Equal("alice\n31\nadmin", output.Trim());
     }
 
     [Fact]
@@ -1894,7 +1894,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             "var a = 0\nvar b = 0\n"
             + "($a, $b) = [10, 20]\n"
             + "echo $a $b");
-        Assert.Equal("10 20", output.Trim());
+        Assert.Equal("10\n20", output.Trim());
     }
 
     [Fact]
@@ -1906,7 +1906,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             + "try { ($first, $second) = [3, \"bad\"] } catch (error) { }\n"
             + "echo $first $second");
 
-        Assert.Equal("1 2", output.Trim());
+        Assert.Equal("1\n2", output.Trim());
     }
 
     [Fact]
@@ -1922,7 +1922,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             + "}\n"
             + "echo $value");
 
-        Assert.Equal("3 4\n1", output.Trim().Replace("\r", ""));
+        Assert.Equal("3\n4\n1", output.Trim().Replace("\r", ""));
     }
 
     [Fact]
@@ -1935,7 +1935,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             + "update\n"
             + "echo $first $second");
 
-        Assert.Equal("3 4", output.Trim());
+        Assert.Equal("3\n4", output.Trim());
     }
 
     [Theory]

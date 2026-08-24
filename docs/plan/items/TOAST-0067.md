@@ -1,7 +1,7 @@
 ---
 id: TOAST-0067
 title: "`echo` with several arguments emits one value each interpreted and one joined string compiled"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -44,10 +44,35 @@ called wrong.
 
 ## Acceptance
 
-- [ ] `docs/spec/` states what `echo` yields for one argument and for several
-- [ ] Both backends agree, and `(echo 1 2) | count` is the same on each
-- [ ] The case moves from `KnownDivergences()` into `Corpus()`
-- [ ] A negative control
+- [x] `docs/spec/` states what `echo` yields for one argument and for several — a new
+      *How many values a command yields* paragraph in the pipeline-shape section, with all
+      four of its claims run against the implementation rather than asserted
+- [x] Both backends agree, and `echo 1 2 | count` is 2 on each
+- [x] The case moves from `KnownDivergences()` into `Corpus()`, with four companions: one
+      argument, none, a list argument, and a splat — the splat goes through a different
+      emitter path than the fixed-arity one
+- [x] A negative control
+
+## Resolution — 2026-08-23
+
+One value per argument, on both backends. The compiled emitter built a `string[]` and
+`String.Join`ed it; it now writes one line per argument, and `ToshHost.EchoArgs` — the splat
+path — does the same.
+
+The rule stated in the spec is the one that already governed everything else: each
+*argument* is a value. That is why `echo $xs` is one value and `echo ...$xs` is three, and
+joining made the count depend on how the arguments were spelled rather than on how many
+there were.
+
+**Fifteen emitter tests had pinned the joined output** — `echo "hi" "world"` asserting
+`hi world`, and a dozen others using multi-argument `echo` as a probe for tuple assignment,
+record spread, and function references. They were per-backend unit tests encoding a
+divergence, which is exactly what the differential corpus exists to catch and what a
+backend-local test cannot. Their expectations now read the same as the interpreter's output.
+
+Closing this also made `TOAST-0073` reachable: with `echo 1 2` yielding two values on both
+sides, a two-value `echo` inside a subexpression argument is the shape the one-value rule
+exists to refuse, and the compiled backend does not refuse it.
 
 ## Notes
 

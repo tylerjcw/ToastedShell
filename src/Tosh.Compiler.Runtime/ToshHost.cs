@@ -890,12 +890,12 @@ public static class ToshHost
             Console.WriteLine();
             return;
         }
-        var parts = new string[args.Length];
+        // `TOAST-0067`. One value per argument, matching the interpreter, which yields one
+        // for each rather than joining them into a single string.
         for (var i = 0; i < args.Length; i++)
         {
-            parts[i] = ToshValueFormatter.Format(args[i]);
+            Console.WriteLine(ToshValueFormatter.Format(args[i]));
         }
-        Console.WriteLine(string.Join(" ", parts));
     }
 
     // ── Redirection ────────────────────────────────────────────

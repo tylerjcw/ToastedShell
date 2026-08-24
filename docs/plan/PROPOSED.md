@@ -4,6 +4,7 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
+| [`TOAST-0073`](items/TOAST-0073.md) | P2 | proposed | 0/5 | A compiled subexpression argument is not held to the one-value rule the interpreter enforces |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0053`](items/TOAST-0053.md) | P1 | proposed | 0/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
@@ -23,7 +24,6 @@
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | proposed | 0/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
-| [`TOAST-0067`](items/TOAST-0067.md) | P2 | proposed | 0/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOAST-0052`](items/TOAST-0052.md) | P1 | proposed | 0/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
