@@ -190,7 +190,7 @@ type is called, so there is nothing to compare against.
 | interface | **works** — a class fulfilling it answers 9 |
 | enum | **works** — `M.Colour.Green` renders `Green`, after one more fix below |
 | record | **works** — `new M.Point(3, 4)`, read back as 4 |
-| struct | the property read comes back `null` — shell defaults are not initialised |
+| struct | **works** — as of 2026-08-24; see *Struct defaults* below |
 | trait | *"Member 'Name' was not found"* — trait members are not injected into the using class |
 | union | `M.Result.Ok` dispatches as a static *method* on the base; variants are separate types with no factory |
 | record | `M.Point(3, 4)` is read as a static *method* on the module shell |
@@ -201,6 +201,32 @@ type is called, so there is nothing to compare against.
 Union was tried: stamping the base and every variant with the qualified name makes the type
 resolve, and the call then fails one step later because `Ok` is looked up as a static method
 on the base while the variant is a separate type. It needs factories, not names.
+
+### Struct defaults — fixed 2026-08-24
+
+Two causes, both silent.
+
+**The constructor filled only the primary fields.** A `prop` carrying an initializer kept
+whatever the runtime zero-writes, so `struct Pt { prop X: int = 1 }` read back `null`: `1`
+interpreted, an empty line compiled, and nothing anywhere saying a value had gone missing.
+The class path already pointed `_il` at the constructor's generator to emit initializers
+through the ordinary expression machinery; the struct path now does the same, so a computed
+default like `prop X: int = 2 + 3` works rather than only a literal one.
+
+**A struct was not on the emitted structural-rendering path.** `TOAST-0022` admitted `class`
+and `record` and left `struct` on the CLR-object fallback, rendering `p.Pt` — the assembly's
+namespace, for a type the reader declared. A struct describes itself the way a class does,
+`Pt { X = 1 }`, not the way a record does.
+
+Worth noting: neither cause was about *emitting the struct*. The type, its fields and its
+constructor were all emitted correctly. What was missing was the shell semantics wrapped
+around them — defaults, and how the value describes itself.
+
+The second struct row below — "comes back as something `int` will not take" — is **not** a
+struct defect at all. A module-qualified annotation is unresolved for `class`, `struct` and
+`record` alike, and the diagnostic claims the variable has no annotation when it plainly
+does. Filed as [`TOAST-0076`](TOAST-0076.md), and the trait and union rows beneath it are
+worth re-measuring against that cause before being treated as distinct.
 
 ### Enum needed a second piece, and it names the general shape
 

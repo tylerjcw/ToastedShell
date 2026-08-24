@@ -276,6 +276,31 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A `prop` that shadows a base class's is two CLR members, and reflection returns
         // both — this rendered `Circle { K = c, K = s }`, showing a member the reader cannot
         // reach and a duplicate key. Members are walked most-derived first and deduplicated.
+        // ── Structs: shell defaults, and how one describes itself (`TOAST-0035`) ─
+        //
+        // A struct's constructor filled its *primary* fields and nothing else, so a `prop`
+        // with an initializer kept the zero the runtime writes: `$q.X` was 1 interpreted and
+        // an empty line compiled, with nothing to say a value had gone missing.
+        yield return Case(
+            "struct-property-initializer",
+            "struct Pt { prop X: int = 1 }\nvar q: Pt = new Pt()\necho $q.X");
+
+        yield return Case(
+            "struct-two-property-initializers",
+            "struct Pt {\n    prop X: int = 1\n    prop Y: int = 2\n}\n"
+            + "var q: Pt = new Pt()\necho $\"{$q.X} {$q.Y}\"");
+
+        // Through the ordinary expression machinery, not a constants-only copy of it.
+        yield return Case(
+            "struct-computed-initializer",
+            "struct Pt { prop X: int = 2 + 3 }\nvar q: Pt = new Pt()\necho $q.X");
+
+        // A struct describes itself like a class, not like a record. Left off the emitted
+        // structural path it rendered `p.Pt` — the assembly's namespace for a declared type.
+        yield return Case(
+            "struct-renders-structurally",
+            "struct Pt { prop X: int = 1 }\nvar q: Pt = new Pt()\necho $\"{$q}\"");
+
         // `TOAST-0065`, moved up from `KnownDivergences`. Recorded as a `match` narrowing
         // defect; it was neither. The spec's type pattern is `_ is T` (§Match) and worked on
         // both backends all along — the failing arm was spelled `Circle => …`, which the spec

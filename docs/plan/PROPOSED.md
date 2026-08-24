@@ -4,6 +4,7 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
+| [`TOAST-0076`](items/TOAST-0076.md) | P2 | proposed | 0/6 | A module-qualified type annotation is not resolved, and the diagnostic says the annotation is missing |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0053`](items/TOAST-0053.md) | P1 | proposed | 0/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |

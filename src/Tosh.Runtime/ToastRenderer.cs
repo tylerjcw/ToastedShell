@@ -655,7 +655,7 @@ public static class ToastRenderer
     {
         var type = value.GetType();
         if (type.GetCustomAttribute<ToshTypeAttribute>() is not { } marker ||
-            marker.Kind is not ("class" or "record"))
+            marker.Kind is not ("class" or "record" or "struct"))
         {
             return false;
         }
@@ -709,6 +709,9 @@ public static class ToastRenderer
             }
         }
 
+        // A struct describes itself the way a class does — `Pt { X = 1 }` — rather than the
+        // way a record does. Excluding it from this path left it on the CLR-object fallback,
+        // rendering `p.Pt`: the assembly's namespace, for a type the reader declared.
         WriteFields(builder, fields, marker.Kind == "record", type.Name, depth, visited);
         return true;
     }

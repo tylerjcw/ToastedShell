@@ -1223,12 +1223,86 @@ internal sealed partial class EmitterImpl
             ctorIl.Emit(OpCodes.Stfld, fb);
         }
 
+        EmitStructPropertyInitializers(st, typeBuilder, fields, ctorIl);
         ctorIl.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
         var shell = new ClrTypeShell(st.Name, typeBuilder, ctor, paramTypes, paramNames, fields, supportsDirectNewObj: false);
         _clrTypeShells[st.Name] = shell;
         _clrShellsByType[typeBuilder] = shell;
+    }
+
+    /// <summary>
+    /// Applies a struct's property initializers in its constructor — <c>TOAST-0035</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The constructor filled the *primary* fields and nothing else, so
+    /// <c>struct Pt { prop X: int = 1 }</c> left `X` at the zero the runtime writes and
+    /// `$q.X` read back null — 1 interpreted, an empty line compiled, with nothing to say a
+    /// value had gone missing. The item recorded it as "shell defaults are not initialised".
+    /// </para>
+    /// <para>
+    /// The same device the class path uses: `_il` is pointed at the constructor's generator
+    /// so an initializer is emitted through the ordinary expression machinery rather than a
+    /// second, constants-only copy of it.
+    /// </para>
+    /// </remarks>
+    private void EmitStructPropertyInitializers(
+        BoundStructDefinition st,
+        TypeBuilder typeBuilder,
+        Dictionary<string, FieldBuilder> fields,
+        ILGenerator ctorIl)
+    {
+        if (!st.Members.OfType<BoundClassPropertyMember>().Any(static p => p.Initializer is not null))
+        {
+            return;
+        }
+
+        var savedIl = _il;
+        var savedLocals = _locals;
+        var savedParams = _paramSlots;
+        var savedTypedLocals = _typedParamLocals;
+        var savedReturnType = _currentFunctionReturnType;
+        var savedThis = _currentThisType;
+
+        try
+        {
+            _il = ctorIl;
+            _locals = new();
+            _paramSlots = new();
+            _typedParamLocals = new();
+            _currentFunctionReturnType = null;
+            _currentThisType = typeBuilder;
+
+            foreach (var prop in st.Members.OfType<BoundClassPropertyMember>())
+            {
+                if (prop.Initializer is null) continue;
+                if (!fields.TryGetValue(prop.Name, out var fb)) continue;
+
+                ctorIl.Emit(OpCodes.Ldarg_0);
+                var initType = EmitPipeline(prop.Initializer, asStatement: false);
+                if (initType is null)
+                {
+                    ctorIl.Emit(OpCodes.Ldnull);
+                }
+                else
+                {
+                    BoxIfValueType(initType);
+                }
+
+                ctorIl.Emit(OpCodes.Stfld, fb);
+            }
+        }
+        finally
+        {
+            _il = savedIl;
+            _locals = savedLocals;
+            _paramSlots = savedParams;
+            _typedParamLocals = savedTypedLocals;
+            _currentFunctionReturnType = savedReturnType;
+            _currentThisType = savedThis;
+        }
     }
 
     /// <summary>
