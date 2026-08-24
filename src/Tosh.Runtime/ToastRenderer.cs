@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Collections;
 using System.Globalization;
 using System.Numerics;
@@ -411,6 +412,18 @@ public static class ToastRenderer
             case IShellInvocableObject invocable when TryWriteDeclaredRendering(builder, invocable, depth, visited):
                 return;
 
+            // `TOAST-0022`. A compiled class is a real emitted CLR type, not a
+            // `ToshClassInstance`, so it cannot answer `IShellInvocableObject` — and fell
+            // through to the CLR-object path, which prints the type name. `Display` was the
+            // first place that showed, but the gap is the object model, not the renderer.
+            case not null when TryWriteEmittedRendering(builder, value, depth, visited):
+                return;
+
+            // And with no declaration to render through, an emitted class still describes
+            // itself the way the interpreted one does — `Plain { N = 5 }`, not `Plain`.
+            case not null when TryWriteEmittedStructure(builder, value, depth, visited):
+                return;
+
             // Records before dictionaries. A `{| … |}` literal is an `ExpandoObject`, and
             // **a string-keyed dictionary is a record** — that is the existing convention,
             // encoded in `ShellRecordUtilities`, and a Tōast dictionary literal is
@@ -573,6 +586,139 @@ public static class ToastRenderer
     /// this writes verbatim.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Renders a *compiled* class through its own declaration — <c>TOAST-0022</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Applies the same rule <see cref="ToshClassInstance"/> applies interpreted, and in the
+    /// same order: the <c>Display</c> trait's method first, then a declared <c>ToString</c>.
+    /// A trait is emitted as a CLR interface and the class implements it, so "uses Display"
+    /// is a real interface check rather than a guess from the presence of a method — a class
+    /// that happens to declare <c>render</c> without the trait is not a Display.
+    /// </para>
+    /// <para>
+    /// Only types the compiler emitted are considered. Without that guard this would change
+    /// how every CLR object renders, which is a far larger claim than the one being fixed.
+    /// </para>
+    /// </remarks>
+    private static bool TryWriteEmittedRendering(
+        StringBuilder builder,
+        object value,
+        int depth,
+        HashSet<object>? visited)
+    {
+        var type = value.GetType();
+        if (type.GetCustomAttribute<ToshTypeAttribute>() is null)
+        {
+            return false;
+        }
+
+        var method = FindEmittedRenderMethod(type);
+        if (method is null)
+        {
+            return false;
+        }
+
+        var rendered = method.Invoke(value, Array.Empty<object?>());
+
+        if (rendered is string text)
+        {
+            builder.Append(text);
+            return true;
+        }
+
+        if (rendered is null)
+        {
+            return false;
+        }
+
+        Write(builder, rendered, format: null, depth + 1, nested: false, visited);
+        return true;
+    }
+
+    /// <summary>
+    /// Renders a compiled class or record structurally — <c>TOAST-0022</c>.
+    /// </summary>
+    /// <remarks>
+    /// The interpreted instance is an <see cref="IShellRecordObject"/>, so the renderer walks
+    /// its members; an emitted type is a plain CLR type and walked nothing, printing its name.
+    /// The properties are read reflectively here rather than by teaching
+    /// <c>ShellRecordUtilities</c> about CLR objects, because that utility answers for member
+    /// access as well as rendering and this is a claim about rendering only.
+    /// </remarks>
+    private static bool TryWriteEmittedStructure(
+        StringBuilder builder,
+        object value,
+        int depth,
+        HashSet<object>? visited)
+    {
+        var type = value.GetType();
+        if (type.GetCustomAttribute<ToshTypeAttribute>() is not { } marker ||
+            marker.Kind is not ("class" or "record"))
+        {
+            return false;
+        }
+
+        // A stored `prop` is emitted as a field and a computed one as a real CLR property, so
+        // both are walked. Reading only properties rendered `Plain { }` — the right shape
+        // around nothing, which is a worse answer than the type name it replaced.
+        var fields = new List<KeyValuePair<string, object?>>();
+
+        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (field.IsSpecialName || field.Name.StartsWith('<'))
+            {
+                continue;
+            }
+
+            fields.Add(new KeyValuePair<string, object?>(field.Name, field.GetValue(value)));
+        }
+
+        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (property.GetIndexParameters().Length > 0 || !property.CanRead)
+            {
+                continue;
+            }
+
+            fields.Add(new KeyValuePair<string, object?>(
+                property.Name,
+                property.GetValue(value)));
+        }
+
+        WriteFields(builder, fields, marker.Kind == "record", type.Name, depth, visited);
+        return true;
+    }
+
+    /// <summary>The declaration an emitted type renders through, or null for neither.</summary>
+    private static MethodInfo? FindEmittedRenderMethod(Type type)
+    {
+        var usesDisplay = Array.Exists(
+            type.GetInterfaces(),
+            candidate => string.Equals(candidate.Name, DisplayTraitName, StringComparison.Ordinal));
+
+        if (usesDisplay)
+        {
+            var render = type.GetMethod(
+                DisplayMethodName,
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                Type.EmptyTypes,
+                modifiers: null);
+
+            if (render is not null)
+            {
+                return render;
+            }
+        }
+
+        // A declared `ToString`, which for an emitted type means one it declares itself
+        // rather than the one every object inherits.
+        var toString = type.GetMethod(nameof(ToString), Type.EmptyTypes);
+        return toString is not null && toString.DeclaringType == type ? toString : null;
+    }
+
     private static bool TryWriteDeclaredRendering(
         StringBuilder builder,
         IShellInvocableObject invocable,
@@ -622,19 +768,42 @@ public static class ToastRenderer
         int depth,
         HashSet<object>? visited)
     {
-        var isRecord = value is not IShellInvocableObject;
+        // Through the shared utility rather than `GetMembers` directly, so the sentinel
+        // keys it filters stay filtered in one place.
+        ShellRecordUtilities.TryGetVisibleFields(value, out var fields);
 
+        WriteFields(
+            builder,
+            fields,
+            isRecord: value is not IShellInvocableObject,
+            TypeNameOf(value),
+            depth,
+            visited);
+    }
+
+    /// <summary>
+    /// Writes the <c>Name { … }</c> / <c>{| … |}</c> body once, for either backend.
+    /// </summary>
+    /// <remarks>
+    /// Split out of <see cref="WriteRecordLike"/> so a compiled class can render in the same
+    /// shape without a second copy of it — `TOAST-0022`. A second copy is how the two
+    /// backends came to disagree about interpolation clauses, and this is the same file.
+    /// </remarks>
+    private static void WriteFields(
+        StringBuilder builder,
+        IReadOnlyList<KeyValuePair<string, object?>> fields,
+        bool isRecord,
+        string typeName,
+        int depth,
+        HashSet<object>? visited)
+    {
         if (!isRecord)
         {
-            builder.Append(TypeNameOf(value)).Append(' ');
+            builder.Append(typeName).Append(' ');
         }
 
         builder.Append(isRecord ? "{| " : "{ ");
         var first = true;
-
-        // Through the shared utility rather than `GetMembers` directly, so the sentinel
-        // keys it filters stay filtered in one place.
-        ShellRecordUtilities.TryGetVisibleFields(value, out var fields);
 
         foreach (var field in fields)
         {

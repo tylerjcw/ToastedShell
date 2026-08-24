@@ -174,6 +174,36 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // never handed it the hole's clauses, so `$"{42:X}"` was `2A` interpreted and `42`
         // compiled — a clause the language refuses to ignore, silently ignored. Both backends
         // now call `ToastRenderer.RenderHole`, which is one implementation rather than two.
+        // `TOAST-0022`, moved up from `KnownDivergences`. An emitted class is a real CLR type
+        // and cannot answer `IShellInvocableObject`, so it fell through to the CLR-object path
+        // and printed its type name. The renderer applies the declared rule to emitted types
+        // too now — `Display` first, then a declared `ToString`.
+        yield return Case(
+            "render-class-with-display",
+            "trait Display { func render() -> string }\n"
+            + "class DiffTemp uses Display {\n"
+            + "    prop C: int = 21\n"
+            + "    func render() -> string => $\"{$this.C}deg\"\n"
+            + "}\n"
+            + "echo $\"{(new DiffTemp())}\"");
+
+        yield return Case(
+            "render-class-with-declared-tostring",
+            "class Tagged {\n    prop N: int = 5\n    func ToString() -> string => $\"tag:{$this.N}\"\n}\n"
+            + "echo $\"{(new Tagged())}\"");
+
+        // The controls that keep the rule honest. A class declaring neither renders as
+        // itself, and `render` *without* the trait is not a Display — otherwise the check
+        // would be "has a method with the right name", which is not what `uses` means.
+        yield return Case(
+            "render-class-with-neither",
+            "class Plain {\n    prop N: int = 5\n}\necho $\"{(new Plain())}\"");
+
+        yield return Case(
+            "render-method-without-the-trait",
+            "class Sneaky {\n    prop N: int = 5\n    func render() -> string => \"sneaky\"\n}\n"
+            + "echo $\"{(new Sneaky())}\"");
+
         yield return Case("render-format-clause", "echo $\"{42:X} {3.14159:F2}\"");
         yield return Case("render-alignment-right", "var n = 7\necho $\"[{$n,6}]\"");
         yield return Case("render-alignment-left", "var n = 7\necho $\"[{$n,-6}]\"");
@@ -604,18 +634,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             + "    Shape => \"shape\"\n"
             + "}\n"
             + "echo $r");
-
-        // A compiled class is a real emitted CLR type rather than a ToshClassInstance, so
-        // it never answers `TryGetOwnRendering` and its `Display` implementation is not
-        // reached: `21deg` interpreted, `DiffTemp` compiled.
-        yield return Divergence(
-            "TOAST-0022", "render-class-with-display",
-            "trait Display { func render() -> string }\n"
-            + "class DiffTemp uses Display {\n"
-            + "    prop C: int = 21\n"
-            + "    func render() -> string => $\"{$this.C}deg\"\n"
-            + "}\n"
-            + "echo $\"{(new DiffTemp())}\"");
 
         // ── `TOAST-0018`'s specified semantics, not yet implemented compiled ──
         //

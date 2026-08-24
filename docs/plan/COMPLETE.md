@@ -4,6 +4,7 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
+| [`TOAST-0022`](items/TOAST-0022.md) | P2 | complete | 6/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0072`](items/TOAST-0072.md) | P2 | complete | 5/5 | A rune's block argument ran in the current scope, so a macro calling a macro never worked |
 | [`TOAST-0069`](items/TOAST-0069.md) | P2 | complete | 7/7 | A rune call site forces whole-script source replay, so a program using a macro is not compiled at all |
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |

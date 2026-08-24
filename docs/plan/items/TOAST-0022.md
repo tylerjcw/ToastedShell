@@ -1,7 +1,7 @@
 ---
 id: TOAST-0022
 title: "Compiled interpolation drops format clauses and cannot reach a class's Display"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
@@ -27,11 +27,12 @@ renderer falls through to its CLR-object path.
 - [x] A format clause reaches the renderer from compiled code — `$"{42:X}"` is `2A` on both
       backends
 - [x] Alignment (`$"{$n,6}"`) likewise — left, right, and combined with a format clause
-- [ ] A compiled class implementing `Display` renders through it
-- [ ] A compiled class with a `ToString` renders through that, as the interpreter's does
-- [ ] Both cases move from `KnownDivergences()` into `Corpus()`, which is the mechanism's
+- [x] A compiled class implementing `Display` renders through it
+- [x] A compiled class with a `ToString` renders through that, as the interpreter's does
+- [x] Both cases move from `KnownDivergences()` into `Corpus()`, which is the mechanism's
       own signal that they are fixed
-- [ ] A negative control: reverting fails the moved cases
+- [x] A negative control: reverting fails the moved cases — four of them, since the two
+      controls added alongside depend on the same paths
 
 ## Progress — 2026-08-23
 
@@ -53,6 +54,30 @@ through a wider call.
 Worth recording: a first corpus row spelled the clauses `{42:X,6}`, where `X,6` is simply the
 format string — both backends agreed on the nonsense, so it would have passed while asserting
 nothing. Alignment precedes the format clause, as in .NET: `{42,6:X}`.
+
+## The object-model gap, measured — 2026-08-23
+
+The item guessed that `Display` was "just the first place it showed" and asked what else an
+emitted class fails to answer. Writing the controls found the next one immediately: a class
+declaring *neither* `Display` nor `ToString` rendered `Plain { N = 5 }` interpreted and
+`Plain` compiled, because `ToshClassInstance` is an `IShellRecordObject` whose members the
+renderer walks and an emitted type is not.
+
+So the fix is two paths, not one:
+
+- **A declared rendering.** `Display` first, then a declared `ToString`, in the interpreter's
+  order. "Uses Display" is checked as a real interface — a trait is emitted as one — rather
+  than inferred from a method's name, so a class that happens to declare `render` without the
+  trait is still not a Display. That is a control in the corpus.
+- **Structural rendering.** The properties are read reflectively, and both fields *and* CLR
+  properties are walked: a stored `prop` is emitted as a field and a computed one as a real
+  property. Reading only properties produced `Plain { }` — the right shape around nothing,
+  which is a worse answer than the type name it replaced.
+
+The reflection stays inside the renderer rather than going into `ShellRecordUtilities`, which
+answers for member access as well and would make this a much broader claim than the one being
+fixed. `WriteRecordLike`'s body is now shared with the emitted path rather than copied, since
+a second copy of a rendering rule is exactly how the format-clause half of this item happened.
 
 ## Notes
 
