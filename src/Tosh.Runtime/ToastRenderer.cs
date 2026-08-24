@@ -661,34 +661,81 @@ public static class ToastRenderer
         }
 
         // A stored `prop` is emitted as a field and a computed one as a real CLR property, so
-        // both are walked. Reading only properties rendered `Plain { }` — the right shape
-        // around nothing, which is a worse answer than the type name it replaced.
-        var fields = new List<KeyValuePair<string, object?>>();
+        // both are walked.
+        //
+        // Two rules, and they pull in opposite directions. A `prop` that shadows a base
+        // class's is *two* CLR members and reflection returns both, so the most-derived one
+        // must win — otherwise `class Circle extends Shape` with `K` on each rendered
+        // `Circle { K = c, K = s }`. But the interpreted instance lists inherited members
+        // *first*, so `Derived { A = 1, B = 2 }` rather than `{ B = 2, A = 1 }`. So the
+        // hierarchy is walked twice: downwards to decide which member each name resolves to,
+        // then upwards to lay them out.
+        const BindingFlags declared =
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
 
-        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+        var levels = new List<Type>();
+        for (var level = type; level is not null && level != typeof(object); level = level.BaseType)
         {
-            if (field.IsSpecialName || field.Name.StartsWith('<'))
-            {
-                continue;
-            }
-
-            fields.Add(new KeyValuePair<string, object?>(field.Name, field.GetValue(value)));
+            levels.Add(level);
         }
 
-        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        var chosen = new Dictionary<string, MemberInfo>(StringComparer.Ordinal);
+        foreach (var level in levels)
         {
-            if (property.GetIndexParameters().Length > 0 || !property.CanRead)
+            foreach (var member in VisibleMembers(level, declared))
             {
-                continue;
+                chosen.TryAdd(member.Name, member);
             }
+        }
 
-            fields.Add(new KeyValuePair<string, object?>(
-                property.Name,
-                property.GetValue(value)));
+        var fields = new List<KeyValuePair<string, object?>>(chosen.Count);
+        var emitted = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var index = levels.Count - 1; index >= 0; index--)
+        {
+            foreach (var member in VisibleMembers(levels[index], declared))
+            {
+                if (!emitted.Add(member.Name))
+                {
+                    continue;
+                }
+
+                var resolved = chosen[member.Name];
+                fields.Add(new KeyValuePair<string, object?>(
+                    resolved.Name,
+                    resolved is FieldInfo field
+                        ? field.GetValue(value)
+                        : ((PropertyInfo)resolved).GetValue(value)));
+            }
         }
 
         WriteFields(builder, fields, marker.Kind == "record", type.Name, depth, visited);
         return true;
+    }
+
+    /// <summary>The renderable members one level of an emitted type declares.</summary>
+    /// <remarks>
+    /// Fields and properties both, because a stored `prop` becomes a field and a computed one
+    /// a property. Compiler-generated backing fields are skipped — they carry the same value
+    /// under a name nobody wrote.
+    /// </remarks>
+    private static IEnumerable<MemberInfo> VisibleMembers(Type level, BindingFlags flags)
+    {
+        foreach (var field in level.GetFields(flags))
+        {
+            if (!field.IsSpecialName && !field.Name.StartsWith('<'))
+            {
+                yield return field;
+            }
+        }
+
+        foreach (var property in level.GetProperties(flags))
+        {
+            if (property.GetIndexParameters().Length == 0 && property.CanRead)
+            {
+                yield return property;
+            }
+        }
     }
 
     /// <summary>The declaration an emitted type renders through, or null for neither.</summary>

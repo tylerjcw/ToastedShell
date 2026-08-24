@@ -199,6 +199,22 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "render-class-with-neither",
             "class Plain {\n    prop N: int = 5\n}\necho $\"{(new Plain())}\"");
 
+        // A `prop` that shadows a base class's is two CLR members, and reflection returns
+        // both — this rendered `Circle { K = c, K = s }`, showing a member the reader cannot
+        // reach and a duplicate key. Members are walked most-derived first and deduplicated.
+        yield return Case(
+            "render-class-with-a-shadowed-property",
+            "class Shape { prop K: string = \"s\" }\n"
+            + "class Circle extends Shape { prop K: string = \"c\" }\n"
+            + "var s: Shape = new Circle()\necho $\"{$s}\"");
+
+        // Inherited members that are *not* shadowed must still appear.
+        yield return Case(
+            "render-class-with-an-inherited-property",
+            "class Base { prop A: int = 1 }\n"
+            + "class Derived extends Base { prop B: int = 2 }\n"
+            + "echo $\"{(new Derived())}\"");
+
         yield return Case(
             "render-method-without-the-trait",
             "class Sneaky {\n    prop N: int = 5\n    func render() -> string => \"sneaky\"\n}\n"
