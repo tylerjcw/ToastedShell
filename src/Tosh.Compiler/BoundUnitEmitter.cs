@@ -481,6 +481,10 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(global::Tosh.Runtime.ToshNoValue).GetMethod(
             nameof(global::Tosh.Runtime.ToshNoValue.Normalize),
             new[] { typeof(object) })!;
+    private static readonly MethodInfo s_tryReportUnhandledException =
+        typeof(global::Tosh.Runtime.CompiledProgramBoundary).GetMethod(
+            nameof(global::Tosh.Runtime.CompiledProgramBoundary.TryReportUnhandledException),
+            new[] { typeof(Exception), typeof(Assembly) })!;
     /// <summary>
     /// Whether a command's value is becoming a function's result — <c>TOAST-0066</c>.
     /// </summary>
@@ -1350,6 +1354,17 @@ internal sealed partial class EmitterImpl : IDisposable
             }
         }
 
+        // `TOAST-0042`. Main is the process boundary, so a failure that reaches it must
+        // retain its Tōast diagnostic instead of falling through to the CLR's unhandled-
+        // exception printer. Start the protected region only after the declaration passes:
+        // those passes emit other method bodies while temporarily swapping `_il`, whereas
+        // everything below is the executable Main prologue and body.
+        //
+        // The runtime helper checks Assembly.GetEntryAssembly before handling. Reflection
+        // and embedding callers therefore receive the original exception unchanged; only
+        // an actual `dotnet program.dll` / apphost launch owns this presentation boundary.
+        _il.BeginExceptionBlock();
+
         // Main prologue: wire up the ambient ToshRuntime once so any
         // builtin command dispatched through ToshHost has a runtime
         // available. Idempotent on the host side.
@@ -1641,14 +1656,30 @@ internal sealed partial class EmitterImpl : IDisposable
             _deferredCleanupFrames = savedDeferredCleanupFrames;
         }
 
-        if (mainReturnFrame is { } frame)
-        {
-            EmitReturnEpilogue(frame);
-        }
-        else
-        {
-            _il.Emit(OpCodes.Ret);
-        }
+        // Every source-level top-level return already leaves to the frame epilogue so
+        // defer/finally cleanup runs. Put that epilogue outside this outer catch too: there
+        // is exactly one real `ret`, and no invalid `ret` instruction can land in the try.
+        var mainExit = mainReturnFrame?.Epilogue ?? _il.DefineLabel();
+        _il.Emit(OpCodes.Leave, mainExit);
+
+        _il.BeginCatchBlock(typeof(Exception));
+        var unhandledException = _il.DeclareLocal(typeof(Exception));
+        _il.Emit(OpCodes.Stloc, unhandledException);
+        _il.Emit(OpCodes.Ldloc, unhandledException);
+        _il.Emit(OpCodes.Ldtoken, _program);
+        _il.Emit(OpCodes.Call, s_runtimeTypeHandle_GetTypeFromHandle);
+        _il.Emit(OpCodes.Callvirt, s_type_get_Assembly);
+        _il.Emit(OpCodes.Call, s_tryReportUnhandledException);
+
+        var handled = _il.DefineLabel();
+        _il.Emit(OpCodes.Brtrue, handled);
+        _il.Emit(OpCodes.Rethrow);
+        _il.MarkLabel(handled);
+        _il.Emit(OpCodes.Leave, mainExit);
+        _il.EndExceptionBlock();
+
+        _il.MarkLabel(mainExit);
+        _il.Emit(OpCodes.Ret);
         // `TOAST-0035`. Module-method bodies are emitted *before* `Program` is closed,
         // because a body may need a `Program`-level helper: a block argument emits one
         // through `EmitBlockBodyMethod`, and adding it to a created type throws "Unable to

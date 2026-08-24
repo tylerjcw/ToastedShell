@@ -4,7 +4,6 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TOAST-0042`](items/TOAST-0042.md) | P2 | partial | 5/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 2/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | partial | 6/7 | Suite reliability on a clean checkout: four flakes named, two fixed, one rare abort left |

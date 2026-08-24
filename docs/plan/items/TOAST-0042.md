@@ -1,10 +1,11 @@
 ---
 id: TOAST-0042
 title: "A compiled program did not convert its arguments, and toshc named the one file you must not run"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-21
+closed: 2026-08-24
 ---
 
 ## Problem
@@ -52,7 +53,7 @@ resolves the alias and applies its `coerce` clause.
 
 Same shape as `TOAST-0030`'s causes: one rule, implemented twice, and the copies drifted.
 
-### 3. An uncaught failure prints a CLR stack trace — **not fixed**
+### 3. An uncaught failure printed a CLR stack trace
 
 Same condition, two presentations:
 
@@ -64,7 +65,7 @@ Same condition, two presentations:
 Even a `ToshDiagnosticException` — which carries the code, title, span and help — is
 printed as a raw .NET unhandled exception.
 
-## Resolution so far — 2026-08-21
+## Earlier resolution — 2026-08-21
 
 **Arguments convert.** `ConvertCompiledScriptArg` keeps its four fast paths and now falls
 through to `CheckType`, the same annotation bridge this file already uses for
@@ -74,12 +75,37 @@ through to `CheckType`, the same annotation bridge this file already uses for
 apphost and bundle, then a final line: `toshc: run it with './mandelbrot'` — or
 `'dotnet out.dll'` when no launcher was emitted.
 
-### Left open, deliberately
+### Initially left open
 
 Fault 3. `Main` is emitted with no exception handling, and wrapping it in IL is not a small
 change: a `ret` inside a try block is illegal, and a top-level `return` emits one. It also
 belongs with `TOAST-0037`, which owns compiler diagnostics — a rendered failure needs the
 code manifest that item is for.
+
+## Final resolution — 2026-08-24
+
+The emitter now puts the existing `Program.Main(string[] args)` body inside one outer
+exception region. Source-level `return` already leaves through a defer-aware epilogue, so
+that epilogue was moved outside the new catch and `Main` still contains exactly one legal
+`ret`. The public `void Main(string[])` CLR ABI is unchanged.
+
+The catch delegates presentation to `Tosh.Runtime.CompiledProgramBoundary`. A
+`ToshDiagnosticException` retains its original code, source span, label and help; another
+exception is rendered through the existing `tosh.runtime.error` diagnostic rather than the
+CLR unhandled-exception printer. The process exits with status 1, and redirected stderr uses
+the plain diagnostic format.
+
+This boundary is process-aware. It handles the failure only when the emitted assembly is
+`Assembly.GetEntryAssembly()`, as it is under `dotnet program.dll`, an apphost or a bundle.
+Reflection and embedding callers still receive the original exception unchanged, because
+their host owns presentation. The helper lives in `Tosh.Runtime`, so pure-profile artifacts
+do not acquire a dependency on `Tosh.Compiler.Runtime` merely to report a failure.
+
+This does not depend on `TOAST-0037`: that item names failures produced *by the compiler*.
+The entry-point boundary renders runtime diagnostics whose manifest codes already exist.
+End-to-end child-process tests pin a structured diagnostic, an ordinary exception, non-zero
+exit status, absence of a CLR stack trace, reflected-call propagation, and a successful
+top-level `return` as the control.
 
 ### One difference that is already filed
 
@@ -94,7 +120,7 @@ interpolation drops format clauses — not a new fault.
 - [x] `examples/mandelbrot.tosh` runs compiled
 - [x] A negative control — reverting the conversion fails exactly the four types that
       fell through and leaves the four controls passing
-- [ ] An uncaught failure in a compiled program is reported as a Tōast diagnostic rather
+- [x] An uncaught failure in a compiled program is reported as a Tōast diagnostic rather
       than an unhandled CLR exception
 
 ## Notes
