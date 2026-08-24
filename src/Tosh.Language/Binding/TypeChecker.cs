@@ -58,6 +58,7 @@ public static class TypeChecker
         // pain. Function bodies are walked inside this same pass —
         // there is no separate resolution phase.
         CollectUserFunctions(unit.Root, ctx.UserFunctions);
+        CollectContractDefinitions(unit.Root, ctx.Interfaces, ctx.Traits, qualifier: null);
         Walk(unit.Root, ctx);
         return ctx.Diagnostics;
         }
@@ -345,6 +346,10 @@ public static class TypeChecker
 
         public Dictionary<string, BoundFunctionDefinition> UserFunctions { get; } =
             new(StringComparer.Ordinal);
+        public Dictionary<string, BoundInterfaceDefinition> Interfaces { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, BoundTraitDefinition> Traits { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         public BoundType? CurrentReturnType { get; set; }
 
         /// <summary>
@@ -443,6 +448,54 @@ public static class TypeChecker
                 break;
             case BoundWhileStatement w:
                 CollectUserFunctions(w.Body, sink);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Harvests trait/interface declarations before classes are checked, including their
+    /// qualified module names so a contract may be declared after its implementation or in
+    /// another module — <c>TOAST-0020</c>.
+    /// </summary>
+    private static void CollectContractDefinitions(
+        BoundNode node,
+        Dictionary<string, BoundInterfaceDefinition> interfaces,
+        Dictionary<string, BoundTraitDefinition> traits,
+        string? qualifier)
+    {
+        switch (node)
+        {
+            case BoundScript script:
+                foreach (var statement in script.Statements)
+                {
+                    CollectContractDefinitions(statement, interfaces, traits, qualifier);
+                }
+                break;
+
+            case BoundModuleDefinition module:
+                var moduleQualifier = qualifier is null
+                    ? module.Name
+                    : $"{qualifier}.{module.Name}";
+                foreach (var statement in module.Body.Statements)
+                {
+                    CollectContractDefinitions(statement, interfaces, traits, moduleQualifier);
+                }
+                break;
+
+            case BoundInterfaceDefinition @interface:
+                interfaces.TryAdd(@interface.Name, @interface);
+                if (qualifier is not null)
+                {
+                    interfaces[$"{qualifier}.{@interface.Name}"] = @interface;
+                }
+                break;
+
+            case BoundTraitDefinition trait:
+                traits.TryAdd(trait.Name, trait);
+                if (qualifier is not null)
+                {
+                    traits[$"{qualifier}.{trait.Name}"] = trait;
+                }
                 break;
         }
     }
@@ -579,6 +632,7 @@ public static class TypeChecker
                 break;
 
             case BoundClassDefinition cls:
+                CheckContractMemberTypes(cls, ctx);
                 foreach (var member in cls.Members)
                 {
                     switch (member)
@@ -636,6 +690,197 @@ public static class TypeChecker
                     if (f.DefaultValue is not null) CheckPipeline(f.DefaultValue, ctx);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Applies the interpreter's trait/interface member-type rule to the compile-time IR.
+    /// The rule and diagnostic construction are shared by both paths; this method only
+    /// adapts bound declarations to that common representation — <c>TOAST-0020</c>.
+    /// </summary>
+    private static void CheckContractMemberTypes(BoundClassDefinition @class, CheckContext ctx)
+    {
+        if (@class.ImplementedInterfaces is { Count: > 0 })
+        {
+            foreach (var declaredName in @class.ImplementedInterfaces)
+            {
+                var lookupName = StripContractTypeArguments(declaredName);
+                if (!ctx.Interfaces.TryGetValue(lookupName, out var @interface))
+                {
+                    continue;
+                }
+
+                foreach (var method in @interface.Methods)
+                {
+                    CheckContractMethodType(
+                        @class,
+                        declaredName,
+                        "interface",
+                        method.Name,
+                        method.Parameters,
+                        method.ReturnTypeName,
+                        ctx);
+                }
+            }
+        }
+
+        if (@class.UsedTraits is not { Count: > 0 })
+        {
+            return;
+        }
+
+        foreach (var declaredName in @class.UsedTraits)
+        {
+            var lookupName = StripContractTypeArguments(declaredName);
+            if (!ctx.Traits.TryGetValue(lookupName, out var trait))
+            {
+                continue;
+            }
+
+            foreach (var method in trait.Methods)
+            {
+                CheckContractMethodType(
+                    @class,
+                    declaredName,
+                    "trait",
+                    method.Name,
+                    method.Parameters,
+                    method.ReturnTypeName,
+                    ctx);
+            }
+
+            foreach (var property in trait.Properties)
+            {
+                var implementation = @class.Members
+                    .OfType<BoundClassPropertyMember>()
+                    .FirstOrDefault(candidate => string.Equals(
+                        candidate.Name,
+                        property.Name,
+                        StringComparison.OrdinalIgnoreCase));
+                if (implementation is null)
+                {
+                    continue;
+                }
+
+                var mismatch = ContractMemberTypeRules.FindPropertyMismatch(
+                    implementation.Name,
+                    implementation.TypeName,
+                    property.TypeName,
+                    (actual, expected) => ContractNamesSameType(actual, expected, ctx));
+                AddContractMismatch(
+                    @class,
+                    declaredName,
+                    "trait",
+                    property.Name,
+                    mismatch,
+                    ctx);
+            }
+        }
+    }
+
+    private static void CheckContractMethodType(
+        BoundClassDefinition @class,
+        string contractName,
+        string contractKind,
+        string memberName,
+        IReadOnlyList<BoundParameter> contractParameters,
+        string? contractReturnTypeName,
+        CheckContext ctx)
+    {
+        var implementation = @class.Members
+            .OfType<BoundClassMethodMember>()
+            .FirstOrDefault(candidate => string.Equals(
+                candidate.Method.Name,
+                memberName,
+                StringComparison.OrdinalIgnoreCase));
+        if (implementation is null)
+        {
+            return;
+        }
+
+        var mismatch = ContractMemberTypeRules.FindMethodMismatch(
+            implementation.Method.Parameters
+                .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
+                .ToArray(),
+            implementation.Method.ReturnTypeName,
+            contractParameters
+                .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
+                .ToArray(),
+            contractReturnTypeName,
+            (actual, expected) => ContractReturnIsCovariant(actual, expected, ctx),
+            (actual, expected) => ContractNamesSameType(actual, expected, ctx));
+        AddContractMismatch(
+            @class,
+            contractName,
+            contractKind,
+            memberName,
+            mismatch,
+            ctx);
+    }
+
+    private static void AddContractMismatch(
+        BoundClassDefinition @class,
+        string contractName,
+        string contractKind,
+        string memberName,
+        ContractMemberTypeMismatch? mismatch,
+        CheckContext ctx)
+    {
+        if (mismatch is not { } found)
+        {
+            return;
+        }
+
+        ctx.Diagnostics.Add(ContractMemberTypeRules.CreateDiagnostic(
+            @class.Name,
+            contractName,
+            contractKind,
+            memberName,
+            found,
+            ctx.SourceName,
+            ctx.SourceText,
+            @class.Span,
+            ToshDiagnosticSeverity.Warning));
+    }
+
+    private static bool ContractReturnIsCovariant(
+        string actualName,
+        string expectedName,
+        CheckContext ctx)
+    {
+        if (ContractNamesSameType(actualName, expectedName, ctx))
+        {
+            return true;
+        }
+
+        var actual = ResolverFor(ctx).Resolve(actualName);
+        var expected = ResolverFor(ctx).Resolve(expectedName);
+        return !actual.IsDynamic
+            && !expected.IsDynamic
+            && IsAssignable(actual, expected, out _);
+    }
+
+    private static bool ContractNamesSameType(
+        string actualName,
+        string expectedName,
+        CheckContext ctx)
+    {
+        if (string.Equals(actualName, expectedName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var actual = ResolverFor(ctx).Resolve(actualName);
+        var expected = ResolverFor(ctx).Resolve(expectedName);
+        return !actual.IsDynamic
+            && !expected.IsDynamic
+            && IsAssignable(actual, expected, out _)
+            && IsAssignable(expected, actual, out _);
+    }
+
+    private static string StripContractTypeArguments(string name)
+    {
+        var genericStart = name.IndexOf('<');
+        return genericStart < 0 ? name : name[..genericStart];
     }
 
     /// <summary>

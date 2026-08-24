@@ -1282,7 +1282,7 @@ public sealed partial class ToshEngine
     /// the trait — it has only declined to repeat it.
     /// </para>
     /// </remarks>
-    private (string What, string Expected, string Actual)? ResolveMemberTypeMismatch(
+    private ContractMemberTypeMismatch? ResolveMemberTypeMismatch(
         ToshClassDefinition definition,
         string memberName,
         IReadOnlyList<FunctionParameterDefinition> contractParameters,
@@ -1298,26 +1298,17 @@ public sealed partial class ToshEngine
             return null;
         }
 
-        if (contractReturnTypeName is { Length: > 0 } expectedReturn &&
-            implementation.ReturnTypeName is { Length: > 0 } actualReturn &&
-            !IsCovariantWith(actualReturn, expectedReturn))
-        {
-            return ("return type", expectedReturn, actualReturn);
-        }
-
-        var shared = Math.Min(contractParameters.Count, implementation.Parameters.Count);
-
-        for (var index = 0; index < shared; index++)
-        {
-            if (contractParameters[index].TypeName is { Length: > 0 } expectedParameter &&
-                implementation.Parameters[index].TypeName is { Length: > 0 } actualParameter &&
-                !NamesSameType(actualParameter, expectedParameter))
-            {
-                return ($"parameter '{implementation.Parameters[index].Name}'", expectedParameter, actualParameter);
-            }
-        }
-
-        return null;
+        return ContractMemberTypeRules.FindMethodMismatch(
+            implementation.Parameters
+                .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
+                .ToArray(),
+            implementation.ReturnTypeName,
+            contractParameters
+                .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
+                .ToArray(),
+            contractReturnTypeName,
+            IsCovariantWith,
+            NamesSameType);
     }
 
     /// <summary>
@@ -1335,23 +1326,22 @@ public sealed partial class ToshEngine
         string contractName,
         string contractKind,
         string memberName,
-        (string What, string Expected, string Actual)? mismatch)
+        ContractMemberTypeMismatch? mismatch)
     {
         if (mismatch is not { } found)
         {
             return;
         }
 
-        throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh.runtime.contract_member_type_mismatch",
-            Title: $"Class '{@class.Name}' implements '{contractName}.{memberName}' with an incompatible {found.What}.",
-            SourceName: sourceName,
-            SourceText: sourceText,
-            Span: @class.Span,
-            Label: $"the {contractKind} declares {found.Expected}, the class declares {found.Actual}",
-            Help: found.What == "return type"
-                ? $"a class may return the type the {contractKind} declares, or one derived from it, but not an unrelated one."
-                : $"this member must name the same type the {contractKind} declares. Only a return type may narrow."));
+        throw ToshDiagnosticException.Create(ContractMemberTypeRules.CreateDiagnostic(
+            @class.Name,
+            contractName,
+            contractKind,
+            memberName,
+            found,
+            sourceName,
+            sourceText,
+            @class.Span));
     }
 
     /// <summary>
@@ -1364,24 +1354,23 @@ public sealed partial class ToshEngine
     /// to coerce it and fail. The failure would land at the assignment, nowhere near the
     /// declaration that permitted it. C# and Java keep fields invariant for the same reason.
     /// </remarks>
-    private (string What, string Expected, string Actual)? ResolvePropertyTypeMismatch(
+    private ContractMemberTypeMismatch? ResolvePropertyTypeMismatch(
         ToshClassDefinition definition,
         TraitPropertyDefinition traitProperty)
     {
-        if (traitProperty.TypeName is not { Length: > 0 } expected)
-        {
-            return null;
-        }
-
         var implementation = definition.Properties
             .FirstOrDefault(property => string.Equals(property.Name, traitProperty.Name, StringComparison.OrdinalIgnoreCase));
 
-        if (implementation?.TypeName is not { Length: > 0 } actual || NamesSameType(actual, expected))
+        if (implementation is null)
         {
             return null;
         }
 
-        return ($"property '{implementation.Name}'", expected, actual);
+        return ContractMemberTypeRules.FindPropertyMismatch(
+            implementation.Name,
+            implementation.TypeName,
+            traitProperty.TypeName,
+            NamesSameType);
     }
 
     /// <summary>Whether <paramref name="actual"/> is <paramref name="expected"/> or derives from it.</summary>

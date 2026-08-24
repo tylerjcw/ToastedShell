@@ -1,10 +1,11 @@
 ---
 id: TOAST-0020
 title: "A trait's declared member types are not enforced on the implementing class"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-24
 ---
 
 ## Problem
@@ -39,7 +40,7 @@ a formatter or a compiler wants to make.
 - [x] A negative control: 2 of 9 fail with the check reverted
 - [x] The same for a required property's declared type — **invariant**, decided separately
 - [x] Interfaces checked for the same gap, with the same rule
-- [ ] The compiler path agrees — **not done**, see below
+- [x] The compiler path agrees
 
 ## Decision — 2026-08-17
 
@@ -87,27 +88,26 @@ behaving differently would need a stated reason, and there was none.
 The three call sites share `ThrowOnContractTypeMismatch`, which names the contract kind in
 its help text, so a trait and an interface each say what they are.
 
-## Remaining
+## Compiler resolution — 2026-08-24
 
-One acceptance box is left: the **compiler** path, where traits are emitted by
-`BoundUnitEmitter.TypeDeclarations` and a compiled class is a real CLR type rather than a
-`ToshClassInstance` — the same divergence `TOAST-0022` records.
+The compiler's `TypeChecker` now harvests interface and trait declarations before walking
+classes, including forward declarations and module-qualified names. Both official compile
+drivers — the CLI and MSBuild SDK task — already run this pass before the emitter, so an
+incompatible implementation now prevents an artifact from being written rather than
+becoming an all-`object` CLR interface implementation that metadata alone cannot reject.
 
-## The decision this needs first
+The rule was not copied into the checker. `ContractMemberTypeRules` now owns the first-
+mismatch decision and diagnostic construction; the interpreter and compiler adapt their
+different class representations to it. Return covariance and exact parameter/property
+matching therefore cannot drift between two implementations, and compile-mode promotion
+produces a diagnostic record byte-for-byte equal to the interpreter's.
 
-"Compatible" is a variance question, and it has no recorded answer:
-
-- Is `-> int` satisfied by an implementation returning `-> int` only, or by any subtype?
-- Do aliases match — `int` against `Int32`, `str` against `string`?
-- May an implementation return a **subclass** of the declared type? (Covariance — usually
-  yes, and usually wanted.)
-- May a parameter take a **supertype**? (Contravariance — sound, rarely implemented,
-  frequently confusing.)
-- What about `null`, and a declared type that is nullable versus one that is not?
-
-Answering by writing code produces whatever the first implementation happened to accept,
-and that becomes the language's rule by accident. This wants a paragraph in `docs/spec/`
-first — which is the same discipline `TOAST-0014` is being run on.
+The compiler matrix pins five refusals — trait return, parameter and property, plus
+interface return and parameter — beside seven controls for exact agreement, subclass
+returns, aliases, unannotated sides, invariant properties and interface covariance. A
+direct parity test compares the full structured diagnostic after severity promotion. The
+focused 30-test contract selection and the full 6,603-test suite pass (6,602 passed, one
+existing skip).
 
 ## Notes
 
