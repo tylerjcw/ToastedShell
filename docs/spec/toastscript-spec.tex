@@ -2644,6 +2644,46 @@ depend on how much data follows it. A generator yielding one array and the same 
 yielding two hand downstream the same first item, so adding a second batch never changes
 what the first batch meant.
 
+\paragraph{A function that produces nothing contributes nothing.}
+A call contributes to a pipeline exactly the values it produced. A function that falls off
+its end, returns bare, or ends in an expression that yields nothing has produced no value,
+and contributes none --- it does not contribute a null standing in for one.
+
+\begin{lstlisting}
+func f() { }                          # produces nothing
+func g() { return }                   # produces nothing
+func v() -> void { writeline "hi" }   # writes; produces nothing
+func h() { return null }              # produces one value, which is null
+
+echo (f | count)                      # 0
+echo (g | count)                      # 0
+echo (v | count)                      # 0
+echo (h | count)                      # 1
+\end{lstlisting}
+
+Returning \code{null} is therefore not the same as producing nothing, and which of the two
+happened can depend on a branch taken at run time:
+
+\begin{lstlisting}
+func maybe(x) { if ($x) { return 1 } }
+echo (maybe true | count)             # 1
+echo (maybe false | count)            # 0
+\end{lstlisting}
+
+The distinction is observable \emph{only} in a pipeline. In every other position --- an
+assignment, a subexpression argument, a comparison --- a function that produced nothing
+reads as \code{null}:
+
+\begin{lstlisting}
+var x = f()
+echo ($x == null)                     # true
+\end{lstlisting}
+
+\paragraph{Null and return annotations.}
+A return annotation refuses \code{null} unless it is nullable: \code{-> string} rejects it
+and \code{-> string?} accepts it. \code{dynamic} accepts it, because \code{dynamic} is the
+opt-out from annotation checking and cannot itself be a check that only some values pass.
+
 \paragraph{How many values a command yields.}
 One per argument. \code{echo 1 2} yields two values, not one joined string, for the same
 reason \code{echo \$xs} yields one: each \emph{argument} is a value, and joining them

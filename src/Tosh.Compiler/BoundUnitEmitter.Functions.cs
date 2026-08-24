@@ -723,7 +723,10 @@ internal sealed partial class EmitterImpl
             }
             else
             {
-                _il.Emit(OpCodes.Ldnull);
+                // `TOAST-0066`. Falling off the end produced no value, which is not the same
+                // as producing null: `f | count` is 0 for the first and 1 for the second.
+                // The sentinel is normalised to null everywhere except a pipeline stage.
+                _il.Emit(OpCodes.Ldsfld, s_noValueInstance);
             }
             _il.Emit(OpCodes.Stloc, returnFrame.ValueLocal!);
             EmitExecutionFrameExit(executionFrame);

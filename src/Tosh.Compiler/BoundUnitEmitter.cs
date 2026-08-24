@@ -469,6 +469,23 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(ToshValueFormatter).GetMethod(
             nameof(ToshValueFormatter.Format),
             new[] { typeof(object) })!;
+    private static readonly FieldInfo s_noValueInstance =
+        typeof(global::Tosh.Runtime.ToshNoValue).GetField(
+            nameof(global::Tosh.Runtime.ToshNoValue.Instance))!;
+    private static readonly MethodInfo s_noValueNormalize =
+        typeof(global::Tosh.Runtime.ToshNoValue).GetMethod(
+            nameof(global::Tosh.Runtime.ToshNoValue.Normalize),
+            new[] { typeof(object) })!;
+    /// <summary>
+    /// Whether a command's value is becoming a function's result — <c>TOAST-0066</c>.
+    /// </summary>
+    /// <remarks>
+    /// Set only around a return's value. A command that produced nothing reads as null
+    /// everywhere else, so the "produced nothing" answer is asked for exactly where the
+    /// difference is observable: a pipeline stage counting what the function contributed.
+    /// </remarks>
+    private bool _emittingReturnValue;
+
     private static readonly MethodInfo s_renderHole =
         typeof(ToastRenderer).GetMethod(
             nameof(ToastRenderer.RenderHole),
@@ -539,6 +556,10 @@ internal sealed partial class EmitterImpl : IDisposable
             new[] { typeof(string), typeof(object[]) })!;
     private static readonly MethodInfo s_hostInvokeValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeValue),
+            new[] { typeof(string), typeof(object[]) })!;
+    private static readonly MethodInfo s_hostInvokeValueOrNothing =
+        s_toshHost.GetMethod(
+            nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeValueOrNothing),
             new[] { typeof(string), typeof(object[]) })!;
     private static readonly MethodInfo s_hostGetMember =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.GetMember),

@@ -220,6 +220,25 @@ public static class ToshHost
     }
 
     /// <summary>
+    /// As <see cref="InvokeValue"/>, but reports "produced nothing" rather than null.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0066`. Used only where a command's result becomes a *function's* result — a
+    /// trailing expression collapsed into a return. `func f() -> void { writeline "hi" }`
+    /// collapses to `return writeline "hi"`, and `writeline` yields nothing, so the function
+    /// yields nothing; returning null there made it contribute a pipeline value it never
+    /// produced. Everywhere else a command in value position still reads as null, which is
+    /// what the interpreter does, so the sentinel never escapes into a reader's value.
+    /// </remarks>
+    public static object? InvokeValueOrNothing(string name, object?[] args)
+    {
+        var (_, all) = InvokeAndDrain(name, args, printItems: false);
+        if (all.Count == 0) return global::Tosh.Runtime.ToshNoValue.Instance;
+        if (all.Count == 1) return all[0];
+        return all;
+    }
+
+    /// <summary>
     /// Reads a (possibly dotted) member path from <paramref name="target"/>.
     /// Mirrors the runtime evaluator's <c>$x.member</c> semantics by
     /// delegating to <see cref="ToshRuntime.ObjectAccessor"/>.
@@ -1676,7 +1695,16 @@ public static class ToshHost
         {
             await foreach (var _ in items) { /* drain & discard */ }
             var slot = BuildSlot(ps, positional, named, leadingInputSlot: false, inputValue: null);
-            yield return InvokeUserFunc(fn, slot);
+
+            // `TOAST-0066`. A function that produced no value contributes none, which is what
+            // the interpreter does — its result reaches the pipeline as a sequence, and an
+            // empty one is simply empty. Returning null and yielding it made `f | count` 1.
+            var single = InvokeUserFunc(fn, slot);
+            if (!global::Tosh.Runtime.ToshNoValue.Is(single))
+            {
+                yield return single;
+            }
+
             yield break;
         }
         if (paramCount == effectiveArgCount + 1)
@@ -1684,7 +1712,11 @@ public static class ToshHost
             await foreach (var item in items)
             {
                 var slot = BuildSlot(ps, positional, named, leadingInputSlot: true, inputValue: item);
-                yield return InvokeUserFunc(fn, slot);
+                var mapped = InvokeUserFunc(fn, slot);
+                if (!global::Tosh.Runtime.ToshNoValue.Is(mapped))
+                {
+                    yield return mapped;
+                }
             }
             yield break;
         }

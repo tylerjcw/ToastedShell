@@ -508,6 +508,7 @@ public sealed partial class ToshEngine
             // evaluates to null — so without this the type could be written and never
             // satisfied by the one expression that produces it.
             return allowsNull ||
+                   IsDynamicAnnotation(normalizedTypeName) ||
                    (TryParseTupleAnnotation(normalizedTypeName, out var unit) && unit.Count == 0);
         }
 
@@ -1262,6 +1263,20 @@ public sealed partial class ToshEngine
         (callable.MaximumParameterCount is null || count <= callable.MaximumParameterCount);
 
     /// <summary>Whether a return annotation says "no value".</summary>
+    /// <summary>
+    /// Recognises the `dynamic` annotation — <c>TOAST-0066</c>.
+    /// </summary>
+    /// <remarks>
+    /// `dynamic` says "anything", and null is a value, so refusing it is hard to defend:
+    /// `func g() -> dynamic { return null }` failed with
+    /// `return_type_conversion_failed`, reporting that null "could not be converted to
+    /// 'dynamic'". The opt-out from annotation checking cannot itself be a check that only
+    /// some values pass. `string` still refuses null, which is the nullability rule working
+    /// as intended — `string?` is how that is asked for.
+    /// </remarks>
+    private static bool IsDynamicAnnotation(string typeName) =>
+        string.Equals(typeName, "dynamic", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsNothingAnnotation(string typeName) =>
         string.Equals(typeName, "nothing", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(typeName, "void", StringComparison.OrdinalIgnoreCase);

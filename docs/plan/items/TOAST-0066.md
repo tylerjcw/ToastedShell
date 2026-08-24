@@ -1,7 +1,7 @@
 ---
 id: TOAST-0066
 title: "A compiled function's null result contributes a pipeline value where the interpreter's contributes none"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -50,15 +50,48 @@ accepting no value at all is hard to defend: the annotation exists to say "anyth
 nullability rule for return annotations is unstated, and this is the same gap seen from the
 other side.
 
+## Resolution — 2026-08-23
+
+**The convention needed a way to say "no value", so there is one.** A compiled function
+returns a single `object?` and had no way to distinguish producing nothing from producing
+null, so the null stood in for the absent value and was counted. `ToshNoValue.Instance` is
+that distinction, carried at run time because it cannot be decided at compile time:
+`func f(x) { if ($x) { return 1 } }` contributes one value or none depending on the branch,
+and the interpreter reports 1 and 0.
+
+It is emitted at three points, all meaning "this produced nothing": falling off the end of an
+untyped function, a bare `return`, and a returned expression that itself yielded no value.
+That third one is how `-> void` reaches it — `void` is not a concrete CLR type, so a void
+function takes the untyped path, and its trailing `writeline "hi"` is collapsed into a return
+whose expression produces nothing.
+
+**Only a pipeline stage distinguishes the two**, which is what made this safe to do. In an
+assignment, a subexpression argument, or a comparison, the interpreter reads a function that
+produced nothing as null — so the sentinel is normalised away at the call site and at the
+command-value boundary, and never reaches a value a reader can hold. `InvokeValueOrNothing`
+exists only for the return path for that reason.
+
+The adjacent gap the item predicted was real: `-> dynamic` refused null with
+`return_type_conversion_failed`. `dynamic` is the opt-out from annotation checking and
+cannot itself be a check only some values pass. `string` still refuses null and `string?`
+accepts it, which is the nullability rule working rather than a hole in it.
+
+Recorded while closing: both backends refuse a null return through a non-nullable annotation,
+in different words. Filed as [`TOAST-0074`](TOAST-0074.md).
+
 ## Acceptance
 
-- [ ] A compiled function producing nothing contributes nothing to a pipeline
-- [ ] A function returning `null` *deliberately* behaves the same on both backends, whatever
-      that is decided to be
-- [ ] `-> dynamic` accepts `null`, or the specification says why it does not
-- [ ] The case moves from `KnownDivergences()` into `Corpus()`
-- [ ] `docs/spec/` states whether a null result is a pipeline value
-- [ ] A negative control
+- [x] A compiled function producing nothing contributes nothing to a pipeline
+- [x] A function returning `null` *deliberately* behaves the same on both backends — it
+      contributes one value, and dropping nulls to fix the count would have silenced it
+- [x] `-> dynamic` accepts `null`
+- [x] The case moves from `KnownDivergences()` into `Corpus()` — with eleven companions
+      covering both sides of the distinction, the branch-dependent case, and the value
+      positions where the sentinel must not be visible
+- [x] `docs/spec/` states whether a null result is a pipeline value — a new *A function that
+      produces nothing contributes nothing* paragraph, plus one on null and return
+      annotations; every claim in both was run against the implementation
+- [x] A negative control — normalising in the stage instead of skipping fails four cases
 
 ## Notes
 

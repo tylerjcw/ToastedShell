@@ -1225,12 +1225,24 @@ internal sealed partial class EmitterImpl
             }
             else
             {
-                _il.Emit(OpCodes.Ldnull);
+                // `TOAST-0066`. A bare `return` produced no value, like falling off the end.
+                _il.Emit(OpCodes.Ldsfld, s_noValueInstance);
             }
             EmitReturnValueAndLeave();
             return;
         }
-        var t = EmitPipelineAsValue(ret.Value);
+        var wasEmittingReturnValue = _emittingReturnValue;
+        _emittingReturnValue = typedReturn is null;
+        Type? t;
+        try
+        {
+            t = EmitPipelineAsValue(ret.Value);
+        }
+        finally
+        {
+            _emittingReturnValue = wasEmittingReturnValue;
+        }
+
         if (t is null)
         {
             if (typedReturn is not null)
@@ -1239,7 +1251,11 @@ internal sealed partial class EmitterImpl
             }
             else
             {
-                _il.Emit(OpCodes.Ldnull);
+                // `TOAST-0066`. The returned expression itself produced no value, so neither
+                // does the function. This is how a `-> void` body reaches here: a trailing
+                // expression is collapsed into a return, and `writeline "hi"` collapsed into
+                // one made the function contribute a value it never produced.
+                _il.Emit(OpCodes.Ldsfld, s_noValueInstance);
             }
             EmitReturnValueAndLeave();
             return;

@@ -4,6 +4,7 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
+| [`TOAST-0066`](items/TOAST-0066.md) | P2 | complete | 6/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
 | [`TOAST-0067`](items/TOAST-0067.md) | P2 | complete | 4/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | complete | 6/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0072`](items/TOAST-0072.md) | P2 | complete | 5/5 | A rune's block argument ran in the current scope, so a macro calling a macro never worked |

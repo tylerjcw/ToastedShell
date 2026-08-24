@@ -209,6 +209,63 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // interpreter and with itself — `echo $items` over two elements already contributed
         // two. The splat row goes through a different emitter path than the fixed-arity one,
         // which is why both are here.
+        // `TOAST-0066`, moved up from `KnownDivergences`. A compiled function returns one
+        // `object?` and had no way to say it produced *nothing*, so the null standing in for
+        // the absent value was counted: `f | count` was 0 interpreted and 1 compiled. The
+        // rows below are the whole distinction — producing nothing is not returning null,
+        // and which one happened can depend on a branch taken at run time.
+        yield return Case(
+            "void-function-contributes-nothing",
+            "func f() -> void { writeline \"hi\" }\necho (f | count)");
+
+        yield return Case(
+            "function-producing-nothing-contributes-nothing",
+            "func f() { }\necho (f | count)");
+
+        yield return Case(
+            "bare-return-contributes-nothing",
+            "func f() { return }\necho (f | count)");
+
+        yield return Case(
+            "deliberate-null-return-contributes-one",
+            "func h() { return null }\necho (h | count)");
+
+        yield return Case(
+            "returned-value-contributes-one",
+            "func g() { return 5 }\necho (g | count)");
+
+        // The branch decides, so it cannot be settled at compile time.
+        yield return Case(
+            "conditional-return-taken",
+            "func f(x) { if ($x) { return 1 } }\necho (f true | count)");
+
+        yield return Case(
+            "conditional-return-not-taken",
+            "func f(x) { if ($x) { return 1 } }\necho (f false | count)");
+
+        // And in value position the sentinel must never be visible: a function that produced
+        // nothing reads as null everywhere except a pipeline stage.
+        yield return Case(
+            "no-value-reads-as-null-in-a-variable",
+            "func f() { }\nvar x = f()\necho $\"[{$x}]\"");
+
+        yield return Case(
+            "no-value-compares-equal-to-null",
+            "func f() { }\necho ((f()) == null)");
+
+        // `dynamic` is the opt-out from annotation checking, so it cannot itself refuse a
+        // value — returning null through it failed with `return_type_conversion_failed`.
+        // The rows after it are the nullability rule still working: `string` refuses, `?`
+        // accepts, and `dynamic` is the exception rather than a hole in it.
+        yield return Case(
+            "dynamic-return-accepts-null",
+            "func g() -> dynamic { return null }\necho ((g()) == null)");
+
+        yield return Case(
+            "nullable-return-accepts-null",
+            "func g() -> string? { return null }\necho ((g()) == null)");
+
+
         yield return Case("echo-multiple-arguments", "echo 1 2");
         yield return Case("echo-single-argument", "echo 1");
         yield return Case("echo-no-arguments", "echo");
@@ -605,6 +662,15 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // and the compiled backend evaluates it happily. Found while moving `TOAST-0067`,
         // whose fix made `echo 1 2` yield two values on both sides and so made this
         // reachable. `TOAST-0073`.
+        // Both backends refuse a null return through a non-nullable annotation — the
+        // *behaviour* agrees. Only the wording differs: "Function 'g' returned a value that
+        // could not be converted to 'string'" against "'return value' produced a value that
+        // could not be converted to 'string'". Recorded because the corpus compares messages
+        // deliberately, and a message is part of the behaviour. `TOAST-0074`.
+        yield return Divergence(
+            "TOAST-0074", "non-nullable-return-refusal-message",
+            "func g() -> string { return null }\necho (g())");
+
         yield return Divergence(
             "TOAST-0073", "subexpression-argument-arity",
             "echo ((echo 1 2) | count)");
@@ -620,14 +686,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A variable annotated with a base class rejects a subclass value when
         // compiled. Parameters and returns take a different path and accept it,
         // so this is specific to the variable annotation.
-
-        // A compiled function whose result is null still contributes one value to the
-        // pipeline; the interpreted one contributes none — `TOAST-0066`. Reached here
-        // through `-> void`, which is simply the case where the null is guaranteed, but the
-        // difference is general and has nothing to do with `void`.
-        yield return Divergence(
-            "TOAST-0066", "null-result-pipeline-contribution",
-            "func f() -> void { writeline \"hi\" }\necho (f | count)");
 
         // `match` with type-pattern arms over a declared hierarchy yields null compiled and
         // the arm's value interpreted — `TOAST-0065`. `match` itself is fine: the same

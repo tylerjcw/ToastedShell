@@ -107,7 +107,9 @@ internal sealed partial class EmitterImpl
     {
         if (!EmitHostArgs(call)) return null;
         RequireTier(2, "command invocation (value)");
-        _il.Emit(OpCodes.Call, s_hostInvokeValue);
+        _il.Emit(
+            OpCodes.Call,
+            _emittingReturnValue ? s_hostInvokeValueOrNothing : s_hostInvokeValue);
         return typeof(object);
     }
 

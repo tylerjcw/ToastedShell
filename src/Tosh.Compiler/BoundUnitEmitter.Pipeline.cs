@@ -735,6 +735,10 @@ internal sealed partial class EmitterImpl
                 return null;
             }
 
+            // `TOAST-0066`. Only a pipeline stage distinguishes "produced nothing" from
+            // "returned null"; in value position the reader sees null, so the sentinel is
+            // normalised away here rather than escaping into a value they could hold.
+            _il.Emit(OpCodes.Call, s_noValueNormalize);
             return typeof(object);
         }
 
@@ -784,6 +788,12 @@ internal sealed partial class EmitterImpl
         {
             _il.Emit(OpCodes.Pop);
             return null;
+        }
+
+        if (!entry.IsTyped)
+        {
+            // `TOAST-0066`, as above — a typed function never produces the sentinel.
+            _il.Emit(OpCodes.Call, s_noValueNormalize);
         }
 
         return resultType;
