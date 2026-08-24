@@ -171,7 +171,8 @@ public static class TypeChecker
     ///     Always an error in compile mode.</item>
     ///   <item><c>tosh.compile.implicit_dynamic</c> — a <c>var</c>
     ///     declaration was given no annotation and the inferrer
-    ///     could not pin down a concrete type. Suppressible via
+    ///     could not pin down a concrete type, or its written annotation
+    ///     could not be resolved. Suppressible via
     ///     <paramref name="allowDynamic"/>.</item>
     /// </list>
     /// All emitted diagnostics carry <see cref="ToshDiagnosticSeverity.Error"/>;
@@ -283,18 +284,37 @@ public static class TypeChecker
         BoundUnit unit,
         List<ToshDiagnostic> diagnostics)
     {
-        // Already concretely typed -> nothing to flag.
-        if (!decl.Symbol.DeclaredType.IsDynamic) return;
         // Explicit `: dynamic` is an intentional opt-out and must
         // not be reported as implicit dynamic.
         if (decl.AnnotatedDynamic) return;
+
+        // An unresolved annotation may have a concrete initializer. Lowering retains that
+        // inferred implementation type as a best effort, but it must not erase the failed
+        // source-level contract from the compile audit.
+        if (!decl.HasUnresolvedTypeAnnotation && !decl.Symbol.DeclaredType.IsDynamic) return;
+
+        // `TOAST-0076`. An annotation that failed to resolve is a different report from no
+        // annotation at all. Telling a reader who wrote `var v: M.Box` that the variable
+        // "has no type annotation", and advising them to add one, describes neither what
+        // happened nor anything they can do — the obvious reply is "but I did", and the real
+        // cause appears nowhere.
+        var annotated = decl.HasUnresolvedTypeAnnotation;
+        var annotationName = decl.Symbol.DeclaredTypeName;
+
         diagnostics.Add(new ToshDiagnostic(
             Code: "tosh.compile.implicit_dynamic",
-            Title: $"Variable '{decl.Symbol.Name}' has no type annotation and the inferrer could not pin down a concrete type.",
+            Title: annotated
+                ? $"Variable '{decl.Symbol.Name}' is annotated "
+                    + (string.IsNullOrEmpty(annotationName) ? "with a type" : $"'{annotationName}'")
+                    + " but the annotation could not be resolved to a concrete type."
+                : $"Variable '{decl.Symbol.Name}' has no type annotation and the inferrer could not pin down a concrete type.",
             SourceName: (unit.ParseResult as ParseResult)?.SourceName,
             SourceText: (unit.ParseResult as ParseResult)?.SourceText,
             Span: decl.Span,
-            Help: "annotate the variable (e.g. `var " + decl.Symbol.Name + ": int = ...`) or pass `--compile-allow-dynamic` to allow implicit dynamic.",
+            Help: annotated
+                ? "check the type name is spelled correctly and is reachable from here, or pass "
+                    + "`--compile-allow-dynamic` to allow implicit dynamic."
+                : "annotate the variable (e.g. `var " + decl.Symbol.Name + ": int = ...`) or pass `--compile-allow-dynamic` to allow implicit dynamic.",
             Severity: ToshDiagnosticSeverity.Error,
             Category: ToshDiagnosticCategory.Type,
             Lifecycle: ToshDiagnosticLifecycle.Preview));

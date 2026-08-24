@@ -153,6 +153,16 @@ public sealed record BoundVariableDeclaration(
     /// value is allowed to change CLR type after reassignment.
     /// </summary>
     public bool HasExplicitTypeAnnotation { get; init; }
+
+    /// <summary>
+    /// True when the source carried a non-dynamic annotation that the
+    /// lowering resolver could not resolve. Kept separately from
+    /// <see cref="BoundSymbol.DeclaredType"/> because lowering may still infer
+    /// a useful implementation type from the initializer; compile-mode
+    /// diagnostics must nevertheless report that the written contract was
+    /// unknown rather than silently treating it as absent.
+    /// </summary>
+    public bool HasUnresolvedTypeAnnotation { get; init; }
 }
 
 // ─── Expressions ──────────────────────────────────────────────────────

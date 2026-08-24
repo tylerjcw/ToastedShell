@@ -210,7 +210,7 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     [Theory]
     [InlineData(
         "export module M {\n    export class Box {\n        prop X: int = 5\n    }\n}\n" +
-        "var b: dynamic = new M.Box()\nvar r: int = $b.X\necho $r", "5")]
+        "var b: M.Box = new M.Box()\nvar r: int = $b.X\necho $r", "5")]
     [InlineData(
         "export module M {\n    export interface IShape {\n        func Area() -> int\n    }\n" +
         "    export class Square fulfills IShape {\n        func Area() -> int => 9\n    }\n}\n" +
@@ -226,7 +226,7 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     // "Construct instances with 'new M.Point(...)'" — the test was wrong, not the compiler.
     [InlineData(
         "export module M {\n    export record Point(X: int, Y: int)\n}\n" +
-        "var p: dynamic = new M.Point(3, 4)\nvar r: int = $p.Y\necho $r", "4")]
+        "var p: M.Point = new M.Point(3, 4)\nvar r: int = $p.Y\necho $r", "4")]
     // A plain `type` alias. Emitting the shell was never the problem — nothing read its
     // BaseTypeName back, so `M.Meters` named the shell class rather than `int` and a value
     // could not be assigned to it.
@@ -281,13 +281,15 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// The kinds a stamp alone does not lift out of replay.
     /// </summary>
     /// <remarks>
-    /// Tripwires. Each was measured with the stamp in place and each failed differently,
-    /// which is why they are not simply "the rest of the switch":
+    /// Tripwires. `TOAST-0076` removed their shared annotation-resolution ambiguity, leaving
+    /// three distinct reasons not to add them mechanically to the module switch:
     ///
-    ///   record  `M.Point(3, 4)` — read as a static *method* on the module shell
-    ///   union   `M.Result.Ok`   — static member not found on the module shell
-    ///   struct  the property read came back as something `int` would not take
-    ///   trait   the class using it still resolved to nothing
+    ///   struct  its qualified annotation resolves, but the module path has not yet been
+    ///           lifted and run under the runtime profile
+    ///   trait   its qualified annotation resolves, but members are not injected into the
+    ///           class that uses it
+    ///   union   its qualified annotation resolves, but variants still need factories on
+    ///           the module-qualified union base
     ///
     /// Each needs its own construction or member path taught about a module-qualified
     /// shell. When one starts emitting, this fails and says to verify it by running it.

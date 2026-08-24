@@ -190,13 +190,9 @@ type is called, so there is nothing to compare against.
 | interface | **works** — a class fulfilling it answers 9 |
 | enum | **works** — `M.Colour.Green` renders `Green`, after one more fix below |
 | record | **works** — `new M.Point(3, 4)`, read back as 4 |
-| struct | **works** — as of 2026-08-24; see *Struct defaults* below |
-| trait | *"Member 'Name' was not found"* — trait members are not injected into the using class |
-| union | `M.Result.Ok` dispatches as a static *method* on the base; variants are separate types with no factory |
-| record | `M.Point(3, 4)` is read as a static *method* on the module shell |
-| union | `M.Result.Ok` — static member not found on the module shell |
-| struct | the property read comes back as something `int` will not take |
-| trait | the class using it still resolves to nothing |
+| struct | Its shell now works and `M.Vec` resolves as an annotation (`TOAST-0076`); the module path is still deliberately replayed until it is enabled and run end to end |
+| trait | `M.Named` resolves as an annotation (`TOAST-0076`), but *"Member 'Name' was not found"* remains — trait members are not injected into the using class |
+| union | `M.Result` resolves as an annotation (`TOAST-0076`), but `M.Result.Ok` still needs a factory on the base; variants are separate types |
 
 Union was tried: stamping the base and every variant with the qualified name makes the type
 resolve, and the call then fails one step later because `Ok` is looked up as a static method
@@ -222,11 +218,12 @@ Worth noting: neither cause was about *emitting the struct*. The type, its field
 constructor were all emitted correctly. What was missing was the shell semantics wrapped
 around them — defaults, and how the value describes itself.
 
-The second struct row below — "comes back as something `int` will not take" — is **not** a
-struct defect at all. A module-qualified annotation is unresolved for `class`, `struct` and
-`record` alike, and the diagnostic claims the variable has no annotation when it plainly
-does. Filed as [`TOAST-0076`](TOAST-0076.md), and the trait and union rows beneath it are
-worth re-measuring against that cause before being treated as distinct.
+The old struct result — "comes back as something `int` will not take" — was **not** a struct
+defect at all. A module-qualified annotation was unresolved for `class`, `struct` and
+`record` alike, and the diagnostic claimed the variable had no annotation when it plainly
+did. [`TOAST-0076`](TOAST-0076.md) now resolves all three. Re-measuring trait and union
+showed that their qualified annotations resolve too, but their failures remain after that
+point: trait member injection and union variant factories are independent work.
 
 ### Enum needed a second piece, and it names the general shape
 
@@ -244,17 +241,18 @@ actually uses has been taught. That is why "mirror the switch" could not have wo
 is the question to ask of each remaining kind: `record` is reached as a *call*
 (`M.Point(3, 4)`), `union` as a member chain like the enum, `struct` through `new`.
 
-So the stamp is necessary and not sufficient: **four kinds are lifted — class, interface,
-enum and record** — and three need work of their own. `struct` and `trait` have incomplete
-shells rather than a resolution problem, and `union` needs variant factories.
+So the stamp is necessary and not sufficient: **four kinds are currently lifted — class,
+interface, enum and record**. Struct's shell defaults, rendering and qualified annotation
+are now fixed; it remains to enable the module path and pin the executed runtime-profile
+answer. Trait still needs member injection, and union needs variant factories.
 
-One of the three was a **bad probe rather than a defect**, and it is worth recording because
-it nearly cost the record case. `M.Point(3, 4)` was written where a record wants
+The record failure was a **bad probe rather than a defect**, and it is worth recording
+because it nearly cost the record case. `M.Point(3, 4)` was written where a record wants
 `new M.Point(3, 4)`, and the compiled program answered *"Construct instances with
 'new M.Point(...)'"* — the compiler was right and the test was wrong. Every remaining
-failure above was re-checked with the syntax the interpreter accepts. The four are **left
-replaying** and are tripwires — a kind that emits and fails is worse than one that replays
-and works, which is the lesson this item keeps teaching.
+failure above was re-checked with the syntax the interpreter accepts. The three remaining
+kinds are **left replaying** and are tripwires — a kind that emits and fails is worse than
+one that replays and works, which is the lesson this item keeps teaching.
 
 The measured library is unchanged at 2 of 16 — `Git` and `Math`. Enum being lifted does not
 move it, because the files using enums (`Gl` 4, `Gtk` 5, `Sdl` 2) each carry other blockers

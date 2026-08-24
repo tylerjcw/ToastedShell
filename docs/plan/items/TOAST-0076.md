@@ -1,10 +1,11 @@
 ---
 id: TOAST-0076
 title: "A module-qualified type annotation is not resolved, and the diagnostic says the annotation is missing"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-24
+closed: 2026-08-24
 ---
 
 ## Problem
@@ -57,12 +58,36 @@ The message is emitted where implicit-dynamic is detected; the check evidently r
 
 ## Acceptance
 
-- [ ] A module-qualified annotation resolves, for class, struct and record alike
-- [ ] `var v: M.Box = new M.Box()` compiles under `--profile runtime` and agrees with the
+- [x] A module-qualified annotation resolves, for class, struct and record alike
+- [x] `var v: M.Box = new M.Box()` compiles under `--profile runtime` and agrees with the
       interpreter
-- [ ] When an annotation genuinely cannot be resolved, the diagnostic says *that*, and does
+- [x] When an annotation genuinely cannot be resolved, the diagnostic says *that*, and does
       not claim the annotation is absent when it is present
-- [ ] The `TOAST-0035` kind table is re-measured against this cause, and rows it explains are
+- [x] The `TOAST-0035` kind table is re-measured against this cause, and rows it explains are
       folded into it rather than left as separate kind-specific failures
-- [ ] Differential corpus cases for the qualified forms
-- [ ] A negative control
+- [x] Differential corpus cases for the qualified forms
+- [x] A negative control
+
+## Resolution — 2026-08-24
+
+`Lowerer.BuildUserTypeRegistry` now carries the enclosing module path while harvesting
+source-declared types. A declaration inside nested modules is available under its qualified
+name (`Outer.Inner.Box`) as well as through the existing bare entry used while lowering a
+module's own body. The common resolver therefore handles class, struct, record, interface,
+enum, trait, union and type-alias annotations without kind-specific cases.
+
+An unresolved written annotation is now recorded independently of the local's inferred
+implementation type. That distinction matters for `var value: Missing.Type = 1`: lowering
+can retain `int` as useful best-effort information without allowing it to erase the invalid
+source contract. The compile diagnostic names `Missing.Type`, says it could not be resolved,
+and no longer advises the reader to add the annotation already present.
+
+The runtime-profile corpus now executes a typed `M.Box` and typed `M.Point`; the differential
+corpus covers module-qualified class, struct and record values. The negative control uses an
+unknown qualified path with a concrete initializer, so reverting only the diagnostic text or
+only the registry walk fails independently.
+
+Re-measuring `TOAST-0035` removed the old struct typed-local failure from the struct account.
+Trait and union annotations resolve too, but their residual failures remain independent:
+trait members are not injected into a using class, and module-qualified union variants need
+factories on the union base. Their source-replay tripwires therefore remain.

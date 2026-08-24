@@ -49,6 +49,30 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "module-simple-type-alias",
             "export module M {\n    export type Meters = int\n}\nvar d: M.Meters = 5\necho $d");
 
+        // `TOAST-0076`. The annotation resolver and the construction path must agree about
+        // a module-qualified source type. These three kinds found the shared flat-registry
+        // defect; keeping all three prevents a later kind-specific workaround.
+        yield return Case(
+            "module-qualified-class-annotation",
+            "export module DiffQualifiedClassModule {\n"
+            + "    export class Box { prop X: int = 3 }\n}\n"
+            + "var box: DiffQualifiedClassModule.Box = new DiffQualifiedClassModule.Box()\n"
+            + "echo $box.X");
+
+        yield return Case(
+            "module-qualified-struct-annotation",
+            "export module DiffQualifiedStructModule {\n"
+            + "    export struct Vec { prop X: int = 4 }\n}\n"
+            + "var vec: DiffQualifiedStructModule.Vec = new DiffQualifiedStructModule.Vec()\n"
+            + "echo $vec.X");
+
+        yield return Case(
+            "module-qualified-record-annotation",
+            "export module DiffQualifiedRecordModule {\n"
+            + "    export record Point(X: int)\n}\n"
+            + "var point: DiffQualifiedRecordModule.Point = new DiffQualifiedRecordModule.Point(5)\n"
+            + "echo $point.X");
+
         yield return Case(
             "refinement-coerces-a-negative",
             "type PosInt = int where _ > 0 coerce (_ == 0 ? 1 : Math.abs(_))\n"

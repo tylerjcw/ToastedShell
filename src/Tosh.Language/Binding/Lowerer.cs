@@ -57,46 +57,68 @@ public static class Lowerer
     internal static IReadOnlyDictionary<string, BoundType> BuildUserTypeRegistry(StatementSyntax root)
     {
         var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
-        Visit(root);
+        Visit(root, qualifier: null);
         return registry;
-        void Visit(StatementSyntax statement)
+
+        // `TOAST-0076`. A type declared in a module is registered under every qualifier by
+        // which it can be reached. The bare entry preserves the flat registry's existing
+        // ability to resolve a sibling annotation while lowering that module's own body; it
+        // is not a statement about export visibility, which the interpreter enforces at
+        // runtime. Registering only the bare entry made an external `var v: M.Box` collapse
+        // to dynamic even though `new M.Box()` resolved the same declaration.
+        void Register(string? qualifier, string name, BoundType type)
+        {
+            registry[name] = type;
+
+            if (!string.IsNullOrEmpty(qualifier))
+            {
+                registry[$"{qualifier}.{name}"] = type;
+            }
+        }
+
+        void Visit(StatementSyntax statement, string? qualifier)
         {
             switch (statement)
             {
                 case ScriptStatementSyntax script:
-                    foreach (var s in script.Statements) Visit(s);
+                    foreach (var s in script.Statements) Visit(s, qualifier);
                     break;
 
                 case ModuleDefinitionStatementSyntax module:
-                    foreach (var s in module.Body.Statements) Visit(s);
+                    {
+                        var inner = string.IsNullOrEmpty(qualifier)
+                            ? module.Name
+                            : $"{qualifier}.{module.Name}";
+                        foreach (var s in module.Body.Statements) Visit(s, inner);
+                    }
                     break;
 
                 case ClassDefinitionStatementSyntax cls:
-                    registry[cls.Name] = new UserClassType(cls.Name, Definition: cls, BackingClrType: null);
+                    Register(qualifier, cls.Name, new UserClassType(cls.Name, Definition: cls, BackingClrType: null));
                     break;
 
                 case RecordDefinitionStatementSyntax rec:
-                    registry[rec.Name] = new UserRecordType(rec.Name, Definition: rec, BackingClrType: null);
+                    Register(qualifier, rec.Name, new UserRecordType(rec.Name, Definition: rec, BackingClrType: null));
                     break;
 
                 case StructDefinitionStatementSyntax str:
-                    registry[str.Name] = new UserStructType(str.Name, Definition: str, BackingClrType: null);
+                    Register(qualifier, str.Name, new UserStructType(str.Name, Definition: str, BackingClrType: null));
                     break;
 
                 case UnionDefinitionStatementSyntax uni:
-                    registry[uni.Name] = new UserUnionType(uni.Name, Definition: uni, BackingClrType: null);
+                    Register(qualifier, uni.Name, new UserUnionType(uni.Name, Definition: uni, BackingClrType: null));
                     break;
 
                 case EnumDefinitionStatementSyntax enm:
-                    registry[enm.Name] = new UserEnumType(enm.Name, Definition: enm, BackingClrType: null);
+                    Register(qualifier, enm.Name, new UserEnumType(enm.Name, Definition: enm, BackingClrType: null));
                     break;
 
                 case InterfaceDefinitionStatementSyntax iface:
-                    registry[iface.Name] = new UserInterfaceType(iface.Name, Definition: iface, BackingClrType: null);
+                    Register(qualifier, iface.Name, new UserInterfaceType(iface.Name, Definition: iface, BackingClrType: null));
                     break;
 
                 case TraitDefinitionStatementSyntax tr:
-                    registry[tr.Name] = new UserTraitType(tr.Name, Definition: tr, BackingClrType: null);
+                    Register(qualifier, tr.Name, new UserTraitType(tr.Name, Definition: tr, BackingClrType: null));
                     break;
 
                 case TypeAliasStatementSyntax alias:
@@ -115,7 +137,7 @@ public static class Lowerer
                     // representation stays consistent.
                     {
                         var baseType = ResolveAliasBaseType(alias.BaseTypeName, registry);
-                        registry[alias.Name] = new RefinementType(baseType, alias.Name, alias);
+                        Register(qualifier, alias.Name, new RefinementType(baseType, alias.Name, alias));
                     }
                     break;
             }
@@ -390,10 +412,11 @@ public static class Lowerer
         // the implicit-dynamic diagnostic.
         BoundType declaredType;
         var annotatedDynamic = false;
+        var unresolvedAnnotation = false;
         if (!string.IsNullOrEmpty(decl.TypeName))
         {
-            if (string.Equals(decl.TypeName, "dynamic",
-                    StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(decl.TypeName, "dynamic", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(decl.TypeName, "any", StringComparison.OrdinalIgnoreCase))
             {
                 declaredType = BoundType.Dynamic;
                 annotatedDynamic = true;
@@ -401,6 +424,7 @@ public static class Lowerer
             else
             {
                 var annotated = ctx.ResolveType(decl.TypeName);
+                unresolvedAnnotation = annotated.IsDynamic;
                 declaredType = annotated.IsDynamic && value is not null
                     ? TypeInferrer.InferPipelineValue(value)
                     : annotated;
@@ -427,6 +451,7 @@ public static class Lowerer
         {
             AnnotatedDynamic = annotatedDynamic,
             HasExplicitTypeAnnotation = !string.IsNullOrEmpty(decl.TypeName),
+            HasUnresolvedTypeAnnotation = unresolvedAnnotation,
         };
     }
 

@@ -338,6 +338,38 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
         Assert.Empty(diags);
     }
 
+    /// <summary>A module path is part of the annotation, not a dynamic escape hatch.</summary>
+    [Theory]
+    [InlineData("export class Box { prop X: int = 3 }", "M.Box", "new M.Box()")]
+    [InlineData("export struct Vec { prop X: int = 3 }", "M.Vec", "new M.Vec()")]
+    [InlineData("export record Point(X: int)", "M.Point", "new M.Point(3)")]
+    [InlineData("export trait Named { prop Name = \"anon\" } export class Person uses Named { }", "M.Named", "new M.Person()")]
+    [InlineData("export union Result { Ok(value) Err(message) }", "M.Result", "M.Result.Ok(3)")]
+    public void Compile_audit_resolves_module_qualified_annotations(
+        string declaration,
+        string annotation,
+        string initializer)
+    {
+        var diags = CheckCompile(
+            $"export module M {{ {declaration} }}\nvar value: {annotation} = {initializer}",
+            allowDynamic: false);
+
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Compile_audit_names_an_unresolved_annotation_even_when_the_initializer_is_concrete()
+    {
+        var diags = CheckCompile("var value: Missing.Type = 1", allowDynamic: false);
+
+        var diagnostic = Assert.Single(diags);
+        Assert.Equal("tosh.compile.implicit_dynamic", diagnostic.Code);
+        Assert.Contains("'Missing.Type'", diagnostic.Title, StringComparison.Ordinal);
+        Assert.Contains("could not be resolved", diagnostic.Title, StringComparison.Ordinal);
+        Assert.DoesNotContain("has no type annotation", diagnostic.Title, StringComparison.Ordinal);
+        Assert.DoesNotContain("annotate the variable", diagnostic.Help, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Compile_audit_passes_fully_typed_program()
     {
