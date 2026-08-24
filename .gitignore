@@ -584,6 +584,7 @@ $RECYCLE.BIN/
 
 # AI companion memory — local databases are private
 .tosh/memory.db
+.tosh/memory.db-*
 # ~/.tosh/memory.db is outside the repo; no entry needed
 # .tosh/memories.toml is intentionally tracked for shared decisions
 ToSh.tome
