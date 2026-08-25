@@ -278,7 +278,9 @@ members. `ToastRuntime.CommandHost` carries an opaque `IToastCommandHost`, and
 `CommandContext.RequireCommandHost<T>` lets a command package recover its own host type. TōSh
 supplies its session runtime; a test supplies an unrelated host and invokes its command through
 the language engine. The concrete `CommandContext.Runtime` view remains temporarily while
-shell command callers migrate to this host-neutral seam.
+shell command callers migrate to this host-neutral seam. `spawn` and `scope` are the first
+shell-specific consumers: they explicitly require TōSh's host type for its concrete job table,
+while the other concurrency commands remain host-independent.
 
 ## Staging
 

@@ -34,10 +34,12 @@ public sealed class ScopeCommand : ShellCommand
                 label: "pass a block like '{ spawn dotnet --version }'");
         }
 
+        var runtime = context.RequireCommandHost<ToshRuntime>();
+
         // Snapshot job IDs that exist BEFORE the block runs.
         // Use the non-reaping snapshot so we don't lose any already-completed jobs and
         // accidentally treat their IDs as scope-owned.
-        var preExistingIds = context.Runtime.GetJobsSnapshot()
+        var preExistingIds = runtime.GetJobsSnapshot()
             .Select(j => j.Id)
             .ToHashSet();
 
@@ -57,7 +59,7 @@ public sealed class ScopeCommand : ShellCommand
             // them first, then wait for every monitor to observe process exit before
             // rethrowing. Kill() is intentionally synchronous and only signals the
             // process; without the waits below, callers can still observe Running.
-            scopedJobs = CollectScopedJobs(context.Runtime, preExistingIds);
+            scopedJobs = CollectScopedJobs(runtime, preExistingIds);
             foreach (var job in scopedJobs)
             {
                 job.Kill();
@@ -68,7 +70,7 @@ public sealed class ScopeCommand : ShellCommand
         }
 
         // Block completed — gather any jobs registered during the block.
-        scopedJobs = CollectScopedJobs(context.Runtime, preExistingIds);
+        scopedJobs = CollectScopedJobs(runtime, preExistingIds);
 
         // Await all scope-owned jobs concurrently and stream completions.
         if (scopedJobs.Count == 0)

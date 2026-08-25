@@ -55,7 +55,8 @@ public sealed class SpawnCommand : ShellCommand
                 label: "this argument is empty");
         }
 
-        var resolvedPath = ResolveExternalPath(context, commandName);
+        var runtime = context.RequireCommandHost<ToshRuntime>();
+        var resolvedPath = ResolveExternalPath(context, runtime, commandName);
         var processArguments = filteredArgs.Skip(1).ToArray();
 
         if (foreground)
@@ -74,35 +75,32 @@ public sealed class SpawnCommand : ShellCommand
             context.CancellationToken);
 
         var commandText = BuildCommandText(commandName, processArguments);
-        var job = RuntimeRegister(
-            context,
+        var job = runtime.RegisterJob(
             ShellJob.StartExternalProcess(
-                context.Runtime.AllocateJobId(),
+                runtime.AllocateJobId(),
                 commandText,
                 resolvedPath,
-                context.Runtime.CurrentDirectory,
+                runtime.CurrentDirectory,
                 processArguments,
                 initialInput));
 
         var info = job.ToInfo();
-        context.Runtime.SetLastResult(info);
-        context.Runtime.SetLastExitCode(0);
+        runtime.SetLastResult(info);
+        runtime.SetLastExitCode(0);
         yield return info;
     }
 
-    private static ShellJob RuntimeRegister(CommandContext context, ShellJob job)
+    private static string ResolveExternalPath(
+        CommandContext context,
+        ToshRuntime runtime,
+        string commandName)
     {
-        return context.Runtime.RegisterJob(job);
-    }
-
-    private static string ResolveExternalPath(CommandContext context, string commandName)
-    {
-        if (context.Runtime.Commands.TryGet(commandName, out var registered) && registered is ExternalProcessCommand external)
+        if (runtime.Commands.TryGet(commandName, out var registered) && registered is ExternalProcessCommand external)
         {
             return external.ResolvedPath;
         }
 
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, commandName);
+        var lookup = ExternalCommandResolver.Resolve(runtime.CurrentDirectory, commandName);
         return lookup.Status switch
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
