@@ -21,7 +21,7 @@ public sealed class AsyncCommand : ShellCommand
             ? CommandArguments.Slice(context.Arguments, 1)
             : Array.Empty<object?>();
 
-        var baseExecutor = context.BlockExecutor ?? context.Runtime.BlockExecutor;
+        var baseExecutor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor;
         var futureContext = context with
         {
             BlockExecutor = baseExecutor?.Fork(),

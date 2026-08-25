@@ -28,7 +28,7 @@ public sealed class RaceCommand : ShellCommand
         // Fork the executor once per operation at the time race is called so each
         // arm gets an isolated scope snapshot.  This enables true concurrent execution
         // with no serialisation lock.
-        var baseExecutor = context.BlockExecutor ?? context.Runtime.BlockExecutor;
+        var baseExecutor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor;
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
 

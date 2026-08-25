@@ -268,6 +268,11 @@ Text commands likewise resolve file arguments against the language working direc
 `writeline` target the language stream. A standalone `template | writeline` pipeline is pinned;
 only `wc`'s optional shell display-column override still needs a host presentation port.
 
+The pure concurrency commands (`async`, `race`, `settle`, and `timeout`) obtain forkable block
+execution from the command context or `LanguageRuntime`; a standalone `timeout` block is pinned.
+`spawn` and `scope` deliberately remain shell-bound for now because they manipulate TōSh's
+concrete job table rather than the neutral background-pipeline capability.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

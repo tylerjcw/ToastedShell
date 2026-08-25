@@ -27,7 +27,7 @@ public sealed class SettleCommand : ShellCommand
 
         // Fork the executor once per operation so each arm gets an isolated scope snapshot,
         // enabling true concurrent execution with no serialisation lock.
-        var baseExecutor = context.BlockExecutor ?? context.Runtime.BlockExecutor;
+        var baseExecutor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor;
 
         var tasks = operations
             .Select((operation, index) =>

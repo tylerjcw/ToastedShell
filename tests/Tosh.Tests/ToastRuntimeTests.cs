@@ -1,6 +1,7 @@
 using Tosh.Language;
 using Tosh.Runtime;
 using Tosh.Stdlib.Clr;
+using Tosh.Stdlib.Concurrency;
 using Tosh.Stdlib.Pipeline;
 using Tosh.Stdlib.Text;
 using Tosh.Stdlib.Time;
@@ -230,6 +231,19 @@ public sealed class ToastRuntimeTests
 
         Assert.Empty(results);
         Assert.Equal($"alpha{Environment.NewLine}beta{Environment.NewLine}", output.ToString());
+        Assert.Null(engine.ShellRuntime);
+    }
+
+    [Fact]
+    public async Task Language_level_concurrency_runs_without_a_shell_runtime()
+    {
+        var language = new ToastRuntime();
+        language.Commands.RegisterOrReplace(new TimeoutCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync("timeout 1 { 1 + 2 }");
+
+        Assert.Equal(3, Assert.Single(results));
         Assert.Null(engine.ShellRuntime);
     }
 

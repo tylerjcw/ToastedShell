@@ -40,7 +40,7 @@ public sealed class TimeoutCommand : ShellCommand
             : Array.Empty<object?>();
 
         var timeoutDuration = TimeSpan.FromSeconds(seconds);
-        var baseExecutor = context.BlockExecutor ?? context.Runtime.BlockExecutor;
+        var baseExecutor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor;
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
 
         var operationContext = context with
