@@ -49,3 +49,25 @@ does not need `systemctl`.
 The borderline cases are worth deciding explicitly rather than by where a file
 currently sits: `Time` and `Data` read as language, `Net` reads as shell, and `Clr` is
 language only because the CLR bridge is how Tōast reaches types at all.
+
+## State after 2026-08-25
+
+Boundary preparation in `TOAST-0006` proved the first language-side groups in a host with no
+`ToshRuntime`: CLR, Data/hash, Time, Pipeline (except `inspect`), Text (except `wc`'s display
+override), Functional runtime helpers, and pure Concurrency (`async`, `race`, `settle`,
+`timeout`). `spawn` and `scope` now explicitly recover TōSh's opaque command host because they
+manipulate its concrete job table.
+
+Two reclassifications are explicit:
+
+- `inspect` is shell-side even though its directory says Pipeline. Its defining behavior is an
+  interactive inline tree browser and its fallback is a shell object inspector.
+- `wc`'s counting core is language-side, but `--show`/`--hide` currently attach preferences to
+  TōSh's display engine. Split that presentation decoration from the counter instead of moving
+  a display-selection type into the language contract.
+
+The next implementation slice is to divide `BuiltInCommands.RegisterDefaults` into explicit
+language and shell registrars while it is still one assembly. The full registrar remains their
+composition for compatibility. Once callers and tests choose a registrar deliberately, the two
+sets can move to separate projects without a behavioral diff; this is also the prerequisite for
+removing `ToshEngine(ToshRuntime)` and completing `TOAST-0006`'s physical assembly acceptance.

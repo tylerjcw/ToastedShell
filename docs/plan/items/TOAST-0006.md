@@ -293,6 +293,16 @@ front end and Tōme construct from `ToastRuntime`; the TōSh startup loader and 
 recover their own command host from the language runtime. Only source-compatibility APIs and
 tests still construct `ToshEngine` from `ToshRuntime` or read `engine.Runtime`.
 
+The remaining compatibility surface is measured rather than hidden: the test project contains
+1,479 `ToshEngine` constructions, including 343 parameterless calls that currently mean "create
+the complete TōSh command set", plus 54 direct `engine.Runtime`/`_engine.Runtime` reads. Shipping
+code has none. Removing the concrete constructor before dividing the standard-library registrar
+would either break that meaning or make the language secretly load the shell, so the final
+physical assembly move now crosses `TOAST-0007`: split the registrars, give tests an explicit
+full-shell factory, migrate the compatibility calls, then remove the concrete types from the
+language assembly. This revises the earlier strictly sequential `0006`-then-`0007` plan based on
+the boundary exposed by the completed production migration.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
