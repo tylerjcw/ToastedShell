@@ -10,7 +10,8 @@ public sealed class ToshRuntime :
     IToastSessionRedirection,
     IToastBackgroundJobHost,
     IToastRuntimeNamespaceFactory,
-    IToastEnvironmentExporter
+    IToastEnvironmentExporter,
+    IToastAutoCdCommandFactory
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -58,6 +59,7 @@ public sealed class ToshRuntime :
             BackgroundJobs = this,
             RuntimeNamespaceFactory = this,
             EnvironmentExporter = this,
+            AutoCdCommandFactory = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
@@ -650,6 +652,42 @@ public sealed class ToshRuntime :
             _directoryStack.Add(path);
             _directoryStackIndex = _directoryStack.Count - 1;
             SaveDirectoryStackUnsafe();
+        }
+    }
+
+    /// <summary>Creates TōSh's directory-navigation command for AutoCd.</summary>
+    public IShellCommand CreateAutoCdCommand(string resolvedPath)
+        => new HostedAutoCdCommand(this, resolvedPath);
+
+    private sealed class HostedAutoCdCommand(ToshRuntime runtime, string resolvedPath)
+        : IShellCommand
+    {
+        public string Name => "cd";
+
+        public string Description => "Auto-cd into a directory.";
+
+        public string Usage => "cd [path]";
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            var directoryInfo = new DirectoryInfo(resolvedPath);
+
+            if (!directoryInfo.Exists)
+            {
+                throw new InvalidOperationException($"Directory '{resolvedPath}' does not exist.");
+            }
+
+            var oldDirectory = FileSystemEntry.From(new DirectoryInfo(runtime.CurrentDirectory));
+            runtime.CurrentDirectory = directoryInfo.FullName;
+            runtime.PushDirectory(directoryInfo.FullName);
+
+            var newDirectory = FileSystemEntry.From(directoryInfo);
+            var sender = runtime.EventSenderFactory?.Invoke()
+                ?? new ShellEventSender(Function: null, Script: null, Line: null);
+            var evt = new DirectoryChangedEvent(oldDirectory, newDirectory, sender);
+            await runtime.Events.RaiseAsync(evt, context.CancellationToken);
+
+            yield return newDirectory;
         }
     }
 

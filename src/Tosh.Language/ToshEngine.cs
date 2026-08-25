@@ -114,7 +114,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     public ToshEngine(ToshRuntime? runtime = null)
     {
         ShellRuntime = runtime ?? ToshRuntime.CreateDefault();
-        LanguageRuntime = Runtime.Language;
+        LanguageRuntime = ShellRuntime.Language;
         LanguageRuntime.BlockExecutor = new EngineBlockExecutor(this);
         LanguageRuntime.Evaluator = this;
         LanguageRuntime.EventSenderFactory = CreateEventSender;
@@ -169,7 +169,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// <summary>
     /// Creates a forked child engine that shares the same <see cref="ToshRuntime"/> but has
     /// its own isolated scope stack pre-seeded with cloned copies of <paramref name="capturedScopes"/>.
-    /// The fork does NOT write back to <c>Runtime.BlockExecutor</c> / <c>Runtime.Evaluator</c> /
+    /// The fork does NOT write back to <c>LanguageRuntime.BlockExecutor</c> /
+    /// <c>LanguageRuntime.Evaluator</c> /
     /// <c>LanguageRuntime.EventSenderFactory</c>; instead it propagates its executor via
     /// <see cref="CommandContext.BlockExecutor"/>.
     /// </summary>
@@ -3210,7 +3211,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                         SourceText: sourceText,
                         Span: commandSyntax.Span,
                         Label: $"resolved to '{external.ResolvedPath}', but nothing is registered to launch it",
-                        Help: "reference Tosh.Stdlib, which registers a launcher automatically, or set Runtime.ExternalCommands to your own IExternalCommandFactory.")),
+                        Help: "reference Tosh.Stdlib, which registers a launcher automatically, or set ToastRuntime.ExternalCommands to your own IExternalCommandFactory.")),
             ExternalCommandLookupStatus.NotExecutable =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.external_command_not_executable",
@@ -3223,7 +3224,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                         ? $"make it executable, for example with `chmod +x {commandSyntax.Name}`, or run it with an interpreter."
                         : "check the file permissions or invoke it through an interpreter.")),
             ExternalCommandLookupStatus.IsDirectory when LanguageRuntime.Options.AutoCd =>
-                new AutoCdCommand(external.ResolvedPath ?? commandSyntax.Name),
+                CreateAutoCdCommand(
+                    external.ResolvedPath ?? commandSyntax.Name,
+                    sourceName,
+                    sourceText,
+                    commandSyntax.Span),
             ExternalCommandLookupStatus.IsDirectory =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.external_command_is_directory",
@@ -3233,7 +3238,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     Span: commandSyntax.Span,
                     Label: $"'{commandSyntax.Name}' does not refer to a runnable program")),
             _ when LanguageRuntime.Options.AutoCd && TryResolveAutoCdDirectory(commandSyntax.Name, out var autoCdPath) =>
-                new AutoCdCommand(autoCdPath),
+                CreateAutoCdCommand(autoCdPath, sourceName, sourceText, commandSyntax.Span),
             // `TS-P2-41`. A word that names a member of the running class is not an unknown
             // command, and saying so — then suggesting `bg` — was the whole complaint. Placed
             // after the external lookup above, so a real program of the same name still wins.
@@ -7429,40 +7434,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         return false;
     }
 
-    private sealed class AutoCdCommand : IShellCommand
+    private IShellCommand CreateAutoCdCommand(
+        string resolvedPath,
+        string sourceName,
+        string sourceText,
+        TextSpan span)
     {
-        private readonly string _resolvedPath;
-
-        public AutoCdCommand(string resolvedPath)
-        {
-            _resolvedPath = resolvedPath;
-        }
-
-        public string Name => "cd";
-        public string Description => "Auto-cd into a directory.";
-        public string Usage => "cd [path]";
-
-        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
-        {
-            var directoryInfo = new DirectoryInfo(_resolvedPath);
-
-            if (!directoryInfo.Exists)
-            {
-                throw new InvalidOperationException($"Directory '{_resolvedPath}' does not exist.");
-            }
-
-            var oldDirectory = FileSystemEntry.From(new DirectoryInfo(context.Runtime.CurrentDirectory));
-            context.Runtime.CurrentDirectory = directoryInfo.FullName;
-            context.Runtime.PushDirectory(directoryInfo.FullName);
-
-            var newDirectory = FileSystemEntry.From(directoryInfo);
-            var sender = context.Runtime.EventSenderFactory?.Invoke()
-                ?? new ShellEventSender(Function: null, Script: null, Line: null);
-            var evt = new DirectoryChangedEvent(oldDirectory, newDirectory, sender);
-            await context.Runtime.Events.RaiseAsync(evt, context.CancellationToken);
-
-            yield return newDirectory;
-        }
+        return LanguageRuntime.AutoCdCommandFactory?.CreateAutoCdCommand(resolvedPath)
+            ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.auto_cd_not_supported",
+                Title: "This host does not support AutoCd navigation.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: "AutoCd resolved this name to a directory, but the host cannot navigate there"));
     }
 
     internal sealed class EngineBlockExecutor : IShellBlockExecutor

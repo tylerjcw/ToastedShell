@@ -236,6 +236,13 @@ without one it updates the process environment directly, while TōSh supplies it
 also track the name as exported and mirror its value into session variables. Hosted and
 unhosted assignments are both pinned end to end.
 
+AutoCd no longer implements a shell command inside the evaluator. Command resolution still
+identifies that a name denotes a directory, then asks the optional
+`IToastAutoCdCommandFactory` for the host's navigation command. TōSh owns directory-history
+updates, event raising and the resulting `FileSystemEntry`; an embedded host can substitute
+another command or receives a capability diagnostic. No evaluator command calls
+`CommandContext.Runtime` now.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -285,9 +292,10 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       `IToastBackgroundJobHost` port and language-neutral request records. `$tosh` is now
       composed through `IToastRuntimeNamespaceFactory`, with only the script/function
       views left in the language assembly. `$env` export bookkeeping now uses the optional
-      `IToastEnvironmentExporter`. The remaining compatibility uses of `ToshRuntime` are
-      the shell constructor/fork and AutoCd navigation; those must move before the physical
-      assembly split. `CommandContext`
+      `IToastEnvironmentExporter`, and AutoCd command creation uses
+      `IToastAutoCdCommandFactory`. The remaining compatibility use of `ToshRuntime` is the
+      shell constructor/fork and its guarded `Runtime` property; that adapter must move or
+      disappear before the physical assembly split. `CommandContext`
       now requires a language runtime and carries
       the shell runtime only when one exists, so declared functions run unhosted. The
       host-signal port now

@@ -135,6 +135,9 @@ public sealed class ToastRuntime
     /// <summary>Tracks <c>$env</c> assignments for a host with export bookkeeping.</summary>
     public IToastEnvironmentExporter? EnvironmentExporter { get; init; }
 
+    /// <summary>Creates host navigation commands for AutoCd resolution.</summary>
+    public IToastAutoCdCommandFactory? AutoCdCommandFactory { get; init; }
+
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the
     /// host does not expose process execution.

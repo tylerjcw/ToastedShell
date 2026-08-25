@@ -249,7 +249,7 @@ public sealed partial class ToshEngine
     /// that exits early would emit its output and then its cleanup out of order.
     ///
     /// <c>exit</c> is why the deferred blocks are gathered as the loop goes rather
-    /// than collected up front: the loop stops at <c>Runtime.ExitRequested</c>, and
+    /// than collected up front: the loop stops at <c>LanguageRuntime.ExitRequested</c>, and
     /// only the <c>defer</c> statements actually *reached* by then should run —
     /// registering one that execution never got to would invent cleanup for a
     /// resource that was never acquired.

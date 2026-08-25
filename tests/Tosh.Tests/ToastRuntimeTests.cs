@@ -45,6 +45,7 @@ public sealed class ToastRuntimeTests
         Assert.Null(language.BackgroundJobs);
         Assert.Null(language.RuntimeNamespaceFactory);
         Assert.Null(language.EnvironmentExporter);
+        Assert.Null(language.AutoCdCommandFactory);
         Assert.Null(language.ExternalCommands);
         Assert.Empty(language.InvocationArguments);
         Assert.Null(language.BlockExecutor);
@@ -177,6 +178,61 @@ public sealed class ToastRuntimeTests
         }
     }
 
+    [Fact]
+    public async Task A_language_engine_delegates_auto_cd_without_a_shell_runtime()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"toast-autocd-{Guid.NewGuid():N}");
+        var target = Directory.CreateDirectory(Path.Combine(root, "target")).FullName;
+
+        try
+        {
+            var factory = new RecordingAutoCdCommandFactory();
+            var language = new ToastRuntime
+            {
+                AutoCdCommandFactory = factory,
+                CurrentDirectory = root,
+            };
+            language.Options.AutoCd = true;
+            var engine = new ToshEngine(language);
+
+            var results = await engine.ExecuteToListAsync("target");
+
+            Assert.Equal(target, Assert.Single(results));
+            Assert.Equal(target, factory.ResolvedPath);
+            Assert.Null(engine.ShellRuntime);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task An_unhosted_engine_reports_when_auto_cd_is_unavailable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"toast-autocd-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(root, "target"));
+
+        try
+        {
+            var language = new ToastRuntime
+            {
+                CurrentDirectory = root,
+            };
+            language.Options.AutoCd = true;
+            var engine = new ToshEngine(language);
+
+            var failure = await Assert.ThrowsAsync<ToshDiagnosticException>(
+                () => engine.ExecuteToListAsync("target"));
+
+            Assert.Equal("tosh.runtime.auto_cd_not_supported", failure.Diagnostics[0].Code);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>
     /// The language runtime names contracts, not the .NET reflection implementations.
     /// A host may replace all three services while constructing the runtime; the default
@@ -234,6 +290,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime, runtime.Language.BackgroundJobs);
         Assert.Same(runtime, runtime.Language.RuntimeNamespaceFactory);
         Assert.Same(runtime, runtime.Language.EnvironmentExporter);
+        Assert.Same(runtime, runtime.Language.AutoCdCommandFactory);
         Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
         Assert.Same(runtime.InvocationArguments, runtime.Language.InvocationArguments);
         Assert.Same(runtime.BlockExecutor, runtime.Language.BlockExecutor);
@@ -366,5 +423,31 @@ public sealed class ToastRuntimeTests
 
         public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
             => [new("Marker", 42)];
+    }
+
+    private sealed class RecordingAutoCdCommandFactory : IToastAutoCdCommandFactory
+    {
+        public string? ResolvedPath { get; private set; }
+
+        public IShellCommand CreateAutoCdCommand(string resolvedPath)
+        {
+            ResolvedPath = resolvedPath;
+            return new AutoCdProbeCommand(resolvedPath);
+        }
+    }
+
+    private sealed class AutoCdProbeCommand(string resolvedPath) : IShellCommand
+    {
+        public string Name => "cd";
+
+        public string Description => "Records embedded-host AutoCd navigation.";
+
+        public string Usage => "cd <path>";
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            await Task.CompletedTask;
+            yield return resolvedPath;
+        }
     }
 }

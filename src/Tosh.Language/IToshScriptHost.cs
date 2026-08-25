@@ -21,7 +21,7 @@ namespace Tosh.Language;
 /// are.
 /// </para>
 /// <para>
-/// Commands reach it through <c>context.Runtime.Evaluator as IToshScriptHost</c>, which
+/// Commands reach it through <c>context.LanguageRuntime.Evaluator as IToshScriptHost</c>, which
 /// is the pattern `XargsCommand`, `VarsCommand` and `ExportCommand` already use for
 /// <see cref="Tosh.Runtime.IShellEvaluator"/>. Resolving at execute time rather than at
 /// construction is what lets these commands be registered before an engine exists.
