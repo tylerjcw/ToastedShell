@@ -137,9 +137,9 @@ source rather than only here.
       for an evaluator to re-read — asserted by
       `The_readiness_probe_compiles_without_source_replay`. What remains is the reference:
       the emitted assembly still names `Tosh.Compiler.Runtime`, which bridges to
-      `Tosh.Language`, and the `pure` profile now refuses three tier-2 features —
-      host-dispatched `new`, dynamic member access, and union field annotation conversion.
-      Those three are the whole of the distance left
+      `Tosh.Language`, and the `pure` profile now refuses two tier-2 features —
+      host-dispatched `new` and dynamic member access. Those two are the whole of the
+      distance left
 - [x] Whatever fights back is filed, not worked around — four fixed, one filed
 - [x] A negative control
 
@@ -188,6 +188,22 @@ The focused compiler, matrix, pipeline-value, and pure dependency audit group is
 542 tests. Recompiling the full readiness probe under `--profile pure` now reports exactly
 three refusals: host-dispatched CLR construction, dynamic member access, and union field
 annotation conversion. The former command-dispatch refusal is gone.
+
+## Progress — 2026-08-24: known union annotations are portable
+
+Non-generic union variants already emitted direct CLR constructors, but every annotated
+field still called back into `ToshHost.CheckTypeAtSource`. Concrete CLR-backed annotations
+now use a small `Tosh.Runtime` boundary: the compiler passes the resolved CLR type token,
+the boundary applies the shared `TypeConversion` rules, and conversion failures retain the
+canonical diagnostic code, fractional-loss guidance, source span, and fully qualified field
+owner. Refinements, generic annotations, constraints, and special dynamic/void annotations
+remain on the language-engine path rather than being approximated.
+
+This preserves conversion such as `Lit("1.5")` to a `double` field and direct recursive
+union checks such as `Add(left: Node, right: Node)`. The focused emitter, matrix,
+differential, pipeline-value, and pure dependency audit group is green at 709 tests. The
+full readiness probe now reports exactly two pure-profile refusals: host-dispatched CLR
+construction and dynamic member access.
 
 ## Notes
 

@@ -2666,14 +2666,35 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Typed_recursive_union_constructs_and_converts_fields_directly()
     {
-        var (output, result, _) = CompileLoadAndRun(
+        const string source =
             "union EmitExpr { Lit(value: double) Add(left: EmitExpr, right: EmitExpr) }\n"
             + "var tree = EmitExpr.Add(EmitExpr.Lit(\"1.5\"), EmitExpr.Lit(2))\n"
-            + "echo $tree.left.value\necho $tree.right.value");
+            + "echo $tree.left.value\necho $tree.right.value";
+
+        var (output, result, _) = CompileLoadAndRun(source);
 
         Assert.True(result.IsClean,
             $"expected clean emit, got: {string.Join(", ", result.UnsupportedShapes)}");
         Assert.Equal("1.5\n2", output.Trim());
+
+        var pure = EmitWithProfile(
+            "union EmitExpr { Lit(value: double) Add(left: EmitExpr, right: EmitExpr) }\n"
+            + "var leaf = EmitExpr.Lit(\"1.5\")\n"
+            + "writeline $leaf.value",
+            CompileProfile.Pure);
+        Assert.True(pure.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", pure.UnsupportedShapes)}");
+    }
+
+    [Fact]
+    public void Typed_union_portable_conversion_preserves_field_failure_diagnostic()
+    {
+        var thrown = Assert.Throws<TargetInvocationException>(() => CompileLoadAndRun(
+            "union TypedLit { Lit(value: double) }\nTypedLit.Lit(\"bad\")"));
+
+        var diagnostic = Assert.IsType<ToshDiagnosticException>(thrown.InnerException);
+        Assert.Equal("tosh.runtime.annotation_conversion_failed", Assert.Single(diagnostic.Diagnostics).Code);
+        Assert.Contains("TypedLit.Lit.value", diagnostic.Message, StringComparison.Ordinal);
     }
 
     [Fact]

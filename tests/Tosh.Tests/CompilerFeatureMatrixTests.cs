@@ -207,6 +207,15 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Unions emit a CLR abstract base class + sealed variant subclasses.");
 
         yield return Case(
+            "types.union-known-field-annotation",
+            "Types",
+            "union Reading { Value(number: double) }\nvar reading = Reading.Value(\"1.5\")",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "A union field with a concrete CLR-backed annotation converts through the portable boundary.");
+
+        yield return Case(
             "types.enum-definition",
             "Types",
             "enum Color { Red, Green, Blue }",

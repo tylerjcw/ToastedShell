@@ -757,6 +757,20 @@ internal sealed partial class EmitterImpl : IDisposable
                 typeof(string),
                 typeof(string),
             })!;
+    private static readonly MethodInfo s_portableConvertKnownAnnotation =
+        typeof(AnnotationConversionBoundary).GetMethod(
+            nameof(AnnotationConversionBoundary.ConvertKnownType),
+            new[]
+            {
+                typeof(object),
+                typeof(Type),
+                typeof(string),
+                typeof(int),
+                typeof(int),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+            })!;
 
     private static readonly MethodInfo s_hostNormalizePackedArguments =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.NormalizePackedArguments),

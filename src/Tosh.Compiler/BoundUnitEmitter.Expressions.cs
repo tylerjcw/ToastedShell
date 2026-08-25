@@ -771,14 +771,29 @@ internal sealed partial class EmitterImpl
                             {
                                 var parameter = variant.Parameters[i];
                                 var parse = (ParseResult)_unit.ParseResult;
-                                RequireTier(2, "union field annotation conversion");
+                                var usesPortableBoundary = TryResolvePortableUnionFieldType(
+                                    fieldType,
+                                    out var targetType);
+                                if (usesPortableBoundary)
+                                {
+                                    _il.Emit(OpCodes.Ldtoken, targetType!);
+                                    _il.Emit(OpCodes.Call, s_runtimeTypeHandle_GetTypeFromHandle);
+                                }
                                 _il.Emit(OpCodes.Ldstr, fieldType);
                                 _il.Emit(OpCodes.Ldc_I4, parameter.Span.Start);
                                 _il.Emit(OpCodes.Ldc_I4, parameter.Span.Length);
                                 _il.Emit(OpCodes.Ldstr, $"field '{unionName}.{variantName}.{parameter.Name}'");
                                 _il.Emit(OpCodes.Ldstr, parse.SourceName);
                                 _il.Emit(OpCodes.Ldstr, parse.SourceText);
-                                _il.Emit(OpCodes.Call, s_hostCheckTypeAtSource);
+                                if (usesPortableBoundary)
+                                {
+                                    _il.Emit(OpCodes.Call, s_portableConvertKnownAnnotation);
+                                }
+                                else
+                                {
+                                    RequireTier(2, "union field annotation conversion");
+                                    _il.Emit(OpCodes.Call, s_hostCheckTypeAtSource);
+                                }
                             }
                         }
 
@@ -813,6 +828,49 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Call, s_hostInvokeQualifiedMethod);
         }
         return typeof(object);
+    }
+
+    /// <summary>
+    /// Resolves the annotation shapes whose conversion semantics are wholly represented by
+    /// a CLR type. Refinements, generic annotations, constraints, and special dynamic/void
+    /// names retain the language-engine boundary.
+    /// </summary>
+    private bool TryResolvePortableUnionFieldType(string typeName, out Type? targetType)
+    {
+        targetType = null;
+        var normalized = typeName.EndsWith("?", StringComparison.Ordinal)
+            ? typeName[..^1]
+            : typeName;
+
+        if (normalized.Length == 0
+            || normalized.Contains('<', StringComparison.Ordinal)
+            || normalized.Contains('[', StringComparison.Ordinal)
+            || normalized.Contains('(', StringComparison.Ordinal)
+            || _clrAliasTypes.Contains(normalized)
+            || string.Equals(normalized, "any", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "dynamic", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "void", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "nothing", StringComparison.OrdinalIgnoreCase)
+            || global::Tosh.Language.ToshTypeParameterConstraintRegistry.TryGet(normalized, out _))
+        {
+            return false;
+        }
+
+        if (_clrTypeShells.TryGetValue(normalized, out var shell))
+        {
+            targetType = shell.Type;
+            return true;
+        }
+
+        if (DotNetTypeResolver.TryResolveToastTypeName(normalized, out var resolved)
+            && resolved is not null
+            && !resolved.ContainsGenericParameters)
+        {
+            targetType = resolved;
+            return true;
+        }
+
+        return false;
     }
 
     private Type? EmitMethodCall(BoundMethodCall call)
