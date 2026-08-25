@@ -178,4 +178,96 @@ public sealed class ToastStreamTests
             if (File.Exists(path)) { File.Delete(path); }
         }
     }
+
+    /// <summary>
+    /// The evaluator no longer reaches through its compatibility <c>Runtime</c> property
+    /// while redirecting. This would throw before the session-redirection port existed.
+    /// </summary>
+    [Fact]
+    public async Task An_unhosted_engine_redirects_without_a_shell_runtime()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"toast-stream-{Guid.NewGuid():N}.txt");
+
+        try
+        {
+            var language = new ToastRuntime();
+            language.Commands.RegisterOrReplace(new LanguageEmitCommand());
+            var engine = new ToshEngine(language);
+            var before = language.Output;
+
+            await engine.ExecuteToListAsync($"language-emit out> \"{path}\"");
+
+            Assert.Equal("standalone", File.ReadAllText(path).TrimEnd());
+            Assert.Same(before, language.Output);
+        }
+        finally
+        {
+            if (File.Exists(path)) { File.Delete(path); }
+        }
+    }
+
+    /// <summary>
+    /// Shell-provided commands still follow redirection, and disposal restores the exact
+    /// session writer that was present before the pipeline.
+    /// </summary>
+    [Fact]
+    public async Task Shell_session_redirection_is_scoped_and_restored()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), $"toast-stream-{Guid.NewGuid():N}.txt");
+        var errorPath = Path.Combine(Path.GetTempPath(), $"toast-stream-{Guid.NewGuid():N}.err");
+        var sessionOutput = new StringWriter();
+        var sessionError = new StringWriter();
+        var runtime = new ToshRuntime(sessionOutput, sessionError);
+        runtime.Commands.RegisterOrReplace(new SessionWriteCommand());
+        var engine = new ToshEngine(runtime);
+
+        try
+        {
+            await engine.ExecuteToListAsync(
+                $"session-write out> \"{outputPath}\" err> \"{errorPath}\"");
+
+            Assert.Equal("shell output", File.ReadAllText(outputPath).TrimEnd());
+            Assert.Equal("shell error", File.ReadAllText(errorPath).TrimEnd());
+            Assert.Equal(string.Empty, sessionOutput.ToString());
+            Assert.Equal(string.Empty, sessionError.ToString());
+            Assert.Same(sessionOutput, runtime.Output);
+            Assert.Same(sessionError, runtime.Error);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) { File.Delete(outputPath); }
+            if (File.Exists(errorPath)) { File.Delete(errorPath); }
+        }
+    }
+
+    private sealed class LanguageEmitCommand : IShellCommand
+    {
+        public string Name => "language-emit";
+
+        public string Description => "Emits a value without requiring a shell session.";
+
+        public string Usage => "language-emit";
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            await Task.CompletedTask;
+            yield return new ShellTextLine("standalone");
+        }
+    }
+
+    private sealed class SessionWriteCommand : IShellCommand
+    {
+        public string Name => "session-write";
+
+        public string Description => "Writes through the shell session for a boundary test.";
+
+        public string Usage => "session-write";
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            await context.Runtime.Output.WriteLineAsync("shell output");
+            await context.Runtime.Error.WriteLineAsync("shell error");
+            yield break;
+        }
+    }
 }

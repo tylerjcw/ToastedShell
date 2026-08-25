@@ -36,9 +36,17 @@ public sealed class ToastRuntime
     private sealed class UnhostedServices :
         IToastHostSignals,
         IToastDiagnosticSink,
-        IToastExecutionObserver
+        IToastExecutionObserver,
+        IToastSessionRedirection
     {
         internal static readonly UnhostedServices Instance = new();
+
+        private sealed class NoopScope : IDisposable
+        {
+            internal static readonly NoopScope Instance = new();
+
+            public void Dispose() { }
+        }
 
         public bool ExitRequested => false;
 
@@ -63,6 +71,9 @@ public sealed class ToastRuntime
         public void SetLastResult(object? value) { }
 
         public void SetLastExitCode(int exitCode) { }
+
+        public IDisposable Begin(IToastStream? output, IToastStream? error)
+            => NoopScope.Instance;
     }
 
     /// <summary>Where a program's ordinary output goes.</summary>
@@ -95,6 +106,15 @@ public sealed class ToastRuntime
 
     /// <summary>Receives result and exit-code observations for host session state.</summary>
     public IToastExecutionObserver ExecutionObserver { get; init; } = UnhostedServices.Instance;
+
+    /// <summary>Mirrors language redirection into an optional host session.</summary>
+    /// <remarks>
+    /// The default scope is inert because an embedded language host need not have a
+    /// session. TōSh supplies its live implementation so shell commands and external
+    /// processes follow the language's redirected destinations without the evaluator
+    /// reaching into <c>ToshRuntime.Output</c> or <c>ToshRuntime.Error</c>.
+    /// </remarks>
+    public IToastSessionRedirection SessionRedirection { get; init; } = UnhostedServices.Instance;
 
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the

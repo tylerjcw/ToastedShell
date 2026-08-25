@@ -1,8 +1,13 @@
 using System.Collections.Concurrent;
+using System.Text;
 
 namespace Tosh.Runtime;
 
-public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink, IToastExecutionObserver
+public sealed class ToshRuntime :
+    IToastHostSignals,
+    IToastDiagnosticSink,
+    IToastExecutionObserver,
+    IToastSessionRedirection
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -46,6 +51,7 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink, IToas
             HostSignals = this,
             Diagnostics = this,
             ExecutionObserver = this,
+            SessionRedirection = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
@@ -100,6 +106,103 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink, IToas
 
             if (Language is not null) { Language.Error = ToastStreams.FromWriter(value); }
         }
+    }
+
+    /// <summary>
+    /// Mirrors a language-owned redirection into the shell session for the lifetime of a
+    /// pipeline. The language streams themselves remain untouched; only the legacy shell
+    /// writers used by shell commands and process plumbing are scoped here (`TOAST-0006`).
+    /// </summary>
+    public IDisposable Begin(IToastStream? output, IToastStream? error)
+    {
+        var originalOutput = _output;
+        var originalError = _error;
+
+        if (output is not null)
+        {
+            _output = new ToastStreamWriter(output);
+        }
+
+        if (error is not null)
+        {
+            _error = new ToastStreamWriter(error);
+        }
+
+        return new SessionRedirectionScope(
+            this,
+            originalOutput,
+            originalError,
+            restoreOutput: output is not null,
+            restoreError: error is not null);
+    }
+
+    private sealed class SessionRedirectionScope(
+        ToshRuntime runtime,
+        TextWriter originalOutput,
+        TextWriter originalError,
+        bool restoreOutput,
+        bool restoreError) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            if (restoreOutput)
+            {
+                runtime._output = originalOutput;
+            }
+
+            if (restoreError)
+            {
+                runtime._error = originalError;
+            }
+        }
+    }
+
+    private sealed class ToastStreamWriter(IToastStream stream) : TextWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public override void Write(char value) => stream.WriteText(value.ToString());
+
+        public override void Write(string? value)
+        {
+            if (value is not null)
+            {
+                stream.WriteText(value);
+            }
+        }
+
+        public override void WriteLine(string? value)
+            => stream.WriteTextLine(value ?? string.Empty);
+
+        public override void Flush() => stream.Flush();
+
+        public override Task WriteAsync(string? value)
+            => value is null
+                ? Task.CompletedTask
+                : stream.WriteTextAsync(value, CancellationToken.None).AsTask();
+
+        public override Task WriteLineAsync(string? value)
+            => stream.WriteTextLineAsync(value ?? string.Empty, CancellationToken.None).AsTask();
+
+        public override Task WriteAsync(
+            ReadOnlyMemory<char> buffer,
+            CancellationToken cancellationToken = default)
+            => stream.WriteTextAsync(buffer.ToString(), cancellationToken).AsTask();
+
+        public override Task WriteLineAsync(
+            ReadOnlyMemory<char> buffer,
+            CancellationToken cancellationToken = default)
+            => stream.WriteTextLineAsync(buffer.ToString(), cancellationToken).AsTask();
+
+        public override Task FlushAsync()
+            => stream.FlushAsync(CancellationToken.None).AsTask();
     }
 
     public string CurrentDirectory

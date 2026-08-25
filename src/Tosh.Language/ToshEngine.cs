@@ -2640,9 +2640,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             StringComparison.Ordinal);
     }
 
-    private static TextWriter CreateCompositeWriter(IReadOnlyList<TextWriter> writers)
-        => writers.Count == 1 ? writers[0] : new CompositeTextWriter(writers);
-
     private static async IAsyncEnumerable<object?> ReadLinesAsync(
         string path,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)

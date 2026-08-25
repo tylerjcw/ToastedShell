@@ -722,7 +722,7 @@ public sealed partial class ToshEngine
 
     private void WriteAutoHelp(SubcommandNode target, IReadOnlyList<DispatchFrame> path)
     {
-        var writer = Runtime.Output;
+        using var writer = new StringWriter();
         var usageLine = BuildSubcommandUsageLine(path, target);
 
         // Header: "name — description" (or just usage if no description).
@@ -882,7 +882,8 @@ public sealed partial class ToshEngine
             }
         }
 
-        writer.Flush();
+        LanguageRuntime.Output.WriteText(writer.ToString());
+        LanguageRuntime.Output.Flush();
     }
 
     private static string FormatFlagLine(FunctionParameterSyntax flag, int nameWidth, int typeWidth)

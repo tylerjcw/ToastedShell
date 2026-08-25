@@ -185,8 +185,9 @@ public sealed partial class ToshEngine
         var errorTargets = new List<TextWriter>();
         IToastStream? originalOutput = null;
         IToastStream? originalError = null;
-        TextWriter? originalSessionOutput = null;
-        TextWriter? originalSessionError = null;
+        IToastStream? redirectedOutput = null;
+        IToastStream? redirectedError = null;
+        IDisposable? sessionRedirection = null;
 
         try
         {
@@ -252,28 +253,26 @@ public sealed partial class ToshEngine
             if (outputTargets.Count > 0)
             {
                 originalOutput = LanguageRuntime.Output;
-                LanguageRuntime.Output = ToastStreams.Composite(
+                redirectedOutput = ToastStreams.Composite(
                     outputTargets.Select(ToastStreams.FromWriter).ToArray());
-
-                // The session's writer is moved too, and that half is a **shell**
-                // mechanism rather than a language one: TōSh commands write diagnostics
-                // and passthrough text to `Runtime.Error`/`Runtime.Output`, and an
-                // external process inherits handles decided from them. The language no
-                // longer reads either — it writes to the stream above — so a host with no
-                // session redirects with this whole branch inert.
-                originalSessionOutput = Runtime.Output;
-                Runtime.Output = CreateCompositeWriter(outputTargets);
+                LanguageRuntime.Output = redirectedOutput;
             }
 
             if (errorTargets.Count > 0)
             {
                 originalError = LanguageRuntime.Error;
-                LanguageRuntime.Error = ToastStreams.Composite(
+                redirectedError = ToastStreams.Composite(
                     errorTargets.Select(ToastStreams.FromWriter).ToArray());
-
-                originalSessionError = Runtime.Error;
-                Runtime.Error = CreateCompositeWriter(errorTargets);
+                LanguageRuntime.Error = redirectedError;
             }
+
+            // TōSh commands and external-process plumbing still write through the
+            // shell session. Mirror the language destinations through an optional host
+            // capability; an embedded Tōast runtime receives an inert scope and never
+            // needs a ToshRuntime (`TOAST-0006`).
+            sessionRedirection = LanguageRuntime.SessionRedirection.Begin(
+                redirectedOutput,
+                redirectedError);
 
             var hasOutputRedirection = outputTargets.Count > 0;
 
@@ -309,19 +308,7 @@ public sealed partial class ToshEngine
         }
         finally
         {
-            // Session first, language second, and the order matters: assigning
-            // `Runtime.Output` re-derives `Language.Output` from the writer, so restoring
-            // the language destination first would leave an equivalent-but-different
-            // adapter in place instead of the exact one that was saved.
-            if (originalSessionOutput is not null)
-            {
-                Runtime.Output = originalSessionOutput;
-            }
-
-            if (originalSessionError is not null)
-            {
-                Runtime.Error = originalSessionError;
-            }
+            sessionRedirection?.Dispose();
 
             if (originalOutput is not null)
             {

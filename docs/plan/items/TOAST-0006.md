@@ -205,6 +205,15 @@ by `A_language_engine_invokes_a_declared_function_without_a_shell_runtime`. Shel
 operations remain explicit capabilities and are the remaining assembly-division work,
 rather than a prerequisite for constructing or running the language.
 
+The last direct session-writer access left redirection on 2026-08-25.
+`IToastSessionRedirection` accepts language-owned `IToastStream` destinations and returns a
+scope; its embedded default is inert, while `ToshRuntime` adapts the streams for legacy shell
+commands and external-process plumbing and restores the exact session writers on disposal.
+An unhosted engine now executes an output redirection end to end, and hosted stdout/stderr
+redirections are pinned to follow the scope and restore both session writers. Auto-help also
+buffers into `LanguageRuntime.Output`, so `Tosh.Language` no longer reads or assigns
+`ToshRuntime.Output` or `ToshRuntime.Error`.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -248,9 +257,10 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       the composed `LanguageRuntime`, and every language-owned state/service access now
       routes through it rather than through a forwarding property on `ToshRuntime`. The
       existing host-signal and diagnostic-sink ports are also supplied on `ToastRuntime`,
-      with inert defaults for a language-only host. The remaining direct host uses are
-      shell-session mirroring during redirection and auto-help, background jobs,
-      and `$tosh` composition. `CommandContext` now requires a language runtime and carries
+      with inert defaults for a language-only host. Shell-session mirroring during
+      redirection now uses the scoped `IToastSessionRedirection` port, and auto-help writes
+      through the language stream. The remaining direct host uses are background jobs and
+      `$tosh` composition. `CommandContext` now requires a language runtime and carries
       the shell runtime only when one exists, so declared functions run unhosted. The
       host-signal port now
       describes the language's real environment duties—synchronize an already-exported

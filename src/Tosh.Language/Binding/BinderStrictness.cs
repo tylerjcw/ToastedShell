@@ -21,8 +21,8 @@ public enum BinderStrictness
     Lenient,
 
     /// <summary>
-    /// Binder writes diagnostics to <c>Runtime.Error</c> but execution
-    /// proceeds — the evaluator still attempts runtime resolution
+    /// Binder reports diagnostics through the language runtime's diagnostic sink, but
+    /// execution proceeds — the evaluator still attempts runtime resolution
     /// (which may succeed via PATH or fail with the runtime's
     /// <c>command_not_found</c> diagnostic). Default for the REPL,
     /// startup files, and <c>autoload/</c>.
