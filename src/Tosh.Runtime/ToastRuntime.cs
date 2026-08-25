@@ -138,6 +138,9 @@ public sealed class ToastRuntime
     /// <summary>Creates host navigation commands for AutoCd resolution.</summary>
     public IToastAutoCdCommandFactory? AutoCdCommandFactory { get; init; }
 
+    /// <summary>Opaque host state available to commands that belong to that host.</summary>
+    public IToastCommandHost? CommandHost { get; init; }
+
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the
     /// host does not expose process execution.

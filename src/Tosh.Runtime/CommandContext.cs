@@ -71,15 +71,28 @@ public sealed record CommandContext
         this.OutputIsCaptured = OutputIsCaptured;
         this.ScopedCommands = ScopedCommands;
         this.ShellTypes = ShellTypes;
-        this.ShellRuntime = ShellRuntime;
+        this.CommandHost = LanguageRuntime.CommandHost ?? ShellRuntime;
+        this.ShellRuntime = ShellRuntime ?? this.CommandHost as ToshRuntime;
     }
 
     public ToastRuntime LanguageRuntime { get; init; }
 
     public ToshRuntime? ShellRuntime { get; init; }
 
+    /// <summary>
+    /// Host-specific command state carried opaquely by the language runtime.
+    /// </summary>
+    public IToastCommandHost? CommandHost { get; init; }
+
     public ToshRuntime Runtime => ShellRuntime ?? throw new InvalidOperationException(
         "This command context has no TōSh session runtime. The command requires a shell host capability.");
+
+    /// <summary>Gets the invoking host as the type required by a host-specific command.</summary>
+    public THost RequireCommandHost<THost>()
+        where THost : class, IToastCommandHost
+        => CommandHost as THost
+           ?? throw new InvalidOperationException(
+               $"This command requires a '{typeof(THost).Name}' host, but the active Tōast runtime did not supply one.");
 
     public IAsyncEnumerable<object?> Input { get; init; }
 

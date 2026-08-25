@@ -11,7 +11,8 @@ public sealed class ToshRuntime :
     IToastBackgroundJobHost,
     IToastRuntimeNamespaceFactory,
     IToastEnvironmentExporter,
-    IToastAutoCdCommandFactory
+    IToastAutoCdCommandFactory,
+    IToastCommandHost
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -60,6 +61,7 @@ public sealed class ToshRuntime :
             RuntimeNamespaceFactory = this,
             EnvironmentExporter = this,
             AutoCdCommandFactory = this,
+            CommandHost = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);

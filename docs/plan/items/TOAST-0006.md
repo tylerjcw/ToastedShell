@@ -273,6 +273,13 @@ execution from the command context or `LanguageRuntime`; a standalone `timeout` 
 `spawn` and `scope` deliberately remain shell-bound for now because they manipulate TōSh's
 concrete job table rather than the neutral background-pipeline capability.
 
+Host-specific commands no longer need the language contract to enumerate a shell runtime's
+members. `ToastRuntime.CommandHost` carries an opaque `IToastCommandHost`, and
+`CommandContext.RequireCommandHost<T>` lets a command package recover its own host type. TōSh
+supplies its session runtime; a test supplies an unrelated host and invokes its command through
+the language engine. The concrete `CommandContext.Runtime` view remains temporarily while
+shell command callers migrate to this host-neutral seam.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

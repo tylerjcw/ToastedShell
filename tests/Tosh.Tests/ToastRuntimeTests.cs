@@ -51,6 +51,7 @@ public sealed class ToastRuntimeTests
         Assert.Null(language.RuntimeNamespaceFactory);
         Assert.Null(language.EnvironmentExporter);
         Assert.Null(language.AutoCdCommandFactory);
+        Assert.Null(language.CommandHost);
         Assert.Null(language.ExternalCommands);
         Assert.Empty(language.InvocationArguments);
         Assert.Null(language.BlockExecutor);
@@ -141,6 +142,23 @@ public sealed class ToastRuntimeTests
         Assert.Null(engine.ShellRuntime);
         Assert.NotNull(factory.Script);
         Assert.NotNull(factory.Function);
+    }
+
+    [Fact]
+    public async Task A_language_engine_carries_an_opaque_command_host()
+    {
+        var host = new RecordingCommandHost();
+        var language = new ToastRuntime
+        {
+            CommandHost = host,
+        };
+        language.Commands.RegisterOrReplace(new CommandHostProbeCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync("command-host-probe");
+
+        Assert.Equal(42, Assert.Single(results));
+        Assert.Null(engine.ShellRuntime);
     }
 
     [Fact]
@@ -381,6 +399,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime, runtime.Language.RuntimeNamespaceFactory);
         Assert.Same(runtime, runtime.Language.EnvironmentExporter);
         Assert.Same(runtime, runtime.Language.AutoCdCommandFactory);
+        Assert.Same(runtime, runtime.Language.CommandHost);
         Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
         Assert.Same(runtime.InvocationArguments, runtime.Language.InvocationArguments);
         Assert.Same(runtime.BlockExecutor, runtime.Language.BlockExecutor);
@@ -538,6 +557,26 @@ public sealed class ToastRuntimeTests
         {
             await Task.CompletedTask;
             yield return resolvedPath;
+        }
+    }
+
+    private sealed class RecordingCommandHost : IToastCommandHost
+    {
+        public int Marker => 42;
+    }
+
+    private sealed class CommandHostProbeCommand : IShellCommand
+    {
+        public string Name => "command-host-probe";
+
+        public string Description => "Reads opaque host state from a command context.";
+
+        public string Usage => "command-host-probe";
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            await Task.CompletedTask;
+            yield return context.RequireCommandHost<RecordingCommandHost>().Marker;
         }
     }
 }
