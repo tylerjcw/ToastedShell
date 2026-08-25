@@ -32,16 +32,16 @@ namespace Tosh.Runtime;
 /// merged into a single command before being written back.
 /// </para>
 /// </remarks>
-public interface ICommandTable
+public interface ICommandTable : IScopedCommandView
 {
     /// <summary>Every registered command, ordered by name.</summary>
-    IEnumerable<IShellCommand> All { get; }
+    new IEnumerable<IShellCommand> All { get; }
 
     /// <summary>Every registered name, including aliases.</summary>
     IEnumerable<string> AllNames { get; }
 
     /// <summary>Looks a name up, returning false rather than throwing when it is unknown.</summary>
-    bool TryGet(string name, out IShellCommand command);
+    new bool TryGet(string name, out IShellCommand command);
 
     /// <summary>Adds a command, replacing any existing one of the same name.</summary>
     void RegisterOrReplace(IShellCommand command);
@@ -54,5 +54,5 @@ public interface ICommandTable
     /// what a scope can see: a scope's own table stores each name as its own entry, so
     /// aliases can only come from the registry.
     /// </summary>
-    IReadOnlyDictionary<string, IReadOnlyList<string>> GetAliasMap();
+    new IReadOnlyDictionary<string, IReadOnlyList<string>> GetAliasMap();
 }

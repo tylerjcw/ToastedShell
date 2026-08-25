@@ -397,7 +397,16 @@ public sealed partial class ToshEngine
             allocationSpecification = values[0];
         }
 
-        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver(), BlockExecutor: _ownBlockExecutor, ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
+        var context = new CommandContext(
+            LanguageRuntime,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            [allocationSpecification],
+            cancellationToken,
+            ScopedTypeResolver: CreateScopedTypeResolver(),
+            BlockExecutor: _ownBlockExecutor,
+            ScopedCommands: CreateScopedCommandView(),
+            ShellTypes: this,
+            ShellRuntime: ShellRuntime);
         var size = NativeCommandUtilities.ResolveAllocationSize(context, allocationSpecification, 0);
 
         if (size < 0)
@@ -850,14 +859,15 @@ public sealed partial class ToshEngine
         }
 
         var context = new CommandContext(
-            Runtime,
+            LanguageRuntime,
             AsyncEnumerableExtensions.Empty<object?>(),
             arguments,
             cancellationToken,
             ScopedTypeResolver: CreateScopedTypeResolver(),
             BlockExecutor: _ownBlockExecutor,
             ScopedCommands: CreateScopedCommandView(),
-            ShellTypes: this);
+            ShellTypes: this,
+            ShellRuntime: ShellRuntime);
 
         // `$this` is the receiver itself rather than a self-reference: an extension
         // adds behaviour to a value, and has no instance state of its own to reach.

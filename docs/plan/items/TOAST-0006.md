@@ -192,16 +192,18 @@ complete:
 | `Formatter` (4) | **Done in `TOAST-0014`.** Language rendering is independent of display profiles |
 | `Invoker` | **Done 2026-08-24.** `IObjectInvoker` is the language contract; the .NET host supplies `ReflectionInvoker` |
 
-**And the step that makes this real rather than structural: `ToshEngine` still takes a
-`ToshRuntime`.** This was the remaining public API boundary; it landed on 2026-08-24 as an
+**The step that made this real rather than structural was constructing `ToshEngine`
+without a `ToshRuntime`.** This public API boundary landed on 2026-08-24 as an
 additional `ToshEngine(ToastRuntime)` constructor, without constructing a hidden shell
 runtime. The compatibility constructor remains for TōSh hosts while their shell-only call
 sites are migrated.
 
 An engine constructed from a `ToastRuntime` alone now evaluates an ordinary script, pinned
-by `A_language_engine_runs_without_a_shell_runtime`. Shell-only operations remain explicit
-capabilities and are the remaining assembly-division work, rather than a prerequisite for
-constructing or running the language.
+by `A_language_engine_runs_without_a_shell_runtime`, and invokes declared functions through
+a command context whose language runtime is mandatory and shell runtime is optional, pinned
+by `A_language_engine_invokes_a_declared_function_without_a_shell_runtime`. Shell-only
+operations remain explicit capabilities and are the remaining assembly-division work,
+rather than a prerequisite for constructing or running the language.
 
 ## Staging
 
@@ -219,7 +221,7 @@ Two stages, because 182 references is not one commit.
 | `Commands` (14) | **One `ICommandTable` of the six members the language uses** — `TryGet`, `All`, `AllNames`, `RegisterOrReplace`, `Remove`, `GetAliasMap`. Done 2026-08-17. The original decision was to split reads from writes, and it rested on my incorrect claim that the language never registers: a `global` or `export` function declaration must put a name in the runtime table, so a read-only view would not have compiled |
 | `Output`/`Error` (16) | **The language emits values; the shell renders.** Scoped 2026-08-17 to the *session's* output only — see the note below, because "no streams in the language" was the wrong way to say it |
 | `Events` (10) | **Language-side.** `event` is language syntax and the language calls `Register` and `MarkRequired`, not only `Raise`, so the bus goes with it |
-| `ExitRequested` (4), `ExportedEnvironmentVariables` (1) | **`IToastHostSignals`** — done 2026-08-17. Membership differs from the plan: the language *reads* ExitRequested in four loop-stop checks and requests exit in exactly one place (the `--help` path, `TS-P2-52`), and exports were already shell-side — `ExportCommand` writes them, the language only asks `IsExported` once, in `forget` |
+| `ExitRequested` (4), `ExportedEnvironmentVariables` | **`IToastHostSignals`** — done. The language reads exit state and requests exit for script `--help`; export creation stays shell-side, while the language queries, synchronizes and removes names that the host has already exported |
 | `CurrentDirectory` (15) | **Passed per evaluation**, not held on any runtime. 14 of the 15 are path resolution; the single write is the AutoCd path, gated on `Config.Shell.AutoCd` and therefore shell behaviour by its own configuration |
 
 **These are consistently the strictest option available, and that is a coherent choice
@@ -248,7 +250,9 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       existing host-signal and diagnostic-sink ports are also supplied on `ToastRuntime`,
       with inert defaults for a language-only host. The remaining direct host uses are
       shell-session mirroring during redirection and auto-help, background jobs,
-      `$tosh` composition and command-context construction. The host-signal port now
+      and `$tosh` composition. `CommandContext` now requires a language runtime and carries
+      the shell runtime only when one exists, so declared functions run unhosted. The
+      host-signal port now
       describes the language's real environment duties—synchronize an already-exported
       global and remove it on `forget`—rather than the stale claim that it only queried
       membership. Result and exit-code updates now go through an

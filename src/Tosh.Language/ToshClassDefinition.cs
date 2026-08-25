@@ -2623,11 +2623,12 @@ public sealed class ToshClassDefinition : IShellNamedType
                 CommandSpan: method.Span,
                 ArgumentSpans: argumentSpans);
             var syntheticContext = new CommandContext(
-                Runtime: _engine.Runtime,
+                LanguageRuntime: _engine.LanguageRuntime,
                 Input: System.Linq.AsyncEnumerable.Empty<object?>(),
                 Arguments: argumentValues,
                 CancellationToken: cancellationToken,
-                Invocation: syntheticInvocation);
+                Invocation: syntheticInvocation,
+                ShellRuntime: _engine.ShellRuntime);
 
             methodBindings = _engine.InferMethodTypeBindings(
                 method,

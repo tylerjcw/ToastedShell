@@ -384,12 +384,14 @@ public sealed partial class ToshEngine
         CancellationToken cancellationToken)
     {
         var context = new CommandContext(
-            Runtime,
+            LanguageRuntime,
             AsyncEnumerableExtensions.Empty<object?>(),
             arguments,
             cancellationToken,
             ScopedTypeResolver: CreateScopedTypeResolver(),
-            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
+            ScopedCommands: CreateScopedCommandView(),
+            ShellTypes: this,
+            ShellRuntime: ShellRuntime);
 
         return await AsyncEnumerableExtensions.ToListAsync(command.ExecuteAsync(context), cancellationToken);
     }

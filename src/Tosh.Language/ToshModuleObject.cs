@@ -130,11 +130,12 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
         if (_exports.Commands.TryGetValue(methodName, out var command))
         {
             var context = new CommandContext(
-                _engine.Runtime,
+                _engine.LanguageRuntime,
                 AsyncEnumerableExtensions.Empty<object?>(),
                 arguments,
                 CancellationToken.None,
-                ScopedTypeResolver: _engine.CreateScopedTypeResolver());
+                ScopedTypeResolver: _engine.CreateScopedTypeResolver(),
+                ShellRuntime: _engine.ShellRuntime);
             var values = AsyncEnumerableExtensions.ToListAsync(command.ExecuteAsync(context), CancellationToken.None)
                 .GetAwaiter()
                 .GetResult();

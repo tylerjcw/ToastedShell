@@ -68,6 +68,17 @@ public sealed class ToastRuntimeTests
         Assert.Equal(5, Assert.Single(results));
     }
 
+    [Fact]
+    public async Task A_language_engine_invokes_a_declared_function_without_a_shell_runtime()
+    {
+        var engine = new ToshEngine(new ToastRuntime());
+
+        var results = await engine.ExecuteToListAsync(
+            "func add(a: int, b: int) -> int { return ($a + $b) }\nadd 2 3");
+
+        Assert.Equal(5, Assert.Single(results));
+    }
+
     /// <summary>
     /// The language runtime names contracts, not the .NET reflection implementations.
     /// A host may replace all three services while constructing the runtime; the default
