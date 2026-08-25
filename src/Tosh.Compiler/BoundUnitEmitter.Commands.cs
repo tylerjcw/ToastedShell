@@ -14,6 +14,12 @@ internal sealed partial class EmitterImpl
 {
     private void EmitCommandCallStatement(BoundCommandCall call)
     {
+        if (string.Equals(call.Name, "writeline", StringComparison.Ordinal)
+            && TryEmitWriteLineStatement(call))
+        {
+            return;
+        }
+
         if (!string.Equals(call.Name, "echo", StringComparison.Ordinal))
         {
             EmitHostInvokeStatement(call);
@@ -81,6 +87,59 @@ internal sealed partial class EmitterImpl
 
             _il.Emit(OpCodes.Call, s_writeLineString);
         }
+    }
+
+    /// <summary>
+    /// Emits positional <c>writeline</c> calls directly against the portable
+    /// text serializer and <see cref="Console"/>. This is the command's exact
+    /// argument-mode behavior: serialize each value, join with one space, and
+    /// append one newline. Pipeline input, named arguments, and splats keep the
+    /// host-dispatch path because they require runtime argument expansion.
+    /// </summary>
+    private bool TryEmitWriteLineStatement(BoundCommandCall call)
+    {
+        if (call.Arguments.Any(static argument => argument.Name is not null || argument.IsSplat))
+        {
+            return false;
+        }
+
+        if (call.Arguments.Count == 0)
+        {
+            _il.Emit(OpCodes.Ldstr, string.Empty);
+            _il.Emit(OpCodes.Call, s_writeLineString);
+            return true;
+        }
+
+        if (call.Arguments.Count == 1)
+        {
+            var argumentType = EmitExpression(call.Arguments[0].Value);
+            if (argumentType is null) return true;
+            BoxIfValueType(argumentType);
+            _il.Emit(OpCodes.Call, s_serializeExternalText);
+            _il.Emit(OpCodes.Call, s_writeLineString);
+            return true;
+        }
+
+        var renderedArguments = _il.DeclareLocal(typeof(string[]));
+        _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+        _il.Emit(OpCodes.Newarr, typeof(string));
+        for (var index = 0; index < call.Arguments.Count; index++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, index);
+            var argumentType = EmitExpression(call.Arguments[index].Value);
+            if (argumentType is null) return true;
+            BoxIfValueType(argumentType);
+            _il.Emit(OpCodes.Call, s_serializeExternalText);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        _il.Emit(OpCodes.Stloc, renderedArguments);
+        _il.Emit(OpCodes.Ldstr, " ");
+        _il.Emit(OpCodes.Ldloc, renderedArguments);
+        _il.Emit(OpCodes.Call, s_joinStrings);
+        _il.Emit(OpCodes.Call, s_writeLineString);
+        return true;
     }
 
     /// <summary>

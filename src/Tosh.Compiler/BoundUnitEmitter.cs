@@ -474,6 +474,14 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(ToshValueFormatter).GetMethod(
             nameof(ToshValueFormatter.Format),
             new[] { typeof(object) })!;
+    private static readonly MethodInfo s_serializeExternalText =
+        typeof(ExternalTextSerializer).GetMethod(
+            nameof(ExternalTextSerializer.Serialize),
+            new[] { typeof(object) })!;
+    private static readonly MethodInfo s_joinStrings =
+        typeof(string).GetMethod(
+            nameof(string.Join),
+            new[] { typeof(string), typeof(string[]) })!;
     private static readonly FieldInfo s_noValueInstance =
         typeof(global::Tosh.Runtime.ToshNoValue).GetField(
             nameof(global::Tosh.Runtime.ToshNoValue.Instance))!;

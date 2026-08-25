@@ -69,6 +69,15 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Builtin command dispatch is runtime-hosted Tier 2.");
 
         yield return Case(
+            "commands.writeline-positional",
+            "Commands and pipelines",
+            "writeline \"answer\" 42 true",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "Positional writeline calls serialize and join directly in pure IL.");
+
+        yield return Case(
             "blocks.pipeline-block",
             "Commands and pipelines",
             "seq 3 | where { _ > 1 }",

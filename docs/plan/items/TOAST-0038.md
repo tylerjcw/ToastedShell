@@ -161,6 +161,20 @@ Worth recording for planning: a long stretch of `TOAST-0035` went into lifting r
 interface and alias declarations out of replay, and **none of them were what this item
 needed**. Asking what the probe actually contains would have found this in one command.
 
+## Progress — 2026-08-24: positional `writeline` is pure IL
+
+The readiness probe's three output statements no longer require command-host dispatch.
+Positional `writeline` now evaluates each argument, renders it with
+`ExternalTextSerializer`, joins multiple arguments with one space, and calls
+`Console.WriteLine` directly. Named arguments and splats remain on the host path because
+they require runtime argument expansion.
+
+This reduced the probe's distinct pure-profile refusals from five to four without adding a
+second rendering rule: the emitted path calls the same portable serializer ordinary text
+output uses. The compiler matrix and focused emitter tests pin the pure positional case,
+exact output, and the splat negative control. The full suite remained green at 6,606 passed
+and one skipped.
+
 ## Notes
 
 Depends on `TOAST-0034` for four of the six errors. The other two can be fixed immediately

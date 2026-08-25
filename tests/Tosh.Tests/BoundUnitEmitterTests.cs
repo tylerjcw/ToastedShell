@@ -960,6 +960,30 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Profile_pure_accepts_positional_writeline_with_exact_rendering()
+    {
+        var result = EmitWithProfile("writeline \"answer\" 42 true", CompileProfile.Pure);
+        Assert.True(result.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+
+        var output = CompileAndRun("writeline \"answer\" 42 true");
+        Assert.Equal("answer 42 true\n", output.Replace("\r", "", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Profile_pure_keeps_writeline_splat_on_host_dispatch()
+    {
+        var result = EmitWithProfile(
+            "var values = [\"answer\", 42]\nwriteline ...$values",
+            CompileProfile.Pure);
+
+        Assert.False(result.IsClean);
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("command invocation (statement)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_runtime_rejects_class_definition()
     {
         // Classes with a base class can't be lowered to a CLR shell
@@ -2138,14 +2162,16 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     public void Subcommand_dispatch_no_longer_requires_tier3_with_pure_profile()
     {
         // After Family 4, subcommand dispatch compiles natively (no source-replay).
-        // Pure profile still fails because `writeline` is a command invocation (Tier 2),
-        // but NOT because of a Tier-3 "subcommand-tree dispatch" shape.
+        // Positional `writeline` now emits directly too. Pure profile still rejects the
+        // compiled subcommand-tree dispatcher as Tier 2, but never regains Tier 3 replay.
         var engine = new ToshEngine(_runtime);
         var parse = engine.Parse("subcommand run { writeline 1 }", "<sub-tier>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         using var stream = new MemoryStream();
         var result = BoundUnitEmitter.Emit(unit, $"SubTier_{Guid.NewGuid():N}", stream, CompileProfile.Pure);
         Assert.False(result.IsClean);
+        Assert.Contains(result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("subcommand-tree dispatch (compiled)", StringComparison.Ordinal));
         Assert.DoesNotContain(result.UnsupportedShapes,
             s => s.Contains("tier 3"));
     }
