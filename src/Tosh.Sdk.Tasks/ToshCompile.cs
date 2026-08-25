@@ -151,7 +151,7 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             ?? Path.GetFileNameWithoutExtension(OutputPath);
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parsed = engine.Parse(source, sourceName);
         if (parsed.Diagnostics.Count > 0)
         {

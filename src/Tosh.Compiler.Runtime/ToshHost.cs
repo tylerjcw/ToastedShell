@@ -86,7 +86,7 @@ public static class ToshHost
             // Eagerly build a ToshEngine so rt.BlockExecutor is wired.
             // We also keep a reference so the host bridge can resolve
             // user-defined types for compiled `new`-expressions.
-            s_engine = new ToshEngine(rt);
+            s_engine = new ToshEngine(rt.Language);
             s_runtime = rt;
         }
     }

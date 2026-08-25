@@ -282,6 +282,12 @@ shell command callers migrate to this host-neutral seam. `spawn` and `scope` are
 shell-specific consumers: they explicitly require TōSh's host type for its concrete job table,
 while the other concurrency commands remain host-independent.
 
+The DAP, MCP, SDK compile task and compiled-runtime host now construct `ToshEngine` from
+`runtime.Language`, not from `ToshRuntime`. Their language runtime still carries TōSh as the
+opaque command host, so shell-specific commands keep their host without making the engine
+constructor part of that dependency. The CLI/REPL compatibility path remains until its helpers
+stop retrieving the session through `engine.Runtime`.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

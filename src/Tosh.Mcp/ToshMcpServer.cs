@@ -353,7 +353,7 @@ public sealed class ToshMcpServer
         var outputWriter = new StringWriter();
         var errorWriter = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(outputWriter, errorWriter);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         using var timeoutCts = new CancellationTokenSource(timeoutMs);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -439,7 +439,7 @@ public sealed class ToshMcpServer
             try
             {
                 var runtime = ToshRuntime.CreateDefault();
-                var engine = new ToshEngine(runtime);
+                var engine = new ToshEngine(runtime.Language);
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 engine.ExecuteToListAsync(text, "<mcp-explain>", cts.Token).GetAwaiter().GetResult();
             }

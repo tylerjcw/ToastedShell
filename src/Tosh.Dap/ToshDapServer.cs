@@ -196,7 +196,7 @@ public sealed class ToshDapServer
         var outputWriter = new StringWriter();
         var errorWriter = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(outputWriter, errorWriter);
-        _engine = new ToshEngine(runtime);
+        _engine = new ToshEngine(runtime.Language);
 
         _session = new ToshDebugSession(_engine, stopOnEntry: _stopOnEntry || true);
         _session.Paused += async (ctx, depth) =>
