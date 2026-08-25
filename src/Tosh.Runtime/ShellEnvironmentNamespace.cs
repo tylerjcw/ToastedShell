@@ -4,11 +4,11 @@ namespace Tosh.Runtime;
 
 public sealed class ShellEnvironmentNamespace : IShellRecordObject
 {
-    private readonly ToshRuntime? _runtime;
+    private readonly IToastEnvironmentExporter? _exporter;
 
-    public ShellEnvironmentNamespace(ToshRuntime? runtime = null)
+    public ShellEnvironmentNamespace(IToastEnvironmentExporter? exporter = null)
     {
-        _runtime = runtime;
+        _exporter = exporter;
     }
 
     public string ShellTypeName => "Environment";
@@ -58,11 +58,11 @@ public sealed class ShellEnvironmentNamespace : IShellRecordObject
             }
         }
 
-        if (_runtime is not null)
+        if (_exporter is not null)
         {
-            // Route through the runtime so the variable is tracked as exported and
-            // mirrored into the local Variables dictionary, matching `export NAME = …`.
-            _runtime.ExportEnvironmentVariable(canonical, value);
+            // Let TōSh track the name as exported and mirror it into the session's
+            // Variables dictionary, matching `export NAME = …`.
+            _exporter.ExportEnvironmentVariable(canonical, value);
         }
         else
         {

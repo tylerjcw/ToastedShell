@@ -125,7 +125,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // engine-owned hooks, and for the same reason they are.
         LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
         _toshNamespace = CreateRuntimeNamespace();
-        _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
+        _environmentNamespace = new ShellEnvironmentNamespace(LanguageRuntime.EnvironmentExporter);
         // `source`, `eval`, `debug` and `format` used to be constructed and registered
         // here, which made the *language* own a set of commands. A command is a shell
         // concept: the language exposes what it can do — see `IToshScriptHost` — and TōSh
@@ -158,7 +158,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         LanguageRuntime.EventSenderFactory = CreateEventSender;
         LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
         _toshNamespace = CreateRuntimeNamespace();
-        _environmentNamespace = new ShellEnvironmentNamespace();
+        _environmentNamespace = new ShellEnvironmentNamespace(LanguageRuntime.EnvironmentExporter);
 
         LoadBuiltinRunesAsync().GetAwaiter().GetResult();
 
@@ -178,7 +178,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         ShellRuntime = runtime;
         LanguageRuntime = runtime.Language;
         _toshNamespace = CreateRuntimeNamespace();
-        _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
+        _environmentNamespace = new ShellEnvironmentNamespace(LanguageRuntime.EnvironmentExporter);
         // Pre-seed the scope stack with clones of the parent's visible scopes.
         // capturedScopes is ordered outer-to-inner; pushing outer-first means
         // the inner-most scope ends up on top of the stack — correct lookup order.
@@ -203,7 +203,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         LanguageRuntime = runtime;
         _toshNamespace = CreateRuntimeNamespace();
-        _environmentNamespace = new ShellEnvironmentNamespace();
+        _environmentNamespace = new ShellEnvironmentNamespace(LanguageRuntime.EnvironmentExporter);
 
         if (capturedScopes is not null)
         {

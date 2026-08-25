@@ -132,6 +132,9 @@ public sealed class ToastRuntime
     /// </remarks>
     public IToastRuntimeNamespaceFactory? RuntimeNamespaceFactory { get; init; }
 
+    /// <summary>Tracks <c>$env</c> assignments for a host with export bookkeeping.</summary>
+    public IToastEnvironmentExporter? EnvironmentExporter { get; init; }
+
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the
     /// host does not expose process execution.

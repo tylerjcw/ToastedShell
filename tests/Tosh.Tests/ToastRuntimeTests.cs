@@ -44,6 +44,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.SessionRedirection);
         Assert.Null(language.BackgroundJobs);
         Assert.Null(language.RuntimeNamespaceFactory);
+        Assert.Null(language.EnvironmentExporter);
         Assert.Null(language.ExternalCommands);
         Assert.Empty(language.InvocationArguments);
         Assert.Null(language.BlockExecutor);
@@ -136,6 +137,46 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(factory.Function);
     }
 
+    [Fact]
+    public async Task An_unhosted_engine_assigns_process_environment_without_a_shell_runtime()
+    {
+        var variableName = "TOAST_UNHOSTED_ENV_" + Guid.NewGuid().ToString("N");
+        var engine = new ToshEngine(new ToastRuntime());
+
+        try
+        {
+            await engine.ExecuteToListAsync($"$env.{variableName} = \"standalone\"");
+
+            Assert.Equal("standalone", Environment.GetEnvironmentVariable(variableName));
+            Assert.Null(engine.ShellRuntime);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variableName, null);
+        }
+    }
+
+    [Fact]
+    public async Task The_shell_tracks_an_environment_assignment_as_an_export()
+    {
+        var variableName = "TOAST_HOSTED_ENV_" + Guid.NewGuid().ToString("N");
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+
+        try
+        {
+            await engine.ExecuteToListAsync($"$env.{variableName} = \"hosted\"");
+
+            Assert.Contains(variableName, runtime.ExportedEnvironmentVariables);
+            Assert.Equal("hosted", runtime.Variables[variableName]);
+            Assert.Equal("hosted", Environment.GetEnvironmentVariable(variableName));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variableName, null);
+        }
+    }
+
     /// <summary>
     /// The language runtime names contracts, not the .NET reflection implementations.
     /// A host may replace all three services while constructing the runtime; the default
@@ -192,6 +233,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime, runtime.Language.SessionRedirection);
         Assert.Same(runtime, runtime.Language.BackgroundJobs);
         Assert.Same(runtime, runtime.Language.RuntimeNamespaceFactory);
+        Assert.Same(runtime, runtime.Language.EnvironmentExporter);
         Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
         Assert.Same(runtime.InvocationArguments, runtime.Language.InvocationArguments);
         Assert.Same(runtime.BlockExecutor, runtime.Language.BlockExecutor);

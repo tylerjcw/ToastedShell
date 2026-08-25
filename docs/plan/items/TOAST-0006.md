@@ -230,6 +230,12 @@ root or retain the empty embedded default. The first TōSh root is still publish
 `ToshRuntime.RuntimeNamespace` for completion and introspection, and forked engines receive
 their own evaluator-backed views without replacing it.
 
+`$env` assignment no longer hides a concrete shell runtime inside
+`ShellEnvironmentNamespace`. The namespace accepts an optional `IToastEnvironmentExporter`:
+without one it updates the process environment directly, while TōSh supplies itself to
+also track the name as exported and mirror its value into session variables. Hosted and
+unhosted assignments are both pinned end to end.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -278,9 +284,10 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       through the language stream. Background pipelines now use the optional
       `IToastBackgroundJobHost` port and language-neutral request records. `$tosh` is now
       composed through `IToastRuntimeNamespaceFactory`, with only the script/function
-      views left in the language assembly. The remaining compatibility uses of
-      `ToshRuntime` are the shell constructor/fork, `$env` export mirroring and AutoCd
-      navigation; those must move before the physical assembly split. `CommandContext`
+      views left in the language assembly. `$env` export bookkeeping now uses the optional
+      `IToastEnvironmentExporter`. The remaining compatibility uses of `ToshRuntime` are
+      the shell constructor/fork and AutoCd navigation; those must move before the physical
+      assembly split. `CommandContext`
       now requires a language runtime and carries
       the shell runtime only when one exists, so declared functions run unhosted. The
       host-signal port now

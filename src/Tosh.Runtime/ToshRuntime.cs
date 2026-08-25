@@ -9,7 +9,8 @@ public sealed class ToshRuntime :
     IToastExecutionObserver,
     IToastSessionRedirection,
     IToastBackgroundJobHost,
-    IToastRuntimeNamespaceFactory
+    IToastRuntimeNamespaceFactory,
+    IToastEnvironmentExporter
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -56,6 +57,7 @@ public sealed class ToshRuntime :
             SessionRedirection = this,
             BackgroundJobs = this,
             RuntimeNamespaceFactory = this,
+            EnvironmentExporter = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
