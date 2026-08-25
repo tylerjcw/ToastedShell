@@ -18,7 +18,7 @@ public sealed class TailCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var options = ParseArguments(context.Arguments, context.Runtime.CurrentDirectory);
+        var options = ParseArguments(context.Arguments, context.LanguageRuntime.CurrentDirectory);
 
         if (options.Follow)
         {

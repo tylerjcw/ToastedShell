@@ -23,7 +23,7 @@ public sealed class UniqueCommand : ShellCommand
 
         if (parsed.Positionals.Count > 0)
         {
-            var paths = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals);
+            var paths = ShellPathArguments.ExpandMany(context.LanguageRuntime.CurrentDirectory, parsed.Positionals);
             var lines = await TextInputUtilities.ReadLinesFromFilesAsync(paths, context.CancellationToken);
 
             foreach (var item in Collapse(lines.Select(line => (object?)new ShellTextLine(line.Text)).ToList(), countOccurrences, ignoreCase))

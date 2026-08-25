@@ -35,8 +35,8 @@ public sealed partial class TemplateCommand : ShellCommand
                     var path = match.Groups["path"].Value.Trim();
                     var value = path is "." or "_"
                         ? item
-                        : context.Runtime.ObjectAccessor.GetValue(item, path);
-                    return value is null ? string.Empty : context.Runtime.Formatter.Format(value);
+                        : context.LanguageRuntime.ObjectAccessor.GetValue(item, path);
+                    return value is null ? string.Empty : ToastRenderer.Render(value);
                 });
 
             rendered = rendered.Replace("\x00LBRACE\x00", "{{").Replace("\x00RBRACE\x00", "}}");

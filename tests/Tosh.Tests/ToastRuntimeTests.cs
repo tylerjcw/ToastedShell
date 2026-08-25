@@ -2,6 +2,7 @@ using Tosh.Language;
 using Tosh.Runtime;
 using Tosh.Stdlib.Clr;
 using Tosh.Stdlib.Pipeline;
+using Tosh.Stdlib.Text;
 using Tosh.Stdlib.Time;
 
 namespace Tosh.Tests;
@@ -208,6 +209,27 @@ public sealed class ToastRuntimeTests
 
         Assert.Equal(["alpha", "beta"], results);
         Assert.Contains("alpha", output.ToString(), StringComparison.Ordinal);
+        Assert.Null(engine.ShellRuntime);
+    }
+
+    [Fact]
+    public async Task Language_level_text_commands_run_without_a_shell_runtime()
+    {
+        using var output = new StringWriter();
+        var language = new ToastRuntime
+        {
+            Output = ToastStreams.FromWriter(output),
+        };
+        language.Commands.RegisterOrReplace(new TemplateCommand());
+        language.Commands.RegisterOrReplace(new WriteLineCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync(
+            "var items = [{| Name: \"alpha\" |}, {| Name: \"beta\" |}]\n" +
+            "$items | template \"{{ Name }}\" | writeline");
+
+        Assert.Empty(results);
+        Assert.Equal($"alpha{Environment.NewLine}beta{Environment.NewLine}", output.ToString());
         Assert.Null(engine.ShellRuntime);
     }
 

@@ -263,6 +263,11 @@ working directory and output from `LanguageRuntime`; `tee` renders invariantly w
 inside that category because its object inspector and inline prompt are presentation services.
 A standalone `sort | tee | get` pipeline pins the language-only path.
 
+Text commands likewise resolve file arguments against the language working directory.
+`template` uses the language object accessor plus invariant rendering, while `write` and
+`writeline` target the language stream. A standalone `template | writeline` pipeline is pinned;
+only `wc`'s optional shell display-column override still needs a host presentation port.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

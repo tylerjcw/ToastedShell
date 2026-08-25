@@ -40,7 +40,7 @@ public sealed class GrepCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var options = ParseOptions(context, context.Arguments, context.Runtime.CurrentDirectory);
+        var options = ParseOptions(context, context.Arguments, context.LanguageRuntime.CurrentDirectory);
         var lines = options.Paths.Count > 0
             ? await ReadLinesAsync(options.Paths, options.Recursive, context.CancellationToken)
             : await TextInputUtilities.ReadLinesFromInputAsync(context, "grep expects text input or file paths.");

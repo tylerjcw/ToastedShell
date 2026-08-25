@@ -18,7 +18,7 @@ public sealed class WriteCommand : ShellCommand, IImplicitGlobCommand
 
         if (rendered.Length > 0)
         {
-            await context.Runtime.Output.WriteAsync(rendered);
+            await context.LanguageRuntime.Output.WriteTextAsync(rendered, context.CancellationToken);
         }
 
         yield break;

@@ -18,10 +18,10 @@ public sealed class WriteLineCommand : ShellCommand, IImplicitGlobCommand
 
         if (rendered.Length == 0)
         {
-            await context.Runtime.Output.WriteLineAsync();
+            await context.LanguageRuntime.Output.WriteTextLineAsync(string.Empty, context.CancellationToken);
             yield break;
         }
 
-        await context.Runtime.Output.WriteLineAsync(rendered);
+        await context.LanguageRuntime.Output.WriteTextLineAsync(rendered, context.CancellationToken);
     }
 }

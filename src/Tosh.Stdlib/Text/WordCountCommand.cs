@@ -30,7 +30,7 @@ public sealed class WordCountCommand : ShellCommand
 
         if (parsed.Positionals.Count > 0)
         {
-            var paths = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals);
+            var paths = ShellPathArguments.ExpandMany(context.LanguageRuntime.CurrentDirectory, parsed.Positionals);
             var statistics = new List<TextStatistics>();
 
             foreach (var path in paths)

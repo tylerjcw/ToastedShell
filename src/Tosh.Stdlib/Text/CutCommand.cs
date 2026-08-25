@@ -17,7 +17,7 @@ public sealed class CutCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var options = ParseOptions(context.Arguments, context.Runtime.CurrentDirectory);
+        var options = ParseOptions(context.Arguments, context.LanguageRuntime.CurrentDirectory);
         var lines = options.Paths.Count > 0
             ? await TextInputUtilities.ReadLinesFromFilesAsync(options.Paths, context.CancellationToken)
             : await TextInputUtilities.ReadLinesFromInputAsync(context, "cut expects text input or file paths.");
