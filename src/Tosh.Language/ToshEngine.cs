@@ -43,7 +43,24 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </remarks>
     private int _deferredCleanupDepth;
     private int _commandEventDepth;
-    private readonly ToshRuntimeNamespace _toshNamespace;
+    private sealed class UnhostedRuntimeNamespace : IShellRecordObject
+    {
+        internal static readonly UnhostedRuntimeNamespace Instance = new();
+
+        public string ShellTypeName => "ToastRuntime";
+
+        public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+        {
+            value = null;
+            return false;
+        }
+
+        public bool TrySetMember(string name, object? value) => false;
+
+        public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false) => [];
+    }
+
+    private readonly IShellRecordObject _toshNamespace;
     private readonly ShellEnvironmentNamespace _environmentNamespace;
 
     /// <summary>
@@ -96,7 +113,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
     public ToshEngine(ToshRuntime? runtime = null)
     {
-        Runtime = runtime ?? ToshRuntime.CreateDefault();
+        ShellRuntime = runtime ?? ToshRuntime.CreateDefault();
         LanguageRuntime = Runtime.Language;
         LanguageRuntime.BlockExecutor = new EngineBlockExecutor(this);
         LanguageRuntime.Evaluator = this;
@@ -127,6 +144,30 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
+    /// Creates a language engine without constructing a TōSh session runtime.
+    /// </summary>
+    /// <remarks>
+    /// Shell-only operations remain unavailable unless the supplied <see cref="ToastRuntime"/>
+    /// exposes the corresponding host capability. Ordinary parsing, binding, declarations,
+    /// expressions, and language streams use this runtime directly (`TOAST-0006`).
+    /// </remarks>
+    public ToshEngine(ToastRuntime runtime)
+    {
+        LanguageRuntime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        LanguageRuntime.BlockExecutor = new EngineBlockExecutor(this);
+        LanguageRuntime.Evaluator = this;
+        LanguageRuntime.EventSenderFactory = CreateEventSender;
+        LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
+        _toshNamespace = UnhostedRuntimeNamespace.Instance;
+        _environmentNamespace = new ShellEnvironmentNamespace();
+
+        LoadBuiltinRunesAsync().GetAwaiter().GetResult();
+
+        Tosh.Runtime.OperatorEvaluator.ResolveTraitConstraint ??= static (name, type) =>
+            ToshTypeParameterConstraintRegistry.TryGet(name, out var predicate) && predicate(type);
+    }
+
+    /// <summary>
     /// Creates a forked child engine that shares the same <see cref="ToshRuntime"/> but has
     /// its own isolated scope stack pre-seeded with cloned copies of <paramref name="capturedScopes"/>.
     /// The fork does NOT write back to <c>Runtime.BlockExecutor</c> / <c>Runtime.Evaluator</c> /
@@ -135,7 +176,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </summary>
     private ToshEngine(ToshRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
     {
-        Runtime = runtime;
+        ShellRuntime = runtime;
         LanguageRuntime = runtime.Language;
         _toshNamespace = new ToshRuntimeNamespace(this);
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
@@ -159,12 +200,32 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
     }
 
+    private ToshEngine(ToastRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
+    {
+        LanguageRuntime = runtime;
+        _toshNamespace = UnhostedRuntimeNamespace.Instance;
+        _environmentNamespace = new ShellEnvironmentNamespace();
+
+        if (capturedScopes is not null)
+        {
+            foreach (var scope in capturedScopes)
+            {
+                _scopes.Push(scope.Clone());
+            }
+        }
+
+        _ownBlockExecutor = new EngineBlockExecutor(this);
+        LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
+    }
+
     /// <summary>
     /// Creates an isolated child engine that shares the same runtime but has its own
     /// execution state. Pass <see cref="CaptureVisibleScopes"/> as the snapshot.
     /// </summary>
     internal ToshEngine Fork(IReadOnlyList<LexicalScope>? capturedScopes)
-        => new(Runtime, capturedScopes);
+        => ShellRuntime is { } shell
+            ? new ToshEngine(shell, capturedScopes)
+            : new ToshEngine(LanguageRuntime, capturedScopes);
 
     private static readonly ParseResult _builtinRunesParseResult =
         ToshParser.Parse(BuiltinRunes.Source, "<builtin-runes>");
@@ -174,16 +235,25 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         await foreach (var _ in EvaluateAsync(_builtinRunesParseResult, CancellationToken.None)) { }
     }
 
-    public ToshRuntime Runtime { get; }
+    /// <summary>The TōSh session runtime, when this engine is hosted by TōSh.</summary>
+    public ToshRuntime? ShellRuntime { get; }
+
+    /// <summary>
+    /// Compatibility view of the TōSh runtime for shell hosts.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// This engine was constructed from a language-only <see cref="ToastRuntime"/>.
+    /// </exception>
+    public ToshRuntime Runtime => ShellRuntime ?? throw new InvalidOperationException(
+        "This Tōast engine has no TōSh session runtime. Supply the required host capability on ToastRuntime instead.");
 
     /// <summary>
     /// The language-owned runtime state used by parsing, binding, and evaluation.
     /// </summary>
     /// <remarks>
     /// Kept separate from <see cref="Runtime"/> so language services do not reach their
-    /// state through shell forwarding properties. The current public constructor still
-    /// receives a <see cref="ToshRuntime"/>; `TOAST-0006` will remove that final host
-    /// requirement after the remaining shell-only uses are isolated.
+    /// state through shell forwarding properties. A language-only host supplies this type
+    /// directly; TōSh supplies the same object through composition.
     /// </remarks>
     public ToastRuntime LanguageRuntime { get; }
 

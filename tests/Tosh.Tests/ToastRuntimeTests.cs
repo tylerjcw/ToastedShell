@@ -55,6 +55,19 @@ public sealed class ToastRuntimeTests
         Assert.True(language.Options.MaxRecursionDepth > 0);
     }
 
+    [Fact]
+    public async Task A_language_engine_runs_without_a_shell_runtime()
+    {
+        var language = new ToastRuntime();
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync("var x = 2\n$x + 3");
+
+        Assert.Same(language, engine.LanguageRuntime);
+        Assert.Null(engine.ShellRuntime);
+        Assert.Equal(5, Assert.Single(results));
+    }
+
     /// <summary>
     /// The language runtime names contracts, not the .NET reflection implementations.
     /// A host may replace all three services while constructing the runtime; the default

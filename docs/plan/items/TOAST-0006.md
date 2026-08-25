@@ -193,14 +193,15 @@ complete:
 | `Invoker` | **Done 2026-08-24.** `IObjectInvoker` is the language contract; the .NET host supplies `ReflectionInvoker` |
 
 **And the step that makes this real rather than structural: `ToshEngine` still takes a
-`ToshRuntime`.** Everything so far has been additive and internally verifiable. That one
-is a public API change touching every test plus `Tosh.Stdlib`, `Tosh.Cli`, `Tosh.Dap`,
-`Tosh.LanguageServices` and `Tosh.Compiler` — and it cannot land honestly until the three
-above do, because the engine genuinely still needs a shell for them.
+`ToshRuntime`.** This was the remaining public API boundary; it landed on 2026-08-24 as an
+additional `ToshEngine(ToastRuntime)` constructor, without constructing a hidden shell
+runtime. The compatibility constructor remains for TōSh hosts while their shell-only call
+sites are migrated.
 
-Until an engine can be constructed from a `ToastRuntime` alone, "the language stands
-alone" is a property of a data class rather than of the language. That is the honest
-statement of where this item is.
+An engine constructed from a `ToastRuntime` alone now evaluates an ordinary script, pinned
+by `A_language_engine_runs_without_a_shell_runtime`. Shell-only operations remain explicit
+capabilities and are the remaining assembly-division work, rather than a prerequisite for
+constructing or running the language.
 
 ## Staging
 
