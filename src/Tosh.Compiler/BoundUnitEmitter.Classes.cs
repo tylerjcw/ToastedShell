@@ -192,12 +192,15 @@ internal sealed partial class EmitterImpl
         // need the engine-side ToshClassObject to own dispatch.
         var supportsDirectNewObj = true;
         // Inheritance now emits a complete CLR shell hierarchy, but an
-        // inherited `new` call site remains host-dispatched until all
-        // inherited member/method semantics can stay on the typed path.
+        // General inherited construction remains host-dispatched until inherited member
+        // reads stay typed. Error subclasses are the narrow exception: their CLR base is
+        // complete, their own state is emitted, and throwing/catching them needs no
+        // inherited dynamic member lookup.
         // Traits may carry property default values that are set by the tosh
         // evaluator during ToshHost.CreateObject — bypassing that path with
         // a bare newobj would silently drop those defaults.
-        if (cls.BaseClassName is not null
+        if ((cls.BaseClassName is not null
+                && !typeof(ToshError).IsAssignableFrom(parentType))
             || (cls.UsedTraits is { Count: > 0 })
             || (cls.ImplementedInterfaces is { Count: > 0 })
             || cls.IsAbstract
@@ -627,11 +630,10 @@ internal sealed partial class EmitterImpl
             }
             else if (member is BoundClassPropertyMember prop)
             {
-                // Computed properties (with getter/setter bodies)
-                // and lazy props aren't lowered onto the shell yet —
-                // routing such instances through host dispatch keeps
-                // the engine's evaluator owning that behavior.
-                if (prop.GetterBody is not null || prop.SetterBody is not null || prop.IsLazy)
+                // Getter bodies are real CLR properties (DeclareComputedProperties below),
+                // so they do not prevent direct construction. Setter bodies and lazy
+                // storage still need engine-owned behavior.
+                if (prop.SetterBody is not null || prop.IsLazy)
                 {
                     supportsDirectNewObj = false;
                 }

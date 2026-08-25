@@ -189,6 +189,15 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Simple records emit CLR shell classes.");
 
         yield return Case(
+            "types.new-qualified-clr",
+            "Types",
+            "var table = new System.Collections.Hashtable()",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "A fully-qualified CLR constructor uses the portable reflection binder.");
+
+        yield return Case(
             "types.interface-definition",
             "Types",
             "interface Printable { func print() }",

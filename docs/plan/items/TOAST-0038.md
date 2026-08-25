@@ -137,9 +137,8 @@ source rather than only here.
       for an evaluator to re-read — asserted by
       `The_readiness_probe_compiles_without_source_replay`. What remains is the reference:
       the emitted assembly still names `Tosh.Compiler.Runtime`, which bridges to
-      `Tosh.Language`, and the `pure` profile now refuses two tier-2 features —
-      host-dispatched `new` and dynamic member access. Those two are the whole of the
-      distance left
+      `Tosh.Language`, and the `pure` profile now refuses one tier-2 feature: dynamic
+      member access. That is the whole of the distance left
 - [x] Whatever fights back is filed, not worked around — four fixed, one filed
 - [x] A negative control
 
@@ -204,6 +203,25 @@ union checks such as `Add(left: Node, right: Node)`. The focused emitter, matrix
 differential, pipeline-value, and pure dependency audit group is green at 709 tests. The
 full readiness probe now reports exactly two pure-profile refusals: host-dispatched CLR
 construction and dynamic member access.
+
+## Progress — 2026-08-24: portable construction
+
+Compiler-resolved CLR construction no longer needs `ToshHost.NewObject`. Fully qualified
+CLR names and the runtime's fixed built-in CLR aliases pass a type token and positional
+arguments to a small `Tosh.Runtime` boundary backed by the existing `ReflectionInvoker`, so
+constructor overload selection and conversions are unchanged. Import-dependent short names,
+generic source spellings, named arguments, splats, and shell collection constructors remain
+on the host path.
+
+Classes whose only former construction blocker was a computed getter now use their emitted
+CLR constructor—the getter was already a real CLR property. Emitted `Error` subclasses do
+the same; general inherited construction remains host-owned until inherited member access
+is portable. Pure-profile diagnostics now include the unresolved construction type name,
+which exposed and accounted for `Lexer`, `LexError`, and `ParseError` rather than collapsing
+them into one indistinguishable refusal.
+
+The full readiness probe now reports exactly one pure-profile refusal: dynamic member
+access.
 
 ## Notes
 

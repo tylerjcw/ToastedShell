@@ -1053,6 +1053,37 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Profile_pure_accepts_portable_construction_paths()
+    {
+        const string source =
+            "class Computed { prop Value: int => 42 }\n"
+            + "class LocalError(message: string) extends Error { prop Message: string = $message }\n"
+            + "var computed = new Computed()\n"
+            + "var localError = new LocalError(\"local\")\n"
+            + "var original = new System.Collections.Hashtable()\n"
+            + "var copy = new System.Collections.Hashtable($original)\n"
+            + "var error = new Error(\"boom\")";
+
+        var result = EmitWithProfile(source, CompileProfile.Pure);
+        Assert.True(result.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+
+        var output = CompileAndRun(source);
+        Assert.Equal(string.Empty, output);
+    }
+
+    [Fact]
+    public void Profile_pure_keeps_short_clr_construction_on_host_resolution_path()
+    {
+        var result = EmitWithProfile("new StringBuilder()", CompileProfile.Pure);
+
+        Assert.False(result.IsClean);
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("new object construction via host dispatch", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_runtime_rejects_class_definition()
     {
         // Classes with a base class can't be lowered to a CLR shell

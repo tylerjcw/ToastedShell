@@ -599,6 +599,33 @@ internal sealed partial class EmitterImpl
                 return recordType;
         }
 
+        // A fully-qualified CLR name is unambiguous at compile time. Keep overload
+        // selection in Tosh.Runtime.ReflectionInvoker (the same binder the host uses),
+        // but pass the resolved type token directly so pure artifacts need no engine for
+        // name resolution or construction.
+        if (newObj.TypeArguments is not { Count: > 0 }
+            && newObj.Arguments.All(a => a.Name is null && !a.IsSplat)
+            && (newObj.TypeName.Contains('.', StringComparison.Ordinal)
+                || DotNetTypeResolver.BuiltInAliases.ContainsKey(newObj.TypeName))
+            && DotNetTypeResolver.TryResolveToastTypeName(newObj.TypeName, out var clrType)
+            && clrType is not null
+            && !clrType.ContainsGenericParameters)
+        {
+            _il.Emit(OpCodes.Ldtoken, clrType);
+            _il.Emit(OpCodes.Call, s_runtimeTypeHandle_GetTypeFromHandle);
+            if (!EmitArgsArrayCore($"new {newObj.TypeName}", newObj.Arguments)) return null;
+            _il.Emit(OpCodes.Call, s_portableCreateClrObject);
+            if (clrType.IsValueType)
+            {
+                _il.Emit(OpCodes.Unbox_Any, clrType);
+            }
+            else
+            {
+                _il.Emit(OpCodes.Castclass, clrType);
+            }
+            return clrType;
+        }
+
         _il.Emit(OpCodes.Ldstr, newObj.TypeName);
         // Build object?[] of arg values via the shared splat/named-aware emitter
         // so that `new TypeName(arg, name: value, ...rest)` flows through to
@@ -622,7 +649,7 @@ internal sealed partial class EmitterImpl
             }
         }
         if (!EmitArgsArrayCore($"new {newObj.TypeName}", newObj.Arguments)) return null;
-        RequireTier(2, "new object construction via host dispatch");
+        RequireTier(2, $"new object construction via host dispatch ({newObj.TypeName})");
         _il.Emit(OpCodes.Call, hasTypeArgs ? s_hostNewObjectGeneric : s_hostNewObject);
         return typeof(object);
     }

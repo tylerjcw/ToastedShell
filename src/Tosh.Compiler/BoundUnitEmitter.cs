@@ -771,6 +771,10 @@ internal sealed partial class EmitterImpl : IDisposable
                 typeof(string),
                 typeof(string),
             })!;
+    private static readonly MethodInfo s_portableCreateClrObject =
+        typeof(ClrConstructionBoundary).GetMethod(
+            nameof(ClrConstructionBoundary.Create),
+            new[] { typeof(Type), typeof(object[]) })!;
 
     private static readonly MethodInfo s_hostNormalizePackedArguments =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.NormalizePackedArguments),
