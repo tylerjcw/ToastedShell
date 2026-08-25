@@ -127,7 +127,11 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     /// resolving a name to a program on <c>PATH</c> reports that this host does not run
     /// external commands, which is the honest answer for an embedded Tōast (`TOAST-0004`).
     /// </remarks>
-    public IExternalCommandFactory? ExternalCommands { get; set; }
+    public IExternalCommandFactory? ExternalCommands
+    {
+        get => Language.ExternalCommands;
+        set => Language.ExternalCommands = value;
+    }
 
     public IObjectAccessor ObjectAccessor => Language.ObjectAccessor;
 

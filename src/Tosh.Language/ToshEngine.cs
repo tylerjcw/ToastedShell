@@ -3117,7 +3117,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             // The shell supplies the factory; the language only decides that the name
             // is not anything it owns and so must be a program (`TOAST-0004`).
             ExternalCommandLookupStatus.Found when external.ResolvedPath is not null =>
-                Runtime.ExternalCommands?.CreateExternalProcess(commandSyntax.Name, external.ResolvedPath)
+                LanguageRuntime.ExternalCommands?.CreateExternalProcess(commandSyntax.Name, external.ResolvedPath)
                     ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
                         Code: "tosh.runtime.external_commands_unavailable",
                         Title: $"'{commandSyntax.Name}' is a program on disk, and this host does not run external programs.",

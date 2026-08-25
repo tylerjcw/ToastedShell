@@ -40,6 +40,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.Commands);
         Assert.NotNull(language.HostSignals);
         Assert.NotNull(language.Diagnostics);
+        Assert.Null(language.ExternalCommands);
         Assert.False(string.IsNullOrEmpty(language.CurrentDirectory));
 
         language.HostSignals.RequestExit();
@@ -100,6 +101,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime.Language.Events, runtime.Events);
         Assert.Same(runtime, runtime.Language.HostSignals);
         Assert.Same(runtime, runtime.Language.Diagnostics);
+        Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
 
         // One table, two views — the shell keeps the registry's extra members while the
         // language sees only ICommandTable, but it must be the same instance or

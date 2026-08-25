@@ -82,6 +82,18 @@ public sealed class ToastRuntime
     /// </remarks>
     public IToastDiagnosticSink Diagnostics { get; init; } = UnhostedServices.Instance;
 
+    /// <summary>
+    /// Creates commands that launch external programs, or <see langword="null"/> when the
+    /// host does not expose process execution.
+    /// </summary>
+    /// <remarks>
+    /// Process launching is a host capability rather than language state. Keeping the
+    /// optional factory here lets command resolution decline honestly in an embedded host
+    /// without making the evaluator depend on TōSh's process implementation (`TOAST-0004`,
+    /// `TOAST-0006`).
+    /// </remarks>
+    public IExternalCommandFactory? ExternalCommands { get; set; }
+
     /// <summary>Constructs values and invokes members through the host's object model.</summary>
     /// <remarks>
     /// The .NET host uses <see cref="ReflectionInvoker"/>. The contract and init-only
