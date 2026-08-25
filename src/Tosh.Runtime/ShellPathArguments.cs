@@ -12,14 +12,14 @@ public static class ShellPathArguments
 
         if (positionals.Count > 0)
         {
-            return ExpandMany(context.Runtime.CurrentDirectory, positionals);
+            return ExpandMany(context.LanguageRuntime.CurrentDirectory, positionals);
         }
 
         var paths = new List<string>();
 
         await foreach (var item in context.Input.WithCancellation(cancellationToken))
         {
-            paths.AddRange(Expand(context.Runtime.CurrentDirectory, item));
+            paths.AddRange(Expand(context.LanguageRuntime.CurrentDirectory, item));
         }
 
         return paths;

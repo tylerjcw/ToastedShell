@@ -243,6 +243,11 @@ updates, event raising and the resulting `FileSystemEntry`; an embedded host can
 another command or receives a capability diagnostic. No evaluator command calls
 `CommandContext.Runtime` now.
 
+The runtime helpers shared by pipeline, aggregation, path and reflection commands also use
+`CommandContext.LanguageRuntime` directly. None of those language-side utilities requires a
+`ToshRuntime`; the remaining `CommandContext.Runtime` callers are commands in `Tosh.Stdlib`
+and can now be divided according to the standard-library boundary in `TOAST-0007`.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

@@ -86,7 +86,7 @@ internal static class FunctionalCommandUtilities
 
             case ShellBlock block:
                 {
-                    var executor = context.BlockExecutor ?? context.Runtime.BlockExecutor
+                    var executor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor
                                    ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
 
                     var locals = new Dictionary<string, object?>(StringComparer.Ordinal);

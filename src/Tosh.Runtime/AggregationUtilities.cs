@@ -48,7 +48,7 @@ internal static class AggregationUtilities
 
         await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
         {
-            var value = memberPath is null ? item : context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+            var value = memberPath is null ? item : context.LanguageRuntime.ObjectAccessor.GetValue(item, memberPath);
 
             if (value is not null)
             {
@@ -230,7 +230,7 @@ internal static class AggregationUtilities
 
         try
         {
-            value = context.Runtime.ObjectAccessor.GetValue(row, column);
+            value = context.LanguageRuntime.ObjectAccessor.GetValue(row, column);
             return true;
         }
         catch (InvalidOperationException)
@@ -359,7 +359,7 @@ internal static class AggregationUtilities
                 {
                     value = item is null
                         ? null
-                        : context.Runtime.ObjectAccessor.GetValue(item, accumulator.MemberPath);
+                        : context.LanguageRuntime.ObjectAccessor.GetValue(item, accumulator.MemberPath);
                 }
 
                 if (value is null)

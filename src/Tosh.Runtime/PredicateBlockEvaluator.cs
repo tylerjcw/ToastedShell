@@ -7,7 +7,7 @@ internal static class PredicateBlockEvaluator
         ShellBlock block,
         object? item)
     {
-        var executor = context.Runtime.BlockExecutor
+        var executor = context.LanguageRuntime.BlockExecutor
                        ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
 
         var hasValue = false;

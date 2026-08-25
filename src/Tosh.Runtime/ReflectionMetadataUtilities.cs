@@ -425,10 +425,10 @@ internal static class ReflectionMetadataUtilities
             return true;
         }
 
-        return TryResolveShellType(context.Runtime, name, out descriptor);
+        return TryResolveShellType(context.LanguageRuntime, name, out descriptor);
     }
 
-    private static bool TryResolveShellType(ToshRuntime runtime, string name, out IShellTypeDescriptor descriptor)
+    private static bool TryResolveShellType(ToastRuntime runtime, string name, out IShellTypeDescriptor descriptor)
     {
         if (runtime.Classes.TryGetValue(name, out var rawDescriptor) &&
             rawDescriptor is IShellTypeDescriptor shellDescriptor)
