@@ -20,7 +20,8 @@ public sealed class ToshRepl
     {
         _engine = engine;
         _engine.IsInteractiveSession = true;
-        _runtime = engine.Runtime;
+        _runtime = engine.LanguageRuntime.CommandHost as ToshRuntime
+            ?? throw new InvalidOperationException("The TōSh REPL requires a TōSh command host.");
         _diagnostics = new DiagnosticRenderer(_runtime.Config.Theme.Diagnostics, _runtime.Config.Diagnostics);
         _lineEditor = new ReplLineEditor();
         _commandLineInsertion = new ReplCommandLineInsertionSink();

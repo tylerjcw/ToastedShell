@@ -11,7 +11,7 @@ ConfigureConsoleEncoding();
 
 var runtime = ToshRuntime.CreateDefault(Console.Out, Console.Error);
 runtime.InlinePrompts = new ConsoleInlinePromptProvider(runtime);
-var engine = new ToshEngine(runtime);
+var engine = new ToshEngine(runtime.Language);
 
 // Strip diagnostic-output overrides before resolving the invocation plan so
 // that user-facing flags (`--diagnostics=json|text|plain`) take effect for any
@@ -529,7 +529,7 @@ static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
     // Build a minimal runtime just for command registration — no startup/config needed.
     // Use a real ToshRuntime + ToshEngine so engine-supplied built-ins (source, debug) are included.
     var runtime = ToshRuntime.CreateDefault();
-    _ = new ToshEngine(runtime);
+    _ = new ToshEngine(runtime.Language);
     var registry = runtime.Commands;
 
     string output;
@@ -657,7 +657,7 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
         sourceName = $"{primaryInput} (+{inputPaths.Length - 1} more)";
     }
 
-    var compileEngine = new ToshEngine(runtime);
+    var compileEngine = new ToshEngine(runtime.Language);
     var parseResult = compileEngine.Parse(source, sourceName);
     if (parseResult.Diagnostics.Count > 0)
     {

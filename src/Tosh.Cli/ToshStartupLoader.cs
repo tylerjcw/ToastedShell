@@ -20,15 +20,17 @@ public static class ToshStartupLoader
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(engine);
+        var runtime = engine.LanguageRuntime.CommandHost as ToshRuntime
+            ?? throw new InvalidOperationException("The TōSh startup loader requires a TōSh command host.");
 
         var profile = profileStartup ? new StartupProfileData() : null;
         var fileProfiles = profileStartup ? new List<StartupFileProfile>() : null;
         var totalStopwatch = profileStartup ? Stopwatch.StartNew() : null;
 
         var root = configDirectory ?? ToshConfigDefaults.GetDefaultConfigDirectory();
-        engine.Runtime.Config.Startup.ApplyRootDirectory(root);
+        runtime.Config.Startup.ApplyRootDirectory(root);
 
-        var configPath = engine.Runtime.Config.Startup.ResolvePath(engine.Runtime.Config.Startup.ConfigFilePath);
+        var configPath = runtime.Config.Startup.ResolvePath(runtime.Config.Startup.ConfigFilePath);
 
         // Config errors are non-fatal — log and continue so the shell remains usable.
         if (File.Exists(configPath))
@@ -56,7 +58,7 @@ public static class ToshStartupLoader
         }
 
         // Profile and autoload errors are non-fatal — log and continue.
-        foreach (var path in EnumerateStartupFiles(engine.Runtime.Config.Startup, includeConfigFile: false, includeProfile: !skipProfile))
+        foreach (var path in EnumerateStartupFiles(runtime.Config.Startup, includeConfigFile: false, includeProfile: !skipProfile))
         {
             var isProfile = path.EndsWith("profile.tosh", StringComparison.OrdinalIgnoreCase);
             var fileStopwatch = profileStartup ? Stopwatch.StartNew() : null;
@@ -94,7 +96,7 @@ public static class ToshStartupLoader
             totalStopwatch.Stop();
             profile!.Total = totalStopwatch.Elapsed;
             profile.Files = fileProfiles!;
-            engine.Runtime.StartupProfile = profile;
+            runtime.StartupProfile = profile;
         }
     }
 

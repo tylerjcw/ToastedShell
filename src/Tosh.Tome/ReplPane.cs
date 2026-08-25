@@ -52,9 +52,10 @@ internal sealed class ReplPane
             {
                 try
                 {
-                    _engine = new ToshEngine();
+                    var runtime = ToshRuntime.CreateDefault();
+                    _engine = new ToshEngine(runtime.Language);
                     if (!string.IsNullOrEmpty(cwd) && Directory.Exists(cwd))
-                        _engine.Runtime.CurrentDirectory = cwd;
+                        runtime.CurrentDirectory = cwd;
                     _transcript.Add($"\u001b[2mTōsh embedded REPL — Esc to leave, Ctrl+L to clear, :repl close to hide\u001b[22m");
                 }
                 catch (Exception ex)

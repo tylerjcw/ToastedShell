@@ -288,6 +288,11 @@ opaque command host, so shell-specific commands keep their host without making t
 constructor part of that dependency. The CLI/REPL compatibility path remains until its helpers
 stop retrieving the session through `engine.Runtime`.
 
+That final production compatibility path is now gone too. The CLI, metadata exporter, compiler
+front end and Tōme construct from `ToastRuntime`; the TōSh startup loader and REPL explicitly
+recover their own command host from the language runtime. Only source-compatibility APIs and
+tests still construct `ToshEngine` from `ToshRuntime` or read `engine.Runtime`.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
