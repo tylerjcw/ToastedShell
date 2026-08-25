@@ -124,8 +124,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // them rather than knowing about them (`TS-P3-27`). Set beside the other
         // engine-owned hooks, and for the same reason they are.
         LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
-        _toshNamespace = new ToshRuntimeNamespace(this);
-        Runtime.RuntimeNamespace ??= _toshNamespace;
+        _toshNamespace = CreateRuntimeNamespace();
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
         // `source`, `eval`, `debug` and `format` used to be constructed and registered
         // here, which made the *language* own a set of commands. A command is a shell
@@ -158,7 +157,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         LanguageRuntime.Evaluator = this;
         LanguageRuntime.EventSenderFactory = CreateEventSender;
         LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
-        _toshNamespace = UnhostedRuntimeNamespace.Instance;
+        _toshNamespace = CreateRuntimeNamespace();
         _environmentNamespace = new ShellEnvironmentNamespace();
 
         LoadBuiltinRunesAsync().GetAwaiter().GetResult();
@@ -178,7 +177,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         ShellRuntime = runtime;
         LanguageRuntime = runtime.Language;
-        _toshNamespace = new ToshRuntimeNamespace(this);
+        _toshNamespace = CreateRuntimeNamespace();
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
         // Pre-seed the scope stack with clones of the parent's visible scopes.
         // capturedScopes is ordered outer-to-inner; pushing outer-first means
@@ -203,7 +202,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     private ToshEngine(ToastRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
     {
         LanguageRuntime = runtime;
-        _toshNamespace = UnhostedRuntimeNamespace.Instance;
+        _toshNamespace = CreateRuntimeNamespace();
         _environmentNamespace = new ShellEnvironmentNamespace();
 
         if (capturedScopes is not null)
@@ -226,6 +225,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         => ShellRuntime is { } shell
             ? new ToshEngine(shell, capturedScopes)
             : new ToshEngine(LanguageRuntime, capturedScopes);
+
+    private IShellRecordObject CreateRuntimeNamespace()
+        => LanguageRuntime.RuntimeNamespaceFactory?.CreateRuntimeNamespace(
+            new ToshScriptNamespace(this),
+            new ToshFunctionNamespace(this))
+           ?? UnhostedRuntimeNamespace.Instance;
 
     private static readonly ParseResult _builtinRunesParseResult =
         ToshParser.Parse(BuiltinRunes.Source, "<builtin-runes>");

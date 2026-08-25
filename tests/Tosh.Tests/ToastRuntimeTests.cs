@@ -43,6 +43,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.ExecutionObserver);
         Assert.NotNull(language.SessionRedirection);
         Assert.Null(language.BackgroundJobs);
+        Assert.Null(language.RuntimeNamespaceFactory);
         Assert.Null(language.ExternalCommands);
         Assert.Empty(language.InvocationArguments);
         Assert.Null(language.BlockExecutor);
@@ -117,6 +118,24 @@ public sealed class ToastRuntimeTests
         Assert.Equal("tosh.runtime.background_jobs_not_supported", failure.Diagnostics[0].Code);
     }
 
+    [Fact]
+    public async Task A_language_engine_accepts_a_host_runtime_namespace_without_a_shell_runtime()
+    {
+        var factory = new RecordingRuntimeNamespaceFactory();
+        var language = new ToastRuntime
+        {
+            RuntimeNamespaceFactory = factory,
+        };
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync("$tosh.Marker");
+
+        Assert.Equal(42, Assert.Single(results));
+        Assert.Null(engine.ShellRuntime);
+        Assert.NotNull(factory.Script);
+        Assert.NotNull(factory.Function);
+    }
+
     /// <summary>
     /// The language runtime names contracts, not the .NET reflection implementations.
     /// A host may replace all three services while constructing the runtime; the default
@@ -172,6 +191,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime, runtime.Language.ExecutionObserver);
         Assert.Same(runtime, runtime.Language.SessionRedirection);
         Assert.Same(runtime, runtime.Language.BackgroundJobs);
+        Assert.Same(runtime, runtime.Language.RuntimeNamespaceFactory);
         Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
         Assert.Same(runtime.InvocationArguments, runtime.Language.InvocationArguments);
         Assert.Same(runtime.BlockExecutor, runtime.Language.BlockExecutor);
@@ -184,6 +204,16 @@ public sealed class ToastRuntimeTests
 
         runtime.CurrentDirectory = "/tmp";
         Assert.Equal("/tmp", runtime.Language.CurrentDirectory);
+    }
+
+    [Fact]
+    public void The_shell_runtime_namespace_is_published_from_the_runtime_assembly()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        _ = new ToshEngine(runtime);
+
+        Assert.NotNull(runtime.RuntimeNamespace);
+        Assert.Equal(typeof(ToshRuntime).Assembly, runtime.RuntimeNamespace.GetType().Assembly);
     }
 
     /// <summary>
@@ -254,5 +284,45 @@ public sealed class ToastRuntimeTests
             await Task.CompletedTask;
             yield break;
         }
+    }
+
+    private sealed class RecordingRuntimeNamespaceFactory : IToastRuntimeNamespaceFactory
+    {
+        public IToastScriptNamespace? Script { get; private set; }
+
+        public IToastFunctionNamespace? Function { get; private set; }
+
+        public IShellRecordObject CreateRuntimeNamespace(
+            IToastScriptNamespace script,
+            IToastFunctionNamespace function)
+        {
+            Script = script;
+            Function = function;
+            return MarkerRuntimeNamespace.Instance;
+        }
+    }
+
+    private sealed class MarkerRuntimeNamespace : IShellRecordObject
+    {
+        public static MarkerRuntimeNamespace Instance { get; } = new();
+
+        public string ShellTypeName => "TestRuntime";
+
+        public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+        {
+            if (name == "Marker")
+            {
+                value = 42;
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        public bool TrySetMember(string name, object? value) => false;
+
+        public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+            => [new("Marker", 42)];
     }
 }

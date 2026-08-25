@@ -8,7 +8,8 @@ public sealed class ToshRuntime :
     IToastDiagnosticSink,
     IToastExecutionObserver,
     IToastSessionRedirection,
-    IToastBackgroundJobHost
+    IToastBackgroundJobHost,
+    IToastRuntimeNamespaceFactory
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -54,6 +55,7 @@ public sealed class ToshRuntime :
             ExecutionObserver = this,
             SessionRedirection = this,
             BackgroundJobs = this,
+            RuntimeNamespaceFactory = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
@@ -277,6 +279,20 @@ public sealed class ToshRuntime :
     /// Stored as <see cref="object"/> to avoid a Core -> Language assembly dependency.
     /// </summary>
     public object? RuntimeNamespace { get; set; }
+
+    /// <summary>
+    /// Composes TōSh's runtime namespace around the evaluator-backed script and function
+    /// views. The first root is published for completion and introspection; forked engines
+    /// receive their own live root without replacing that session-level reference.
+    /// </summary>
+    public IShellRecordObject CreateRuntimeNamespace(
+        IToastScriptNamespace script,
+        IToastFunctionNamespace function)
+    {
+        var runtimeNamespace = new ToshRuntimeNamespace(this, script, function);
+        RuntimeNamespace ??= runtimeNamespace;
+        return runtimeNamespace;
+    }
 
     public IDictionary<string, object?> Classes => Language.Classes;
 

@@ -124,6 +124,14 @@ public sealed class ToastRuntime
     /// </remarks>
     public IToastBackgroundJobHost? BackgroundJobs { get; init; }
 
+    /// <summary>Composes the host-owned runtime namespace exposed to language code.</summary>
+    /// <remarks>
+    /// Tōast supplies live script/function views to this optional factory. A host that
+    /// leaves it unset exposes the intentionally empty embedded namespace; TōSh supplies
+    /// the shell configuration, session, last-result and host views (`TOAST-0006`).
+    /// </remarks>
+    public IToastRuntimeNamespaceFactory? RuntimeNamespaceFactory { get; init; }
+
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the
     /// host does not expose process execution.

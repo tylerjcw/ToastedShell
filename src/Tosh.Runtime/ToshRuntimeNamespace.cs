@@ -1,35 +1,35 @@
-using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using Tosh.Runtime;
 
-namespace Tosh.Language;
+namespace Tosh.Runtime;
 
 internal sealed class ToshRuntimeNamespace
     : IShellRecordObject, IShellRuntimeNamespaceSummarySource
 {
-    private readonly ToshEngine _engine;
+    private readonly ToshRuntime _runtime;
 
-    public ToshRuntimeNamespace(ToshEngine engine)
+    public ToshRuntimeNamespace(
+        ToshRuntime runtime,
+        IToastScriptNamespace script,
+        IToastFunctionNamespace function)
     {
-        _engine = engine;
-        Last = new ToshLastNamespace(engine.Runtime);
-        Script = new ToshScriptNamespace(engine);
-        Function = new ToshFunctionNamespace(engine);
-        Session = new ToshSessionNamespace(engine.Runtime);
+        _runtime = runtime;
+        Last = new ToshLastNamespace(runtime);
+        Script = script;
+        Function = function;
+        Session = new ToshSessionNamespace(runtime);
         Host = new ToshHostNamespace();
     }
 
-    public ToshConfig Config => _engine.Runtime.Config;
+    public ToshConfig Config => _runtime.Config;
 
-    public bool IsLoginShell => _engine.Runtime.IsLoginShell;
+    public bool IsLoginShell => _runtime.IsLoginShell;
 
     public ToshLastNamespace Last { get; }
 
-    public ToshScriptNamespace Script { get; }
+    public IToastScriptNamespace Script { get; }
 
-    public ToshFunctionNamespace Function { get; }
+    public IToastFunctionNamespace Function { get; }
 
     public ToshSessionNamespace Session { get; }
 
@@ -68,14 +68,10 @@ internal sealed class ToshRuntimeNamespace
         }
     }
 
-    public bool TrySetMember(string name, object? value)
-    {
-        return false;
-    }
+    public bool TrySetMember(string name, object? value) => false;
 
     public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
-    {
-        return
+        =>
         [
             new(nameof(Config), Config),
             new(nameof(IsLoginShell), IsLoginShell),
@@ -85,7 +81,6 @@ internal sealed class ToshRuntimeNamespace
             new(nameof(Session), Session),
             new(nameof(Host), Host),
         ];
-    }
 
     public RuntimeNamespaceDisplaySummary GetDisplaySummary()
     {
@@ -183,33 +178,21 @@ internal sealed class ToshRuntimeNamespace
         => string.IsNullOrEmpty(sha) ? "(unknown)" : sha[..Math.Min(12, sha.Length)];
 }
 
-internal sealed class ToshLastNamespace
-    : IShellRecordObject
+internal sealed class ToshLastNamespace(ToshRuntime runtime) : IShellRecordObject
 {
-    private readonly ToshRuntime _runtime;
+    public object? Result => runtime.LastResult;
 
-    public ToshLastNamespace(ToshRuntime runtime)
-    {
-        _runtime = runtime;
-    }
+    public int ExitCode => runtime.LastExitCode;
 
-    public object? Result => _runtime.LastResult;
+    public TimeSpan? Duration => runtime.LastCommandDuration;
 
-    public int ExitCode => _runtime.LastExitCode;
+    public string? Diagnostic => runtime.LastDiagnostic;
 
-    public TimeSpan? Duration => _runtime.LastCommandDuration;
+    public Exception? Error => runtime.LastError;
 
-    /// <summary>Rendered diagnostic from the most recent failed command, or <c>null</c> if it succeeded.</summary>
-    public string? Diagnostic => _runtime.LastDiagnostic;
+    public bool HasError => runtime.LastError is not null;
 
-    /// <summary>Underlying exception associated with <see cref="Diagnostic"/>, or <c>null</c> on success.</summary>
-    public Exception? Error => _runtime.LastError;
-
-    /// <summary><c>true</c> when the most recent command produced an uncaught diagnostic.</summary>
-    public bool HasError => _runtime.LastError is not null;
-
-    /// <summary>Wall-clock start time of the most recent command, when recorded.</summary>
-    public DateTimeOffset? StartedAt => _runtime.LastStartedAt;
+    public DateTimeOffset? StartedAt => runtime.LastStartedAt;
 
     public string ShellTypeName => "ToshRuntime.Last";
 
@@ -259,153 +242,23 @@ internal sealed class ToshLastNamespace
         ];
 }
 
-internal sealed class ToshScriptNamespace
-    : IShellRecordObject
+internal sealed class ToshSessionNamespace(ToshRuntime runtime) : IShellRecordObject
 {
-    private readonly ToshEngine _engine;
+    public string CurrentDirectory => runtime.CurrentDirectory;
 
-    public ToshScriptNamespace(ToshEngine engine)
-    {
-        _engine = engine;
-    }
+    public int HistoryCount => runtime.History.Count;
 
-    public string Path => _engine.GetCurrentScriptPath();
+    public long NextHistoryId => runtime.NextHistoryId;
 
-    public string Name
-    {
-        get
-        {
-            var path = Path;
-            return string.IsNullOrEmpty(path) ? string.Empty : System.IO.Path.GetFileName(path);
-        }
-    }
+    public string HistoryFilePath => runtime.Config.History.FilePath;
 
-    public string Directory
-    {
-        get
-        {
-            var path = Path;
-
-            if (string.IsNullOrEmpty(path))
-            {
-                return string.Empty;
-            }
-
-            return System.IO.Path.GetDirectoryName(path) ?? string.Empty;
-        }
-    }
-
-    public object?[] Args => _engine.GetCurrentScriptArguments().ToArray();
-
-    public string ShellTypeName => "ToshRuntime.Script";
-
-    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
-    {
-        switch (name)
-        {
-            case nameof(Path):
-                value = Path;
-                return true;
-            case nameof(Name):
-                value = Name;
-                return true;
-            case nameof(Directory):
-                value = Directory;
-                return true;
-            case nameof(Args):
-                value = Args;
-                return true;
-            default:
-                value = null;
-                return false;
-        }
-    }
-
-    public bool TrySetMember(string name, object? value) => false;
-
-    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
-        =>
-        [
-            new(nameof(Path), Path),
-            new(nameof(Name), Name),
-            new(nameof(Directory), Directory),
-            new(nameof(Args), Args),
-        ];
-}
-
-internal sealed class ToshFunctionNamespace
-    : IShellRecordObject
-{
-    private readonly ToshEngine _engine;
-
-    public ToshFunctionNamespace(ToshEngine engine)
-    {
-        _engine = engine;
-    }
-
-    public string Name => _engine.GetCurrentFunctionName();
-
-    public object?[] Args => _engine.GetCurrentFunctionArguments().ToArray();
-
-    public object? Input => _engine.GetCurrentFunctionInput();
-
-    public string ShellTypeName => "ToshRuntime.Function";
-
-    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
-    {
-        switch (name)
-        {
-            case nameof(Name):
-                value = Name;
-                return true;
-            case nameof(Args):
-                value = Args;
-                return true;
-            case nameof(Input):
-                value = Input;
-                return true;
-            default:
-                value = null;
-                return false;
-        }
-    }
-
-    public bool TrySetMember(string name, object? value) => false;
-
-    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
-        =>
-        [
-            new(nameof(Name), Name),
-            new(nameof(Args), Args),
-            new(nameof(Input), Input),
-        ];
-}
-
-internal sealed class ToshSessionNamespace
-    : IShellRecordObject
-{
-    private readonly ToshRuntime _runtime;
-
-    public ToshSessionNamespace(ToshRuntime runtime)
-    {
-        _runtime = runtime;
-    }
-
-    public string CurrentDirectory => _runtime.CurrentDirectory;
-
-    public int HistoryCount => _runtime.History.Count;
-
-    public long NextHistoryId => _runtime.NextHistoryId;
-
-    public string HistoryFilePath => _runtime.Config.History.FilePath;
-
-    public int JobCount => _runtime.GetJobs().Count;
+    public int JobCount => runtime.GetJobs().Count;
 
     public int OpenHandleCount => ManagedFileHandle.GetOpenHandles().Count;
 
     public ManagedFileHandle[] OpenHandles => ManagedFileHandle.GetOpenHandles().ToArray();
 
-    public StartupProfileData? StartupProfile => _runtime.StartupProfile;
+    public StartupProfileData? StartupProfile => runtime.StartupProfile;
 
     public string ShellTypeName => "ToshRuntime.Session";
 
@@ -454,13 +307,11 @@ internal sealed class ToshSessionNamespace
             new(nameof(HistoryFilePath), HistoryFilePath),
             new(nameof(JobCount), JobCount),
             new(nameof(OpenHandleCount), OpenHandleCount),
-            // OpenHandles can be large/noisy; expose count by default and keep handles addressable by name.
             new(nameof(StartupProfile), StartupProfile),
         ];
 }
 
-internal sealed class ToshHostNamespace
-    : IShellRecordObject
+internal sealed class ToshHostNamespace : IShellRecordObject
 {
     private static string? _cachedBuildSha;
 
@@ -480,12 +331,6 @@ internal sealed class ToshHostNamespace
 
     public bool IsInteractive => !Console.IsInputRedirected;
 
-    /// <summary>
-    /// SHA-256 of the running executable, computed lazily on first read and
-    /// cached for the life of the process. Lets users verify which binary a
-    /// session is actually running (helpful after upgrading <c>/usr/bin/tosh</c>
-    /// while older shells are still attached to the previous on-disk file).
-    /// </summary>
     public string BuildSha256
     {
         get

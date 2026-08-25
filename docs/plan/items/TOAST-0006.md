@@ -222,6 +222,14 @@ host-defined display value. A language-only host can supply another implementati
 constructing `ToshRuntime`, or leave the capability absent and receive a specific diagnostic.
 No `ShellJob*` type or job-table operation remains in `Tosh.Language`.
 
+The `$tosh` root crossed next. Tōast owns only the live `Script` and `Function` views;
+it passes those through `IToastRuntimeNamespaceFactory`, and TōSh composes them with
+its `Config`, `Last`, `Session` and `Host` views. The shell root and all four shell-only
+children now compile from `Tosh.Runtime`, while a language-only host may inject its own
+root or retain the empty embedded default. The first TōSh root is still published on
+`ToshRuntime.RuntimeNamespace` for completion and introspection, and forked engines receive
+their own evaluator-backed views without replacing it.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -268,9 +276,12 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       with inert defaults for a language-only host. Shell-session mirroring during
       redirection now uses the scoped `IToastSessionRedirection` port, and auto-help writes
       through the language stream. Background pipelines now use the optional
-      `IToastBackgroundJobHost` port and language-neutral request records. The remaining
-      direct host use is `$tosh` composition. `CommandContext` now requires a language
-      runtime and carries
+      `IToastBackgroundJobHost` port and language-neutral request records. `$tosh` is now
+      composed through `IToastRuntimeNamespaceFactory`, with only the script/function
+      views left in the language assembly. The remaining compatibility uses of
+      `ToshRuntime` are the shell constructor/fork, `$env` export mirroring and AutoCd
+      navigation; those must move before the physical assembly split. `CommandContext`
+      now requires a language runtime and carries
       the shell runtime only when one exists, so declared functions run unhosted. The
       host-signal port now
       describes the language's real environment duties—synchronize an already-exported
