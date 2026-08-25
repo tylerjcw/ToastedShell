@@ -93,7 +93,7 @@ public sealed class SortCommand : ShellCommand
             }
 
             var memberPath = CommandArguments.RequireString(parsed.Positionals, 0, "member path");
-            return context.Runtime.ObjectAccessor.GetValue(value, memberPath);
+            return context.LanguageRuntime.ObjectAccessor.GetValue(value, memberPath);
         }
 
         async Task<TreeEntryInfo> SortTreeAsync(TreeEntryInfo node)

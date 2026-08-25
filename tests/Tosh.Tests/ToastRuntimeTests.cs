@@ -1,6 +1,7 @@
 using Tosh.Language;
 using Tosh.Runtime;
 using Tosh.Stdlib.Clr;
+using Tosh.Stdlib.Pipeline;
 using Tosh.Stdlib.Time;
 
 namespace Tosh.Tests;
@@ -185,6 +186,28 @@ public sealed class ToastRuntimeTests
 
         Assert.Equal(3, results[0]);
         Assert.IsType<CommandTimingInfo>(results[1]);
+        Assert.Null(engine.ShellRuntime);
+    }
+
+    [Fact]
+    public async Task Language_level_pipeline_commands_run_without_a_shell_runtime()
+    {
+        using var output = new StringWriter();
+        var language = new ToastRuntime
+        {
+            Output = ToastStreams.FromWriter(output),
+        };
+        language.Commands.RegisterOrReplace(new SortCommand());
+        language.Commands.RegisterOrReplace(new TeeCommand());
+        language.Commands.RegisterOrReplace(new GetCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync(
+            "var items = [{| Name: \"beta\" |}, {| Name: \"alpha\" |}]\n" +
+            "$items | sort Name | tee | get Name");
+
+        Assert.Equal(["alpha", "beta"], results);
+        Assert.Contains("alpha", output.ToString(), StringComparison.Ordinal);
         Assert.Null(engine.ShellRuntime);
     }
 

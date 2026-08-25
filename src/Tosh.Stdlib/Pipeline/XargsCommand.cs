@@ -17,7 +17,7 @@ public sealed class XargsCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var evaluator = context.Runtime.Evaluator
+        var evaluator = context.LanguageRuntime.Evaluator
                         ?? throw new InvalidOperationException("This runtime cannot evaluate nested commands for xargs.");
         var options = ParseOptions(context.Arguments);
         var inputValues = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);

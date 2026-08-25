@@ -36,7 +36,7 @@ public sealed class DistinctCommand : ShellCommand, ICurrentItemMemberPathComman
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
-            var keyValue = memberPath is null ? item : context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+            var keyValue = memberPath is null ? item : context.LanguageRuntime.ObjectAccessor.GetValue(item, memberPath);
             if (seen.Add(keyValue))
             {
                 yield return item;

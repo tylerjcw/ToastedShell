@@ -32,7 +32,7 @@ public sealed class FrequenciesCommand : ShellCommand, ICurrentItemMemberPathCom
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
-            var value = memberPath is null ? item : context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+            var value = memberPath is null ? item : context.LanguageRuntime.ObjectAccessor.GetValue(item, memberPath);
             var key = value ?? "<null>";
 
             if (counts.TryGetValue(key, out var count))

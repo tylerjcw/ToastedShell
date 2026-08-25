@@ -257,6 +257,12 @@ The language-level `hash` path and `time` block execution follow the same bounda
 also clones the caller's command context when forwarding instead of reconstructing a
 shell-only context and dropping scoped services; its standalone-runtime block path is pinned.
 
+Pipeline commands now take object access, nested evaluation, block execution, variables,
+working directory and output from `LanguageRuntime`; `tee` renders invariantly with
+`ToastRenderer` and writes through `IToastStream`. Only `inspect` retains a shell dependency
+inside that category because its object inspector and inline prompt are presentation services.
+A standalone `sort | tee | get` pipeline pins the language-only path.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

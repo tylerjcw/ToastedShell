@@ -31,7 +31,7 @@ public sealed class GetCommand : ShellCommand
 
             await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
             {
-                yield return Project(item, variadic, context.Runtime.ObjectAccessor);
+                yield return Project(item, variadic, context.LanguageRuntime.ObjectAccessor);
             }
 
             yield break;
@@ -166,7 +166,7 @@ public sealed class GetCommand : ShellCommand
         {
             await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
             {
-                yield return Project(item, selection, context.Runtime.ObjectAccessor);
+                yield return Project(item, selection, context.LanguageRuntime.ObjectAccessor);
             }
 
             yield break;
@@ -181,7 +181,7 @@ public sealed class GetCommand : ShellCommand
 
             try
             {
-                value = context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+                value = context.LanguageRuntime.ObjectAccessor.GetValue(item, memberPath);
             }
             catch (Exception exception) when (exception is not InvalidOperationException)
             {

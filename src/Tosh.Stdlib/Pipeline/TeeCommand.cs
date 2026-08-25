@@ -39,7 +39,7 @@ public sealed class TeeCommand : ShellCommand
                 yield return item;
             }
 
-            context.Runtime.Variables[name] = captured.Count switch
+            context.LanguageRuntime.Variables[name] = captured.Count switch
             {
                 0 => null,
                 1 => captured[0],
@@ -55,7 +55,9 @@ public sealed class TeeCommand : ShellCommand
         {
             if (parsed.Positionals.Count == 1)
             {
-                var path = PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, CommandArguments.RequireString(parsed.Positionals, 0, "path"));
+                var path = PathUtilities.ResolvePath(
+                    context.LanguageRuntime.CurrentDirectory,
+                    CommandArguments.RequireString(parsed.Positionals, 0, "path"));
                 var mode = append ? FileMode.Append : FileMode.Create;
                 writer = new StreamWriter(File.Open(path, mode, FileAccess.Write, FileShare.Read), Encoding.UTF8);
             }
@@ -69,7 +71,7 @@ public sealed class TeeCommand : ShellCommand
                 var text = item switch
                 {
                     ShellTextLine line => line.Text,
-                    _ => context.Runtime.Formatter.Format(item),
+                    _ => ToastRenderer.Render(item),
                 };
 
                 if (writer is not null)
@@ -79,7 +81,7 @@ public sealed class TeeCommand : ShellCommand
                 }
                 else
                 {
-                    await context.Runtime.Output.WriteLineAsync(text);
+                    await context.LanguageRuntime.Output.WriteTextLineAsync(text, context.CancellationToken);
                 }
 
                 yield return item;

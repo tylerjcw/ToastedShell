@@ -30,7 +30,7 @@ public sealed class ParallelCommand : ShellCommand
 
         // Fork the executor once per item so each invocation gets an isolated scope snapshot.
         // This replaces the old engineLock serialisation, enabling true concurrent execution.
-        var baseExecutor = context.BlockExecutor ?? context.Runtime.BlockExecutor;
+        var baseExecutor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor;
         var results = new ConcurrentDictionary<int, List<object?>>();
 
         await Parallel.ForEachAsync(

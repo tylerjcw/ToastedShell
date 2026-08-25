@@ -27,7 +27,7 @@ public sealed class EachCommand : ShellCommand
 
         var operation = FunctionalCommandUtilities.RequireCallableOrBlock(context, 0);
         operation = await FunctionalCommandUtilities.ResolveCallableOrBlockAsync(context, operation);
-        var executor = context.Runtime.BlockExecutor;
+        var executor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor;
 
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))

@@ -49,7 +49,7 @@ public sealed class GroupByCommand : ShellCommand, ICurrentItemMemberPathCommand
 
                 try
                 {
-                    keyValue = context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+                    keyValue = context.LanguageRuntime.ObjectAccessor.GetValue(item, memberPath);
                 }
                 catch (Exception exception) when (exception is not InvalidOperationException)
                 {
