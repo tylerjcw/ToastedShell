@@ -109,7 +109,7 @@ public sealed partial class ToshEngine
 
     private void WarnIfShadowingBuiltin(string commandName)
     {
-        if (Runtime.Commands.TryGet(commandName, out var existing) &&
+        if (LanguageRuntime.Commands.TryGet(commandName, out var existing) &&
             existing is not ICommandResolutionMetadata)
         {
             WriteWarning(
@@ -180,7 +180,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        return Runtime.Options.IsHushed(code, severity);
+        return LanguageRuntime.Options.IsHushed(code, severity);
     }
 
     /// <summary>
@@ -200,7 +200,7 @@ public sealed partial class ToshEngine
             return;
         }
 
-        Runtime.Options.HushedDiagnostics.Add(trimmed);
+        LanguageRuntime.Options.HushedDiagnostics.Add(trimmed);
     }
 
     /// <summary>Public <see cref="IShellEvaluator"/> entry point for the <c>hush</c> builtin.</summary>

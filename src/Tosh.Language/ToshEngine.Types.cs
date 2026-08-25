@@ -1086,7 +1086,7 @@ public sealed partial class ToshEngine
     {
         using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
         using var executionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Options.MaxRecursionDepth,
+            LanguageRuntime.Options.MaxRecursionDepth,
             callName,
             sourceName,
             sourceText,
@@ -1129,7 +1129,7 @@ public sealed partial class ToshEngine
         using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
         cancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Options.MaxRecursionDepth,
+            LanguageRuntime.Options.MaxRecursionDepth,
             callName,
             sourceName,
             sourceText,

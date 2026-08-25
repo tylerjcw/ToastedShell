@@ -1160,7 +1160,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
             try
             {
-                value = _engine.Runtime.ObjectAccessor.GetValue(instance.ClrBaseObject, name);
+                value = _engine.LanguageRuntime.ObjectAccessor.GetValue(instance.ClrBaseObject, name);
                 return true;
             }
             catch { /* member not found on CLR base */ }
@@ -1557,7 +1557,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
             try
             {
-                _engine.Runtime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
+                _engine.LanguageRuntime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
                 return true;
             }
             catch { /* member not found or read-only on CLR base */ }
@@ -1804,7 +1804,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
             if (ClrBaseType is not null && instance.ClrBaseObject is not null)
             {
-                return await _engine.Runtime.Invoker.InvokeInstanceMethodAsync(
+                return await _engine.LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
                     instance.ClrBaseObject,
                     methodName,
                     arguments,
@@ -2283,7 +2283,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         IReadOnlyList<object?> arguments,
         CancellationToken cancellationToken)
     {
-        var clrObject = await _engine.Runtime.Invoker.CreateInstanceAsync(
+        var clrObject = await _engine.LanguageRuntime.Invoker.CreateInstanceAsync(
             ClrBaseType!,
             arguments,
             cancellationToken);

@@ -406,7 +406,7 @@ public sealed partial class ToshEngine
         {
             try
             {
-                var currentValue = await Runtime.ObjectAccessor.GetValueAsync(
+                var currentValue = await LanguageRuntime.ObjectAccessor.GetValueAsync(
                     target,
                     memberPath,
                     cancellationToken);
@@ -434,7 +434,7 @@ public sealed partial class ToshEngine
 
             try
             {
-                await Runtime.ObjectAccessor.SetValueAsync(
+                await LanguageRuntime.ObjectAccessor.SetValueAsync(
                     target,
                     memberPath,
                     coalescedBinding.Value,
@@ -459,7 +459,7 @@ public sealed partial class ToshEngine
         {
             if (assignment.Operator != "=")
             {
-                var currentValue = await Runtime.ObjectAccessor.GetValueAsync(
+                var currentValue = await LanguageRuntime.ObjectAccessor.GetValueAsync(
                     target,
                     memberPath,
                     cancellationToken);
@@ -473,7 +473,7 @@ public sealed partial class ToshEngine
                     cancellationToken);
             }
 
-            await Runtime.ObjectAccessor.SetValueAsync(
+            await LanguageRuntime.ObjectAccessor.SetValueAsync(
                 target,
                 memberPath,
                 valueToAssign,
@@ -559,7 +559,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        foreach (var (name, rawValue) in Runtime.Variables)
+        foreach (var (name, rawValue) in LanguageRuntime.Variables)
         {
             if (seen.Add(name))
             {
@@ -594,7 +594,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        if (Runtime.Variables.TryGetValue(name, out var globalValue))
+        if (LanguageRuntime.Variables.TryGetValue(name, out var globalValue))
         {
             binding = ToVariableBinding(globalValue);
             return true;
@@ -795,7 +795,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        foreach (var runtimeValue in Runtime.Variables.Values)
+        foreach (var runtimeValue in LanguageRuntime.Variables.Values)
         {
             if (ValuesReferToSameObject(ToVariableBinding(runtimeValue).Value, value))
             {
@@ -803,7 +803,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        foreach (var handler in Runtime.Events.GetHandlers())
+        foreach (var handler in LanguageRuntime.Events.GetHandlers())
         {
             if (handler.CapturedScopes is not { } scopes)
             {
@@ -942,7 +942,7 @@ public sealed partial class ToshEngine
                 return;
             }
 
-            Runtime.Variables[name] = binding;
+            LanguageRuntime.Variables[name] = binding;
             Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
             return;
         }
@@ -953,7 +953,7 @@ public sealed partial class ToshEngine
             return;
         }
 
-        Runtime.Variables[name] = binding;
+        LanguageRuntime.Variables[name] = binding;
         Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
     }
 
@@ -972,9 +972,9 @@ public sealed partial class ToshEngine
             return true;
         }
 
-        if (Runtime.Variables.ContainsKey(name))
+        if (LanguageRuntime.Variables.ContainsKey(name))
         {
-            Runtime.Variables[name] = binding;
+            LanguageRuntime.Variables[name] = binding;
             Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
             return true;
         }
@@ -998,7 +998,7 @@ public sealed partial class ToshEngine
     private IDisposable PushScope(IReadOnlyDictionary<string, object?> locals, bool isModuleScope = false)
     {
         _scopes.Push(new LexicalScope(locals, isModuleScope));
-        return new ScopeFrame(_scopes, Runtime.Events);
+        return new ScopeFrame(_scopes, LanguageRuntime.Events);
     }
 
     /// <summary>
@@ -1038,7 +1038,7 @@ public sealed partial class ToshEngine
     private IDisposable PushScope(LexicalScope scope)
     {
         _scopes.Push(scope);
-        return new ScopeFrame(_scopes, Runtime.Events);
+        return new ScopeFrame(_scopes, LanguageRuntime.Events);
     }
 
     private static VariableBinding ToVariableBinding(object? value)

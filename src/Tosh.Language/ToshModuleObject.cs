@@ -151,7 +151,7 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
         // member an existing call resolves to; it only turns a hard failure into a hit.
         if (_engine.TryResolveTypeName(Name) is { } shadowedType)
         {
-            return _engine.Runtime.Invoker.InvokeStatic(shadowedType, methodName, arguments);
+            return _engine.LanguageRuntime.Invoker.InvokeStatic(shadowedType, methodName, arguments);
         }
 
         throw new InvalidOperationException(

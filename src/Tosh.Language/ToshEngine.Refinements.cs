@@ -236,7 +236,7 @@ public sealed partial class ToshEngine
 
         if (modifier is DeclarationModifier.Global or DeclarationModifier.Export)
         {
-            Runtime.Classes[definition.Name] = definition;
+            LanguageRuntime.Classes[definition.Name] = definition;
             return;
         }
 
@@ -246,7 +246,7 @@ public sealed partial class ToshEngine
             return;
         }
 
-        Runtime.Classes[definition.Name] = definition;
+        LanguageRuntime.Classes[definition.Name] = definition;
     }
 
     private void PreRegisterRefinementTypeAliases(
@@ -340,7 +340,7 @@ public sealed partial class ToshEngine
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(baseTypeName);
 
-        Runtime.Classes[name] = new RefinementTypeDefinition(
+        LanguageRuntime.Classes[name] = new RefinementTypeDefinition(
             Name: name,
             TypeParameters: Array.Empty<string>(),
             BaseTypeName: baseTypeName,
@@ -374,7 +374,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        if (Runtime.Classes.TryGetValue(name, out var rawValue) &&
+        if (LanguageRuntime.Classes.TryGetValue(name, out var rawValue) &&
             rawValue is RefinementTypeDefinition runtimeDefinition)
         {
             definition = runtimeDefinition;
@@ -1630,7 +1630,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        foreach (var (name, _) in Runtime.Classes)
+        foreach (var (name, _) in LanguageRuntime.Classes)
         {
             candidates.Add(name);
         }

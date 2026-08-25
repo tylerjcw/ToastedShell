@@ -439,7 +439,7 @@ public static class Binder
         if (context.CommandRegistry.TryGet(name, out var resolved))
         {
             // Phase 1 doesn't stamp BoundCommand: top-level user functions are
-            // registered into the same Runtime.Commands registry the binder
+            // registered into the same LanguageRuntime.Commands registry the binder
             // queried, replacing aliases. A bound reference captured at parse
             // time can therefore go stale before evaluation. The binder's
             // Phase 1 value is the diagnostic below; runtime resolution stays

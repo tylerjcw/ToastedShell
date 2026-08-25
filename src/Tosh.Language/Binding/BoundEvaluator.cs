@@ -29,7 +29,7 @@ public static class BoundEvaluator
         ArgumentNullException.ThrowIfNull(source);
 
         var parseResult = engine.Parse(source, sourceName);
-        var unit = Lowerer.Lower(parseResult, engine.Runtime.Commands);
+        var unit = Lowerer.Lower(parseResult, engine.LanguageRuntime.Commands);
         return engine.EvaluateAsync(unit, cancellationToken);
     }
 

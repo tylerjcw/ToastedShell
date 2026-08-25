@@ -113,6 +113,8 @@ public sealed class ToastRuntimeTests
         var runtime = ToshRuntime.CreateDefault();
         var engine = new ToshEngine(runtime);
 
+        Assert.Same(runtime.Language, engine.LanguageRuntime);
+
         await engine.ExecuteToListAsync("global var probe = 41");
 
         Assert.True(runtime.Language.Variables.ContainsKey("probe"));

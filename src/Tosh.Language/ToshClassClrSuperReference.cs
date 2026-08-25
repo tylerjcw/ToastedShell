@@ -25,7 +25,7 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
 
     public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
-        var clrObject = await _engine.Runtime.Invoker.CreateInstanceAsync(
+        var clrObject = await _engine.LanguageRuntime.Invoker.CreateInstanceAsync(
             _clrBaseType,
             context.Arguments,
             context.CancellationToken);
@@ -43,7 +43,7 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
         {
             try
             {
-                value = _engine.Runtime.ObjectAccessor.GetValue(_instance.ClrBaseObject, name);
+                value = _engine.LanguageRuntime.ObjectAccessor.GetValue(_instance.ClrBaseObject, name);
                 return true;
             }
             catch { /* member not found */ }
@@ -59,7 +59,7 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
         {
             try
             {
-                _engine.Runtime.ObjectAccessor.SetValue(_instance.ClrBaseObject, name, value);
+                _engine.LanguageRuntime.ObjectAccessor.SetValue(_instance.ClrBaseObject, name, value);
                 return true;
             }
             catch { /* member not found or read-only */ }
@@ -88,7 +88,7 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
     {
         if (_instance.ClrBaseObject is not null)
         {
-            var result = _engine.Runtime.Invoker.InvokeInstance(_instance.ClrBaseObject, methodName, arguments);
+            var result = _engine.LanguageRuntime.Invoker.InvokeInstance(_instance.ClrBaseObject, methodName, arguments);
             return new InvocationResult(result, ReturnedVoid: false);
         }
 
@@ -102,7 +102,7 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
     {
         if (_instance.ClrBaseObject is not null)
         {
-            return await _engine.Runtime.Invoker.InvokeInstanceMethodAsync(
+            return await _engine.LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
                 _instance.ClrBaseObject,
                 methodName,
                 arguments,

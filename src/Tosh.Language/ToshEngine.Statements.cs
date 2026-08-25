@@ -458,7 +458,7 @@ public sealed partial class ToshEngine
 
         if (statement.Modifier == DeclarationModifier.Global || (statement.Modifier == DeclarationModifier.Default && _scopes.Count == 0))
         {
-            if (Runtime.TypeResolver is not IImportingTypeResolver importingResolver)
+            if (LanguageRuntime.TypeResolver is not IImportingTypeResolver importingResolver)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.using_not_supported",
@@ -1583,7 +1583,7 @@ public sealed partial class ToshEngine
             }
 
             // Debug hook / script trace: fire before each statement executes.
-            if (DebugHook is not null || Runtime.Options.ScriptTrace)
+            if (DebugHook is not null || LanguageRuntime.Options.ScriptTrace)
             {
                 var action = await InvokeDebugHookAsync(sourceName, sourceText, statement, cancellationToken);
                 if (action == DebugAction.Abort)

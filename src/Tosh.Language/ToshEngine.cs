@@ -97,15 +97,16 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     public ToshEngine(ToshRuntime? runtime = null)
     {
         Runtime = runtime ?? ToshRuntime.CreateDefault();
+        LanguageRuntime = Runtime.Language;
         Runtime.BlockExecutor = new EngineBlockExecutor(this);
         Runtime.Evaluator = this;
-        Runtime.EventSenderFactory = CreateEventSender;
+        LanguageRuntime.EventSenderFactory = CreateEventSender;
 
         // `extend` methods are the engine's knowledge — lexically scoped, arriving
         // with imported modules, written in ToastScript — so the invoker asks for
         // them rather than knowing about them (`TS-P3-27`). Set beside the other
         // engine-owned hooks, and for the same reason they are.
-        Runtime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
+        LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
         _toshNamespace = new ToshRuntimeNamespace(this);
         Runtime.RuntimeNamespace ??= _toshNamespace;
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
@@ -129,12 +130,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// Creates a forked child engine that shares the same <see cref="ToshRuntime"/> but has
     /// its own isolated scope stack pre-seeded with cloned copies of <paramref name="capturedScopes"/>.
     /// The fork does NOT write back to <c>Runtime.BlockExecutor</c> / <c>Runtime.Evaluator</c> /
-    /// <c>Runtime.EventSenderFactory</c>; instead it propagates its executor via
+    /// <c>LanguageRuntime.EventSenderFactory</c>; instead it propagates its executor via
     /// <see cref="CommandContext.BlockExecutor"/>.
     /// </summary>
     private ToshEngine(ToshRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
     {
         Runtime = runtime;
+        LanguageRuntime = runtime.Language;
         _toshNamespace = new ToshRuntimeNamespace(this);
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
         // Pre-seed the scope stack with clones of the parent's visible scopes.
@@ -154,7 +156,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // `extend` methods are the engine's knowledge — lexically scoped, arriving
         // with imported modules, written in ToastScript — so the invoker asks for
         // them rather than knowing about them (`TS-P3-27`).
-        Runtime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
+        LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
     }
 
     /// <summary>
@@ -173,6 +175,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     public ToshRuntime Runtime { get; }
+
+    /// <summary>
+    /// The language-owned runtime state used by parsing, binding, and evaluation.
+    /// </summary>
+    /// <remarks>
+    /// Kept separate from <see cref="Runtime"/> so language services do not reach their
+    /// state through shell forwarding properties. The current public constructor still
+    /// receives a <see cref="ToshRuntime"/>; `TOAST-0006` will remove that final host
+    /// requirement after the remaining shell-only uses are isolated.
+    /// </remarks>
+    public ToastRuntime LanguageRuntime { get; }
 
     /// <summary>
     /// True when this engine is hosting an interactive REPL session.
@@ -233,12 +246,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
     internal ITypeResolver CreateScopedTypeResolver()
     {
-        // Runtime.NativeTypes holds globally-declared `raw struct` types. It sits
+        // LanguageRuntime.NativeTypes holds globally-declared `raw struct` types. It sits
         // under the lexical scopes but above the CLR resolver, so a global raw
         // struct is nameable even with no scope on the stack.
-        var baseResolver = Runtime.NativeTypes.Count == 0 && Runtime.Modules.Count == 0
-            ? Runtime.TypeResolver
-            : new NativeTypeRegistryResolver(Runtime.TypeResolver, Runtime.NativeTypes, Runtime.Modules);
+        var baseResolver = LanguageRuntime.NativeTypes.Count == 0 && LanguageRuntime.Modules.Count == 0
+            ? LanguageRuntime.TypeResolver
+            : new NativeTypeRegistryResolver(LanguageRuntime.TypeResolver, LanguageRuntime.NativeTypes, LanguageRuntime.Modules);
 
         if (_scopes.Count == 0)
         {
@@ -258,9 +271,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // `-c` prompt takes this path, which is why introspection appeared to work there.
         var modules = EnumerateVisibleModules();
 
-        return _scopes.Count == 0 && modules.Count == 0
-            ? Runtime.Commands
-            : new ScopedCommandView(_scopes.ToArray(), Runtime.Commands, modules, this);
+        if (_scopes.Count == 0 && modules.Count == 0 &&
+            LanguageRuntime.Commands is IScopedCommandView directView)
+        {
+            return directView;
+        }
+
+        return new ScopedCommandView(
+            _scopes.ToArray(),
+            LanguageRuntime.Commands,
+            modules,
+            this);
     }
 
     public ParseResult Parse(string source, string sourceName = "<input>")
@@ -297,7 +318,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
         }
 
-        foreach (var name in Runtime.Classes.Keys)
+        foreach (var name in LanguageRuntime.Classes.Keys)
         {
             typeNames.Add(name);
         }
@@ -310,7 +331,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             typeNames.Add(alias);
         }
 
-        if (Runtime.TypeResolver is DotNetTypeResolver resolver)
+        if (LanguageRuntime.TypeResolver is DotNetTypeResolver resolver)
         {
             foreach (var alias in resolver.GetAliases().Keys)
             {
@@ -319,7 +340,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         return ParseContext.Create(
-            commandNames: Runtime.Commands.AllNames,
+            commandNames: LanguageRuntime.Commands.AllNames,
             moduleNames: moduleNames,
             typeNames: typeNames);
     }
@@ -425,7 +446,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         try
         {
-            var unit = Tosh.Language.Binding.Lowerer.Lower(parseResult, Runtime.Commands);
+            var unit = Tosh.Language.Binding.Lowerer.Lower(parseResult, LanguageRuntime.Commands);
 
             // Type-check pass: piggy-backs on the lowered unit. Same
             // disable env var (TOSH_DISABLE_LOWERER) suppresses both
@@ -467,7 +488,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             return;
         }
 
-        var diagnostics = Tosh.Language.Binding.Binder.Bind(parseResult, Runtime.Commands, IsInteractiveSession);
+        var diagnostics = Tosh.Language.Binding.Binder.Bind(parseResult, LanguageRuntime.Commands, IsInteractiveSession);
         if (diagnostics.Count == 0) return;
 
         switch (BinderStrictness)
@@ -518,7 +539,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         bool isolateScope,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var resolvedPath = PathUtilities.ResolvePath(Runtime.CurrentDirectory, path);
+        var resolvedPath = PathUtilities.ResolvePath(LanguageRuntime.CurrentDirectory, path);
 
         if (!File.Exists(resolvedPath))
         {
@@ -669,7 +690,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Options.MaxRecursionDepth,
+            LanguageRuntime.Options.MaxRecursionDepth,
             $"script {parseResult.SourceName}",
             parseResult.SourceName,
             parseResult.SourceText,
@@ -680,17 +701,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         var stopwatch = isTopLevel ? System.Diagnostics.Stopwatch.StartNew() : null;
 
         // Raise CommandStarting for top-level user input only
-        if (isTopLevel && Runtime.Events.GetHandlers(BuiltInEventNames.CommandStarting).Count > 0)
+        if (isTopLevel && LanguageRuntime.Events.GetHandlers(BuiltInEventNames.CommandStarting).Count > 0)
         {
             _commandEventDepth++;
             try
             {
-                var sender = Runtime.EventSenderFactory?.Invoke()
+                var sender = LanguageRuntime.EventSenderFactory?.Invoke()
                     ?? new ShellEventSender(Function: null, Script: null, Line: null);
                 var inputText = parseResult.SourceText.Trim();
                 var startingEvent = new CommandStartingEvent(
                     inputText, [], inputText, sender);
-                await Runtime.Events.RaiseAsync(startingEvent, cancellationToken);
+                await LanguageRuntime.Events.RaiseAsync(startingEvent, cancellationToken);
 
                 if (startingEvent.Cancelled)
                 {
@@ -897,19 +918,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             _commandEventDepth--;
 
             // Raise CommandCompleted for top-level user input only
-            if (isTopLevel && Runtime.Events.GetHandlers(BuiltInEventNames.CommandCompleted).Count > 0)
+            if (isTopLevel && LanguageRuntime.Events.GetHandlers(BuiltInEventNames.CommandCompleted).Count > 0)
             {
                 stopwatch?.Stop();
                 _commandEventDepth++;
                 try
                 {
-                    var sender = Runtime.EventSenderFactory?.Invoke()
+                    var sender = LanguageRuntime.EventSenderFactory?.Invoke()
                         ?? new ShellEventSender(Function: null, Script: null, Line: null);
                     var inputText = parseResult.SourceText.Trim();
                     var completedEvent = new CommandCompletedEvent(
                         inputText, exitCode, stopwatch?.Elapsed ?? TimeSpan.Zero,
                         values.Count > 0 ? values[^1] : null, sender);
-                    await Runtime.Events.RaiseAsync(completedEvent, cancellationToken);
+                    await LanguageRuntime.Events.RaiseAsync(completedEvent, cancellationToken);
                 }
                 finally
                 {
@@ -1783,7 +1804,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             once,
             capturedScopes?.Cast<object>().ToArray());
 
-        Runtime.Events.Register(handler);
+        LanguageRuntime.Events.Register(handler);
     }
 
     private async Task<bool> EvaluateWhenGuardAsync(
@@ -2362,7 +2383,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (definition.IsRequired)
         {
-            Runtime.Events.MarkRequired(definition.Name);
+            LanguageRuntime.Events.MarkRequired(definition.Name);
         }
 
         if (definition.IsLocal && _scopes.Count > 0)
@@ -2959,7 +2980,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             OutputIsCaptured: outputIsCaptured,
             ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
 
-        if (Runtime.Options.Trace)
+        if (LanguageRuntime.Options.Trace)
         {
             var traceArgs = string.Join(" ", arguments.Select(FormatTraceArgument));
             var traceLine = string.IsNullOrEmpty(traceArgs)
@@ -3050,7 +3071,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
         }
 
-        if (Runtime.Commands.TryGet(commandSyntax.Name, out var command))
+        if (LanguageRuntime.Commands.TryGet(commandSyntax.Name, out var command))
         {
             return command;
         }
@@ -3068,7 +3089,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // spelled. Nothing is registered under a name starting with `~`, so this runs after the
         // builtin lookups and cannot shadow one.
         var externalName = ExpandCommandNameTilde(commandSyntax.Name);
-        var external = ExternalCommandResolver.Resolve(Runtime.CurrentDirectory, externalName);
+        var external = ExternalCommandResolver.Resolve(LanguageRuntime.CurrentDirectory, externalName);
 
         if (external.Status is not ExternalCommandLookupStatus.Found &&
             TryBuildVariableReferenceHint(commandSyntax.Name, out var suggestedReference, out var variableName))
@@ -3116,7 +3137,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     Help: external.IsExplicitPath
                         ? $"make it executable, for example with `chmod +x {commandSyntax.Name}`, or run it with an interpreter."
                         : "check the file permissions or invoke it through an interpreter.")),
-            ExternalCommandLookupStatus.IsDirectory when Runtime.Options.AutoCd =>
+            ExternalCommandLookupStatus.IsDirectory when LanguageRuntime.Options.AutoCd =>
                 new AutoCdCommand(external.ResolvedPath ?? commandSyntax.Name),
             ExternalCommandLookupStatus.IsDirectory =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
@@ -3126,7 +3147,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     SourceText: sourceText,
                     Span: commandSyntax.Span,
                     Label: $"'{commandSyntax.Name}' does not refer to a runnable program")),
-            _ when Runtime.Options.AutoCd && TryResolveAutoCdDirectory(commandSyntax.Name, out var autoCdPath) =>
+            _ when LanguageRuntime.Options.AutoCd && TryResolveAutoCdDirectory(commandSyntax.Name, out var autoCdPath) =>
                 new AutoCdCommand(autoCdPath),
             // `TS-P2-41`. A word that names a member of the running class is not an unknown
             // command, and saying so — then suggesting `bg` — was the whole complaint. Placed
@@ -3234,7 +3255,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             return $"use 'which {name}' to inspect how Tosh resolves this command.";
         }
 
-        foreach (var command in Runtime.Commands.All)
+        foreach (var command in LanguageRuntime.Commands.All)
         {
             var distance = LevenshteinDistance(name, command.Name);
             if (distance < bestMatch.Distance)
@@ -3339,7 +3360,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         try
         {
-            var existingTarget = await Runtime.ObjectAccessor.GetValueAsync(
+            var existingTarget = await LanguageRuntime.ObjectAccessor.GetValueAsync(
                 rootTarget,
                 memberPath,
                 cancellationToken);
@@ -3358,7 +3379,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         try
         {
-            await Runtime.ObjectAccessor.SetValueAsync(
+            await LanguageRuntime.ObjectAccessor.SetValueAsync(
                 rootTarget,
                 memberPath,
                 materializedList,
@@ -3671,7 +3692,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         if (TryPlanAliasCaseVariantAccess(path, out var caseVariantType, out var caseVariantMembers) &&
             caseVariantMembers.Length == 1)
         {
-            var caseVariantCall = Runtime.Invoker.InvokeStatic(
+            var caseVariantCall = LanguageRuntime.Invoker.InvokeStatic(
                 caseVariantType,
                 caseVariantMembers[0],
                 arguments);
@@ -3692,7 +3713,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (plan.Kind == QualifiedInvocationKind.Static)
         {
-            var invocation = Runtime.Invoker.InvokeStatic(plan.DeclaringType, plan.MethodName, arguments);
+            var invocation = LanguageRuntime.Invoker.InvokeStatic(plan.DeclaringType, plan.MethodName, arguments);
             return invocation.ReturnedVoid ? null : invocation.Value;
         }
 
@@ -3703,7 +3724,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             throw new InvalidOperationException("Cannot invoke an instance method on null.");
         }
 
-        var instanceInvocation = Runtime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
+        var instanceInvocation = LanguageRuntime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
         return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
     }
 
@@ -3847,7 +3868,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         if (TryPlanAliasCaseVariantAccess(path, out var caseVariantType, out var caseVariantMembers) &&
             caseVariantMembers.Length == 1)
         {
-            var caseVariantCall = await Runtime.Invoker.InvokeStaticMethodAsync(
+            var caseVariantCall = await LanguageRuntime.Invoker.InvokeStaticMethodAsync(
                 caseVariantType,
                 caseVariantMembers[0],
                 arguments,
@@ -3872,7 +3893,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (plan.Kind == QualifiedInvocationKind.Static)
         {
-            var invocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+            var invocation = await LanguageRuntime.Invoker.InvokeStaticMethodAsync(
                 plan.DeclaringType,
                 plan.MethodName,
                 arguments,
@@ -3891,7 +3912,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             throw new InvalidOperationException("Cannot invoke an instance method on null.");
         }
 
-        var instanceInvocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+        var instanceInvocation = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
             target,
             plan.MethodName,
             arguments,
@@ -4034,14 +4055,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             // lands on whatever it produced (`TS-P2-92`).
             if (plan.MemberPath is null)
             {
-                var staticInvocation = Runtime.Invoker.InvokeStatic(plan.StaticType!, plan.MethodName, arguments);
+                var staticInvocation = LanguageRuntime.Invoker.InvokeStatic(plan.StaticType!, plan.MethodName, arguments);
                 value = staticInvocation.ReturnedVoid ? null : staticInvocation.Value;
                 return true;
             }
 
-            var staticTarget = Runtime.ObjectAccessor.GetValue(plan.StaticType, plan.MemberPath)
+            var staticTarget = LanguageRuntime.ObjectAccessor.GetValue(plan.StaticType, plan.MemberPath)
                                ?? throw CannotInvokeOnNull(plan.MethodName);
-            var chained = Runtime.Invoker.InvokeInstance(staticTarget, plan.MethodName, arguments);
+            var chained = LanguageRuntime.Invoker.InvokeInstance(staticTarget, plan.MethodName, arguments);
             value = chained.ReturnedVoid ? staticTarget : chained.Value;
             return true;
         }
@@ -4050,11 +4071,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (plan.MemberPath is not null)
         {
-            target = Runtime.ObjectAccessor.GetValue(plan.Module, plan.MemberPath)
+            target = LanguageRuntime.ObjectAccessor.GetValue(plan.Module, plan.MemberPath)
                      ?? throw CannotInvokeOnNull(plan.MethodName);
         }
 
-        var invocation = Runtime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
+        var invocation = LanguageRuntime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
         value = invocation.ReturnedVoid ? target : invocation.Value;
         return true;
     }
@@ -4076,7 +4097,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         {
             if (plan.MemberPath is null)
             {
-                var staticInvocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+                var staticInvocation = await LanguageRuntime.Invoker.InvokeStaticMethodAsync(
                     plan.StaticType!,
                     plan.MethodName,
                     arguments,
@@ -4084,12 +4105,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 return (true, staticInvocation.ReturnedVoid ? null : staticInvocation.Value);
             }
 
-            var staticTarget = await Runtime.ObjectAccessor.GetValueAsync(
+            var staticTarget = await LanguageRuntime.ObjectAccessor.GetValueAsync(
                                    plan.StaticType,
                                    plan.MemberPath,
                                    cancellationToken)
                                ?? throw CannotInvokeOnNull(plan.MethodName);
-            var chained = await Runtime.Invoker.InvokeInstanceMethodAsync(
+            var chained = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
                 staticTarget,
                 plan.MethodName,
                 arguments,
@@ -4101,14 +4122,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (plan.MemberPath is not null)
         {
-            target = await Runtime.ObjectAccessor.GetValueAsync(
+            target = await LanguageRuntime.ObjectAccessor.GetValueAsync(
                          plan.Module,
                          plan.MemberPath,
                          cancellationToken)
                      ?? throw CannotInvokeOnNull(plan.MethodName);
         }
 
-        var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+        var invocation = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
             target,
             plan.MethodName,
             arguments,
@@ -4135,14 +4156,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         {
             value = segments.Length == 1
                 ? module
-                : Runtime.ObjectAccessor.GetValue(module, string.Join('.', segments[1..]));
+                : LanguageRuntime.ObjectAccessor.GetValue(module, string.Join('.', segments[1..]));
             return true;
         }
 
         if (segments.Length == 2 &&
             TryGetNamedType(segments[0], out var shellType))
         {
-            value = Runtime.Invoker.GetStaticMember(shellType, segments[1]);
+            value = LanguageRuntime.Invoker.GetStaticMember(shellType, segments[1]);
             return true;
         }
 
@@ -4166,7 +4187,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         {
             for (var index = 2; index < segments.Length; index++)
             {
-                current = Runtime.ObjectAccessor.GetValue(current, segments[index]);
+                current = LanguageRuntime.ObjectAccessor.GetValue(current, segments[index]);
             }
 
             value = current;
@@ -4194,11 +4215,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         RequireMemberPath(type, memberSegments);
 
-        object? current = Runtime.Invoker.GetStaticMember(type, memberSegments[0]);
+        object? current = LanguageRuntime.Invoker.GetStaticMember(type, memberSegments[0]);
 
         for (var index = 1; index < memberSegments.Count; index++)
         {
-            current = Runtime.ObjectAccessor.GetValue(current, memberSegments[index]);
+            current = LanguageRuntime.ObjectAccessor.GetValue(current, memberSegments[index]);
         }
 
         return current;
@@ -4211,11 +4232,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         RequireMemberPath(type, memberSegments);
 
-        object? current = Runtime.Invoker.GetStaticMember(type, memberSegments[0]);
+        object? current = LanguageRuntime.Invoker.GetStaticMember(type, memberSegments[0]);
 
         for (var index = 1; index < memberSegments.Count; index++)
         {
-            current = await Runtime.ObjectAccessor.GetValueAsync(
+            current = await LanguageRuntime.ObjectAccessor.GetValueAsync(
                 current,
                 memberSegments[index],
                 cancellationToken);
@@ -4597,9 +4618,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             break;
         }
 
-        if (!removedVariable && Runtime.Variables.TryGetValue(name, out var globalValue))
+        if (!removedVariable && LanguageRuntime.Variables.TryGetValue(name, out var globalValue))
         {
-            Runtime.Variables.Remove(name);
+            LanguageRuntime.Variables.Remove(name);
             removedVariable = true;
             variableScope = "Global";
             removedVariableBinding = ToVariableBinding(globalValue);
@@ -4620,7 +4641,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (!removedType)
         {
-            Runtime.Classes.Remove(name);
+            LanguageRuntime.Classes.Remove(name);
         }
 
         var removedModule = false;
@@ -4638,7 +4659,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (!removedModule)
         {
-            Runtime.Modules.Remove(name);
+            LanguageRuntime.Modules.Remove(name);
         }
 
         var removedCommand = false;
@@ -4664,11 +4685,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         if (!removedCommand &&
-            Runtime.Commands.TryGet(name, out var command) &&
+            LanguageRuntime.Commands.TryGet(name, out var command) &&
             command is ICommandResolutionMetadata metadata &&
             metadata.ResolutionKind is CommandResolutionKind.Alias or CommandResolutionKind.Function)
         {
-            removedCommand = Runtime.Commands.Remove(name);
+            removedCommand = LanguageRuntime.Commands.Remove(name);
             commandKind = metadata.ResolutionKind.ToString();
             commandScope = "Global";
         }
@@ -4708,7 +4729,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
         }
 
-        var globalMatches = Runtime.Variables
+        var globalMatches = LanguageRuntime.Variables
             .Where(entry => ValuesReferToSameObject(ToVariableBinding(entry.Value).Value, value))
             .Select(entry => entry.Key)
             .ToArray();
@@ -4818,7 +4839,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         if (modifier is DeclarationModifier.Global or DeclarationModifier.Export)
         {
             WarnIfShadowingBuiltin(command.Name);
-            RegisterCommand(Runtime.Commands, command);
+            RegisterCommand(LanguageRuntime.Commands, command);
             return;
         }
 
@@ -4829,7 +4850,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         WarnIfShadowingBuiltin(command.Name);
-        RegisterCommand(Runtime.Commands, command);
+        RegisterCommand(LanguageRuntime.Commands, command);
     }
 
     private IShellCommand RegisterCommand(Dictionary<string, IShellCommand> commands, IShellCommand command)
@@ -5010,10 +5031,10 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 return globalModuleScope.Variables;
             }
 
-            return Runtime.Variables;
+            return LanguageRuntime.Variables;
         }
 
-        return _scopes.Count > 0 ? _scopes.Peek().Variables : Runtime.Variables;
+        return _scopes.Count > 0 ? _scopes.Peek().Variables : LanguageRuntime.Variables;
     }
 
     /// <param name="nativeClrType">
@@ -5179,8 +5200,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (modifier is DeclarationModifier.Global or DeclarationModifier.Export)
         {
-            Runtime.Classes[name] = definition;
-            if (nativeClrType is not null) Runtime.NativeTypes[name] = nativeClrType;
+            LanguageRuntime.Classes[name] = definition;
+            if (nativeClrType is not null) LanguageRuntime.NativeTypes[name] = nativeClrType;
             return;
         }
 
@@ -5191,8 +5212,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             return;
         }
 
-        Runtime.Classes[name] = definition;
-        if (nativeClrType is not null) Runtime.NativeTypes[name] = nativeClrType;
+        LanguageRuntime.Classes[name] = definition;
+        if (nativeClrType is not null) LanguageRuntime.NativeTypes[name] = nativeClrType;
     }
 
     private void PreRegisterTypeDefinitions(
@@ -5275,7 +5296,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
         }
 
-        if (Runtime.Classes.TryGetValue(name, out var rawValue) &&
+        if (LanguageRuntime.Classes.TryGetValue(name, out var rawValue) &&
             rawValue is IShellNamedType runtimeDefinition)
         {
             definition = runtimeDefinition;
@@ -5396,9 +5417,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             return true;
         }
 
-        // Check Runtime.Classes for IShellStaticType instances that don't implement IShellNamedType
+        // Check LanguageRuntime.Classes for IShellStaticType instances that don't implement IShellNamedType
         // (e.g. MathShellType which is a pure static type without type descriptor semantics).
-        if (Runtime.Classes.TryGetValue(path, out var classValue) && classValue is IShellStaticType runtimeStaticType)
+        if (LanguageRuntime.Classes.TryGetValue(path, out var classValue) && classValue is IShellStaticType runtimeStaticType)
         {
             definition = runtimeStaticType;
             return true;
@@ -5420,7 +5441,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             {
                 foreach (var segment in segments[1..])
                 {
-                    current = Runtime.ObjectAccessor.GetValue(current, segment);
+                    current = LanguageRuntime.ObjectAccessor.GetValue(current, segment);
 
                     if (current is null)
                     {
@@ -5515,7 +5536,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // and took the process with it. The compiled backend declines past its own expansion
         // depth and falls back; this is the interpreted half of the same limit.
         using var expansionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Options.MaxRecursionDepth,
+            LanguageRuntime.Options.MaxRecursionDepth,
             $"rune {rune.Name}",
             callerSourceName,
             callerSourceText,
@@ -5606,7 +5627,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
             else
             {
-                var targetVariables = Runtime.Variables;
+                var targetVariables = LanguageRuntime.Variables;
                 var previousBindings = new Dictionary<string, object?>(StringComparer.Ordinal);
 
                 foreach (var (key, value) in locals)
@@ -6373,7 +6394,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         context.CancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Options.MaxRecursionDepth,
+            LanguageRuntime.Options.MaxRecursionDepth,
             definition.Name,
             context.Invocation?.SourceName ?? definition.SourceName,
             context.Invocation?.SourceText ?? definition.SourceText,
@@ -7126,7 +7147,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         var scriptDirectory = GetExecutionDirectory(GetCurrentScriptPath());
 
-        if (string.Equals(scriptDirectory, Runtime.CurrentDirectory, StringComparison.Ordinal))
+        if (string.Equals(scriptDirectory, LanguageRuntime.CurrentDirectory, StringComparison.Ordinal))
         {
             return rawPath;
         }
@@ -7142,7 +7163,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             !sourceName.StartsWith('<') &&
             !sourceName.StartsWith("repl_entry", StringComparison.OrdinalIgnoreCase))
         {
-            var resolvedSource = PathUtilities.ResolvePath(Runtime.CurrentDirectory, sourceName);
+            var resolvedSource = PathUtilities.ResolvePath(LanguageRuntime.CurrentDirectory, sourceName);
             var directory = Path.GetDirectoryName(resolvedSource);
 
             if (!string.IsNullOrWhiteSpace(directory))
@@ -7151,7 +7172,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
         }
 
-        return Runtime.CurrentDirectory;
+        return LanguageRuntime.CurrentDirectory;
     }
 
     /// <summary>
@@ -7298,7 +7319,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         if (name.StartsWith('~'))
         {
-            var expanded = PathUtilities.ResolvePath(Runtime.CurrentDirectory, name);
+            var expanded = PathUtilities.ResolvePath(LanguageRuntime.CurrentDirectory, name);
 
             if (Directory.Exists(expanded))
             {
@@ -7307,7 +7328,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             }
         }
 
-        var candidate = Path.Combine(Runtime.CurrentDirectory, name);
+        var candidate = Path.Combine(LanguageRuntime.CurrentDirectory, name);
 
         if (Directory.Exists(candidate))
         {
@@ -7589,7 +7610,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         // Script trace: emit "+ <line>: <statement>" to stderr (like set -x).
-        if (Runtime.Options.ScriptTrace && statementText is not null)
+        if (LanguageRuntime.Options.ScriptTrace && statementText is not null)
         {
             var prefix = line.HasValue ? $"+ {sourceName}:{line}" : $"+ {sourceName}";
             await Diagnostics.TraceAsync($"{prefix}: {statementText}", cancellationToken);

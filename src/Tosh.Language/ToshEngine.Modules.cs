@@ -72,7 +72,7 @@ public sealed partial class ToshEngine
                         throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
                     }
 
-                    if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                    if (!LanguageRuntime.LoadedModules.Add(requirement.CacheKey))
                     {
                         break;
                     }
@@ -88,7 +88,7 @@ public sealed partial class ToshEngine
                         throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
                     }
 
-                    if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                    if (!LanguageRuntime.LoadedModules.Add(requirement.CacheKey))
                     {
                         break;
                     }
@@ -333,7 +333,7 @@ public sealed partial class ToshEngine
                                 throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
                             }
 
-                            if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                            if (!LanguageRuntime.LoadedModules.Add(requirement.CacheKey))
                             {
                                 break;
                             }
@@ -349,7 +349,7 @@ public sealed partial class ToshEngine
                                 throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
                             }
 
-                            if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                            if (!LanguageRuntime.LoadedModules.Add(requirement.CacheKey))
                             {
                                 break;
                             }
@@ -493,7 +493,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        if (Runtime.Modules.TryGetValue(name, out var runtimeModule) && runtimeModule is ToshModuleObject runtime)
+        if (LanguageRuntime.Modules.TryGetValue(name, out var runtimeModule) && runtimeModule is ToshModuleObject runtime)
         {
             module = runtime;
             return true;
@@ -577,7 +577,7 @@ public sealed partial class ToshEngine
 
         if (modifier is DeclarationModifier.Global or DeclarationModifier.Export)
         {
-            Runtime.Modules[name] = module;
+            LanguageRuntime.Modules[name] = module;
             return;
         }
 
@@ -587,7 +587,7 @@ public sealed partial class ToshEngine
             return;
         }
 
-        Runtime.Modules[name] = module;
+        LanguageRuntime.Modules[name] = module;
     }
 
     /// <summary>
@@ -673,7 +673,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        if (Runtime.Modules.TryGetValue(name, out var rawModule) &&
+        if (LanguageRuntime.Modules.TryGetValue(name, out var rawModule) &&
             rawModule is ToshModuleObject runtimeModule)
         {
             module = runtimeModule;
@@ -736,7 +736,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        foreach (var (name, value) in Runtime.Modules)
+        foreach (var (name, value) in LanguageRuntime.Modules)
         {
             Collect(name, value, depth: 0);
         }
@@ -790,7 +790,7 @@ public sealed partial class ToshEngine
                 }
             }
 
-            if (TryFromModuleTree(Runtime.Modules, moduleName, memberName, out command))
+            if (TryFromModuleTree(LanguageRuntime.Modules, moduleName, memberName, out command))
             {
                 return true;
             }

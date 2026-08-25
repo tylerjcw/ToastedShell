@@ -132,7 +132,7 @@ public sealed partial class ToshEngine
             ShellJob.StartExternalPipeline(
                 Runtime.AllocateJobId(),
                 commandText,
-                Runtime.CurrentDirectory,
+                LanguageRuntime.CurrentDirectory,
                 processStages,
                 initialInput,
                 redirections));
@@ -251,8 +251,8 @@ public sealed partial class ToshEngine
             // than the thing being replaced.
             if (outputTargets.Count > 0)
             {
-                originalOutput = Runtime.Language.Output;
-                Runtime.Language.Output = ToastStreams.Composite(
+                originalOutput = LanguageRuntime.Output;
+                LanguageRuntime.Output = ToastStreams.Composite(
                     outputTargets.Select(ToastStreams.FromWriter).ToArray());
 
                 // The session's writer is moved too, and that half is a **shell**
@@ -267,8 +267,8 @@ public sealed partial class ToshEngine
 
             if (errorTargets.Count > 0)
             {
-                originalError = Runtime.Language.Error;
-                Runtime.Language.Error = ToastStreams.Composite(
+                originalError = LanguageRuntime.Error;
+                LanguageRuntime.Error = ToastStreams.Composite(
                     errorTargets.Select(ToastStreams.FromWriter).ToArray());
 
                 originalSessionError = Runtime.Error;
@@ -297,8 +297,8 @@ public sealed partial class ToshEngine
                         _ => ToastRenderer.Render(value),
                     };
 
-                    await Runtime.Language.Output.WriteTextLineAsync(text, cancellationToken);
-                    await Runtime.Language.Output.FlushAsync(cancellationToken);
+                    await LanguageRuntime.Output.WriteTextLineAsync(text, cancellationToken);
+                    await LanguageRuntime.Output.FlushAsync(cancellationToken);
                 }
                 else
                 {
@@ -325,12 +325,12 @@ public sealed partial class ToshEngine
 
             if (originalOutput is not null)
             {
-                Runtime.Language.Output = originalOutput;
+                LanguageRuntime.Output = originalOutput;
             }
 
             if (originalError is not null)
             {
-                Runtime.Language.Error = originalError;
+                LanguageRuntime.Error = originalError;
             }
 
             await FlushBufferedPipelineRedirectionsAsync(bufferedPlans.Values, cancellationToken);
@@ -476,8 +476,8 @@ public sealed partial class ToshEngine
         {
             FileSystemInfo fileSystemInfo => [fileSystemInfo.FullName],
             FileSystemEntry entry => [entry.FullName],
-            string text => ShellPathArguments.Expand(Runtime.CurrentDirectory, text),
-            _ => [PathUtilities.ResolvePath(Runtime.CurrentDirectory, targetPath.ToString() ?? string.Empty)],
+            string text => ShellPathArguments.Expand(LanguageRuntime.CurrentDirectory, text),
+            _ => [PathUtilities.ResolvePath(LanguageRuntime.CurrentDirectory, targetPath.ToString() ?? string.Empty)],
         };
 
         if (resolvedPaths.Count == 1)
@@ -516,8 +516,8 @@ public sealed partial class ToshEngine
         {
             FileSystemInfo fileSystemInfo => fileSystemInfo.FullName,
             FileSystemEntry entry => entry.FullName,
-            string text => PathUtilities.ResolvePath(Runtime.CurrentDirectory, text),
-            _ => PathUtilities.ResolvePath(Runtime.CurrentDirectory, sourcePath.ToString() ?? string.Empty),
+            string text => PathUtilities.ResolvePath(LanguageRuntime.CurrentDirectory, text),
+            _ => PathUtilities.ResolvePath(LanguageRuntime.CurrentDirectory, sourcePath.ToString() ?? string.Empty),
         };
 
         if (!File.Exists(resolved))
@@ -545,7 +545,7 @@ public sealed partial class ToshEngine
         bool outputIsCaptured = false)
     {
         var ownsTracker = pipelineExitStatusTracker is null;
-        pipelineExitStatusTracker ??= new PipelineExitStatusTracker(Runtime.Options.Pipefail);
+        pipelineExitStatusTracker ??= new PipelineExitStatusTracker(LanguageRuntime.Options.Pipefail);
         IAsyncEnumerable<object?> current = initialInput ?? AsyncEnumerableExtensions.Empty<object?>();
         IReadOnlyList<object?>? pendingFirstCommandArguments = firstCommandArguments;
         var isPipelined = pipeline.Stages.Count > 1 || initialInput is not null;
@@ -631,7 +631,7 @@ public sealed partial class ToshEngine
                 var exitCode = tracker.GetFinalExitCode();
                 Runtime.SetLastExitCode(exitCode);
 
-                if (exitCode != 0 && Runtime.Options.ExitOnError)
+                if (exitCode != 0 && LanguageRuntime.Options.ExitOnError)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
                         Code: "tosh.runtime.nonzero_exit_code",

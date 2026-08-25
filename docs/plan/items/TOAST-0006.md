@@ -241,7 +241,11 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
   2c  Events onto ToastRuntime                       DONE 2026-08-17
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
       IN PROGRESS — object access, type resolution and invocation are injectable host
-      contracts; `ReflectionInvoker` now implements `IObjectInvoker`
+      contracts; `ReflectionInvoker` now implements `IObjectInvoker`. `ToshEngine` exposes
+      the composed `LanguageRuntime`, and every language-owned state/service access now
+      routes through it rather than through a forwarding property on `ToshRuntime`. The
+      remaining direct host uses are session output, process launch/jobs, invocation state,
+      environment synchronization, `$tosh` composition and last-result bookkeeping
   2e  Streams: emit rather than write                DONE as far as it goes
       diagnostics + trace moved; value formatting -> TOAST-0014 (Phase A);
       redirection retarget -> TOAST-0015 (Phase A, needs the stream handle)

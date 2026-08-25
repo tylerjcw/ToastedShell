@@ -347,7 +347,7 @@ public sealed partial class ToshEngine
 
                 if (allowGlobs && PathUtilities.ContainsGlobPattern(text))
                 {
-                    var matches = PathUtilities.ExpandGlob(Runtime.CurrentDirectory, text);
+                    var matches = PathUtilities.ExpandGlob(LanguageRuntime.CurrentDirectory, text);
 
                     if (matches.Count > 0)
                     {
@@ -538,7 +538,7 @@ public sealed partial class ToshEngine
     {
         IShellInvocableObject invocable => invocable.HasInstanceMember(name),
         IShellStaticType or Type => true,
-        _ => Runtime.Invoker.HasInstanceMethod(target, name),
+        _ => LanguageRuntime.Invoker.HasInstanceMethod(target, name),
     };
 
     /// <summary>
@@ -939,7 +939,7 @@ public sealed partial class ToshEngine
                             // arguments cosmetically and infer
                             // element types from the constructor
                             // arguments. Forward as-is.
-                            return await Runtime.Invoker.CreateInstanceAsync(
+                            return await LanguageRuntime.Invoker.CreateInstanceAsync(
                                 shellType,
                                 constructorArguments,
                                 cancellationToken);
@@ -951,7 +951,7 @@ public sealed partial class ToshEngine
                         var lookupName = newObject.TypeName;
                         var type = ResolveTypeName(lookupName)
                                    ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
-                        return await Runtime.Invoker.CreateInstanceAsync(
+                        return await LanguageRuntime.Invoker.CreateInstanceAsync(
                             type,
                             constructorArguments,
                             cancellationToken);
@@ -1285,7 +1285,7 @@ public sealed partial class ToshEngine
                                 Tosh.Runtime.ToastMessages.MemberOfNull(memberAccess.MemberPath));
                         }
 
-                        return await Runtime.ObjectAccessor.GetValueAsync(
+                        return await LanguageRuntime.ObjectAccessor.GetValueAsync(
                             target,
                             memberAccess.MemberPath,
                             cancellationToken);
@@ -1352,7 +1352,7 @@ public sealed partial class ToshEngine
                                 cancellationToken);
                         }
 
-                        var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+                        var invocation = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
                             target,
                             methodCall.MethodName,
                             methodArguments,
@@ -1772,7 +1772,7 @@ public sealed partial class ToshEngine
                             }
                         }
 
-                        if (Runtime.Commands.TryGet(funcRef.Name, out var registeredCommand))
+                        if (LanguageRuntime.Commands.TryGet(funcRef.Name, out var registeredCommand))
                         {
                             return registeredCommand;
                         }
@@ -1805,7 +1805,7 @@ public sealed partial class ToshEngine
                             return new ToshBoundMethodReference(
                                 receiver,
                                 funcRef.Name[(receiverDot + 1)..],
-                                Runtime.Invoker);
+                                LanguageRuntime.Invoker);
                         }
 
                         // A module-qualified function, by contrast, already evaluates
