@@ -984,6 +984,75 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Profile_pure_accepts_expression_seeded_count_value_pipeline()
+    {
+        const string source =
+            "var values = [1, 2, 3]\n"
+            + "var count = ($values | count)\n"
+            + "writeline $count";
+
+        var result = EmitWithProfile(source, CompileProfile.Pure);
+        Assert.True(result.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+
+        var output = CompileAndRun(source);
+        Assert.Equal("3\n", output.Replace("\r", "", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("var n = (null | count)\nwriteline $n", "0\n")]
+    [InlineData("var n = (\"abc\" | count)\nwriteline $n", "1\n")]
+    [InlineData("var n = ({| a = 1 |} | count)\nwriteline $n", "1\n")]
+    [InlineData("var n = ({% \"a\" => 1 %} | count)\nwriteline $n", "1\n")]
+    public void Direct_count_value_pipeline_preserves_collection_shape(string source, string expected)
+    {
+        var result = EmitWithProfile(source, CompileProfile.Pure);
+        Assert.True(result.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+
+        var output = CompileAndRun(source);
+        Assert.Equal(expected, output.Replace("\r", "", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Profile_pure_keeps_statement_count_pipeline_on_host_dispatch()
+    {
+        var result = EmitWithProfile("[1, 2, 3] | count", CompileProfile.Pure);
+
+        Assert.False(result.IsClean);
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("multi-stage pipeline", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Profile_pure_accepts_expression_seeded_ignore_pipeline()
+    {
+        const string source =
+            "[1, 2, 3] | ignore\n"
+            + "var ignored = ([4, 5] | ignore)\n"
+            + "writeline ($ignored == null)";
+
+        var result = EmitWithProfile(source, CompileProfile.Pure);
+        Assert.True(result.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+
+        var output = CompileAndRun(source);
+        Assert.Equal("true\n", output.Replace("\r", "", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Profile_pure_keeps_argumented_ignore_pipeline_on_host_dispatch()
+    {
+        var result = EmitWithProfile("[1, 2, 3] | ignore extra", CompileProfile.Pure);
+
+        Assert.False(result.IsClean);
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("multi-stage pipeline", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Profile_runtime_rejects_class_definition()
     {
         // Classes with a base class can't be lowered to a CLR shell

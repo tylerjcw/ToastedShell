@@ -5,6 +5,58 @@ namespace Tosh.Runtime;
 
 public static class ShellIterationUtilities
 {
+    /// <summary>
+    /// Enumerates and discards the items an expression contributes when it seeds a pipeline.
+    /// </summary>
+    public static void IgnoreExpressionPipelineItems(object? value)
+    {
+        _ = CountExpressionPipelineItems(value);
+    }
+
+    /// <summary>
+    /// Counts the items an expression contributes when it seeds a pipeline.
+    /// </summary>
+    /// <remarks>
+    /// Expression heads are one value whose collection shape is expanded exactly once.
+    /// This is the synchronous counterpart of <c>SeedFromValue</c> followed by
+    /// <see cref="ReplaySingleInputCollectionAsync"/> and is kept here so compiled pure
+    /// IL and command-host dispatch share the same atom/collection decision.
+    /// </remarks>
+    public static int CountExpressionPipelineItems(object? value)
+    {
+        if (value is null)
+        {
+            return 0;
+        }
+
+        if (value is IAsyncEnumerable<object?> asyncValues)
+        {
+            var count = 0;
+            var enumerator = asyncValues.GetAsyncEnumerator();
+            try
+            {
+                while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+                {
+                    count++;
+                }
+            }
+            finally
+            {
+                enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            return count;
+        }
+
+        var result = 0;
+        foreach (var _ in ExpandIterationItems(value))
+        {
+            result++;
+        }
+
+        return result;
+    }
+
     public static IEnumerable<object?> ExpandIterationItems(object? item)
     {
         if (item is IShellEnumerableObject shellEnumerable)

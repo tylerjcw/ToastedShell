@@ -660,6 +660,14 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(global::Tosh.Runtime.OperatorEvaluator).GetMethod(
             nameof(global::Tosh.Runtime.OperatorEvaluator.EvaluateUnary),
             new[] { typeof(string), typeof(object) })!;
+    private static readonly MethodInfo s_countExpressionPipelineItems =
+        typeof(global::Tosh.Runtime.ShellIterationUtilities).GetMethod(
+            nameof(global::Tosh.Runtime.ShellIterationUtilities.CountExpressionPipelineItems),
+            new[] { typeof(object) })!;
+    private static readonly MethodInfo s_ignoreExpressionPipelineItems =
+        typeof(global::Tosh.Runtime.ShellIterationUtilities).GetMethod(
+            nameof(global::Tosh.Runtime.ShellIterationUtilities.IgnoreExpressionPipelineItems),
+            new[] { typeof(object) })!;
     private static readonly MethodInfo s_hostToEnumerable =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ToEnumerable),
             new[] { typeof(object) })!;

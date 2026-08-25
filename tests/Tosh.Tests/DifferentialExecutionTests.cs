@@ -1101,8 +1101,8 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
     /// </para>
     /// <para>
     /// Not the same as needing no runtime at all: the assembly still references
-    /// `Tosh.Compiler.Runtime`, and the `pure` profile still refuses four tier-2 features —
-    /// host-dispatched `new`, dynamic member access, and two command-dispatch shapes.
+    /// `Tosh.Compiler.Runtime`, and the `pure` profile still refuses three tier-2 features —
+    /// host-dispatched `new`, dynamic member access, and union field annotation conversion.
     /// </para>
     /// </remarks>
     [Fact]

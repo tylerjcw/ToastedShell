@@ -78,6 +78,24 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Positional writeline calls serialize and join directly in pure IL.");
 
         yield return Case(
+            "pipeline.expression-count-value",
+            "Commands and pipelines",
+            "var xs = [1, 2, 3]\nvar n = ($xs | count)\necho $n",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "An expression-seeded zero-argument count in value context uses the portable collection-shape helper.");
+
+        yield return Case(
+            "pipeline.expression-ignore",
+            "Commands and pipelines",
+            "[1, 2, 3] | ignore\necho done",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "An expression-seeded zero-argument ignore drains through the portable collection-shape helper.");
+
+        yield return Case(
             "blocks.pipeline-block",
             "Commands and pipelines",
             "seq 3 | where { _ > 1 }",

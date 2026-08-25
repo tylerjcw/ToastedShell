@@ -268,6 +268,18 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private Type? EmitMultiStagePipeline(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
     {
+        if (TryEmitDirectIgnorePipeline(pipeline, asStatement, asSequence, out var ignoreResultType))
+        {
+            return ignoreResultType;
+        }
+
+        if (!asStatement
+            && !asSequence
+            && TryEmitDirectCountValuePipeline(pipeline))
+        {
+            return typeof(int);
+        }
+
         // Reusable accumulator local: each stage replaces it.
         var accLocal = _il.DeclareLocal(typeof(IAsyncEnumerable<object?>));
 
@@ -356,6 +368,86 @@ internal sealed partial class EmitterImpl
         }
         _il.Emit(OpCodes.Call, s_hostDrainSubexpressionValue);
         return typeof(object);
+    }
+
+    /// <summary>
+    /// Emits <c>expression | ignore</c> directly. The expression is still fully
+    /// enumerated so lazy and asynchronous sources retain their side effects; only
+    /// the command-host lookup and empty output stream are elided.
+    /// </summary>
+    private bool TryEmitDirectIgnorePipeline(
+        BoundPipeline pipeline,
+        bool asStatement,
+        bool asSequence,
+        out Type? resultType)
+    {
+        resultType = null;
+        if (pipeline.Stages.Count != 2
+            || pipeline.Stages[0] is not BoundExpressionStage expression
+            || pipeline.Stages[1] is not BoundCommandCall
+            {
+                Name: "ignore",
+                Arguments.Count: 0,
+            })
+        {
+            return false;
+        }
+
+        var valueType = EmitExpression(expression.Value);
+        if (valueType is null)
+        {
+            return true;
+        }
+
+        BoxIfValueType(valueType);
+        _il.Emit(OpCodes.Call, s_ignoreExpressionPipelineItems);
+
+        if (asStatement)
+        {
+            return true;
+        }
+
+        if (asSequence)
+        {
+            _il.Emit(OpCodes.Newobj, s_listCtor);
+            resultType = s_listOfObject;
+            return true;
+        }
+
+        _il.Emit(OpCodes.Ldnull);
+        resultType = typeof(object);
+        return true;
+    }
+
+    /// <summary>
+    /// Emits <c>(expression | count)</c> directly when <c>count</c> has no arguments.
+    /// The portable runtime helper owns collection shape, including scalar strings,
+    /// records, dictionaries, null, and asynchronous expression values. Statement and
+    /// sequence contexts keep the ordinary command-host path because they have different
+    /// output/cardinality contracts.
+    /// </summary>
+    private bool TryEmitDirectCountValuePipeline(BoundPipeline pipeline)
+    {
+        if (pipeline.Stages.Count != 2
+            || pipeline.Stages[0] is not BoundExpressionStage expression
+            || pipeline.Stages[1] is not BoundCommandCall
+            {
+                Name: "count",
+                Arguments.Count: 0,
+            })
+        {
+            return false;
+        }
+
+        var valueType = EmitExpression(expression.Value);
+        if (valueType is null)
+        {
+            return true;
+        }
+
+        BoxIfValueType(valueType);
+        _il.Emit(OpCodes.Call, s_countExpressionPipelineItems);
+        return true;
     }
 
     /// <summary>

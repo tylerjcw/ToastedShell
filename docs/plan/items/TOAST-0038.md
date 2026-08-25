@@ -137,9 +137,9 @@ source rather than only here.
       for an evaluator to re-read — asserted by
       `The_readiness_probe_compiles_without_source_replay`. What remains is the reference:
       the emitted assembly still names `Tosh.Compiler.Runtime`, which bridges to
-      `Tosh.Language`, and the `pure` profile still refuses four tier-2 features —
-      host-dispatched `new`, dynamic member access, and two command-dispatch shapes.
-      Those four are the whole of the distance left
+      `Tosh.Language`, and the `pure` profile now refuses three tier-2 features —
+      host-dispatched `new`, dynamic member access, and union field annotation conversion.
+      Those three are the whole of the distance left
 - [x] Whatever fights back is filed, not worked around — four fixed, one filed
 - [x] A negative control
 
@@ -174,6 +174,20 @@ second rendering rule: the emitted path calls the same portable serializer ordin
 output uses. The compiler matrix and focused emitter tests pin the pure positional case,
 exact output, and the splat negative control. The full suite remained green at 6,606 passed
 and one skipped.
+
+## Progress — 2026-08-24: expression pipeline terminals are pure IL
+
+The probe's expression-seeded `count` and four `ignore` pipelines no longer resolve or run
+builtin command objects. Zero-argument `count` in value context emits a direct call to a
+portable collection-shape helper; zero-argument `ignore` drains through that same rule and
+then produces no value. Strings, records, and dictionaries remain scalar pipeline values,
+null contributes no items, and asynchronous sources are still drained rather than dropped.
+Statement-form `count` and argumented terminals deliberately remain on the command-host path.
+
+The focused compiler, matrix, pipeline-value, and pure dependency audit group is green at
+542 tests. Recompiling the full readiness probe under `--profile pure` now reports exactly
+three refusals: host-dispatched CLR construction, dynamic member access, and union field
+annotation conversion. The former command-dispatch refusal is gone.
 
 ## Notes
 
