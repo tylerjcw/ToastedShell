@@ -74,7 +74,8 @@ public sealed partial class ToshEngine
                 scriptDoc,
                 argumentParameters,
                 flagParameters,
-                CollectDocumentedNames(declarations, scriptDoc));
+                CollectDocumentedNames(declarations, scriptDoc),
+                cancellationToken);
 
             // Answered, so the body does not run. This asks to exit rather than throwing a
             // signal of its own: `exit` now stops execution, which is the whole reason the

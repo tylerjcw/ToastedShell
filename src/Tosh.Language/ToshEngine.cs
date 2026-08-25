@@ -1071,18 +1071,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         DocComment? scriptDoc,
         IReadOnlyList<FunctionParameterSyntax> argumentParameters,
         IReadOnlyList<FunctionParameterSyntax> flagParameters,
-        IReadOnlyDictionary<string, string> documented)
+        IReadOnlyDictionary<string, string> documented,
+        CancellationToken cancellationToken)
     {
         var name = Path.GetFileName(sourceName);
-        var output = Runtime.Output;
+        var output = LanguageRuntime.Output;
 
         // The file-level doc-block, which the parser separates from a declaration's own block by
         // requiring a blank line between them. Taking the first declaration's description instead
         // printed "Who to greet." as the summary of a script that greets people.
         if (scriptDoc?.Description is { Length: > 0 } summary && !string.IsNullOrWhiteSpace(summary))
         {
-            await output.WriteLineAsync(summary.Trim());
-            await output.WriteLineAsync();
+            await output.WriteTextLineAsync(summary.Trim(), cancellationToken);
+            await output.WriteTextLineAsync(string.Empty, cancellationToken);
         }
 
         var usage = new StringBuilder($"Usage: {name}");
@@ -1101,7 +1102,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             });
         }
 
-        await output.WriteLineAsync(usage.ToString());
+        await output.WriteTextLineAsync(usage.ToString(), cancellationToken);
 
         // `TS-P2-67`. The script's own `@arg` / `@flag` tags describe its inputs, exactly as a
         // subcommand block's do. Without this a subcommand-free script showed its summary as the
@@ -1111,27 +1112,31 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             output,
             "Arguments",
             ApplyDocumentedDescriptions(argumentParameters, documented),
-            isFlag: false);
+            isFlag: false,
+            cancellationToken: cancellationToken);
         await WriteScriptUsageSectionAsync(
             output,
             "Options",
             ApplyDocumentedDescriptions(flagParameters, documented),
-            isFlag: true);
+            isFlag: true,
+            cancellationToken: cancellationToken);
+        await output.FlushAsync(cancellationToken);
     }
 
     private static async Task WriteScriptUsageSectionAsync(
-        TextWriter output,
+        IToastStream output,
         string heading,
         IReadOnlyList<FunctionParameterSyntax> parameters,
-        bool isFlag)
+        bool isFlag,
+        CancellationToken cancellationToken)
     {
         if (parameters.Count == 0)
         {
             return;
         }
 
-        await output.WriteLineAsync();
-        await output.WriteLineAsync($"{heading}:");
+        await output.WriteTextLineAsync(string.Empty, cancellationToken);
+        await output.WriteTextLineAsync($"{heading}:", cancellationToken);
 
         var labels = parameters
             .Select(parameter => isFlag ? $"--{parameter.Name}" : parameter.Name)
@@ -1155,7 +1160,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 line.Append("  ").Append(description.Trim());
             }
 
-            await output.WriteLineAsync(line.ToString());
+            await output.WriteTextLineAsync(line.ToString(), cancellationToken);
         }
     }
 
@@ -1798,8 +1803,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    await Runtime.Error.WriteLineAsync(
-                        $"Event handler '{functionCommand.Name}' for '{eventName}' failed: {ex.Message}");
+                    await LanguageRuntime.Error.WriteTextLineAsync(
+                        $"Event handler '{functionCommand.Name}' for '{eventName}' failed: {ex.Message}",
+                        CancellationToken.None);
                     return null;
                 }
             },
