@@ -48,6 +48,8 @@ public sealed class ToastRuntimeTests
         Assert.False(string.IsNullOrEmpty(language.CurrentDirectory));
 
         language.HostSignals.RequestExit();
+        language.HostSignals.SyncExportedEnvironmentVariable("probe", 1);
+        language.HostSignals.RemoveExportedEnvironmentVariable("probe");
         Assert.False(language.HostSignals.ExitRequested);
         Assert.False(language.HostSignals.IsExported("probe"));
         Assert.True(language.Options.MaxRecursionDepth > 0);

@@ -943,7 +943,7 @@ public sealed partial class ToshEngine
             }
 
             LanguageRuntime.Variables[name] = binding;
-            Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
+            Host.SyncExportedEnvironmentVariable(name, binding.Value);
             return;
         }
 
@@ -954,7 +954,7 @@ public sealed partial class ToshEngine
         }
 
         LanguageRuntime.Variables[name] = binding;
-        Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
+        Host.SyncExportedEnvironmentVariable(name, binding.Value);
     }
 
     private bool TryAssignVariable(string name, VariableBinding binding)
@@ -975,7 +975,7 @@ public sealed partial class ToshEngine
         if (LanguageRuntime.Variables.ContainsKey(name))
         {
             LanguageRuntime.Variables[name] = binding;
-            Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
+            Host.SyncExportedEnvironmentVariable(name, binding.Value);
             return true;
         }
 

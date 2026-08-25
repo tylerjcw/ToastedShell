@@ -4705,7 +4705,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         var removedEnvironment = Host.IsExported(name) ||
                                  Environment.GetEnvironmentVariable(name) is not null;
-        Runtime.RemoveExportedEnvironmentVariable(name);
+        Host.RemoveExportedEnvironmentVariable(name);
 
         var (freedValue, freedValueKind) = TryDisposeForgottenVariableValue(removedVariableBinding?.Value);
 

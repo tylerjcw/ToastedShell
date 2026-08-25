@@ -46,6 +46,10 @@ public sealed class ToastRuntime
 
         public bool IsExported(string name) => false;
 
+        public void SyncExportedEnvironmentVariable(string name, object? value) { }
+
+        public void RemoveExportedEnvironmentVariable(string name) { }
+
         public void ReportWarning(ToshDiagnostic diagnostic) { }
 
         public void ReportWarning(string title, string? help, string? info) { }

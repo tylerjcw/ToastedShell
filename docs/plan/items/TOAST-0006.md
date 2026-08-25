@@ -247,8 +247,10 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       existing host-signal and diagnostic-sink ports are also supplied on `ToastRuntime`,
       with inert defaults for a language-only host. The remaining direct host uses are
       shell-session mirroring during redirection and auto-help, background jobs,
-      environment synchronization, `$tosh` composition
-      and command-context construction. Result and exit-code updates now go through an
+      `$tosh` composition and command-context construction. The host-signal port now
+      describes the language's real environment duties—synchronize an already-exported
+      global and remove it on `forget`—rather than the stale claim that it only queried
+      membership. Result and exit-code updates now go through an
       `IToastExecutionObserver`; the unhosted default ignores them and TōSh retains them
       for `$tosh.Last`. Script invocation arguments and the evaluator/block
       callbacks exposed to host commands now live on `ToastRuntime`; `ToshRuntime` forwards

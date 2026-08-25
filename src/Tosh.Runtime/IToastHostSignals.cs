@@ -24,10 +24,11 @@ namespace Tosh.Runtime;
 /// not run (`TS-P2-52`).
 /// </item>
 /// <item>
-/// Exports are already shell-side and were before this item: `ExportCommand` calls
-/// `ToshRuntime.ExportEnvironmentVariable`. The language's entire involvement is one
-/// membership test, in `forget`, to report whether the name it removed had been
-/// exported.
+/// Exports are initiated shell-side: `ExportCommand` calls
+/// `ToshRuntime.ExportEnvironmentVariable`. The language then has two synchronization
+/// duties: assigning a global must update it if it was already exported, and `forget`
+/// removes it from the host environment. Those are host operations exposed here rather
+/// than direct process-environment access.
 /// </item>
 /// </list>
 /// <para>
@@ -55,4 +56,10 @@ public interface IToastHostSignals
     /// Read by `forget`, which reports what it removed.
     /// </summary>
     bool IsExported(string name);
+
+    /// <summary>Updates <paramref name="name"/> when the host has already exported it.</summary>
+    void SyncExportedEnvironmentVariable(string name, object? value);
+
+    /// <summary>Removes <paramref name="name"/> from the host's exported environment.</summary>
+    void RemoveExportedEnvironmentVariable(string name);
 }
