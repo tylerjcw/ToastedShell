@@ -131,7 +131,7 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
 
     public ITypeResolver TypeResolver => Language.TypeResolver;
 
-    public ReflectionInvoker Invoker => Language.Invoker;
+    public IObjectInvoker Invoker => Language.Invoker;
 
     public DisplayPreferences DisplayPreferences { get; }
 

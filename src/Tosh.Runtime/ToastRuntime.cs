@@ -25,11 +25,10 @@ namespace Tosh.Runtime;
 /// TōSh as a port target rather than a prerequisite.
 /// </para>
 /// <para>
-/// This first slice carries the members whose side is not in question. `Commands`,
-/// `Config`, `CurrentDirectory` and `Events` are still reached through `ToshRuntime`; each
-/// has an open question recorded on the item and moves when its answer does. `Formatter`
-/// left with `TOAST-0014` — the language renders through `ToastRenderer` and no longer asks
-/// the shell how a value reads — and `Output`/`Error` are here as of `TOAST-0015`.
+/// The language-owned state and services now live here; <c>ToshRuntime</c> forwards the
+/// same objects where the shell also consumes them. Formatting left through `TOAST-0014`,
+/// output and redirection use language streams through `TOAST-0015`, and object dispatch
+/// is supplied through host contracts rather than fixed reflection implementations.
 /// </para>
 /// </remarks>
 public sealed class ToastRuntime
@@ -46,20 +45,19 @@ public sealed class ToastRuntime
     /// <summary>Where a program's diagnostics go.</summary>
     public IToastStream Error { get; set; } = ToastStreams.Null;
 
-    /// <summary>Invokes members on values. See `TOAST-0006` on why this is not yet an interface.</summary>
+    /// <summary>Constructs values and invokes members through the host's object model.</summary>
     /// <remarks>
-    /// The one member whose concrete type forecloses a `no_clr` target:
-    /// <see cref="IObjectAccessor"/> and <see cref="ITypeResolver"/> are interfaces, so a
-    /// native implementation can be substituted, while this is a sealed class. Making it
-    /// an interface is recorded on the item as part of this stage.
+    /// The .NET host uses <see cref="ReflectionInvoker"/>. The contract and init-only
+    /// substitution point keep reflection out of the runtime shape a native host must
+    /// implement (`TOAST-0006`, stage 2d).
     /// </remarks>
-    public ReflectionInvoker Invoker { get; } = new();
+    public IObjectInvoker Invoker { get; init; } = new ReflectionInvoker();
 
     /// <summary>Reads members off values — an interface, so a native target can replace it.</summary>
-    public IObjectAccessor ObjectAccessor { get; } = new ReflectionObjectAccessor();
+    public IObjectAccessor ObjectAccessor { get; init; } = new ReflectionObjectAccessor();
 
     /// <summary>Resolves type names — an interface, for the same reason.</summary>
-    public ITypeResolver TypeResolver { get; } = new DotNetTypeResolver();
+    public ITypeResolver TypeResolver { get; init; } = new DotNetTypeResolver();
 
     /// <summary>Settings the language owns, independent of any shell config file.</summary>
     public ToastOptions Options { get; } = new();

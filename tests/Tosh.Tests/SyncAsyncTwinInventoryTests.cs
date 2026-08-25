@@ -53,6 +53,10 @@ public sealed class SyncAsyncTwinInventoryTests
         // rejected as a larger change than this item; it would get its own item.
         "IObjectAccessor.GetValue",
         "IObjectAccessor.SetValue",
+        // `TOAST-0006`: the synchronous compiler/runtime boundaries and asynchronous
+        // evaluator share this contract. ReflectionInvoker's async form delegates to the
+        // sync overload-selection core; another host may have a real async constructor.
+        "IObjectInvoker.CreateInstance",
         "IShellEnumerableObject.EnumerateShellItems",
         "IShellInvocableObject.InvokeInstanceMethod",
         "IShellRecordObject.GetMembers",

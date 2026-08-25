@@ -44,6 +44,32 @@ public sealed class ToastRuntimeTests
     }
 
     /// <summary>
+    /// The language runtime names contracts, not the .NET reflection implementations.
+    /// A host may replace all three services while constructing the runtime; the default
+    /// remains the current CLR implementation.
+    /// </summary>
+    [Fact]
+    public void Object_services_are_host_substitution_points()
+    {
+        var invoker = new ReflectionInvoker();
+        var accessor = new ReflectionObjectAccessor();
+        var resolver = new DotNetTypeResolver();
+
+        var language = new ToastRuntime
+        {
+            Invoker = invoker,
+            ObjectAccessor = accessor,
+            TypeResolver = resolver,
+        };
+
+        Assert.Equal(typeof(IObjectInvoker),
+            typeof(ToastRuntime).GetProperty(nameof(ToastRuntime.Invoker))!.PropertyType);
+        Assert.Same(invoker, language.Invoker);
+        Assert.Same(accessor, language.ObjectAccessor);
+        Assert.Same(resolver, language.TypeResolver);
+    }
+
+    /// <summary>
     /// The shell's members are the *same objects*, not copies of them.
     /// </summary>
     /// <remarks>

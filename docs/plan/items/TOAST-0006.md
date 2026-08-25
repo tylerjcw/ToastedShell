@@ -160,10 +160,10 @@ This matters beyond tidiness because the end goal is a self-hosting Tōast with 
 targets and TōSh rewritten in it. A language that cannot open a file cannot compile
 itself.
 
-## `ReflectionInvoker` must become an interface, and 2d is where it is decided
+## `ReflectionInvoker` is now behind an interface, decided in 2d
 
-`no_clr` needs the value model to work without .NET reflection. Two of the three core
-abstractions already permit that; one does not:
+`no_clr` needs the value model to work without .NET reflection. Before this slice, two of
+the three core abstractions permitted that and one did not:
 
 | | |
 |---|---|
@@ -171,25 +171,26 @@ abstractions already permit that; one does not:
 | `ITypeResolver` | interface — likewise |
 | **`ReflectionInvoker`** | **sealed class, and the language's most-used member at 26 references** |
 
-The reflection weight behind them is not the problem — `DotNetTypeResolver` has 122
+The reflection weight behind them was not the problem — `DotNetTypeResolver` has 122
 reflection uses and `TypeConversion` 58 — because those are *the CLR implementation*
-behind an interface. The problem is that `Invoker` is typed as the concrete class, so a
-native target has nowhere to plug in.
+behind an interface. The problem was that `Invoker` was typed as the concrete class, so a
+native target had nowhere to plug in. `IObjectInvoker` is now the contract, and
+`ReflectionInvoker` is the default .NET implementation.
 
 Small while `ToastRuntime`'s member types are being decided; painful afterwards. So it
 belongs in 2d rather than in a later `no_clr` item.
 
-## What remains after 2026-08-17
+## State after 2026-08-24
 
 The language reads no shell configuration for any decision, holds its own runtime, and
-that runtime stands alone. Three things are left, and each is now a single identified
-question rather than a survey:
+that runtime stands alone. The three prerequisite seams identified on 2026-08-17 are now
+complete:
 
 | | |
 |---|---|
-| `Output`/`Error` (11) | redirection — `TOAST-0015`, wants the stream handle from Phase A |
-| `Formatter` (4) | value-to-text — `TOAST-0014`, Phase A |
-| `Invoker` | must become an interface or `no_clr` has nowhere to plug in |
+| `Output`/`Error` (11) | **Done in `TOAST-0015`.** Redirection targets Tōast streams |
+| `Formatter` (4) | **Done in `TOAST-0014`.** Language rendering is independent of display profiles |
+| `Invoker` | **Done 2026-08-24.** `IObjectInvoker` is the language contract; the .NET host supplies `ReflectionInvoker` |
 
 **And the step that makes this real rather than structural: `ToshEngine` still takes a
 `ToshRuntime`.** Everything so far has been additive and internally verifiable. That one
@@ -239,6 +240,8 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
   2b  IToastHostSignals                              DONE 2026-08-17
   2c  Events onto ToastRuntime                       DONE 2026-08-17
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
+      IN PROGRESS — object access, type resolution and invocation are injectable host
+      contracts; `ReflectionInvoker` now implements `IObjectInvoker`
   2e  Streams: emit rather than write                DONE as far as it goes
       diagnostics + trace moved; value formatting -> TOAST-0014 (Phase A);
       redirection retarget -> TOAST-0015 (Phase A, needs the stream handle)

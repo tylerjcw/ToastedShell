@@ -3,7 +3,7 @@ using System.Reflection;
 
 namespace Tosh.Runtime;
 
-public sealed class ReflectionInvoker
+public sealed class ReflectionInvoker : IObjectInvoker
 {
     /// <summary>
     /// The public methods of a type, by whether they are static, cached permanently.

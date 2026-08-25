@@ -32,7 +32,7 @@ namespace Tosh.Language;
 internal sealed class ToshBoundMethodReference(
     object receiver,
     string methodName,
-    ReflectionInvoker invoker) : IShellCallable
+    IObjectInvoker invoker) : IShellCallable
 {
     public string CallableName { get; } = methodName;
 
