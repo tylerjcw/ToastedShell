@@ -248,7 +248,9 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       with inert defaults for a language-only host. The remaining direct host uses are
       shell-session mirroring during redirection and auto-help, background jobs,
       environment synchronization, `$tosh` composition
-      and last-result bookkeeping. Script invocation arguments and the evaluator/block
+      and command-context construction. Result and exit-code updates now go through an
+      `IToastExecutionObserver`; the unhosted default ignores them and TōSh retains them
+      for `$tosh.Last`. Script invocation arguments and the evaluator/block
       callbacks exposed to host commands now live on `ToastRuntime`; `ToshRuntime` forwards
       the same slots. External-process construction is
       now an optional host capability on `ToastRuntime`, still supplied by TōSh's existing

@@ -33,7 +33,10 @@ namespace Tosh.Runtime;
 /// </remarks>
 public sealed class ToastRuntime
 {
-    private sealed class UnhostedServices : IToastHostSignals, IToastDiagnosticSink
+    private sealed class UnhostedServices :
+        IToastHostSignals,
+        IToastDiagnosticSink,
+        IToastExecutionObserver
     {
         internal static readonly UnhostedServices Instance = new();
 
@@ -52,6 +55,10 @@ public sealed class ToastRuntime
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.CompletedTask;
         }
+
+        public void SetLastResult(object? value) { }
+
+        public void SetLastExitCode(int exitCode) { }
     }
 
     /// <summary>Where a program's ordinary output goes.</summary>
@@ -81,6 +88,9 @@ public sealed class ToastRuntime
     /// back into the language (`TOAST-0006`, stage 2e).
     /// </remarks>
     public IToastDiagnosticSink Diagnostics { get; init; } = UnhostedServices.Instance;
+
+    /// <summary>Receives result and exit-code observations for host session state.</summary>
+    public IToastExecutionObserver ExecutionObserver { get; init; } = UnhostedServices.Instance;
 
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the

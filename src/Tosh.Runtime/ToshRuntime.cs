@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Tosh.Runtime;
 
-public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
+public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink, IToastExecutionObserver
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -45,6 +45,7 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
             Error = ToastStreams.FromWriter(_error),
             HostSignals = this,
             Diagnostics = this,
+            ExecutionObserver = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);

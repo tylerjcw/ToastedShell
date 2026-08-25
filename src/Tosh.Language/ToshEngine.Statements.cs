@@ -1363,7 +1363,8 @@ public sealed partial class ToshEngine
             return;
         }
 
-        Runtime.SetLastResult(values.Count == 1 ? values[0] : values.ToArray());
+        LanguageRuntime.ExecutionObserver.SetLastResult(
+            values.Count == 1 ? values[0] : values.ToArray());
     }
 
     /// <summary>
@@ -1732,7 +1733,7 @@ public sealed partial class ToshEngine
 
                 if (retained is null)
                 {
-                    Runtime.SetLastResult(null);
+                    LanguageRuntime.ExecutionObserver.SetLastResult(null);
                 }
                 else
                 {

@@ -137,8 +137,8 @@ public sealed partial class ToshEngine
                 initialInput,
                 redirections));
 
-        Runtime.SetLastResult(job.ToInfo());
-        Runtime.SetLastExitCode(0);
+        LanguageRuntime.ExecutionObserver.SetLastResult(job.ToInfo());
+        LanguageRuntime.ExecutionObserver.SetLastExitCode(0);
         yield break;
     }
 
@@ -629,7 +629,7 @@ public sealed partial class ToshEngine
             if (ownsTracker && tracker.HasExitCodes && !Host.ExitRequested)
             {
                 var exitCode = tracker.GetFinalExitCode();
-                Runtime.SetLastExitCode(exitCode);
+                LanguageRuntime.ExecutionObserver.SetLastExitCode(exitCode);
 
                 if (exitCode != 0 && LanguageRuntime.Options.ExitOnError)
                 {

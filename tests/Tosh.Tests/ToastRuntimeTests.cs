@@ -40,6 +40,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.Commands);
         Assert.NotNull(language.HostSignals);
         Assert.NotNull(language.Diagnostics);
+        Assert.NotNull(language.ExecutionObserver);
         Assert.Null(language.ExternalCommands);
         Assert.Empty(language.InvocationArguments);
         Assert.Null(language.BlockExecutor);
@@ -104,6 +105,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime.Language.Events, runtime.Events);
         Assert.Same(runtime, runtime.Language.HostSignals);
         Assert.Same(runtime, runtime.Language.Diagnostics);
+        Assert.Same(runtime, runtime.Language.ExecutionObserver);
         Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
         Assert.Same(runtime.InvocationArguments, runtime.Language.InvocationArguments);
         Assert.Same(runtime.BlockExecutor, runtime.Language.BlockExecutor);
