@@ -59,7 +59,6 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         Display.TableTheme = Config.Theme.Tables;
         History = new List<CommandHistoryEntry>();
         ExportedEnvironmentVariables = new HashSet<string>(StringComparer.Ordinal);
-        InvocationArguments = Array.Empty<object?>();
         ExecHandler = new DefaultShellExecHandler();
         Terminal = new TerminalControl();
         SetLastExitCode(0);
@@ -189,7 +188,11 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
 
     public ISet<string> ExportedEnvironmentVariables { get; }
 
-    public IReadOnlyList<object?> InvocationArguments { get; set; }
+    public IReadOnlyList<object?> InvocationArguments
+    {
+        get => Language.InvocationArguments;
+        set => Language.InvocationArguments = value;
+    }
 
     public IShellExecHandler ExecHandler { get; set; }
 
@@ -207,9 +210,17 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         set => Language.EventSenderFactory = value;
     }
 
-    public IShellBlockExecutor? BlockExecutor { get; set; }
+    public IShellBlockExecutor? BlockExecutor
+    {
+        get => Language.BlockExecutor;
+        set => Language.BlockExecutor = value;
+    }
 
-    public IShellEvaluator? Evaluator { get; set; }
+    public IShellEvaluator? Evaluator
+    {
+        get => Language.Evaluator;
+        set => Language.Evaluator = value;
+    }
 
     public bool HistoryStorageInitialized => _historyStorageInitialized;
 

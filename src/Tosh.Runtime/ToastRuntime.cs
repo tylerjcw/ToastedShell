@@ -94,6 +94,15 @@ public sealed class ToastRuntime
     /// </remarks>
     public IExternalCommandFactory? ExternalCommands { get; set; }
 
+    /// <summary>Arguments supplied to the current top-level script invocation.</summary>
+    public IReadOnlyList<object?> InvocationArguments { get; set; } = Array.Empty<object?>();
+
+    /// <summary>Executes a language block on behalf of a host-provided command.</summary>
+    public IShellBlockExecutor? BlockExecutor { get; set; }
+
+    /// <summary>Exposes the active evaluator to host-provided commands.</summary>
+    public IShellEvaluator? Evaluator { get; set; }
+
     /// <summary>Constructs values and invokes members through the host's object model.</summary>
     /// <remarks>
     /// The .NET host uses <see cref="ReflectionInvoker"/>. The contract and init-only

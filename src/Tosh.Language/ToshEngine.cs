@@ -98,8 +98,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         Runtime = runtime ?? ToshRuntime.CreateDefault();
         LanguageRuntime = Runtime.Language;
-        Runtime.BlockExecutor = new EngineBlockExecutor(this);
-        Runtime.Evaluator = this;
+        LanguageRuntime.BlockExecutor = new EngineBlockExecutor(this);
+        LanguageRuntime.Evaluator = this;
         LanguageRuntime.EventSenderFactory = CreateEventSender;
 
         // `extend` methods are the engine's knowledge — lexically scoped, arriving
@@ -216,7 +216,10 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
     internal string GetCurrentScriptPath() => _scriptNameStack.Count > 0 ? _scriptNameStack.Peek() : string.Empty;
 
-    internal IReadOnlyList<object?> GetCurrentScriptArguments() => _scriptArgumentsStack.Count > 0 ? _scriptArgumentsStack.Peek() : Runtime.InvocationArguments;
+    internal IReadOnlyList<object?> GetCurrentScriptArguments() =>
+        _scriptArgumentsStack.Count > 0
+            ? _scriptArgumentsStack.Peek()
+            : LanguageRuntime.InvocationArguments;
 
     internal string GetCurrentFunctionName() => _functionCallStack.Count > 0 ? _functionCallStack.Peek() : string.Empty;
 

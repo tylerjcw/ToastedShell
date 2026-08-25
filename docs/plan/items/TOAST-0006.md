@@ -246,8 +246,10 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       routes through it rather than through a forwarding property on `ToshRuntime`. The
       existing host-signal and diagnostic-sink ports are also supplied on `ToastRuntime`,
       with inert defaults for a language-only host. The remaining direct host uses are
-      session output, background jobs, invocation state, environment synchronization,
-      `$tosh` composition and last-result bookkeeping. External-process construction is
+      session output, background jobs, environment synchronization, `$tosh` composition
+      and last-result bookkeeping. Script invocation arguments and the evaluator/block
+      callbacks exposed to host commands now live on `ToastRuntime`; `ToshRuntime` forwards
+      the same slots. External-process construction is
       now an optional host capability on `ToastRuntime`, still supplied by TōSh's existing
       `IExternalCommandFactory`
   2e  Streams: emit rather than write                DONE as far as it goes
