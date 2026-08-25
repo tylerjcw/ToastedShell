@@ -42,6 +42,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.Diagnostics);
         Assert.NotNull(language.ExecutionObserver);
         Assert.NotNull(language.SessionRedirection);
+        Assert.Null(language.BackgroundJobs);
         Assert.Null(language.ExternalCommands);
         Assert.Empty(language.InvocationArguments);
         Assert.Null(language.BlockExecutor);
@@ -78,6 +79,42 @@ public sealed class ToastRuntimeTests
             "func add(a: int, b: int) -> int { return ($a + $b) }\nadd 2 3");
 
         Assert.Equal(5, Assert.Single(results));
+    }
+
+    [Fact]
+    public async Task A_language_engine_delegates_background_jobs_without_a_shell_runtime()
+    {
+        var jobs = new RecordingBackgroundJobHost();
+        var observer = new RecordingExecutionObserver();
+        var language = new ToastRuntime
+        {
+            BackgroundJobs = jobs,
+            ExecutionObserver = observer,
+        };
+        language.Commands.RegisterOrReplace(new ExternalProcessProbeCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync("external-probe alpha &");
+
+        Assert.Empty(results);
+        Assert.Null(engine.ShellRuntime);
+        var request = Assert.IsType<ToastBackgroundPipelineRequest>(jobs.Request);
+        var stage = Assert.Single(request.Stages);
+        Assert.Equal("/virtual/external-probe", stage.ResolvedPath);
+        Assert.Equal("alpha", Assert.Single(stage.Arguments));
+        Assert.Same(jobs.Result, observer.LastResult);
+        Assert.Equal(0, observer.LastExitCode);
+    }
+
+    [Fact]
+    public async Task An_unhosted_engine_reports_when_background_jobs_are_unavailable()
+    {
+        var engine = new ToshEngine(new ToastRuntime());
+
+        var failure = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("external-probe &"));
+
+        Assert.Equal("tosh.runtime.background_jobs_not_supported", failure.Diagnostics[0].Code);
     }
 
     /// <summary>
@@ -134,6 +171,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime, runtime.Language.Diagnostics);
         Assert.Same(runtime, runtime.Language.ExecutionObserver);
         Assert.Same(runtime, runtime.Language.SessionRedirection);
+        Assert.Same(runtime, runtime.Language.BackgroundJobs);
         Assert.Same(runtime.ExternalCommands, runtime.Language.ExternalCommands);
         Assert.Same(runtime.InvocationArguments, runtime.Language.InvocationArguments);
         Assert.Same(runtime.BlockExecutor, runtime.Language.BlockExecutor);
@@ -175,5 +213,46 @@ public sealed class ToastRuntimeTests
     {
         Assert.False(typeof(ToastRuntime).IsAssignableFrom(typeof(ToshRuntime)));
         Assert.NotNull(typeof(ToshRuntime).GetProperty(nameof(ToshRuntime.Language)));
+    }
+
+    private sealed class RecordingBackgroundJobHost : IToastBackgroundJobHost
+    {
+        public object Result { get; } = new();
+
+        public ToastBackgroundPipelineRequest? Request { get; private set; }
+
+        public object StartExternalPipeline(ToastBackgroundPipelineRequest request)
+        {
+            Request = request;
+            return Result;
+        }
+    }
+
+    private sealed class RecordingExecutionObserver : IToastExecutionObserver
+    {
+        public object? LastResult { get; private set; }
+
+        public int? LastExitCode { get; private set; }
+
+        public void SetLastResult(object? value) => LastResult = value;
+
+        public void SetLastExitCode(int exitCode) => LastExitCode = exitCode;
+    }
+
+    private sealed class ExternalProcessProbeCommand : IExternalProcessCommand
+    {
+        public string Name => "external-probe";
+
+        public string Description => "Represents a host process without launching one.";
+
+        public string Usage => "external-probe [args...]";
+
+        public string ResolvedPath => "/virtual/external-probe";
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
     }
 }

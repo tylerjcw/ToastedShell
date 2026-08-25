@@ -7,7 +7,8 @@ public sealed class ToshRuntime :
     IToastHostSignals,
     IToastDiagnosticSink,
     IToastExecutionObserver,
-    IToastSessionRedirection
+    IToastSessionRedirection,
+    IToastBackgroundJobHost
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -52,6 +53,7 @@ public sealed class ToshRuntime :
             Diagnostics = this,
             ExecutionObserver = this,
             SessionRedirection = this,
+            BackgroundJobs = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
@@ -399,6 +401,53 @@ public sealed class ToshRuntime :
         ReapCompletedJobs();
         _jobs[job.Id] = job;
         return job;
+    }
+
+    /// <summary>
+    /// Materializes a language-neutral background request as a TōSh job, allocates its
+    /// session identifier, and registers it for <c>jobs</c>/<c>wait-for</c>.
+    /// </summary>
+    public object StartExternalPipeline(ToastBackgroundPipelineRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var stages = request.Stages
+            .Select(stage => new ShellJobProcessSpec(stage.ResolvedPath, stage.Arguments))
+            .ToArray();
+        var redirections = request.Redirections
+            .Select(redirection => new ShellJobRedirectionSpec(
+                redirection.Path,
+                redirection.Stream switch
+                {
+                    ToastBackgroundRedirectionStream.Output => ShellJobRedirectionStream.Output,
+                    ToastBackgroundRedirectionStream.Error => ShellJobRedirectionStream.Error,
+                    ToastBackgroundRedirectionStream.OutputThenError => ShellJobRedirectionStream.OutputThenError,
+                    ToastBackgroundRedirectionStream.ErrorThenOutput => ShellJobRedirectionStream.ErrorThenOutput,
+                    _ => throw new ArgumentOutOfRangeException(
+                        nameof(redirection.Stream),
+                        redirection.Stream,
+                        "Unknown background redirection stream."),
+                },
+                redirection.Mode switch
+                {
+                    ToastBackgroundRedirectionMode.Truncate => ShellJobRedirectionMode.Truncate,
+                    ToastBackgroundRedirectionMode.Append => ShellJobRedirectionMode.Append,
+                    _ => throw new ArgumentOutOfRangeException(
+                        nameof(redirection.Mode),
+                        redirection.Mode,
+                        "Unknown background redirection mode."),
+                }))
+            .ToArray();
+
+        var job = RegisterJob(ShellJob.StartExternalPipeline(
+            AllocateJobId(),
+            request.CommandText,
+            request.WorkingDirectory,
+            stages,
+            request.InitialInput,
+            redirections));
+
+        return job.ToInfo();
     }
 
     public bool TryGetJob(int id, out ShellJob job)

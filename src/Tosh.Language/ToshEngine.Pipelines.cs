@@ -26,9 +26,21 @@ public sealed partial class ToshEngine
         PipelineStatementSyntax statement,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        var backgroundJobs = LanguageRuntime.BackgroundJobs;
+        if (backgroundJobs is null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.background_jobs_not_supported",
+                Title: "This host does not support background jobs.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: statement.Span,
+                Label: "background execution requires a host with job control"));
+        }
+
         IReadOnlyList<object?>? initialInput = null;
-        var processStages = new List<ShellJobProcessSpec>();
-        var redirections = new List<ShellJobRedirectionSpec>();
+        var processStages = new List<ToastBackgroundProcessSpec>();
+        var redirections = new List<ToastBackgroundRedirectionSpec>();
         var stages = statement.Pipeline.Stages;
         var stageIndex = 0;
 
@@ -103,7 +115,7 @@ public sealed partial class ToshEngine
                 throw CreateCommandDiagnostic(sourceName, sourceText, commandSyntax, exception);
             }
 
-            processStages.Add(new ShellJobProcessSpec(externalCommand.ResolvedPath, arguments));
+            processStages.Add(new ToastBackgroundProcessSpec(externalCommand.ResolvedPath, arguments));
         }
 
         if (statement.Pipeline.Redirections is { Count: > 0 })
@@ -112,32 +124,30 @@ public sealed partial class ToshEngine
             {
                 var targetPath = await EvaluateArgumentAsync(sourceName, sourceText, redirection.Target, cancellationToken);
                 var path = ResolveRedirectionTargetPath(sourceName, sourceText, redirection, targetPath);
-                redirections.Add(new ShellJobRedirectionSpec(
+                redirections.Add(new ToastBackgroundRedirectionSpec(
                     path,
                     redirection.Stream switch
                     {
-                        RedirectionStream.Output => ShellJobRedirectionStream.Output,
-                        RedirectionStream.Error => ShellJobRedirectionStream.Error,
-                        RedirectionStream.OutputThenError => ShellJobRedirectionStream.OutputThenError,
-                        _ => ShellJobRedirectionStream.ErrorThenOutput,
+                        RedirectionStream.Output => ToastBackgroundRedirectionStream.Output,
+                        RedirectionStream.Error => ToastBackgroundRedirectionStream.Error,
+                        RedirectionStream.OutputThenError => ToastBackgroundRedirectionStream.OutputThenError,
+                        _ => ToastBackgroundRedirectionStream.ErrorThenOutput,
                     },
                     redirection.Mode == RedirectionMode.Append
-                        ? ShellJobRedirectionMode.Append
-                        : ShellJobRedirectionMode.Truncate));
+                        ? ToastBackgroundRedirectionMode.Append
+                        : ToastBackgroundRedirectionMode.Truncate));
             }
         }
 
         var commandText = ExtractSourceSnippet(sourceText, statement.Span);
-        var job = Runtime.RegisterJob(
-            ShellJob.StartExternalPipeline(
-                Runtime.AllocateJobId(),
-                commandText,
-                LanguageRuntime.CurrentDirectory,
-                processStages,
-                initialInput,
-                redirections));
+        var jobInfo = backgroundJobs.StartExternalPipeline(new ToastBackgroundPipelineRequest(
+            commandText,
+            LanguageRuntime.CurrentDirectory,
+            processStages,
+            initialInput,
+            redirections));
 
-        LanguageRuntime.ExecutionObserver.SetLastResult(job.ToInfo());
+        LanguageRuntime.ExecutionObserver.SetLastResult(jobInfo);
         LanguageRuntime.ExecutionObserver.SetLastExitCode(0);
         yield break;
     }

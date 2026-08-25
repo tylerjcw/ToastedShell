@@ -214,6 +214,14 @@ redirections are pinned to follow the scope and restore both session writers. Au
 buffers into `LanguageRuntime.Output`, so `Tosh.Language` no longer reads or assigns
 `ToshRuntime.Output` or `ToshRuntime.Error`.
 
+Background pipelines crossed the boundary on 2026-08-25 as well. Tōast now submits a
+`ToastBackgroundPipelineRequest` containing neutral process and redirection specifications
+through the optional `IToastBackgroundJobHost`. TōSh translates that request into its
+`ShellJob` model, allocates the session job ID, registers the job, and returns its
+host-defined display value. A language-only host can supply another implementation without
+constructing `ToshRuntime`, or leave the capability absent and receive a specific diagnostic.
+No `ShellJob*` type or job-table operation remains in `Tosh.Language`.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -259,8 +267,10 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
       existing host-signal and diagnostic-sink ports are also supplied on `ToastRuntime`,
       with inert defaults for a language-only host. Shell-session mirroring during
       redirection now uses the scoped `IToastSessionRedirection` port, and auto-help writes
-      through the language stream. The remaining direct host uses are background jobs and
-      `$tosh` composition. `CommandContext` now requires a language runtime and carries
+      through the language stream. Background pipelines now use the optional
+      `IToastBackgroundJobHost` port and language-neutral request records. The remaining
+      direct host use is `$tosh` composition. `CommandContext` now requires a language
+      runtime and carries
       the shell runtime only when one exists, so declared functions run unhosted. The
       host-signal port now
       describes the language's real environment duties—synchronize an already-exported

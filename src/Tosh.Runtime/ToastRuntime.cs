@@ -116,6 +116,14 @@ public sealed class ToastRuntime
     /// </remarks>
     public IToastSessionRedirection SessionRedirection { get; init; } = UnhostedServices.Instance;
 
+    /// <summary>Starts process pipelines in the background when the host supports jobs.</summary>
+    /// <remarks>
+    /// An embedded language runtime has no job table by default. The evaluator reports a
+    /// capability diagnostic when background syntax reaches a host that leaves this unset,
+    /// while TōSh supplies its job-control implementation (`TOAST-0006`).
+    /// </remarks>
+    public IToastBackgroundJobHost? BackgroundJobs { get; init; }
+
     /// <summary>
     /// Creates commands that launch external programs, or <see langword="null"/> when the
     /// host does not expose process execution.
