@@ -43,6 +43,8 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
             CurrentDirectory = initialDirectory,
             Output = ToastStreams.FromWriter(_output),
             Error = ToastStreams.FromWriter(_error),
+            HostSignals = this,
+            Diagnostics = this,
         };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);

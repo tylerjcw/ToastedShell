@@ -33,6 +33,27 @@ namespace Tosh.Runtime;
 /// </remarks>
 public sealed class ToastRuntime
 {
+    private sealed class UnhostedServices : IToastHostSignals, IToastDiagnosticSink
+    {
+        internal static readonly UnhostedServices Instance = new();
+
+        public bool ExitRequested => false;
+
+        public void RequestExit() { }
+
+        public bool IsExported(string name) => false;
+
+        public void ReportWarning(ToshDiagnostic diagnostic) { }
+
+        public void ReportWarning(string title, string? help, string? info) { }
+
+        public ValueTask TraceAsync(string line, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
+    }
+
     /// <summary>Where a program's ordinary output goes.</summary>
     /// <remarks>
     /// A destination the language owns, not the shell's <c>TextWriter</c> — `TOAST-0015`.
@@ -44,6 +65,22 @@ public sealed class ToastRuntime
 
     /// <summary>Where a program's diagnostics go.</summary>
     public IToastStream Error { get; set; } = ToastStreams.Null;
+
+    /// <summary>Session signals observed or requested by the language.</summary>
+    /// <remarks>
+    /// A language-only host has no session to exit and no process environment exports, so
+    /// the default answers false and treats exit requests as inert. TōSh supplies its live
+    /// session implementation when composing this runtime (`TOAST-0006`, stage 2b).
+    /// </remarks>
+    public IToastHostSignals HostSignals { get; init; } = UnhostedServices.Instance;
+
+    /// <summary>Where language warnings and trace events are reported.</summary>
+    /// <remarks>
+    /// Reporting defaults to an inert sink for an unhosted runtime. A host that presents
+    /// diagnostics supplies its own renderer/destination without putting those shell choices
+    /// back into the language (`TOAST-0006`, stage 2e).
+    /// </remarks>
+    public IToastDiagnosticSink Diagnostics { get; init; } = UnhostedServices.Instance;
 
     /// <summary>Constructs values and invokes members through the host's object model.</summary>
     /// <remarks>

@@ -7130,13 +7130,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// dependency is the three members the language actually needs, not the whole runtime.
     /// When `TOAST-0006` stage 2d introduces a ToastRuntime, only this line changes.
     /// </remarks>
-    private IToastHostSignals Host => Runtime;
+    private IToastHostSignals Host => LanguageRuntime.HostSignals;
 
     /// <summary>
     /// Where warnings and trace lines go. The language decides there is something to say;
     /// the host decides how it looks and where it lands (`TOAST-0006`).
     /// </summary>
-    private IToastDiagnosticSink Diagnostics => Runtime;
+    private IToastDiagnosticSink Diagnostics => LanguageRuntime.Diagnostics;
 
     public string ResolveSourcePath(string rawPath)
     {
