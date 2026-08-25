@@ -137,7 +137,9 @@ internal sealed partial class EmitterImpl
     {
         if (valueType == typeof(bool)) return;
         BoxIfValueType(valueType);
-        _il.Emit(OpCodes.Call, s_hostIsTruthy);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableIsTruthy : s_hostIsTruthy);
     }
 
     /// <summary>
@@ -944,8 +946,15 @@ internal sealed partial class EmitterImpl
         _il.Emit(OpCodes.Ldstr, call.MethodName);
         if (!EmitArgsArrayCore($"method '{call.MethodName}'", call.Arguments)) return null;
         _il.Emit(call.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        RequireTier(2, "dynamic member access");
-        _il.Emit(OpCodes.Call, s_hostInvokeMember);
+        if (_profile == CompileProfile.Pure)
+        {
+            _il.Emit(OpCodes.Call, s_portableInvokeMember);
+        }
+        else
+        {
+            RequireTier(2, $"dynamic member access ({call.MethodName})");
+            _il.Emit(OpCodes.Call, s_hostInvokeMember);
+        }
         return typeof(object);
     }
 
@@ -1200,7 +1209,9 @@ internal sealed partial class EmitterImpl
             BoxIfValueType(t);
             _il.Emit(OpCodes.Ldstr, member.MemberPath);
             _il.Emit(OpCodes.Ldc_I4_0);
-            _il.Emit(OpCodes.Call, s_hostGetMember);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableGetMember : s_hostGetMember);
             return typeof(object);
         }
 
@@ -1209,7 +1220,9 @@ internal sealed partial class EmitterImpl
         BoxIfValueType(t2);
         _il.Emit(OpCodes.Ldstr, member.MemberPath);
         _il.Emit(member.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        _il.Emit(OpCodes.Call, s_hostGetMember);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableGetMember : s_hostGetMember);
         return typeof(object);
     }
 
@@ -1234,7 +1247,9 @@ internal sealed partial class EmitterImpl
         var ti = EmitExpression(index.Index);
         if (ti is null) return null;
         BoxIfValueType(ti);
-        _il.Emit(OpCodes.Call, s_hostGetIndex);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableGetIndex : s_hostGetIndex);
         return typeof(object);
     }
 

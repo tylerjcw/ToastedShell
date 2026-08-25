@@ -702,7 +702,9 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Ldloc, targetLocal);
             _il.Emit(OpCodes.Ldstr, target.MemberPath);
             _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            _il.Emit(OpCodes.Call, s_hostGetMember);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableGetMember : s_hostGetMember);
             _il.Emit(OpCodes.Brtrue, done);
 
             var rhsType = EmitPipelineAsValue(assign.Value);
@@ -719,7 +721,9 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Ldstr, target.MemberPath);
             _il.Emit(OpCodes.Ldloc, coalescedValueLocal);
             _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            _il.Emit(OpCodes.Call, s_hostSetMember);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableSetMember : s_hostSetMember);
             _il.Emit(OpCodes.Pop);
             _il.MarkLabel(done);
             return;
@@ -745,7 +749,9 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Ldloc, targetLocal);
             _il.Emit(OpCodes.Ldstr, target.MemberPath);
             _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            _il.Emit(OpCodes.Call, s_hostGetMember);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableGetMember : s_hostGetMember);
 
             var rhsType = EmitPipelineAsValue(assign.Value);
             if (rhsType is null)
@@ -789,7 +795,9 @@ internal sealed partial class EmitterImpl
         _il.Emit(OpCodes.Ldstr, target.MemberPath);
         _il.Emit(OpCodes.Ldloc, valueLocal);
         _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        _il.Emit(OpCodes.Call, s_hostSetMember);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableSetMember : s_hostSetMember);
         _il.Emit(OpCodes.Pop);
     }
 
@@ -819,7 +827,9 @@ internal sealed partial class EmitterImpl
             var done = _il.DefineLabel();
             _il.Emit(OpCodes.Ldloc, targetLocal);
             _il.Emit(OpCodes.Ldloc, indexLocal);
-            _il.Emit(OpCodes.Call, s_hostGetIndex);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableGetIndex : s_hostGetIndex);
             _il.Emit(OpCodes.Brtrue, done);
 
             var rhsType = EmitPipelineAsValue(assign.Value);
@@ -835,7 +845,9 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Ldloc, targetLocal);
             _il.Emit(OpCodes.Ldloc, indexLocal);
             _il.Emit(OpCodes.Ldloc, coalescedValueLocal);
-            _il.Emit(OpCodes.Call, s_hostSetIndex);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableSetIndex : s_hostSetIndex);
             _il.Emit(OpCodes.Pop);
             _il.MarkLabel(done);
             return;
@@ -860,7 +872,9 @@ internal sealed partial class EmitterImpl
 
             _il.Emit(OpCodes.Ldloc, targetLocal);
             _il.Emit(OpCodes.Ldloc, indexLocal);
-            _il.Emit(OpCodes.Call, s_hostGetIndex);
+            _il.Emit(
+                OpCodes.Call,
+                _profile == CompileProfile.Pure ? s_portableGetIndex : s_hostGetIndex);
 
             var rhsType = EmitPipelineAsValue(assign.Value);
             if (rhsType is null)
@@ -879,7 +893,9 @@ internal sealed partial class EmitterImpl
         _il.Emit(OpCodes.Ldloc, targetLocal);
         _il.Emit(OpCodes.Ldloc, indexLocal);
         _il.Emit(OpCodes.Ldloc, valueLocal);
-        _il.Emit(OpCodes.Call, s_hostSetIndex);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableSetIndex : s_hostSetIndex);
         _il.Emit(OpCodes.Pop);
     }
 
@@ -1122,7 +1138,9 @@ internal sealed partial class EmitterImpl
         var srcType = EmitPipelineAsSequence(forStmt.Source);
         if (srcType is null) return;
         BoxIfValueType(srcType);
-        _il.Emit(OpCodes.Call, s_hostToEnumerable);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableToEnumerable : s_hostToEnumerable);
 
         // Get an IEnumerator<object?> from the IEnumerable<object?>.
         _il.Emit(OpCodes.Callvirt, s_enumerableGetEnumerator);
@@ -1422,7 +1440,9 @@ internal sealed partial class EmitterImpl
                 BoxIfValueType(t);
             }
         }
-        _il.Emit(OpCodes.Call, s_hostThrowValue);
+        _il.Emit(
+            OpCodes.Call,
+            _profile == CompileProfile.Pure ? s_portableThrowValue : s_hostThrowValue);
     }
 
     /// <summary>
@@ -1450,7 +1470,9 @@ internal sealed partial class EmitterImpl
             // either the wrapper's .Value or the exception itself.
             if (catchClause.Variable is { } sym)
             {
-                _il.Emit(OpCodes.Call, s_hostCaughtValueOf);
+                _il.Emit(
+                    OpCodes.Call,
+                    _profile == CompileProfile.Pure ? s_portableCaughtValueOf : s_hostCaughtValueOf);
                 var slot = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, slot);
                 _locals[sym] = new LocalSlot(slot, typeof(object));
@@ -1460,7 +1482,9 @@ internal sealed partial class EmitterImpl
                 // Even when there's no catch variable we must
                 // route through CaughtValueOf so control-flow
                 // signals are rethrown rather than swallowed.
-                _il.Emit(OpCodes.Call, s_hostCaughtValueOf);
+                _il.Emit(
+                    OpCodes.Call,
+                    _profile == CompileProfile.Pure ? s_portableCaughtValueOf : s_hostCaughtValueOf);
                 _il.Emit(OpCodes.Pop);
             }
             EmitBlock(catchClause.Body);

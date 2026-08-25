@@ -1,7 +1,7 @@
 ---
 id: TOAST-0038
 title: "The readiness probe is untyped and does not compile, and it is Phase B's exit"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-21
@@ -131,15 +131,13 @@ source rather than only here.
 - [x] `tosh --compile` accepts it with no flags
 - [x] The compiled probe produces the same output as the interpreted probe — byte-identical,
       and pinned by `The_readiness_probe_agrees_across_backends`
-- [ ] It runs **without an interpreter dependency** — the second half of Phase B's exit
-      sentence, and still open, though closer. **The probe now compiles under the `runtime`
-      profile**, which refuses source replay, so the artifact no longer carries ToastScript
-      for an evaluator to re-read — asserted by
-      `The_readiness_probe_compiles_without_source_replay`. What remains is the reference:
-      the emitted assembly still names `Tosh.Compiler.Runtime`, which bridges to
-      `Tosh.Language`, and the `pure` profile now refuses one tier-2 feature: dynamic
-      member access. That is the whole of the distance left
-- [x] Whatever fights back is filed, not worked around — four fixed, one filed
+- [x] It runs **without an interpreter dependency** under `--profile pure`, asserted
+      behaviorally by `The_readiness_probe_runs_through_the_pure_backend` and structurally
+      by `Readiness_probe_is_clean_and_references_no_interpreter_assembly`. The emitted
+      assembly and dependency manifest name `Tosh.Runtime`, but neither the language engine
+      nor the compiler host
+- [x] Whatever fought back was filed and then eliminated through the linked items and the
+      portable compiler slices recorded below
 - [x] A negative control
 
 ## Progress — 2026-08-22
@@ -223,15 +221,28 @@ them into one indistinguishable refusal.
 The full readiness probe now reports exactly one pure-profile refusal: dynamic member
 access.
 
+## Progress — 2026-08-24: Phase B exit is green
+
+The final refusal is gone. Under the pure profile, member and method access, index access,
+truthiness, `foreach` conversion, and throw/catch now route through a small portable object
+boundary in `Tosh.Runtime`. The normal runtime and permissive profiles retain their
+engine-aware compiler-host path; only the pure artifact takes the dependency-free route.
+
+`bench/probes/compiler_shape.tosh` now compiles and runs under `--profile pure` with output
+byte-identical to the interpreter. Its assembly metadata contains no reference to
+`Tosh.Compiler.Runtime`, `Tosh.Compiler.IR`, or `Tosh.Language`, and its `.deps.json` lists
+only `Tosh.Runtime` from the TōSh runtime stack. The behavioral, assembly-reference, and
+manifest tests pin all three claims. The full solution builds cleanly, and the full suite is
+green at 6,628 passed and one skipped.
+
 ## Notes
 
 Depends on `TOAST-0034` for four of the six errors. The other two can be fixed immediately
 and will change what the remaining errors are — which is the point of doing this alongside
 rather than after.
 
-Blocks Phase C, which asks that the interpreter and IL pass the differential corpus; that
-corpus is `DifferentialExecutionTests`, now down to three recorded divergences after
-`TOAST-0030`.
+No longer blocks Phase C. The readiness program now passes both halves of the exit, while
+the wider differential corpus remains the ongoing parity guard for subsequent work.
 
 ## The probe compiles and runs — 2026-08-21
 
@@ -259,9 +270,9 @@ Six errors became zero, then the compiled program had to be made to run:
 | `TOAST-0044` | a declared class captured by a CLR name; a dropped instruction; a `ret` inside a finally; a private property that could not be assigned |
 | `TOAST-0045` | a record literal was a dict |
 
-### What is *not* claimed
+### What is now claimed
 
-Phase B's exit sentence has two halves and only one is asserted here. The probe compiles and
-agrees with the interpreter; it does **not** yet run without an interpreter dependency — the
-emitted assembly still references `Tosh.Compiler.Runtime`, which bridges to `Tosh.Language`.
-`TOAST-0035` owns that, and the acceptance box above says so rather than reading as done.
+Both halves of Phase B's exit sentence are asserted. The typed probe compiles and agrees
+with the interpreter, and its pure artifact does not reference the interpreter or compiler
+host. `Tosh.Runtime` remains intentionally present as the stable portable value/object
+boundary; this is not a claim that generated programs use only framework assemblies.

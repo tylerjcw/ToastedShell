@@ -51,7 +51,9 @@ public static class ToshPublisher
         return appHostPath;
     }
 
-    public static string WriteDepsJson(string dllPath)
+    public static string WriteDepsJson(
+        string dllPath,
+        IReadOnlyCollection<string>? runtimeDependencyFileNames = null)
     {
         dllPath = Path.GetFullPath(dllPath);
         var directory = Path.GetDirectoryName(dllPath) ?? ".";
@@ -76,9 +78,18 @@ public static class ToshPublisher
             [appKey] = CreateLibraryEntry(),
         };
 
+        var allowedDependencies = runtimeDependencyFileNames is null
+            ? null
+            : new HashSet<string>(runtimeDependencyFileNames, StringComparer.OrdinalIgnoreCase);
+        var knownRuntimeDependencies = new HashSet<string>(
+            RuntimeDependencyFileNames,
+            StringComparer.OrdinalIgnoreCase);
         foreach (var dependencyPath in Directory.EnumerateFiles(directory, "*.dll", SearchOption.TopDirectoryOnly)
                      .Where(p => !string.Equals(Path.GetFullPath(p), dllPath, StringComparison.OrdinalIgnoreCase))
                      .Where(p => !Path.GetFileName(p).EndsWith(".ref.dll", StringComparison.OrdinalIgnoreCase))
+                     .Where(p => allowedDependencies is null
+                         || !knownRuntimeDependencies.Contains(Path.GetFileName(p))
+                         || allowedDependencies.Contains(Path.GetFileName(p)))
                      .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal))
         {
             var dependencyAssembly = AssemblyName.GetAssemblyName(dependencyPath);
@@ -123,7 +134,10 @@ public static class ToshPublisher
         return depsPath;
     }
 
-    public static string CreateSingleFileBundle(string dllPath, string? outputDir = null)
+    public static string CreateSingleFileBundle(
+        string dllPath,
+        string? outputDir = null,
+        IReadOnlyCollection<string>? runtimeDependencyFileNames = null)
     {
         dllPath = Path.GetFullPath(dllPath);
         var appHostPath = File.Exists(GetAppHostPath(dllPath, outputDir))
@@ -131,6 +145,7 @@ public static class ToshPublisher
             : CreateAppHost(dllPath, outputDir);
         var appHostDirectory = Path.GetDirectoryName(Path.GetFullPath(appHostPath)) ?? ".";
         var hostName = Path.GetFileName(appHostPath);
+        var dependenciesToBundle = runtimeDependencyFileNames ?? RuntimeDependencyFileNames;
         var stagingDir = Directory.CreateTempSubdirectory("tosh-bundle-stage-");
         var outputTempDir = Directory.CreateTempSubdirectory("tosh-bundle-out-");
 
@@ -149,13 +164,13 @@ public static class ToshPublisher
                 var stem = Path.GetFileNameWithoutExtension(dllPath);
                 if (!name.Equals(hostName, StringComparison.OrdinalIgnoreCase)
                     && !name.StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase)
-                    && !RuntimeDependencyFileNames.Contains(name))
+                    && !dependenciesToBundle.Contains(name))
                     continue;
                 File.Copy(srcPath, Path.Combine(stagingDir.FullName, name), overwrite: true);
             }
 
             // Copy runtime dependencies that may live in the apphost directory.
-            foreach (var name in RuntimeDependencyFileNames)
+            foreach (var name in dependenciesToBundle)
             {
                 var src = Path.Combine(appHostDirectory, name);
                 var dst = Path.Combine(stagingDir.FullName, name);
@@ -185,6 +200,13 @@ public static class ToshPublisher
     public static IReadOnlyList<string> GetRuntimeDependencyFileNames()
     {
         return RuntimeDependencyFileNames;
+    }
+
+    public static IReadOnlyList<string> GetRuntimeDependencyFileNames(CompileProfile profile)
+    {
+        return profile == CompileProfile.Pure
+            ? ["Tosh.Runtime.dll"]
+            : RuntimeDependencyFileNames;
     }
 
     private static IEnumerable<FileSpec> EnumerateBundleFileSpecs(string directory, string hostName)

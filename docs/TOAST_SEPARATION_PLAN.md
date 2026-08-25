@@ -124,6 +124,12 @@ names. They are the checklist for the rename, not an obstacle to it.
 
 ## Phase B — The evaluator
 
+> **Exit achieved 2026-08-24.** The typed readiness program at
+> `bench/probes/compiler_shape.tosh` compiles and runs through `--profile pure` with output
+> identical to the interpreter. Artifact audits confirm that the generated assembly and
+> dependency manifest reference `Tosh.Runtime` but neither `Tosh.Language` nor
+> `Tosh.Compiler.Runtime`. `TOAST-0038` records the implementation and regression tests.
+
 ### The evidence
 
 Measured this session with `GC.GetTotalAllocatedBytes`:

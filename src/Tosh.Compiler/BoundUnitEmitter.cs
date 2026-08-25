@@ -600,6 +600,22 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostSetIndex =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.SetIndex),
             new[] { typeof(object), typeof(object), typeof(object) })!;
+    private static readonly MethodInfo s_portableGetMember =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.GetMember),
+            new[] { typeof(object), typeof(string), typeof(bool) })!;
+    private static readonly MethodInfo s_portableSetMember =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.SetMember),
+            new[] { typeof(object), typeof(string), typeof(object), typeof(bool) })!;
+    private static readonly MethodInfo s_portableGetIndex =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.GetIndex),
+            new[] { typeof(object), typeof(object) })!;
+    private static readonly MethodInfo s_portableSetIndex =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.SetIndex),
+            new[] { typeof(object), typeof(object), typeof(object) })!;
     private static readonly MethodInfo s_hostThrowValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ThrowValue),
             new[] { typeof(object) })!;
@@ -609,6 +625,14 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostCaughtValueOf =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.CaughtValueOf),
             new[] { typeof(global::System.Exception) })!;
+    private static readonly MethodInfo s_portableThrowValue =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.ThrowValue),
+            new[] { typeof(object) })!;
+    private static readonly MethodInfo s_portableCaughtValueOf =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.CaughtValueOf),
+            new[] { typeof(Exception) })!;
     private static readonly MethodInfo s_hostSpreadArgs =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.SpreadArgs),
             new[] { typeof(List<object?>), typeof(object) })!;
@@ -670,6 +694,10 @@ internal sealed partial class EmitterImpl : IDisposable
             new[] { typeof(object) })!;
     private static readonly MethodInfo s_hostToEnumerable =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ToEnumerable),
+            new[] { typeof(object) })!;
+    private static readonly MethodInfo s_portableToEnumerable =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.ToEnumerable),
             new[] { typeof(object) })!;
     private static readonly MethodInfo s_hostResolveCommand =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ResolveCommand),
@@ -829,6 +857,10 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostInvokeMember =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeMember),
             new[] { typeof(object), typeof(string), typeof(object?[]), typeof(bool) })!;
+    private static readonly MethodInfo s_portableInvokeMember =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.InvokeMember),
+            new[] { typeof(object), typeof(string), typeof(object?[]), typeof(bool) })!;
 
     private static readonly MethodInfo s_hostInvokeCallable =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeCallable),
@@ -844,6 +876,10 @@ internal sealed partial class EmitterImpl : IDisposable
             new[] { typeof(object) })!;
     private static readonly MethodInfo s_hostIsTruthy =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.IsTruthy),
+            new[] { typeof(object) })!;
+    private static readonly MethodInfo s_portableIsTruthy =
+        typeof(PortableObjectBoundary).GetMethod(
+            nameof(PortableObjectBoundary.IsTruthy),
             new[] { typeof(object) })!;
     private static readonly MethodInfo s_hostThrowAsException =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ThrowAsException),

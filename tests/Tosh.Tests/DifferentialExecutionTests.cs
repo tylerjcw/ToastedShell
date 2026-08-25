@@ -988,7 +988,9 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         return yielded.Length > 0 ? yielded : written;
     }
 
-    private string RunCompiled(string source)
+    private string RunCompiled(
+        string source,
+        CompileProfile profile = CompileProfile.Permissive)
     {
         var engine = new ToshEngine(_runtime);
         var parse = engine.Parse(source, "<differential>");
@@ -1001,7 +1003,7 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A fresh assembly name per case; AssemblyLoadContext caches otherwise.
         var assemblyName = $"ToshDiff_{Guid.NewGuid():N}";
         using var stream = new MemoryStream();
-        var result = BoundUnitEmitter.Emit(unit, assemblyName, stream);
+        var result = BoundUnitEmitter.Emit(unit, assemblyName, stream, profile);
 
         Assert.True(result.IsClean,
             $"unexpected emit diagnostics: {string.Join(", ", result.UnsupportedShapes)}");
@@ -1100,9 +1102,9 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
     /// other reasons.
     /// </para>
     /// <para>
-    /// Not the same as needing no runtime at all: the assembly still references
-    /// `Tosh.Compiler.Runtime`, and the `pure` profile now refuses one tier-2 feature:
-    /// dynamic member access.
+    /// This test continues to pin the intermediate `runtime` profile boundary. The pure
+    /// profile test below owns the final no-interpreter exit and the dependency audit owns
+    /// the artifact-level reference check.
     /// </para>
     /// </remarks>
     [Fact]
@@ -1129,5 +1131,20 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             result.IsClean,
             "the readiness probe fell back to source replay: " +
             string.Join(", ", result.UnsupportedShapes));
+    }
+
+    [Fact]
+    public void The_readiness_probe_runs_through_the_pure_backend()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+        var path = Path.Combine(root, "bench/probes/compiler_shape.tosh");
+        Assert.True(File.Exists(path), $"missing {path}");
+
+        var source = File.ReadAllText(path);
+        var interpreted = Attempt(() => RunInterpreted(source));
+        var pure = Attempt(() => RunCompiled(source, CompileProfile.Pure));
+
+        Assert.Equal(interpreted, pure);
+        Assert.DoesNotContain("threw", pure, StringComparison.Ordinal);
     }
 }

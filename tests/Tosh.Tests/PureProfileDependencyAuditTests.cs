@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Text.Json;
 using Tosh.Compiler;
 using Tosh.Language;
 using Tosh.Language.Binding;
@@ -96,6 +97,60 @@ public sealed class PureProfileDependencyAuditTests
         var members = ReadMemberReferences(image);
 
         Assert.Contains("ToshExecutionDepthGuard.Enter", members);
+    }
+
+    [Fact]
+    public void Readiness_probe_is_clean_and_references_no_interpreter_assembly()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+        var source = File.ReadAllText(Path.Combine(root, "bench/probes/compiler_shape.tosh"));
+        var (result, image) = Emit(source, CompileProfile.Pure);
+
+        Assert.True(
+            result.IsClean,
+            $"expected a clean pure readiness probe, got: {string.Join("; ", result.UnsupportedShapes)}");
+
+        var references = ReadAssemblyReferences(image);
+        Assert.Contains("Tosh.Runtime", references);
+        Assert.DoesNotContain(ForbiddenAssemblies, references.Contains);
+    }
+
+    [Fact]
+    public void Pure_dependency_manifest_lists_only_the_portable_runtime()
+    {
+        var (_, image) = Emit(PureSource, CompileProfile.Pure);
+        var directory = Directory.CreateTempSubdirectory("tosh-pure-deps-");
+        try
+        {
+            var assemblyPath = Path.Combine(directory.FullName, "PureProgram.dll");
+            File.WriteAllBytes(assemblyPath, image);
+
+            foreach (var name in ToshPublisher.GetRuntimeDependencyFileNames())
+            {
+                var source = Path.Combine(AppContext.BaseDirectory, name);
+                if (File.Exists(source))
+                {
+                    File.Copy(source, Path.Combine(directory.FullName, name));
+                }
+            }
+
+            var depsPath = ToshPublisher.WriteDepsJson(
+                assemblyPath,
+                ToshPublisher.GetRuntimeDependencyFileNames(CompileProfile.Pure));
+            using var document = JsonDocument.Parse(File.ReadAllText(depsPath));
+            var json = document.RootElement.GetRawText();
+
+            Assert.Contains("Tosh.Runtime", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("Tosh.Compiler.Runtime", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("Tosh.Compiler.IR", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("Tosh.Language", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("Tosh.Stdlib", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("Tosh.Tui", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]

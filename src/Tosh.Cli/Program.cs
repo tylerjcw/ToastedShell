@@ -792,8 +792,9 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
     // pre-populating its directory. Copies are best-effort: a
     // missing source dll just means the user will see a load
     // failure at runtime, same as before the staging existed.
-    StageCompilerRuntime(outputPath);
-    var depsJsonPath = ToshPublisher.WriteDepsJson(outputPath);
+    var runtimeDependencies = ToshPublisher.GetRuntimeDependencyFileNames(compileProfile);
+    StageCompilerRuntime(outputPath, runtimeDependencies);
+    var depsJsonPath = ToshPublisher.WriteDepsJson(outputPath, runtimeDependencies);
 
     // `TOAST-0042`. The runnable artifact is named **last**, and named as runnable.
     //
@@ -814,7 +815,10 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
         runnablePath = appHostPath;
         if (plan.PublishSingleFile)
         {
-            appHostPath = ToshPublisher.CreateSingleFileBundle(outputPath, outputDir);
+            appHostPath = ToshPublisher.CreateSingleFileBundle(
+                outputPath,
+                outputDir,
+                runtimeDependencies);
             await Console.Error.WriteLineAsync($"toshc: wrote single-file bundle {appHostPath}");
             runnablePath = appHostPath;
         }
@@ -888,11 +892,10 @@ static string FormatRunHint(string path)
         : $"'{full}'";
 }
 
-static void StageCompilerRuntime(string outputPath)
+static void StageCompilerRuntime(string outputPath, IReadOnlyList<string> required)
 {
     var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
     if (string.IsNullOrEmpty(outDir)) return;
-    var required = ToshPublisher.GetRuntimeDependencyFileNames();
     var sources = ResolveRuntimeDependencySources(required);
 
     foreach (var name in required)

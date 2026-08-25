@@ -258,8 +258,9 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             """;
         File.WriteAllText(runtimeConfigPath, runtimeConfig);
 
-        StageCompilerRuntime(OutputPath);
-        var depsJsonPath = ToshPublisher.WriteDepsJson(OutputPath);
+        var runtimeDependencies = ToshPublisher.GetRuntimeDependencyFileNames(profile);
+        StageCompilerRuntime(OutputPath, runtimeDependencies);
+        var depsJsonPath = ToshPublisher.WriteDepsJson(OutputPath, runtimeDependencies);
         Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote {depsJsonPath}");
 
         var outputDir = Path.GetDirectoryName(OutputPath) ?? ".";
@@ -269,7 +270,10 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote {appHostPath}");
             if (PublishSingleFile)
             {
-                appHostPath = ToshPublisher.CreateSingleFileBundle(OutputPath, outputDir);
+                appHostPath = ToshPublisher.CreateSingleFileBundle(
+                    OutputPath,
+                    outputDir,
+                    runtimeDependencies);
                 Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote single-file bundle {appHostPath}");
             }
         }
@@ -284,7 +288,9 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
     /// so <c>dotnet &lt;Out&gt;.dll</c> resolves them. Runs only
     /// when source and target dirs differ.
     /// </summary>
-    private static void StageCompilerRuntime(string outputPath)
+    private static void StageCompilerRuntime(
+        string outputPath,
+        IReadOnlyList<string> required)
     {
         var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
         if (string.IsNullOrEmpty(outDir)) return;
@@ -305,7 +311,6 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             return;
         }
 
-        string[] required = [.. ToshPublisher.GetRuntimeDependencyFileNames()];
         foreach (var name in required)
         {
             var src = Path.Combine(sourceDir, name);
