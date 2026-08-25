@@ -21,10 +21,10 @@ public sealed class NewObjectCommand : ShellCommand
         var typeName = parsedTypeName.TypeName;
         var arguments = CommandArguments.Slice(context.Arguments, parsedTypeName.ConsumedArgumentCount);
 
-        if (context.Runtime.Classes.TryGetValue(typeName, out var runtimeType) &&
+        if (context.LanguageRuntime.Classes.TryGetValue(typeName, out var runtimeType) &&
             runtimeType is IShellStaticType runtimeShellType)
         {
-            yield return await context.Runtime.Invoker.CreateInstanceAsync(
+            yield return await context.LanguageRuntime.Invoker.CreateInstanceAsync(
                 runtimeShellType,
                 arguments,
                 context.CancellationToken);
@@ -33,7 +33,7 @@ public sealed class NewObjectCommand : ShellCommand
 
         if (BuiltInShellTypes.TryResolveStaticType(typeName, context.TypeResolver, out var shellType))
         {
-            yield return await context.Runtime.Invoker.CreateInstanceAsync(
+            yield return await context.LanguageRuntime.Invoker.CreateInstanceAsync(
                 shellType,
                 arguments,
                 context.CancellationToken);
@@ -43,7 +43,7 @@ public sealed class NewObjectCommand : ShellCommand
         var type = context.TypeResolver.Resolve(typeName)
                    ?? throw new InvalidOperationException($"Unable to resolve type '{typeName}'.");
 
-        yield return await context.Runtime.Invoker.CreateInstanceAsync(
+        yield return await context.LanguageRuntime.Invoker.CreateInstanceAsync(
             type,
             arguments,
             context.CancellationToken);

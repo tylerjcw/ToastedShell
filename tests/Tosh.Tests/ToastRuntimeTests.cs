@@ -1,5 +1,6 @@
 using Tosh.Language;
 using Tosh.Runtime;
+using Tosh.Stdlib.Clr;
 
 namespace Tosh.Tests;
 
@@ -155,6 +156,21 @@ public sealed class ToastRuntimeTests
         {
             Environment.SetEnvironmentVariable(variableName, null);
         }
+    }
+
+    [Fact]
+    public async Task Language_level_clr_commands_run_without_a_shell_runtime()
+    {
+        var language = new ToastRuntime();
+        language.Commands.RegisterOrReplace(new NewObjectCommand());
+        language.Commands.RegisterOrReplace(new CallCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync(
+            "new System.Text.StringBuilder hello | call Append \" world\" | call ToString");
+
+        Assert.Equal("hello world", Assert.Single(results));
+        Assert.Null(engine.ShellRuntime);
     }
 
     [Fact]

@@ -33,7 +33,7 @@ public sealed class CallCommand : ShellCommand
                     throw new InvalidOperationException("Cannot invoke an instance method on null.");
                 }
 
-                var instanceInvocation = await context.Runtime.Invoker.InvokeInstanceMethodAsync(
+                var instanceInvocation = await context.LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
                     enumerator.Current,
                     methodName,
                     methodArguments,
@@ -50,7 +50,7 @@ public sealed class CallCommand : ShellCommand
         var method = CommandArguments.RequireString(context.Arguments, parsedTypeName.ConsumedArgumentCount, "method name");
         var type = context.TypeResolver.Resolve(typeName)
                    ?? throw new InvalidOperationException($"Unable to resolve type '{typeName}'.");
-        var staticInvocation = await context.Runtime.Invoker.InvokeStaticMethodAsync(
+        var staticInvocation = await context.LanguageRuntime.Invoker.InvokeStaticMethodAsync(
             type,
             method,
             CommandArguments.Slice(context.Arguments, parsedTypeName.ConsumedArgumentCount + 1),

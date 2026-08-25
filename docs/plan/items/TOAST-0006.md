@@ -248,6 +248,11 @@ The runtime helpers shared by pipeline, aggregation, path and reflection command
 `ToshRuntime`; the remaining `CommandContext.Runtime` callers are commands in `Tosh.Stdlib`
 and can now be divided according to the standard-library boundary in `TOAST-0007`.
 
+That command migration has begun at its cleanest edge: the CLR command group now resolves
+declared types and invokes or constructs values solely through `LanguageRuntime`. A test
+registers its legacy `new` and `call` commands on a standalone `ToastRuntime` and runs the
+pipeline without constructing a shell runtime.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

@@ -27,7 +27,7 @@ public sealed class CallMethodCommand : ShellCommand
             target = textLine.Text;
         }
 
-        var invocation = await context.Runtime.Invoker.InvokeInstanceMethodAsync(
+        var invocation = await context.LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
             target,
             methodName,
             methodArgs,

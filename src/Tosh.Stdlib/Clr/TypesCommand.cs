@@ -39,7 +39,7 @@ public sealed class TypesCommand : ShellCommand
             .Select(ReflectionMetadataUtilities.CreateTypeProjection)
             .Cast<object?>();
 
-        var shellResults = context.Runtime.Classes
+        var shellResults = context.LanguageRuntime.Classes
             .Where(entry => entry.Value is IShellTypeDescriptor)
             .GroupBy(entry => ((IShellTypeDescriptor)entry.Value!).ShellFullName, StringComparer.OrdinalIgnoreCase)
             .Select(group =>
