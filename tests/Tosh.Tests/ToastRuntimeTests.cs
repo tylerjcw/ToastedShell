@@ -1,6 +1,7 @@
 using Tosh.Language;
 using Tosh.Runtime;
 using Tosh.Stdlib.Clr;
+using Tosh.Stdlib.Time;
 
 namespace Tosh.Tests;
 
@@ -170,6 +171,20 @@ public sealed class ToastRuntimeTests
             "new System.Text.StringBuilder hello | call Append \" world\" | call ToString");
 
         Assert.Equal("hello world", Assert.Single(results));
+        Assert.Null(engine.ShellRuntime);
+    }
+
+    [Fact]
+    public async Task The_time_command_runs_a_language_block_without_a_shell_runtime()
+    {
+        var language = new ToastRuntime();
+        language.Commands.RegisterOrReplace(new TimeCommand());
+        var engine = new ToshEngine(language);
+
+        var results = await engine.ExecuteToListAsync("time { 1 + 2 }");
+
+        Assert.Equal(3, results[0]);
+        Assert.IsType<CommandTimingInfo>(results[1]);
         Assert.Null(engine.ShellRuntime);
     }
 

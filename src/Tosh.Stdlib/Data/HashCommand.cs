@@ -22,7 +22,9 @@ public sealed class HashCommand : ShellCommand
             ? context.Arguments[0]?.ToString() ?? "sha256"
             : "sha256";
         var startIndex = context.Arguments.Count > 0 && !LooksLikePath(context.Arguments[0]?.ToString()) ? 1 : 0;
-        var explicitPaths = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, context.Arguments.Skip(startIndex).ToArray());
+        var explicitPaths = ShellPathArguments.ExpandMany(
+            context.LanguageRuntime.CurrentDirectory,
+            context.Arguments.Skip(startIndex).ToArray());
 
         if (explicitPaths.Count > 0)
         {

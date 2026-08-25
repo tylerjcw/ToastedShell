@@ -66,7 +66,7 @@ public sealed class TimeCommand : ShellCommand
 
         if (target is ShellBlock block)
         {
-            var executor = context.Runtime.BlockExecutor
+            var executor = context.BlockExecutor ?? context.LanguageRuntime.BlockExecutor
                 ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
 
             await foreach (var value in executor.ExecuteAsync(
@@ -84,15 +84,7 @@ public sealed class TimeCommand : ShellCommand
         if (target is IShellCallable callable)
         {
             var forwardArgs = context.Arguments.Skip(1).ToList();
-            var innerContext = new CommandContext(
-                context.Runtime,
-                context.Input,
-                forwardArgs,
-                context.CancellationToken,
-                context.Invocation,
-                context.IsPipelined,
-                context.ScopedTypeResolver,
-                context.PipelineExitStatusTracker);
+            var innerContext = context with { Arguments = forwardArgs };
 
             await foreach (var value in callable.InvokeAsync(innerContext)
                                .WithCancellation(context.CancellationToken))
@@ -106,15 +98,7 @@ public sealed class TimeCommand : ShellCommand
         if (target is IShellCommand command)
         {
             var forwardArgs = context.Arguments.Skip(1).ToList();
-            var innerContext = new CommandContext(
-                context.Runtime,
-                context.Input,
-                forwardArgs,
-                context.CancellationToken,
-                context.Invocation,
-                context.IsPipelined,
-                context.ScopedTypeResolver,
-                context.PipelineExitStatusTracker);
+            var innerContext = context with { Arguments = forwardArgs };
 
             await foreach (var value in command.ExecuteAsync(innerContext)
                                .WithCancellation(context.CancellationToken))
@@ -128,15 +112,7 @@ public sealed class TimeCommand : ShellCommand
         if (target is string commandName && context.VisibleCommands.TryGet(commandName, out var resolved))
         {
             var forwardArgs = context.Arguments.Skip(1).ToList();
-            var innerContext = new CommandContext(
-                context.Runtime,
-                context.Input,
-                forwardArgs,
-                context.CancellationToken,
-                context.Invocation,
-                context.IsPipelined,
-                context.ScopedTypeResolver,
-                context.PipelineExitStatusTracker);
+            var innerContext = context with { Arguments = forwardArgs };
 
             await foreach (var value in resolved.ExecuteAsync(innerContext)
                                .WithCancellation(context.CancellationToken))

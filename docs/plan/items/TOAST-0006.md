@@ -253,6 +253,10 @@ declared types and invokes or constructs values solely through `LanguageRuntime`
 registers its legacy `new` and `call` commands on a standalone `ToastRuntime` and runs the
 pipeline without constructing a shell runtime.
 
+The language-level `hash` path and `time` block execution follow the same boundary. `time`
+also clones the caller's command context when forwarding instead of reconstructing a
+shell-only context and dropping scoped services; its standalone-runtime block path is pinned.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
