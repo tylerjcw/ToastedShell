@@ -871,7 +871,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Type_of_returns_the_runtime_type_for_each_object()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo 42 true hello | type-of");
 
@@ -885,7 +885,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Date_and_timespan_commands_return_typed_temporal_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var dateResults = await engine.ExecuteToListAsync("date parse 2026-03-23T14:05:00Z | type-of");
         var spanResults = await engine.ExecuteToListAsync("timespan 1w2d4h5m23s | type-of");
@@ -899,7 +899,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Date_command_and_cast_can_extract_dateonly_and_timeonly_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var dateOnlyCommandResults = await engine.ExecuteToListAsync("date date-only 2026-03-23T14:05:00Z | type-of");
         var timeOnlyCommandResults = await engine.ExecuteToListAsync("date time-only 2026-03-23T14:05:00Z | type-of");
@@ -920,7 +920,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Operator_expressions_can_produce_typed_date_results()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo ((date now) - (timespan 2d)) | type-of");
 
@@ -930,7 +930,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Bare_temporal_literals_can_bind_typed_expression_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var spanResults = await engine.ExecuteToListAsync("var span = 2d\necho $span | type-of");
         var dateResults = await engine.ExecuteToListAsync("var dt = 2026-03-25\necho $dt | type-of");
@@ -944,7 +944,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Bare_ip_literals_can_bind_typed_expression_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ipv4Results = await engine.ExecuteToListAsync("var loopback = 127.0.0.1\necho $loopback | type-of");
         var ipv6Results = await engine.ExecuteToListAsync("var loopback6 = ::1\necho $loopback6 | type-of");
@@ -956,7 +956,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Typed_ipaddress_parameters_accept_string_arguments()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             "func family(address: ipaddress) { echo $address }\nfamily \"127.0.0.1\" | type-of");
@@ -967,7 +967,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Date_command_accepts_direct_iso_values_and_calendar_arithmetic()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var parsedResults = await engine.ExecuteToListAsync("date 2026-03-25T14:05:00Z | type-of");
         var shiftedResults = await engine.ExecuteToListAsync("var next = ((date 2026-01-31) + 1mo)\necho $next.Month $next.Day");
@@ -979,7 +979,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Can_construct_and_invoke_dotnet_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("new System.Text.StringBuilder hello | call Append world | call ToString");
 
@@ -1131,7 +1131,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Fluent_expressions_can_start_with_new_object_construction()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo new System.Text.StringBuilder(\"hello\").Append(\" world\").Length");
 
@@ -1141,7 +1141,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Literal_method_call_expressions_can_transform_strings()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo \"Hello\".ToLower()");
 
@@ -1151,7 +1151,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Static_method_call_expressions_can_use_list_literals()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo String.Join(\" \", [\"Hello\", \"World\"]).ToLower()");
 
@@ -1161,7 +1161,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Static_member_access_expressions_can_resolve_dotnet_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var nowTypeResults = await engine.ExecuteToListAsync("echo DateTime.Now | type-of");
         var emptyLengthResults = await engine.ExecuteToListAsync("echo String.Empty.Length");
@@ -1173,7 +1173,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Static_member_access_can_chain_into_instance_method_calls()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo DateTime.Now.AddDays(-2) | type-of");
 
@@ -1183,7 +1183,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Static_method_call_expressions_support_params_array_overloads()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo String.Join(\" \", \"Hello\", \"World\")");
 
@@ -1193,7 +1193,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Get_can_project_multiple_members_into_queryable_shell_records()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var projectedResults = await engine.ExecuteToListAsync(
             "echo new Tosh.Runtime.ProcessInfo(2, \"large\", false, null, null, 4096, null, null) new Tosh.Runtime.ProcessInfo(1, \"small\", false, null, null, 1024, null, null) | get { Name, PID, Memory }");
@@ -1213,7 +1213,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Member_assignment_can_update_expando_members()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("using System.Dynamic; var person = new ExpandoObject(); $person.Name = \"toast\"; $person.Age = 7");
         var results = await engine.ExecuteToListAsync("echo $person | get { Name, Age }");
@@ -1226,7 +1226,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Bare_var_declaration_can_materialize_expando_on_first_member_assignment()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var person\n$person.Name = \"komrad\"\n$person.Uid = 1000");
         var results = await engine.ExecuteToListAsync("echo $person | get { Name, Uid }");
@@ -1239,7 +1239,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Allocated_variables_can_be_assigned_with_dollar_prefixed_syntax()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var address\n$address = \"123 Somewhere St.\"");
         var results = await engine.ExecuteToListAsync("echo $address");
@@ -1250,7 +1250,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Member_assignment_can_materialize_nested_expando_paths()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var person\n$person.Name.First = \"Komrad\"\n$person.Name.Last = \"Toast\"");
         var results = await engine.ExecuteToListAsync("echo $person | get { Name.First, Name.Last }");
@@ -1263,7 +1263,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Record_literals_create_expando_records()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var kitty = {| Name = \"Loki\", Age = \"1y2m\" |}");
         var results = await engine.ExecuteToListAsync("echo $kitty | get { Name, Age }");
@@ -1276,7 +1276,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Array_literals_create_dotnet_arrays()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var items = [\"one\", \"two\"]");
         var results = await engine.ExecuteToListAsync("echo $items.Length\ntype-of $items | get Name");
@@ -1288,7 +1288,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Built_in_collection_type_aliases_construct_shell_friendly_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1336,7 +1336,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Generic_shell_collection_aliases_support_angle_bracket_construction_and_casting()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1366,7 +1366,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Command_style_new_and_types_surface_shell_collection_types()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1382,7 +1382,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Command_style_new_supports_unquoted_generic_clr_type_names()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1398,7 +1398,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Constructors_command_surfaces_implicit_default_constructor_for_value_types()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1411,7 +1411,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Ternary_operator_selects_branches_lazily_and_binds_looser_than_null_coalescing()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1429,7 +1429,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Method_calls_can_materialize_missing_record_list_members()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var person\nvar kitty = {| Name = \"Loki\" |}\n$person.Pets.Add($kitty)");
         var countResults = await engine.ExecuteToListAsync("echo $person.Pets.Count");
@@ -1442,7 +1442,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Member_assignment_can_update_settable_clr_properties()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var builder = new System.Text.StringBuilder(\"toast\"); $builder.Length = 2");
         var results = await engine.ExecuteToListAsync("echo $builder.ToString()");
@@ -1457,7 +1457,7 @@ public sealed class EngineTests
         // `B.S = 5` are one shape, and only the engine can say which is which — so the hint is
         // raised where the *read* of the same spelling has always raised it. See
         // StaticMemberAssignmentTests for the pair.
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var person = {| Name = \"ada\" |}");
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
@@ -1471,7 +1471,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Runtime_suggests_dollar_prefixed_variable_references_when_a_variable_name_is_used_as_a_command()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var person = {| Name = \"toast\" |}");
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("person.Name"));
@@ -1496,7 +1496,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Wrapper_functions_can_forward_all_call_arguments_to_the_wrapped_command()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             func test1(a, b, c) {
@@ -1530,7 +1530,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Wrapper_functions_can_bind_implicit_positional_parameters_from_the_arrow_body()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             func test1(a, b, c) {
@@ -1563,7 +1563,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Functions_can_convert_emitted_values_to_a_declared_return_type()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func stringifyCount() -> String { count }");
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | stringifyCount");
@@ -1574,7 +1574,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Return_exits_functions_early_with_a_value()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func choose() { return \"done\"; echo never }");
         var results = await engine.ExecuteToListAsync("choose");
@@ -1585,7 +1585,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Return_can_forward_pipeline_values_from_the_current_function_input()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func names() { return get Name }");
         var results = await engine.ExecuteToListAsync("ls -la | first 2 | names");
@@ -1597,7 +1597,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Return_without_a_value_stops_function_execution()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func stop() { return; echo never }");
         var results = await engine.ExecuteToListAsync("stop");
@@ -1608,7 +1608,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Each_executes_a_block_for_each_input_object()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo Hello World | each { _.ToLower() }");
 
@@ -1621,7 +1621,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Return_inside_each_blocks_exits_the_enclosing_function()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func firstLower() { echo Hello World | each { return _.ToLower() }; echo never }");
         var results = await engine.ExecuteToListAsync("firstLower");
@@ -1632,7 +1632,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Each_blocks_support_continue()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo one skip two | each { if ((_ == skip)) { continue }; echo _ }");
 
@@ -1642,7 +1642,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Each_blocks_support_break()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo one two three | each { echo _; break }");
 
@@ -1652,7 +1652,7 @@ public sealed class EngineTests
     [Fact]
     public async Task If_statements_execute_the_true_branch_when_the_condition_is_true()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("if (\"Hello\".Contains(\"H\")) { echo yes }");
 
@@ -1662,7 +1662,7 @@ public sealed class EngineTests
     [Fact]
     public async Task If_statements_execute_else_if_and_else_branches()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("if (false) { echo no } else if (true) { echo yes } else { echo never }");
 
@@ -1687,7 +1687,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Command_substitution_captures_shell_text_output()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo $(/bin/echo hello)");
 
@@ -1697,7 +1697,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Command_substitution_joins_multiple_values_with_newlines()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -1711,7 +1711,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Command_substitution_works_inside_interpolated_strings()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo $\"value: {$(/bin/echo hello)}\"");
 
@@ -1721,7 +1721,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Input_process_substitution_materializes_a_temp_file()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("var path = <(echo alpha beta)\n$path | type-of");
 
@@ -1732,7 +1732,7 @@ public sealed class EngineTests
     [Fact]
     public async Task For_loops_iterate_pipeline_sources_and_bind_loop_variables()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("for item in (echo one two three | first 2) { echo $item }");
 
@@ -1742,7 +1742,7 @@ public sealed class EngineTests
     [Fact]
     public async Task For_loops_support_continue_and_break()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var continueResults = await engine.ExecuteToListAsync(
             "for item in (echo one skip two) { if (($item == skip)) { continue }; echo $item }");
@@ -1756,7 +1756,7 @@ public sealed class EngineTests
     [Fact]
     public async Task For_loops_enumerate_single_collection_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""
             var items = new list("one", "two", "three")
@@ -1769,7 +1769,7 @@ public sealed class EngineTests
     [Fact]
     public async Task For_loops_use_tosh_class_enumeration_hooks()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""
             class Basket {
@@ -1818,7 +1818,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Try_catch_finally_and_throw_work_together()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("try { throw \"boom\" } catch (err) { echo $err } finally { echo done }");
 
@@ -1828,7 +1828,7 @@ public sealed class EngineTests
     [Fact]
     public async Task User_class_extending_Error_can_be_thrown_and_caught_with_pattern_match()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""
             class HttpError(status, url) extends Error {
@@ -1852,7 +1852,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Uncaught_user_error_surfaces_through_diagnostic_renderer()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("""
             class HttpError(status) extends Error {
@@ -1869,7 +1869,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Uncaught_user_error_maps_diagnostic_footer_properties()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("""
             class ArgumentError(message: string) extends Error {
@@ -1895,7 +1895,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Plain_string_throws_still_produce_runtime_throw_diagnostic()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("throw \"boom\""));
 
@@ -1907,7 +1907,7 @@ public sealed class EngineTests
     [Fact]
     public async Task User_thrown_ToshError_subclass_can_be_caught_by_concrete_type_from_csharp()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         // Define the type in tosh, then trigger a throw and observe the
         // raw CLR exception type — it must be the user's class, not a
@@ -1933,7 +1933,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Switch_statements_match_the_first_equal_case()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var kind = \"file\"");
         var fileResults = await engine.ExecuteToListAsync("switch ($kind) { case file { echo file } case dir { echo dir } default { echo other } }");
@@ -1947,7 +1947,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Match_expressions_select_ordered_arms_support_guards_and_require_default_for_exhaustiveness()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("var kind = \"file\"");
         var fileResults = await engine.ExecuteToListAsync("echo (match ($kind) { file => \"file\"; dir => \"dir\"; default => \"other\" })");
@@ -1968,7 +1968,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Operators_support_modulo_membership_and_regex_matching()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var moduloResults = await engine.ExecuteToListAsync("echo (10 % 3)");
         var inResults = await engine.ExecuteToListAsync("echo (komrad in [root, komrad])");
@@ -1988,7 +1988,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Break_and_continue_outside_loops_raise_diagnostics()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var breakException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("break"));
         var continueException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("continue"));
@@ -2014,7 +2014,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Untouched_dotnet_types_can_be_constructed_and_invoked_fluently()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var typeResults = await engine.ExecuteToListAsync("echo new System.Random().Next() | type-of");
         var valueResults = await engine.ExecuteToListAsync("echo new System.Random().Next(1, 10)");
@@ -2032,7 +2032,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Using_aliases_can_resolve_namespace_prefixed_dotnet_types()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("using System.IO = IO\necho IO.Path.DirectorySeparatorChar");
 
@@ -2042,16 +2042,16 @@ public sealed class EngineTests
     [Fact]
     public async Task Using_imports_enable_static_method_access_for_framework_types_from_runtime_assemblies()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var importedResults = await engine.ExecuteToListAsync("using System.IO\necho DriveInfo.GetDrives() | type-of");
         var qualifiedResults = await engine.ExecuteToListAsync("echo System.IO.DriveInfo.GetDrives() | type-of");
         var rawPipelineResults = await engine.ExecuteToListAsync("using System.IO\nDriveInfo.GetDrives() | type-of");
         var flattenedResults = await engine.ExecuteToListAsync("using System.IO\nDriveInfo.GetDrives() | each { _ } | type-of");
 
-        Assert.Collection(importedResults, item => Assert.Equal("array<System.IO.DriveInfo>", engine.Runtime.ObjectAccessor.GetValue(item, "Name")));
-        Assert.Collection(qualifiedResults, item => Assert.Equal("array<System.IO.DriveInfo>", engine.Runtime.ObjectAccessor.GetValue(item, "Name")));
-        Assert.Collection(rawPipelineResults, item => Assert.Equal("array<System.IO.DriveInfo>", engine.Runtime.ObjectAccessor.GetValue(item, "Name")));
+        Assert.Collection(importedResults, item => Assert.Equal("array<System.IO.DriveInfo>", engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name")));
+        Assert.Collection(qualifiedResults, item => Assert.Equal("array<System.IO.DriveInfo>", engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name")));
+        Assert.Collection(rawPipelineResults, item => Assert.Equal("array<System.IO.DriveInfo>", engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name")));
         Assert.NotEmpty(flattenedResults);
         Assert.All(flattenedResults, item => Assert.Equal(typeof(DriveInfo), item));
     }
@@ -2059,17 +2059,17 @@ public sealed class EngineTests
     [Fact]
     public async Task Variable_assignments_preserve_raw_clr_collection_results()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("using System.IO\nvar di = DriveInfo.GetDrives()\necho $di | type-of");
 
-        Assert.Collection(results, item => Assert.Equal("array<System.IO.DriveInfo>", engine.Runtime.ObjectAccessor.GetValue(item, "Name")));
+        Assert.Collection(results, item => Assert.Equal("array<System.IO.DriveInfo>", engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name")));
     }
 
     [Fact]
     public async Task Subexpressions_preserve_raw_clr_collection_results_for_member_access()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("using System.IO\necho (DriveInfo.GetDrives()).Length");
 
@@ -2203,7 +2203,7 @@ public sealed class EngineTests
     [Fact]
     public async Task First_returns_the_first_object_or_first_n_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var single = await engine.ExecuteToListAsync("echo one two three | first");
         var many = await engine.ExecuteToListAsync("echo one two three | first 2");
@@ -2215,7 +2215,7 @@ public sealed class EngineTests
     [Fact]
     public async Task First_reads_a_spread_collection_as_pipeline_items()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var singleArray = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | first");
         var nestedArray = await engine.ExecuteToListAsync("echo ...[[1, 2], [3, 4]] | first");
@@ -2235,7 +2235,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Get_index_reads_a_spread_collection_as_pipeline_items()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var indexResult = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | get 0");
         var firstPipelineRow = await engine.ExecuteToListAsync("echo [1, 2] [3, 4] | get 0");
@@ -2250,7 +2250,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Row_oriented_commands_read_a_spread_collection_as_pipeline_items()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var filtered = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | where { _ > 1 }");
         var sorted = await engine.ExecuteToListAsync("echo ...[3, 1, 2] | sort");
@@ -2264,7 +2264,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Last_returns_the_last_object_or_last_n_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var single = await engine.ExecuteToListAsync("echo one two three | last");
         var many = await engine.ExecuteToListAsync("echo one two three | last 2");
@@ -2276,7 +2276,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Skip_skips_the_first_object_or_first_n_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var single = await engine.ExecuteToListAsync("echo one two three | skip");
         var many = await engine.ExecuteToListAsync("echo one two three | skip 2");
@@ -2306,7 +2306,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Reverse_reorders_arbitrary_pipeline_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo one two three | reverse");
 
@@ -2335,7 +2335,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Ps_returns_tosh_process_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var typeResults = await engine.ExecuteToListAsync("ps | first | type-of");
         var idResults = await engine.ExecuteToListAsync("ps | first | get Id | type-of");
@@ -2347,7 +2347,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Process_info_exposes_memory_as_a_queryable_member()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo new Tosh.Runtime.ProcessInfo(1, \"proc\", false, null, null, 2048, null, null) | get Memory");
 
@@ -2357,7 +2357,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Env_returns_environment_variable_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var nameResults = await engine.ExecuteToListAsync("env PATH | get Name");
         var setResults = await engine.ExecuteToListAsync("env PATH | get IsSet");
@@ -2376,7 +2376,7 @@ public sealed class EngineTests
 
         try
         {
-            var engine = new ToshEngine();
+            var engine = ShellEngine.CreateFullShell();
 
             var results = await engine.ExecuteToListAsync($"echo $env.{variableName}");
 
@@ -2394,7 +2394,7 @@ public sealed class EngineTests
         const string variableName = "TOSH_ENV_NAMESPACE_MISSING_TEST";
         Environment.SetEnvironmentVariable(variableName, null);
 
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync($"echo $env.{variableName}");
 
@@ -2404,7 +2404,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Which_returns_builtin_command_resolutions()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var kindResults = await engine.ExecuteToListAsync("which help | get Kind");
         var usageResults = await engine.ExecuteToListAsync("whence help | get Usage");
@@ -2416,7 +2416,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Which_can_resolve_wrapper_and_block_functions()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func ll => ls -la");
         await engine.ExecuteToListAsync("func recent(days: TimeSpan) { ls -la | where _.Modified > ((date now) - $days) }");
@@ -2550,7 +2550,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Command_arguments_support_splatting()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -2631,7 +2631,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Newline_separated_top_level_statements_can_chain_into_get_after_an_earlier_statement()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("func ll => ls -la\nwhich ll | get Kind");
 
@@ -2641,7 +2641,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Newline_separated_block_statements_execute_inside_each_blocks()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -2657,7 +2657,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Return_exits_top_level_scripts_early()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo before\nreturn \"done\"\necho after");
 
@@ -2667,7 +2667,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Sort_by_alias_can_sort_objects_by_visible_process_members()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             "echo new Tosh.Runtime.ProcessInfo(1, \"large\", false, null, null, 4096, null, null) new Tosh.Runtime.ProcessInfo(2, \"small\", false, null, null, 1024, null, null) | sort-by Memory | get Name");
@@ -3023,7 +3023,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Inspect_returns_object_inspection_for_piped_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("new System.Text.StringBuilder hello | inspect");
 
@@ -3039,7 +3039,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Class_primary_constructor_initializes_properties_and_renders_public_members()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3054,9 +3054,9 @@ public sealed class EngineTests
             """);
 
         var instance = Assert.IsType<ToshClassInstance>(Assert.Single(results));
-        Assert.Equal("Bread", engine.Runtime.ObjectAccessor.GetValue(instance, "Name"));
-        Assert.Equal(2, engine.Runtime.ObjectAccessor.GetValue(instance, "Quantity"));
-        Assert.Equal("Food", engine.Runtime.ObjectAccessor.GetValue(instance, "Category"));
+        Assert.Equal("Bread", engine.LanguageRuntime.ObjectAccessor.GetValue(instance, "Name"));
+        Assert.Equal(2, engine.LanguageRuntime.ObjectAccessor.GetValue(instance, "Quantity"));
+        Assert.Equal("Food", engine.LanguageRuntime.ObjectAccessor.GetValue(instance, "Category"));
 
         var rendered = engine.Runtime.Display.RenderMany(results);
         Assert.Contains("Name", rendered, StringComparison.Ordinal);
@@ -3067,7 +3067,7 @@ public sealed class EngineTests
     [Fact]
     public async Task New_expression_can_construct_tosh_classes()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3089,7 +3089,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Typed_constructor_parameters_do_not_silently_round_fractional_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -3106,7 +3106,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Bare_type_invocation_requires_new_for_clr_and_tosh_types()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var clrException = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -3135,7 +3135,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Class_static_methods_support_custom_return_types_and_instance_methods()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3163,7 +3163,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Type_of_returns_tosh_class_descriptors_for_user_classes()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3186,7 +3186,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Describe_type_members_methods_and_constructors_understand_tosh_classes()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync(
             """
@@ -3218,26 +3218,26 @@ public sealed class EngineTests
         var methodResults = await engine.ExecuteToListAsync("methods Item");
         var constructorResults = await engine.ExecuteToListAsync("constructors Item");
 
-        Assert.Equal("Item", engine.Runtime.ObjectAccessor.GetValue(Assert.Single(describeResults), "Name"));
-        Assert.Equal("ToSh", engine.Runtime.ObjectAccessor.GetValue(describeResults[0], "Assembly"));
+        Assert.Equal("Item", engine.LanguageRuntime.ObjectAccessor.GetValue(Assert.Single(describeResults), "Name"));
+        Assert.Equal("ToSh", engine.LanguageRuntime.ObjectAccessor.GetValue(describeResults[0], "Assembly"));
 
-        Assert.Contains(memberResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Name"), "Name"));
-        Assert.Contains(memberResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Name"), "IsLowStock"));
-        Assert.DoesNotContain(memberResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Name"), "InternalName"));
+        Assert.Contains(memberResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name"), "Name"));
+        Assert.Contains(memberResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name"), "IsLowStock"));
+        Assert.DoesNotContain(memberResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name"), "InternalName"));
 
-        Assert.Contains(methodResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Name"), "named"));
-        Assert.Contains(methodResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Name"), "describe"));
-        Assert.DoesNotContain(methodResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Name"), "is_low_stock"));
+        Assert.Contains(methodResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name"), "named"));
+        Assert.Contains(methodResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name"), "describe"));
+        Assert.DoesNotContain(methodResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Name"), "is_low_stock"));
 
         Assert.Equal(2, constructorResults.Count);
-        Assert.Contains(constructorResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Signature"), "Item()"));
-        Assert.Contains(constructorResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Signature"), "Item(name: string, quantity: int, category: string)"));
+        Assert.Contains(constructorResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Signature"), "Item()"));
+        Assert.Contains(constructorResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Signature"), "Item(name: string, quantity: int, category: string)"));
     }
 
     [Fact]
     public async Task Helper_introspection_commands_understand_tosh_class_instances_and_descriptors()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync(
             """
@@ -3288,14 +3288,14 @@ public sealed class EngineTests
         Assert.Equal(false, Assert.Single(hasHiddenInstanceMethodResults));
         Assert.Equal(true, Assert.Single(hasStaticMethodResults));
 
-        Assert.Contains(constructorResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Signature"), "Item()"));
-        Assert.Contains(constructorResults, item => Equals(engine.Runtime.ObjectAccessor.GetValue(item, "Signature"), "Item(name: string, quantity: int, category: string)"));
+        Assert.Contains(constructorResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Signature"), "Item()"));
+        Assert.Contains(constructorResults, item => Equals(engine.LanguageRuntime.ObjectAccessor.GetValue(item, "Signature"), "Item(name: string, quantity: int, category: string)"));
     }
 
     [Fact]
     public async Task Functions_and_command_wrappers_can_consume_pipeline_input()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var functionResults = await engine.ExecuteToListAsync(
             """
@@ -3326,7 +3326,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Flat_input_variable_is_no_longer_available()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync(
             """
@@ -3343,7 +3343,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Reserved_runtime_namespace_name_cannot_be_used_for_functions_or_modules()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var functionException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("func tosh() { }"));
         var moduleException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("module tosh { }"));
@@ -3355,7 +3355,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Reserved_runtime_namespace_name_cannot_be_used_for_parameters_or_loop_variables()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var parameterException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("func demo(tosh) { echo $tosh }"));
         var loopException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("for tosh in (echo 1) { echo $tosh }"));
@@ -3367,7 +3367,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Reserved_runtime_namespace_name_cannot_be_used_for_lambda_parameters()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("var bad = func(env) => $env"));
@@ -3378,7 +3378,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Reserved_env_runtime_namespace_name_cannot_be_used_for_bindings()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var variableException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("var env = 1"));
         var functionException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("func env() { }"));
@@ -3390,7 +3390,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Class_computed_properties_and_shy_members_work_through_this()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync(
             """
@@ -3472,7 +3472,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Class_special_methods_can_override_string_equality_and_hash_behavior()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3509,7 +3509,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Collections_example_runs_successfully()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var examplePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../examples/collections.tosh"));
         var source = await File.ReadAllTextAsync(examplePath);
 
@@ -4108,7 +4108,7 @@ $output");
     [Fact]
     public async Task Drive_info_size_members_are_exposed_as_storage_size_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var driveRoot = System.IO.Path.GetPathRoot(Environment.CurrentDirectory)
                         ?? throw new InvalidOperationException("Unable to determine the current drive root.");
         var escapedDriveRoot = driveRoot
@@ -5062,7 +5062,7 @@ $output");
     [Fact]
     public async Task Rest_parameter_collects_surplus_arguments_with_named_syntax()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             func gather(first, names...) {
@@ -5081,7 +5081,7 @@ $output");
     [Fact]
     public async Task Rest_parameter_collects_surplus_arguments_with_shorthand_syntax()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             func collect(first, ...) {
@@ -5100,7 +5100,7 @@ $output");
     [Fact]
     public async Task Anonymous_expression_lambda_can_be_invoked()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5114,7 +5114,7 @@ $output");
     [Fact]
     public async Task Callable_invocation_postfix_can_invoke_lambda_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5128,7 +5128,7 @@ $output");
     [Fact]
     public async Task Callable_invocation_postfix_supports_currying_chains()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5142,7 +5142,7 @@ $output");
     [Fact]
     public async Task Callable_invocation_postfix_requires_callable_targets()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -5157,7 +5157,7 @@ $output");
     [Fact]
     public async Task Anonymous_block_lambda_can_return_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5182,7 +5182,7 @@ $output");
     [Fact]
     public async Task Anonymous_functions_capture_live_scope_bindings()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5198,7 +5198,7 @@ $output");
     [Fact]
     public async Task Top_level_functions_support_overloading_by_arity()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5219,7 +5219,7 @@ $output");
     [Fact]
     public async Task Top_level_functions_support_overloading_by_type_annotation()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5239,7 +5239,7 @@ $output");
     [Fact]
     public async Task Top_level_function_overloads_report_ambiguity_for_nullable_null_matches()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -5258,7 +5258,7 @@ $output");
     [Fact]
     public async Task Top_level_function_overloads_report_ambiguity_for_convertible_numeric_matches()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -5277,7 +5277,7 @@ $output");
     [Fact]
     public async Task Top_level_function_redefinition_replaces_matching_overload_signature()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5293,7 +5293,7 @@ $output");
     [Fact]
     public async Task Function_references_invoke_matching_overload()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5314,7 +5314,7 @@ $output");
     [Fact]
     public async Task Class_method_overloads_report_ambiguity_for_nullable_null_matches()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -5335,7 +5335,7 @@ $output");
     [Fact]
     public async Task Class_constructor_overloads_report_ambiguity_for_nullable_null_matches()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -5355,7 +5355,7 @@ $output");
     [Fact]
     public async Task Invoke_requires_a_callable_value()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("invoke 42"));
@@ -5366,7 +5366,7 @@ $output");
     [Fact]
     public async Task Map_supports_callable_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5383,7 +5383,7 @@ $output");
     [Fact]
     public async Task Map_supports_blocks()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5399,7 +5399,7 @@ $output");
     [Fact]
     public async Task Filter_supports_callable_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5415,7 +5415,7 @@ $output");
     [Fact]
     public async Task Filter_supports_blocks()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5431,7 +5431,7 @@ $output");
     [Fact]
     public async Task Reduce_supports_callable_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5444,7 +5444,7 @@ $output");
     [Fact]
     public async Task Reduce_supports_blocks()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5457,7 +5457,7 @@ $output");
     [Fact]
     public async Task Any_all_and_none_support_callable_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var anyResults = await engine.ExecuteToListAsync("echo 1 2 3 | any func(x) => ($x == 2)");
         var allResults = await engine.ExecuteToListAsync("echo 2 4 6 | all func(x) => ((($x % 2) == 0))");
@@ -5471,7 +5471,7 @@ $output");
     [Fact]
     public async Task Existing_pipeline_commands_accept_callable_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var whereResults = await engine.ExecuteToListAsync("echo 1 2 3 4 | where func(x) => ($x > 2)");
         var eachResults = await engine.ExecuteToListAsync("echo one two | each func(x) => ($x.ToUpper())");
@@ -5491,7 +5491,7 @@ $output");
     [Fact]
     public async Task Sort_and_group_by_accept_callable_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var sortResults = await engine.ExecuteToListAsync(
             """
@@ -5516,7 +5516,7 @@ $output");
     [Fact]
     public async Task Partial_binds_leading_arguments()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5531,7 +5531,7 @@ $output");
     [Fact]
     public async Task Curry_accumulates_arguments_until_saturated()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5548,7 +5548,7 @@ $output");
     [Fact]
     public async Task Curry_rejects_non_fixed_arity_callables()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -5566,7 +5566,7 @@ $output");
     [Fact]
     public async Task Rest_parameter_binds_empty_list_when_no_surplus_arguments()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             func f(a, extras...) {
@@ -5584,7 +5584,7 @@ $output");
     [Fact]
     public async Task Function_without_rest_parameter_still_rejects_extra_arguments()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("func strict(a, b) { echo ok }");
 
@@ -5627,7 +5627,7 @@ $output");
     [Fact]
     public async Task Static_method_with_args_returns_class_instance()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             export class Greeter {
@@ -5647,7 +5647,7 @@ $output");
     [Fact]
     public async Task Static_method_without_args_gives_overload_error()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             export class Greeter {
@@ -5669,7 +5669,7 @@ $output");
     [Fact]
     public async Task Static_member_access_without_parens_gives_helpful_error()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await engine.ExecuteToListAsync("""
             export class Greeter {
@@ -5694,7 +5694,7 @@ $output");
     [Fact]
     public async Task Distinct_expands_a_spread_collection()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo ...[3,1,4,1,5,9] | distinct | count");
 
@@ -5704,7 +5704,7 @@ $output");
     [Fact]
     public async Task Reverse_expands_a_spread_collection()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo ...[1,2,3] | reverse");
 
@@ -5714,7 +5714,7 @@ $output");
     [Fact]
     public async Task Skip_expands_a_spread_collection()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo ...[10,20,30,40] | skip 2");
 
@@ -5724,7 +5724,7 @@ $output");
     [Fact]
     public async Task Each_agrees_with_count_on_a_spread_collection()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var eachCount = await engine.ExecuteToListAsync("echo ...[1,2,3] | each { echo ITEM } | count");
         var directCount = await engine.ExecuteToListAsync("echo ...[1,2,3] | count");
@@ -5736,7 +5736,7 @@ $output");
     [Fact]
     public async Task Try_catch_preserves_pre_exception_output()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""try { echo "before"; throw "err" } catch (e) { echo "caught" }""");
 
@@ -5746,7 +5746,7 @@ $output");
     [Fact]
     public async Task Try_without_exception_yields_all_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""try { echo "a"; echo "b" } catch (e) { echo "nope" }""");
 
@@ -5756,7 +5756,7 @@ $output");
     [Fact]
     public async Task Array_plus_operator_concatenates_collections()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo ([1,2] + [3,4]) | flatten");
 
@@ -5766,7 +5766,7 @@ $output");
     [Fact]
     public async Task Split_empty_delimiter_splits_into_characters()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""echo "hello" | split "" | count""");
 
@@ -5776,7 +5776,7 @@ $output");
     [Fact]
     public async Task If_expression_returns_then_branch_value()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""var x = if (true) { echo 1 } else { echo 2 }; echo $x""");
 
@@ -5786,7 +5786,7 @@ $output");
     [Fact]
     public async Task If_expression_returns_else_branch_value()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""var x = if (false) { echo 1 } else { echo 2 }; echo $x""");
 
@@ -5796,7 +5796,7 @@ $output");
     [Fact]
     public async Task If_expression_supports_else_if_chains()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""var x = if (false) { echo 1 } else if (true) { echo 2 } else { echo 3 }; echo $x""");
 
@@ -5806,7 +5806,7 @@ $output");
     [Fact]
     public async Task If_expression_returns_null_for_empty_block()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""var x = if (true) { } else { echo 2 }; echo $x""");
 
@@ -5816,7 +5816,7 @@ $output");
     [Fact]
     public async Task If_expression_returns_array_for_multiple_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("""var x = if (true) { echo 1; echo 2 } else { echo 3 }; echo $x | flatten""");
 
@@ -5826,7 +5826,7 @@ $output");
     [Fact]
     public async Task Integral_arithmetic_promotes_to_biginteger_on_overflow()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -5848,7 +5848,7 @@ $output");
     [Fact]
     public async Task Fibonacci_sequence_can_grow_past_fixed_width_integral_limits()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """

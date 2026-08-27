@@ -9,7 +9,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task From_json_parses_root_objects_into_expando_records()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var typeResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from json | type-of | get Name");
         var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from json | get { name, size }");
@@ -26,7 +26,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task From_json_preserves_array_roots_until_explicitly_expanded()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var typeResults = await engine.ExecuteToListAsync("echo \"[{\\\"name\\\":\\\"alpha\\\"},{\\\"name\\\":\\\"beta\\\"}]\" | from json | type-of | get Name");
         var expandedResults = await engine.ExecuteToListAsync("echo \"[{\\\"name\\\":\\\"alpha\\\"},{\\\"name\\\":\\\"beta\\\"}]\" | from json | each { _ } | get name");
@@ -38,7 +38,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task From_csv_parses_rows_into_expando_records()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var typeResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | type-of | get Name");
         var expandedResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | each { _ } | get name");
@@ -62,7 +62,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task From_xml_raw_still_yields_an_xdocument()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var typeResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml --raw | type-of");
         var rootNameResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml --raw | get \"Root.Name.LocalName\"");
@@ -74,7 +74,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task Parse_creates_expando_records_from_named_regex_groups()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo \"PID=42 Name=tosh\" | parse \"PID=(?<pid>[0-9]+) Name=(?<name>[A-Za-z]+)\"");
 
@@ -88,7 +88,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task Parse_supports_shared_regex_flags_and_regex_objects()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ignoreCaseResults = await engine.ExecuteToListAsync("echo \"pid=42\" | parse -i \"PID=(?<Pid>[0-9]+)\" | get Pid");
         var regexObjectResults = await engine.ExecuteToListAsync("echo \"PID=42\" | parse (new regex(\"PID=(?<Pid>[0-9]+)\")) | get Pid");
@@ -250,7 +250,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task Summarize_empty_input_returns_no_results()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("echo \"{\\\"x\\\":1}\" | from json | where { false } | summarize");
 
@@ -260,7 +260,7 @@ public sealed class StructuredDataCommandTests
     [Fact]
     public async Task Collect_drains_pipeline_into_a_single_array()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         // echo emits individual scalars within one pipeline; collect buffers them into one array
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | collect");

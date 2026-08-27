@@ -139,7 +139,7 @@ public sealed class ExternalCommandTests
         }
 
         using var _ = new TemporaryPathScope(tempDirectory.Path);
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var visibleResults = await engine.ExecuteToListAsync("which visible-command");
         var hiddenResults = await engine.ExecuteToListAsync("which hidden-command");

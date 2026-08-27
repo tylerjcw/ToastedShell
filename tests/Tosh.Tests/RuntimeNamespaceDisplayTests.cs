@@ -23,7 +23,7 @@ public sealed class RuntimeNamespaceDisplayTests
     [Fact]
     public async Task Piped_tosh_to_json_still_returns_full_snapshot()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync("$tosh | to json");
         var json = string.Join("\n", values.Select(value => value?.ToString() ?? string.Empty));

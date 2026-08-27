@@ -30,7 +30,7 @@ public sealed class DiagnosticRendererTests
     [Fact]
     public void Parser_reports_unterminated_strings_as_structured_diagnostics()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var exception = Assert.Throws<ToshDiagnosticException>(() =>
             engine.EvaluateAsync("echo \"unterminated", "repl_entry #2"));

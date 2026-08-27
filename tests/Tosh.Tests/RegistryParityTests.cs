@@ -19,8 +19,8 @@ public sealed class RegistryParityTests
     [Fact]
     public void Every_concrete_ShellCommand_subclass_is_registered_or_explicitly_opted_out()
     {
-        var engine = new ToshEngine();
-        var registeredTypes = engine.Runtime.Commands.All
+        var engine = ShellEngine.CreateFullShell();
+        var registeredTypes = engine.LanguageRuntime.Commands.All
             .Select(c => c.GetType())
             .ToHashSet();
 
@@ -58,8 +58,8 @@ public sealed class RegistryParityTests
     {
         // Smoke check: the registry isn't unexpectedly empty and a few well-known
         // commands resolve. Cheap sanity guard against accidental wholesale wipes.
-        var engine = new ToshEngine();
-        var registry = engine.Runtime.Commands;
+        var engine = ShellEngine.CreateFullShell();
+        var registry = engine.LanguageRuntime.Commands;
 
         foreach (var name in new[] { "echo", "cd", "ls", "spawn", "scope", "help", "source" })
         {
@@ -75,8 +75,8 @@ public sealed class RegistryParityTests
         // Every alias declared via RegisterAlias must resolve through TryGet to the
         // exact same instance as its canonical command, and the canonical name must be
         // present in registry.All. Catches typo'd canonical names in BuiltInCommands.
-        var engine = new ToshEngine();
-        var registry = engine.Runtime.Commands;
+        var engine = ShellEngine.CreateFullShell();
+        var registry = engine.LanguageRuntime.Commands;
         var canonicalsByName = registry.All.ToDictionary(c => c.Name, StringComparer.Ordinal);
 
         foreach (var (canonical, aliases) in registry.GetAliasMap())
@@ -101,8 +101,8 @@ public sealed class RegistryParityTests
         // Aliases registered with RegisterAlias must surface in the canonical command's
         // help topic Aliases list — that's the user-visible signal that they're real
         // alternative names rather than separate commands.
-        var engine = new ToshEngine();
-        var aliasMap = engine.Runtime.Commands.GetAliasMap();
+        var engine = ShellEngine.CreateFullShell();
+        var aliasMap = engine.LanguageRuntime.Commands.GetAliasMap();
         if (aliasMap.Count == 0) return; // nothing registered, nothing to verify
 
         foreach (var (canonical, aliases) in aliasMap)

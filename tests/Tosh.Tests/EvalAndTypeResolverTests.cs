@@ -15,7 +15,7 @@ public sealed class EvalAndTypeResolverTests
     [Fact]
     public async Task Eval_evaluates_a_literal_expression()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("eval \"1 + 2\"");
 
@@ -25,7 +25,7 @@ public sealed class EvalAndTypeResolverTests
     [Fact]
     public async Task Eval_streams_values_not_strings()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("eval \"System.Drawing.Color.Red\"");
 
@@ -36,7 +36,7 @@ public sealed class EvalAndTypeResolverTests
     [Fact]
     public async Task Eval_runs_in_caller_scope()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync("eval \"var x = 42\"\necho $x");
 
@@ -47,7 +47,7 @@ public sealed class EvalAndTypeResolverTests
     [Fact]
     public async Task Eval_works_inside_each_with_interpolated_member_path()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             "[\"Red\", \"Lime\", \"LightBlue\"] | each { eval $\"System.Drawing.Color.{$_}\" }");
@@ -62,7 +62,7 @@ public sealed class EvalAndTypeResolverTests
     [Fact]
     public async Task Eval_requires_at_least_one_argument()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAnyAsync<Exception>(
             async () => await engine.ExecuteToListAsync("eval"));

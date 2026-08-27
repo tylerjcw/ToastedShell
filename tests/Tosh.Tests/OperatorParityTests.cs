@@ -29,7 +29,7 @@ public sealed class OperatorParityTests
             string.Join(", ", binaryOps));
 
         var problems = new List<string>();
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         foreach (var op in binaryOps)
         {
@@ -85,7 +85,7 @@ public sealed class OperatorParityTests
             new[] { "+", "-", "bnot", "not" },
             unaryOps.OrderBy(o => o, StringComparer.Ordinal).ToArray());
 
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         foreach (var (probe, expected) in new[]
                  {

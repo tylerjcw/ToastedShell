@@ -10,7 +10,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_with_first()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("1.. | first 5");
         Assert.Equal(new object[] { 1, 2, 3, 4, 5 }, results);
     }
@@ -18,7 +18,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_with_step_and_first()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("0..2.. | first 5");
         Assert.Equal(new object[] { 0, 2, 4, 6, 8 }, results);
     }
@@ -26,7 +26,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_in_variable()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("var nums = 1..; $nums | first 3");
         Assert.Equal(new object[] { 1, 2, 3 }, results);
     }
@@ -34,7 +34,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_with_where_and_first()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("1.. | where { _ % 2 == 0 } | first 4");
         Assert.Equal(new object[] { 2, 4, 6, 8 }, results);
     }
@@ -42,7 +42,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_with_take_while()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("1.. | take-while { _ < 6 }");
         Assert.Equal(new object[] { 1, 2, 3, 4, 5 }, results);
     }
@@ -64,7 +64,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_in_list_comprehension()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("echo [$x * $x <| for x in 1..10]");
         Assert.Single(results);
         var array = Assert.IsType<int[]>(results[0]);
@@ -74,7 +74,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Finite_range_still_works()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("1..5 | each { $_ * 2 }");
         Assert.Equal(new object[] { 2, 4, 6, 8, 10 }, results);
     }
@@ -82,7 +82,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_match_pattern()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("match (42) { 1..100 => \"in range\"; default => \"out\" }");
         Assert.Single(results);
         Assert.Equal("in range", results[0]);
@@ -133,7 +133,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Recur_fibonacci()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("recur (0, 1) func(a, b) => ($a + $b) | first 10");
         Assert.Equal(new object[] { 0, 1, 1, 2, 3, 5, 8, 13, 21, 34 }, results);
     }
@@ -141,7 +141,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Recur_tribonacci()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("recur (0, 0, 1) func(a, b, c) => ($a + $b + $c) | first 8");
         Assert.Equal(new object[] { 0, 0, 1, 1, 2, 4, 7, 13 }, results);
     }
@@ -149,7 +149,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Recur_single_seed()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("recur 1 func(x) => ($x * 2) | first 5");
         Assert.Equal(new object[] { 1, 2, 4, 8, 16 }, results);
     }
@@ -157,7 +157,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Recur_with_block()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         // Blocks receive _ as the window list for multi-seed
         var results = await engine.ExecuteToListAsync("recur (1, 1) { $_[0] + $_[1] } | first 7");
         Assert.Equal(new object[] { 1, 1, 2, 3, 5, 8, 13 }, results);
@@ -168,7 +168,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Iterate_powers_of_2()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("iterate 1 func(x) => ($x * 2) | first 8");
         Assert.Equal(new object[] { 1, 2, 4, 8, 16, 32, 64, 128 }, results);
     }
@@ -178,7 +178,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Generator_comprehension_is_lazy()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("var sq = ($x * $x <| for x in 1..); $sq | first 5");
         Assert.Equal(new object[] { 1, 4, 9, 16, 25 }, results);
     }
@@ -186,7 +186,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Generator_comprehension_with_where_is_lazy()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("var evens = ($x <| for x in 1.. where $x % 3 == 0)\n$evens | first 4");
         Assert.Equal(new object[] { 3, 6, 9, 12 }, results);
     }
@@ -194,7 +194,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Generator_comprehension_finite()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         // Generator comprehension with finite source — still lazy but pipeable
         var results = await engine.ExecuteToListAsync("($x * 10 <| for x in [1, 2, 3]) | each { $_ }");
         Assert.Equal(new object[] { 10, 20, 30 }, results);
@@ -205,7 +205,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Infinite_range_map_first()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("1.. | map { $_ * 3 } | first 4");
         Assert.Equal(new object[] { 3, 6, 9, 12 }, results);
     }
@@ -213,7 +213,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Iterate_with_take_while()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("iterate 1 func(x) => ($x * 2) | take-while { _ <= 64 }");
         Assert.Equal(new object[] { 1, 2, 4, 8, 16, 32, 64 }, results);
     }
@@ -221,7 +221,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Recur_fibonacci_take_while()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("recur (0, 1) func(a, b) => ($a + $b) | take-while { _ < 100 }");
         Assert.Equal(new object[] { 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89 }, results);
     }
@@ -231,7 +231,7 @@ public sealed class LazySequenceTests
     [Fact]
     public async Task Get_open_range_from_pipeline()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("echo a b c d e | get 2..");
         Assert.Equal(new object[] { "c", "d", "e" }, results);
     }

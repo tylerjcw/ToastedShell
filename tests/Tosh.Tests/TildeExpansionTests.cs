@@ -219,7 +219,7 @@ public sealed class TildeExpansionTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         await engine.ExecuteToListAsync("cd ~");
 
-        Assert.Equal(Home, engine.Runtime.CurrentDirectory);
+        Assert.Equal(Home, engine.LanguageRuntime.CurrentDirectory);
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public sealed class TildeExpansionTests
         try
         {
             await engine.ExecuteToListAsync($"cd ~/{Path.GetFileName(probeDirectory)}");
-            Assert.Equal(probeDirectory, engine.Runtime.CurrentDirectory);
+            Assert.Equal(probeDirectory, engine.LanguageRuntime.CurrentDirectory);
         }
         finally
         {
@@ -319,7 +319,7 @@ public sealed class TildeExpansionTests
         engine.Runtime.Config.Shell.AutoCd = true;
         await engine.ExecuteToListAsync("~");
 
-        Assert.Equal(Home, engine.Runtime.CurrentDirectory);
+        Assert.Equal(Home, engine.LanguageRuntime.CurrentDirectory);
     }
 
     [Fact]
@@ -333,7 +333,7 @@ public sealed class TildeExpansionTests
         try
         {
             await engine.ExecuteToListAsync($"~/{Path.GetFileName(probeDirectory)}");
-            Assert.Equal(probeDirectory, engine.Runtime.CurrentDirectory);
+            Assert.Equal(probeDirectory, engine.LanguageRuntime.CurrentDirectory);
         }
         finally
         {

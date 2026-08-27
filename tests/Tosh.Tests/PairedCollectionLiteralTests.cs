@@ -36,7 +36,7 @@ public sealed class PairedCollectionLiteralTests
     [Fact]
     public async Task Paired_literals_evaluate_in_expression_context()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -54,7 +54,7 @@ public sealed class PairedCollectionLiteralTests
     [Fact]
     public async Task Paired_literals_evaluate_as_ordinary_command_arguments()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -76,7 +76,7 @@ public sealed class PairedCollectionLiteralTests
     [Fact]
     public async Task Paired_literals_evaluate_in_parenthesized_context()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -91,7 +91,7 @@ public sealed class PairedCollectionLiteralTests
     [Fact]
     public async Task Literal_closers_support_postfix_access_without_whitespace()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -106,7 +106,7 @@ public sealed class PairedCollectionLiteralTests
     [Fact]
     public async Task Paired_literals_preserve_mixed_nesting_boundaries()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """

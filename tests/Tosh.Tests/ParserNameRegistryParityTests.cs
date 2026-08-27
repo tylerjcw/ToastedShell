@@ -44,8 +44,8 @@ public sealed class ParserNameRegistryParityTests
 
         Assert.NotEmpty(hardcodedNames); // sanity: regex actually matched
 
-        var engine = new ToshEngine();
-        var registry = engine.Runtime.Commands;
+        var engine = ShellEngine.CreateFullShell();
+        var registry = engine.LanguageRuntime.Commands;
 
         // Non-vacuity guard. This is a source scan, so it fails open: if the comparison
         // sites move somewhere the glob does not read, an empty set looks like a clean

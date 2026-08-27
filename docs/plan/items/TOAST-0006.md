@@ -303,6 +303,38 @@ full-shell factory, migrate the compatibility calls, then remove the concrete ty
 language assembly. This revises the earlier strictly sequential `0006`-then-`0007` plan based on
 the boundary exposed by the completed production migration.
 
+## The test compatibility surface is now explicit — 2026-08-26
+
+The measurement recorded above was exact: 343 parameterless `ToshEngine` constructions,
+54 `engine.Runtime` reads, none in shipping code. Both are now resolved as far as they can
+be before the assembly actually moves.
+
+**`new ToshEngine()` meant "the whole shell" only because the compatibility constructor
+builds a `ToshRuntime` when given none** — the language assembly quietly loading the shell,
+which is the thing being removed. The meaning now has a name: `ShellEngine.CreateFullShell()`
+in the test project, migrated across all 343 sites in 20 files. Tests that want the
+*language* still construct from a `ToastRuntime`, so the distinction is visible in the call
+rather than implied by an omitted argument. The suite is bit-identical either side of the
+migration: 6,647 passing before and after.
+
+**Of the 54 `engine.Runtime` reads, 37 were language members read through the shell.**
+`ObjectAccessor` (19), `CurrentDirectory` (4) and most of `Commands` now read
+`engine.LanguageRuntime` directly. Seventeen remain, and they are the genuine shell surface:
+
+| Member | Reads | Why it is shell |
+|---|---:|---|
+| `Config` | 5 | shell configuration |
+| `Commands` | 5 | **`ShellCommandRegistry`, not `ICommandTable`** |
+| `Formatter` | 4 | display |
+| `GetJobs` / `GetJobsSnapshot` | 2 | the job table |
+| `Display` | 1 | display |
+
+That `Commands` row is worth keeping. `ToastRuntime.Commands` is the six-member
+`ICommandTable` decided in 2026-08-17; `ToshRuntime.Commands` is the concrete registry. Five
+doc-and-metadata tests use `Get` and pass the registry by its concrete type, so they need the
+shell's, and the compiler said so rather than the migration hiding it. The interface was
+sized to what the *language* uses, and this is that decision holding.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

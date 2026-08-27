@@ -13,7 +13,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_substitutes_type_parameter_at_property_storage()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -39,7 +39,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_strictly_rejects_constructor_argument_with_mismatched_type()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         // Assigning an integer to a Box<string> must reject under strict
         // no-coercion semantics for type-parameter bindings.
@@ -60,7 +60,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_rejects_constructor_argument_that_cannot_be_converted()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
             await engine.ExecuteToListAsync(
@@ -79,7 +79,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_rejects_wrong_arity_at_instantiation()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await engine.ExecuteToListAsync(
@@ -94,7 +94,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_rejects_empty_angle_bracket_list()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await engine.ExecuteToListAsync(
@@ -109,7 +109,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_requires_type_arguments_when_class_is_generic()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await engine.ExecuteToListAsync(
@@ -124,7 +124,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_inheritance_propagates_concrete_clr_type_through_base_binding()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -148,7 +148,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_inheritance_with_extends_arity_mismatch_throws()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await engine.ExecuteToListAsync(
@@ -169,7 +169,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_method_substitutes_return_type_per_instance()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -192,7 +192,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_method_parameter_type_is_strictly_enforced_at_call_time()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         // Box<string>.set takes a `T` parameter. With strict no-coercion
         // semantics for type-parameter-bound parameters, passing an int
@@ -231,7 +231,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_method_accepts_same_generic_class_parameter()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -251,7 +251,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_user_interface_constraint_accepts_implementing_class()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -273,7 +273,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_user_interface_constraint_rejects_non_implementing_class()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
             await engine.ExecuteToListAsync(
@@ -296,7 +296,7 @@ public sealed class GenericClassTests
     [Fact]
     public async Task Generic_class_user_interface_constraint_accepts_inherited_interface()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var results = await engine.ExecuteToListAsync(
             """

@@ -7,7 +7,7 @@ public sealed class ContainmentSemanticsTests
     [Fact]
     public async Task Strings_use_ordinal_substring_containment()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -23,7 +23,7 @@ public sealed class ContainmentSemanticsTests
     [Fact]
     public async Task Collections_search_elements_without_stringification_false_positives()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -40,7 +40,7 @@ public sealed class ContainmentSemanticsTests
     [Fact]
     public async Task Dictionaries_search_keys_and_not_values()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -57,7 +57,7 @@ public sealed class ContainmentSemanticsTests
     [Fact]
     public async Task Shell_native_sequences_search_their_items()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -86,7 +86,7 @@ public sealed class ContainmentSemanticsTests
     [Fact]
     public async Task Collection_membership_uses_canonical_class_equality()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """

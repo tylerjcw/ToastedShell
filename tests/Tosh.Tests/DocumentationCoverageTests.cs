@@ -212,7 +212,7 @@ public sealed class DocumentationCoverageTests
 
     private static (ShellCommandRegistry registry, IReadOnlyList<CommandMetadata> entries) GetRegistryAndEntries()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var entries = CommandMetadataExporter.BuildMetadata(engine.Runtime.Commands);
         return (engine.Runtime.Commands, entries);
     }

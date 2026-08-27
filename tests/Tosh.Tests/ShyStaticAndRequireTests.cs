@@ -185,14 +185,14 @@ public sealed class ShyStaticAndRequireTests
                 // Half one: without the require, the binder does flag that name.
                 var control = Binder.Bind(
                     engine.Parse("sourcee", "<require-test>"),
-                    engine.Runtime.Commands,
+                    engine.LanguageRuntime.Commands,
                     isExecutableOnPath: _ => false);
                 Assert.Contains(control, d => d.Code == "tosh.bind.unknown_command");
 
                 // Half two: with it, the binder holds back, because it cannot see the import.
                 var bound = Binder.Bind(
                     engine.Parse(withRequire, "<require-test>"),
-                    engine.Runtime.Commands,
+                    engine.LanguageRuntime.Commands,
                     isExecutableOnPath: _ => false);
                 Assert.DoesNotContain(bound, d => d.Code == "tosh.bind.unknown_command");
 

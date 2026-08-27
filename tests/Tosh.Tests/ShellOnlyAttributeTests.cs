@@ -11,7 +11,7 @@ public sealed class ShellOnlyAttributeTests
     [Fact]
     public async Task Shell_only_command_throws_when_engine_is_not_interactive()
     {
-        var engine = new ToshEngine(); // IsInteractiveSession defaults to false
+        var engine = ShellEngine.CreateFullShell(); // IsInteractiveSession defaults to false
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("prompt-time", "<test>"));
@@ -37,7 +37,7 @@ public sealed class ShellOnlyAttributeTests
     [Fact]
     public async Task Shell_only_diagnostic_carries_attribute_help_text()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("history", "<test>"));
@@ -52,7 +52,7 @@ public sealed class ShellOnlyAttributeTests
     {
         // Errors are never suppressible by design (see ToshEngine.IsCodeHushed).
         // An inline `# hush tosh.shell_only` directive must still abort.
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(

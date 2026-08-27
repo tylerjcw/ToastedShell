@@ -11,7 +11,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Simple_rune_executes_body()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune greet(name) {
                 echo $"Hello, {$name}!"
@@ -24,7 +24,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Rune_with_multiple_parameters()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune add(a, b) {
                 echo ($a + $b)
@@ -37,7 +37,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Rune_with_block_argument()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune do-twice(body) {
                 $body
@@ -53,7 +53,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Sealed_rune_does_not_leak_internal_variables()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync("""
@@ -69,7 +69,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Leaky_rune_exposes_internal_variables()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             leaky rune set-var() {
                 var leaked = 42
@@ -85,7 +85,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Quote_captures_source_text()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune show-source(expr) {
                 var src = (quote { $expr })
@@ -102,7 +102,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Rune_receives_pipeline_input()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune pass-through(x) {
                 echo $"got {$x}"
@@ -117,7 +117,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Builtin_unless_skips_when_true()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             unless true { echo "should not appear" }
             echo "done"
@@ -128,7 +128,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Builtin_unless_executes_when_false()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             unless false { echo "appeared" }
             """);
@@ -140,7 +140,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Rune_with_wrong_arg_count_throws()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         await Assert.ThrowsAnyAsync<Exception>(async () =>
         {
             await engine.ExecuteToListAsync("""
@@ -153,7 +153,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Rune_with_duplicate_params_throws()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         await Assert.ThrowsAnyAsync<Exception>(async () =>
         {
             await engine.ExecuteToListAsync("""
@@ -167,7 +167,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Nested_rune_invocation()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune wrap(x) {
                 echo $"[{$x}]"
@@ -200,7 +200,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Sealed_rune_argument_naming_its_own_parameter_reads_the_callers_variable()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune do-times(count, body) {
                 for i in (1..$count) { $body }
@@ -222,7 +222,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Sealed_rune_does_not_leak_its_declarations()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         await Assert.ThrowsAnyAsync<Exception>(async () =>
             await engine.ExecuteToListAsync("""
                 rune seal-it(x) {
@@ -237,7 +237,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Leaky_rune_still_leaks_its_declarations()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             leaky rune bind-it(x) {
                 var bound = $x
@@ -272,7 +272,7 @@ public sealed class RuneTests
     public async Task Folded_operand_answers_for_its_own_call_site(
         string what, string source, string first, string second)
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync(source);
 
         Assert.Equal(first, results[^2]?.ToString());
@@ -285,7 +285,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Folded_condition_runs_the_arm_belonging_to_its_call_site()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune unless-it(c, body) {
                 if (not $c) { $body }
@@ -333,7 +333,7 @@ public sealed class RuneTests
     [InlineData("mutual", "rune ping(b) { pong $b }\nrune pong(b) { ping $b }\nping { echo \"x\" }")]
     public async Task Runaway_rune_expansion_reports_the_recursion_limit(string what, string source)
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var thrown = await Assert.ThrowsAsync<ToshDiagnosticException>(
             async () => await engine.ExecuteToListAsync(source));
 
@@ -349,7 +349,7 @@ public sealed class RuneTests
     [Fact]
     public async Task Deep_but_finite_rune_nesting_still_runs()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune a(b) { $b }
             a { a { a { a { a { echo "deep" } } } } }
@@ -380,7 +380,7 @@ public sealed class RuneTests
     public async Task A_block_argument_forwarded_through_a_rune_keeps_its_own_scope(
         string what, string source, int expected)
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync(source);
 
         // A rune body that yields more than one value hands back an array, and nesting two of
@@ -416,7 +416,7 @@ public sealed class RuneTests
     [Fact]
     public async Task A_block_argument_still_mutates_the_callers_variables()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
         var results = await engine.ExecuteToListAsync("""
             rune do-twice(b) {
                 $b

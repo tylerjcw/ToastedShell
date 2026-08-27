@@ -123,7 +123,7 @@ public sealed class ClassEqualityCancellationTests
     [Fact]
     public async Task Symbolic_equality_operators_take_precedence_over_Equals()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -145,7 +145,7 @@ public sealed class ClassEqualityCancellationTests
     [Fact]
     public async Task Reference_identity_and_null_short_circuit_user_Equals()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -168,7 +168,7 @@ public sealed class ClassEqualityCancellationTests
     [Fact]
     public async Task Equality_dispatch_is_left_biased()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -189,7 +189,7 @@ public sealed class ClassEqualityCancellationTests
     [Fact]
     public async Task Structural_and_mixed_string_equality_preserve_existing_semantics()
     {
-        var engine = new ToshEngine();
+        var engine = ShellEngine.CreateFullShell();
 
         var values = await engine.ExecuteToListAsync(
             """
