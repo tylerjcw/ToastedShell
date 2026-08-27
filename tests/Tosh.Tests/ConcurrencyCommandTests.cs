@@ -224,7 +224,7 @@ public sealed class ConcurrencyCommandTests
         second.Close();
 
         var context = new CommandContext(
-            ToshRuntime.CreateDefault(),
+            ToshRuntime.CreateDefault().Language,
             AsyncEnumerableExtensions.Empty<object?>(),
             [first, second],
             CancellationToken.None);
@@ -253,7 +253,7 @@ public sealed class ConcurrencyCommandTests
         closed.Close();
 
         var context = new CommandContext(
-            ToshRuntime.CreateDefault(),
+            ToshRuntime.CreateDefault().Language,
             AsyncEnumerableExtensions.Empty<object?>(),
             [withNull, closed],
             CancellationToken.None);
@@ -274,7 +274,7 @@ public sealed class ConcurrencyCommandTests
         var second = ShellChannel.CreateUnbounded();
         using var cancellation = new CancellationTokenSource();
         var context = new CommandContext(
-            ToshRuntime.CreateDefault(),
+            ToshRuntime.CreateDefault().Language,
             AsyncEnumerableExtensions.Empty<object?>(),
             [first, second],
             cancellation.Token);

@@ -33,7 +33,7 @@ public sealed class DebugCommand : ShellCommand
             throw new InvalidOperationException("The 'debug' command requires a non-empty script path.");
         }
 
-        var path = Path.GetFullPath(rawPath, context.Runtime.CurrentDirectory);
+        var path = Path.GetFullPath(rawPath, context.Shell().CurrentDirectory);
         if (!File.Exists(path))
         {
             throw new FileNotFoundException($"Script not found: '{rawPath}'.", path);
@@ -59,8 +59,8 @@ public sealed class DebugCommand : ShellCommand
                 text = string.Concat(text.AsSpan(0, 117), "...");
             }
 
-            await context.Runtime.Error.WriteLineAsync($"[debug] {stepContext.SourceName}:{lineDisplay}  {text}");
-            await context.Runtime.Error.WriteAsync("(debug) ");
+            await context.Shell().Error.WriteLineAsync($"[debug] {stepContext.SourceName}:{lineDisplay}  {text}");
+            await context.Shell().Error.WriteAsync("(debug) ");
 
             while (true)
             {
@@ -82,15 +82,15 @@ public sealed class DebugCommand : ShellCommand
                     case "q" or "quit" or "abort":
                         return DebugAction.Abort;
                     case "vars" or "variables" or "locals":
-                        PrintLocals(context.Runtime);
-                        await context.Runtime.Error.WriteAsync("(debug) ");
+                        PrintLocals(context.Shell());
+                        await context.Shell().Error.WriteAsync("(debug) ");
                         continue;
                     default:
-                        await context.Runtime.Error.WriteLineAsync("  n/next   - step to next statement");
-                        await context.Runtime.Error.WriteLineAsync("  c/cont   - continue execution");
-                        await context.Runtime.Error.WriteLineAsync("  q/quit   - abort execution");
-                        await context.Runtime.Error.WriteLineAsync("  vars     - show local variables");
-                        await context.Runtime.Error.WriteAsync("(debug) ");
+                        await context.Shell().Error.WriteLineAsync("  n/next   - step to next statement");
+                        await context.Shell().Error.WriteLineAsync("  c/cont   - continue execution");
+                        await context.Shell().Error.WriteLineAsync("  q/quit   - abort execution");
+                        await context.Shell().Error.WriteLineAsync("  vars     - show local variables");
+                        await context.Shell().Error.WriteAsync("(debug) ");
                         continue;
                 }
             }
@@ -105,7 +105,7 @@ public sealed class DebugCommand : ShellCommand
         }
         catch (DebugAbortException)
         {
-            await context.Runtime.Error.WriteLineAsync("[debug] Execution aborted.");
+            await context.Shell().Error.WriteLineAsync("[debug] Execution aborted.");
             results = [];
         }
         finally
@@ -170,7 +170,7 @@ public sealed class DebugCommand : ShellCommand
     /// exists (`TOAST-0006`).
     /// </summary>
     private static IToshScriptHost RequireHost(CommandContext context)
-        => context.Runtime.Evaluator as IToshScriptHost
+        => context.Shell().Evaluator as IToshScriptHost
            ?? throw new InvalidOperationException(
                "This host cannot run scripts. Register a ToastScript engine on the runtime " +
                "before using script-running commands.");

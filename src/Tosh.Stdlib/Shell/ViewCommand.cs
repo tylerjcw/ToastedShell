@@ -18,7 +18,7 @@ public sealed class ViewCommand : ShellCommand
 
         if (parsed.Positionals.Count == 0)
         {
-            yield return new FormatterStatus(context.Runtime.Display.Style);
+            yield return new FormatterStatus(context.Shell().Display.Style);
             yield break;
         }
 
@@ -26,19 +26,19 @@ public sealed class ViewCommand : ShellCommand
 
         if (string.Equals(mode, "compact", StringComparison.OrdinalIgnoreCase))
         {
-            context.Runtime.Display.Style = ObjectRenderStyle.Compact;
-            yield return new FormatterStatus(context.Runtime.Display.Style);
+            context.Shell().Display.Style = ObjectRenderStyle.Compact;
+            yield return new FormatterStatus(context.Shell().Display.Style);
             yield break;
         }
 
         if (string.Equals(mode, "detail", StringComparison.OrdinalIgnoreCase))
         {
-            context.Runtime.Display.Style = ObjectRenderStyle.Detail;
-            yield return new FormatterStatus(context.Runtime.Display.Style);
+            context.Shell().Display.Style = ObjectRenderStyle.Detail;
+            yield return new FormatterStatus(context.Shell().Display.Style);
             yield break;
         }
 
-        if (TryResolveTemporalPreferences(context.Runtime.DisplayPreferences, mode, out var targetName, out var preferences))
+        if (TryResolveTemporalPreferences(context.Shell().DisplayPreferences, mode, out var targetName, out var preferences))
         {
             foreach (var status in ConfigureTemporalPreferences(targetName, preferences, parsed.Positionals.Skip(1).ToArray()))
             {
@@ -48,7 +48,7 @@ public sealed class ViewCommand : ShellCommand
             yield break;
         }
 
-        if (TryResolveDurationPreferences(context.Runtime.DisplayPreferences, mode, out var durationTargetName, out var durationPreferences))
+        if (TryResolveDurationPreferences(context.Shell().DisplayPreferences, mode, out var durationTargetName, out var durationPreferences))
         {
             foreach (var status in ConfigureDurationPreferences(durationTargetName, durationPreferences, parsed.Positionals.Skip(1).ToArray()))
             {
@@ -58,7 +58,7 @@ public sealed class ViewCommand : ShellCommand
             yield break;
         }
 
-        if (TryResolveDateOnlyPreferences(context.Runtime.DisplayPreferences, mode, out var dateOnlyTargetName, out var dateOnlyPreferences))
+        if (TryResolveDateOnlyPreferences(context.Shell().DisplayPreferences, mode, out var dateOnlyTargetName, out var dateOnlyPreferences))
         {
             foreach (var status in ConfigureDateOnlyPreferences(dateOnlyTargetName, dateOnlyPreferences, parsed.Positionals.Skip(1).ToArray()))
             {
@@ -68,7 +68,7 @@ public sealed class ViewCommand : ShellCommand
             yield break;
         }
 
-        if (TryResolveTimeOnlyPreferences(context.Runtime.DisplayPreferences, mode, out var timeOnlyTargetName, out var timeOnlyPreferences))
+        if (TryResolveTimeOnlyPreferences(context.Shell().DisplayPreferences, mode, out var timeOnlyTargetName, out var timeOnlyPreferences))
         {
             foreach (var status in ConfigureTimeOnlyPreferences(timeOnlyTargetName, timeOnlyPreferences, parsed.Positionals.Skip(1).ToArray()))
             {
@@ -80,7 +80,7 @@ public sealed class ViewCommand : ShellCommand
 
         if (IsStorageSizeTarget(mode))
         {
-            foreach (var status in ConfigureStorageSizePreferences(context.Runtime.DisplayPreferences.StorageSize, parsed.Positionals.Skip(1).ToArray()))
+            foreach (var status in ConfigureStorageSizePreferences(context.Shell().DisplayPreferences.StorageSize, parsed.Positionals.Skip(1).ToArray()))
             {
                 yield return status;
             }
@@ -90,7 +90,7 @@ public sealed class ViewCommand : ShellCommand
 
         if (IsUnixFileModeTarget(mode))
         {
-            foreach (var status in ConfigureUnixFileModePreferences(context.Runtime.DisplayPreferences.UnixFileMode, parsed.Positionals.Skip(1).ToArray()))
+            foreach (var status in ConfigureUnixFileModePreferences(context.Shell().DisplayPreferences.UnixFileMode, parsed.Positionals.Skip(1).ToArray()))
             {
                 yield return status;
             }
@@ -100,7 +100,7 @@ public sealed class ViewCommand : ShellCommand
 
         if (IsFileAttributesTarget(mode))
         {
-            foreach (var status in ConfigureFileAttributesPreferences(context.Runtime.DisplayPreferences.FileAttributes, parsed.Positionals.Skip(1).ToArray()))
+            foreach (var status in ConfigureFileAttributesPreferences(context.Shell().DisplayPreferences.FileAttributes, parsed.Positionals.Skip(1).ToArray()))
             {
                 yield return status;
             }
@@ -110,7 +110,7 @@ public sealed class ViewCommand : ShellCommand
 
         if (string.Equals(mode, "columns", StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var status in ConfigureTypeProfileColumns(context.Runtime.DisplayPreferences.Profiles, parsed.Positionals.Skip(1).ToArray()))
+            foreach (var status in ConfigureTypeProfileColumns(context.Shell().DisplayPreferences.Profiles, parsed.Positionals.Skip(1).ToArray()))
             {
                 yield return status;
             }

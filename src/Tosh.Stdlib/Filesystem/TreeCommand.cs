@@ -29,14 +29,14 @@ public sealed class TreeCommand : ShellCommand
             var winSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
             var winOptions = WindowsTreeTraversal.ParseOptions(
                 winSelection.RemainingArguments,
-                context.Runtime.CurrentDirectory);
+                context.Shell().CurrentDirectory);
 
             foreach (var rootPath in winOptions.Paths)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 var rootEntry = WindowsTreeTraversal.BuildRoot(rootPath, winOptions);
                 yield return CommandDisplaySelectionParser.Apply(
-                    context.Runtime,
+                    context.Shell(),
                     winSelection.Selection,
                     rootEntry);
             }
@@ -61,7 +61,7 @@ public sealed class TreeCommand : ShellCommand
 
         var result = await ExecuteTreeAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -91,19 +91,19 @@ public sealed class TreeCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         foreach (var entry in entries)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, entry);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, entry);
         }
     }
 
     private static string ResolveTreeExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "tree");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "tree");
 
         return lookup.Status switch
         {
@@ -208,7 +208,7 @@ public sealed class TreeCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

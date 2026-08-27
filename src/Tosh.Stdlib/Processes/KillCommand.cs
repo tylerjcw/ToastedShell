@@ -34,10 +34,10 @@ public sealed class KillCommand : ShellCommand
         foreach (var target in targets)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return KillTarget(context.Runtime, target);
+            yield return KillTarget(context.Shell(), target);
         }
 
-        context.Runtime.SetLastExitCode(0);
+        context.Shell().SetLastExitCode(0);
     }
 
     private static JobControlResult KillTarget(ToshRuntime runtime, object? target)

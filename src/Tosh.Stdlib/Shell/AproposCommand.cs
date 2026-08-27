@@ -29,7 +29,7 @@ public sealed class AproposCommand : ShellCommand
             throw new InvalidOperationException("The 'apropos' command requires a search query.");
         }
 
-        foreach (var result in HelpCatalog.Search(context.Runtime, query, commands: context.ScopedCommands))
+        foreach (var result in HelpCatalog.Search(context.Shell(), query, commands: context.ScopedCommands))
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             yield return result;

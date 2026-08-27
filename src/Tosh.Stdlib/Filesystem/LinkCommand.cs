@@ -29,8 +29,8 @@ public sealed class LinkCommand : ShellCommand
             throw new InvalidOperationException("ln requires a target path and a link path.");
         }
 
-        var targetMatches = ShellPathArguments.Expand(context.Runtime.CurrentDirectory, parsed.Positionals[0]);
-        var linkPathMatches = ShellPathArguments.Expand(context.Runtime.CurrentDirectory, parsed.Positionals[1]);
+        var targetMatches = ShellPathArguments.Expand(context.Shell().CurrentDirectory, parsed.Positionals[0]);
+        var linkPathMatches = ShellPathArguments.Expand(context.Shell().CurrentDirectory, parsed.Positionals[1]);
 
         if (targetMatches.Count != 1 || linkPathMatches.Count != 1)
         {

@@ -15,19 +15,19 @@ public sealed class ForegroundCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var terminal = context.Runtime.Terminal;
+        var terminal = context.Shell().Terminal;
         ShellJob? job;
 
         if (context.Arguments.Count > 0)
         {
-            if (!TryResolveJob(context.Runtime, context.Arguments[0], out job))
+            if (!TryResolveJob(context.Shell(), context.Arguments[0], out job))
             {
                 throw new InvalidOperationException($"'{context.Arguments[0]}' is not a valid job reference.");
             }
         }
         else
         {
-            job = FindMostRecentSuspended(context.Runtime);
+            job = FindMostRecentSuspended(context.Shell());
 
             if (job is null)
             {
@@ -45,18 +45,18 @@ public sealed class ForegroundCommand : ShellCommand
         switch (result.Outcome)
         {
             case ForegroundWaitOutcome.Exited:
-                context.Runtime.SetLastExitCode(result.StatusOrSignal);
+                context.Shell().SetLastExitCode(result.StatusOrSignal);
                 break;
 
             case ForegroundWaitOutcome.Stopped:
                 // Re-suspended — print the stopped message again.
-                context.Runtime.SetLastExitCode(148); // 128 + SIGTSTP(20)
-                await context.Runtime.Error.WriteLineAsync(
+                context.Shell().SetLastExitCode(148); // 128 + SIGTSTP(20)
+                await context.Shell().Error.WriteLineAsync(
                     $"[{job.Id}]  Stopped                 {job.Command}");
                 break;
 
             default:
-                context.Runtime.SetLastExitCode(job.ExitCode ?? 0);
+                context.Shell().SetLastExitCode(job.ExitCode ?? 0);
                 break;
         }
 

@@ -405,8 +405,7 @@ public sealed partial class ToshEngine
             ScopedTypeResolver: CreateScopedTypeResolver(),
             BlockExecutor: _ownBlockExecutor,
             ScopedCommands: CreateScopedCommandView(),
-            ShellTypes: this,
-            ShellRuntime: ShellRuntime);
+            ShellTypes: this);
         var size = NativeCommandUtilities.ResolveAllocationSize(context, allocationSpecification, 0);
 
         if (size < 0)
@@ -866,8 +865,7 @@ public sealed partial class ToshEngine
             ScopedTypeResolver: CreateScopedTypeResolver(),
             BlockExecutor: _ownBlockExecutor,
             ScopedCommands: CreateScopedCommandView(),
-            ShellTypes: this,
-            ShellRuntime: ShellRuntime);
+            ShellTypes: this);
 
         // `$this` is the receiver itself rather than a self-reference: an extension
         // adds behaviour to a value, and has no instance state of its own to reach.

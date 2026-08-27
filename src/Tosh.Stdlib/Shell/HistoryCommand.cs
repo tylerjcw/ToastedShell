@@ -29,7 +29,7 @@ public sealed class HistoryCommand : ShellCommand
 
         if (parsed.Positionals.Count == 0)
         {
-            foreach (var entry in context.Runtime.History)
+            foreach (var entry in context.Shell().History)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return entry;
@@ -46,23 +46,23 @@ public sealed class HistoryCommand : ShellCommand
                 yield return CreateStatus("status", context);
                 yield break;
             case "path":
-                yield return context.Runtime.Config.History.FilePath;
+                yield return context.Shell().Config.History.FilePath;
                 yield break;
             case "expand":
                 {
                     var spec = RequireHistorySpec(parsed);
-                    yield return HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);
+                    yield return HistoryExpansionUtilities.Expand(context.Shell().History.ToArray(), spec);
                     yield break;
                 }
             case "run":
                 {
                     var spec = RequireHistorySpec(parsed);
-                    var evaluator = context.Runtime.Evaluator
+                    var evaluator = context.Shell().Evaluator
                         ?? throw context.CreateDiagnostic(
                             code: "tosh.history.run_unavailable",
                             title: "History replay is not available in this session.",
                             help: "History replay requires a live evaluator. In normal ToSh sessions, `history run` should be available.");
-                    var expanded = HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);
+                    var expanded = HistoryExpansionUtilities.Expand(context.Shell().History.ToArray(), spec);
 
                     await foreach (var value in evaluator.EvaluateAsync(expanded, $"history_expand {spec}", context.CancellationToken))
                     {
@@ -75,7 +75,7 @@ public sealed class HistoryCommand : ShellCommand
                 {
                     var search = await ResolveSearchTextAsync(context, parsed);
 
-                    foreach (var result in context.Runtime.History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                    foreach (var result in context.Shell().History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
                         yield return result;
@@ -86,9 +86,9 @@ public sealed class HistoryCommand : ShellCommand
             case "delete":
                 {
                     var spec = RequireHistorySpec(parsed);
-                    var entry = HistoryExpansionUtilities.ResolveEntry(context.Runtime.History.ToArray(), spec);
+                    var entry = HistoryExpansionUtilities.ResolveEntry(context.Shell().History.ToArray(), spec);
 
-                    if (!context.Runtime.RemoveHistoryEntry(entry.Id))
+                    if (!context.Shell().RemoveHistoryEntry(entry.Id))
                     {
                         throw new InvalidOperationException($"History entry '{entry.Id}' was not found.");
                     }
@@ -97,15 +97,15 @@ public sealed class HistoryCommand : ShellCommand
                     yield break;
                 }
             case "save":
-                context.Runtime.SaveHistoryToFile();
+                context.Shell().SaveHistoryToFile();
                 yield return CreateStatus("save", context);
                 yield break;
             case "reload":
-                context.Runtime.ReloadHistoryFromFile();
+                context.Shell().ReloadHistoryFromFile();
                 yield return CreateStatus("reload", context);
                 yield break;
             case "clear":
-                context.Runtime.ClearHistory();
+                context.Shell().ClearHistory();
                 yield return CreateStatus("clear", context);
                 yield break;
             default:
@@ -117,10 +117,10 @@ public sealed class HistoryCommand : ShellCommand
     {
         return new HistoryStatusResult(
             Action: action,
-            FilePath: context.Runtime.Config.History.FilePath,
-            EntryCount: context.Runtime.History.Count,
-            Persistent: context.Runtime.Config.History.Persistent,
-            Deduplication: context.Runtime.Config.History.Deduplication);
+            FilePath: context.Shell().Config.History.FilePath,
+            EntryCount: context.Shell().History.Count,
+            Persistent: context.Shell().Config.History.Persistent,
+            Deduplication: context.Shell().Config.History.Deduplication);
     }
 
     private static string RequireHistorySpec(ParsedCommandArguments parsed)

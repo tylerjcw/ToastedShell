@@ -25,7 +25,7 @@ public sealed class MoveItemCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var options = ParseOptions(context.Arguments, context.Runtime.CurrentDirectory);
+        var options = ParseOptions(context.Arguments, context.Shell().CurrentDirectory);
 
         if (options.TargetDirectory is null && options.Positionals.Count < 2)
         {
@@ -40,10 +40,10 @@ public sealed class MoveItemCommand : ShellCommand
         var sourceArguments = options.TargetDirectory is null
             ? options.Positionals.Take(options.Positionals.Count - 1).ToArray()
             : options.Positionals.ToArray();
-        var sources = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, sourceArguments);
+        var sources = ShellPathArguments.ExpandMany(context.Shell().CurrentDirectory, sourceArguments);
         var destination = options.TargetDirectory is not null
-            ? ShellPathArguments.Resolve(context.Runtime.CurrentDirectory, options.TargetDirectory)
-            : ShellPathArguments.Resolve(context.Runtime.CurrentDirectory, options.Positionals[^1]);
+            ? ShellPathArguments.Resolve(context.Shell().CurrentDirectory, options.TargetDirectory)
+            : ShellPathArguments.Resolve(context.Shell().CurrentDirectory, options.Positionals[^1]);
 
         if (sources.Count == 0)
         {
@@ -73,7 +73,7 @@ public sealed class MoveItemCommand : ShellCommand
                     continue;
                 }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? context.Runtime.CurrentDirectory);
+                Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? context.Shell().CurrentDirectory);
                 File.Move(source, targetPath, overwrite: true);
 
                 if (options.Verbose)
@@ -331,7 +331,7 @@ public sealed class MoveItemCommand : ShellCommand
 
     private static bool ConfirmOverwrite(CommandContext context, string path)
     {
-        var provider = context.Runtime.InlinePrompts;
+        var provider = context.Shell().InlinePrompts;
 
         if (provider is null)
         {

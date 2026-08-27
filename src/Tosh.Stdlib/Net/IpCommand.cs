@@ -91,7 +91,7 @@ public sealed class IpCommand : ShellCommand
 
         var result = await ExecuteStructuredIpAsync(context, resolvedPath, structuredRequest.Arguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -107,7 +107,7 @@ public sealed class IpCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         IReadOnlyList<object?> parsedItems;
@@ -160,7 +160,7 @@ public sealed class IpCommand : ShellCommand
 
     private static string ResolveIpExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "ip");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "ip");
 
         return lookup.Status switch
         {
@@ -368,7 +368,7 @@ public sealed class IpCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

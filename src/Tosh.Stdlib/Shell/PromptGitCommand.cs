@@ -41,7 +41,7 @@ public sealed class PromptGitCommand : ShellCommand
             }
         }
 
-        var segment = PromptSegmentUtilities.BuildGitSegment(context.Runtime.CurrentDirectory, fg, bg, bold);
+        var segment = PromptSegmentUtilities.BuildGitSegment(context.Shell().CurrentDirectory, fg, bg, bold);
 
         if (segment is not null)
         {

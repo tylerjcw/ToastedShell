@@ -377,7 +377,7 @@ public static class ToshHost
     public static object? InvokeCallable(object? target, object?[] args)
     {
         var ctx = new CommandContext(
-            Runtime,
+            Runtime.Language,
             EmptyAsync(),
             args,
             default,
@@ -1505,7 +1505,7 @@ public static class ToshHost
         }
 
         var command = ResolveCommand(name);
-        var ctx = new CommandContext(Runtime, EmptyInput(), args, default);
+        var ctx = new CommandContext(Runtime.Language, EmptyInput(), args, default);
         return DrainEnumerator(command.ExecuteAsync(ctx), printItems);
     }
 
@@ -1627,7 +1627,7 @@ public static class ToshHost
         object?[] args)
     {
         var ctx = new CommandContext(
-            Runtime,
+            Runtime.Language,
             input,
             args,
             default,

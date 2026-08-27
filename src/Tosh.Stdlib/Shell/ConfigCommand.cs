@@ -29,7 +29,7 @@ public sealed class ConfigCommand : ShellCommand
 
         if (parsed.Positionals.Count == 0)
         {
-            yield return context.Runtime.Config;
+            yield return context.Shell().Config;
             yield break;
         }
 
@@ -50,12 +50,12 @@ public sealed class ConfigCommand : ShellCommand
                 {
                     if (parsed.Positionals.Count == 1)
                     {
-                        yield return context.Runtime.Config;
+                        yield return context.Shell().Config;
                         yield break;
                     }
 
                     var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
-                    yield return ResolveValue(context.Runtime, path);
+                    yield return ResolveValue(context.Shell(), path);
                     yield break;
                 }
 
@@ -65,9 +65,9 @@ public sealed class ConfigCommand : ShellCommand
                     var value = parsed.Positionals.Count > 2
                         ? parsed.Positionals[2]
                         : await ResolvePipelinedValueAsync(context, path);
-                    var normalizedPath = ConfigPathUtilities.NormalizeMemberPath(context.Runtime.Config, path);
-                    context.Runtime.ObjectAccessor.SetValue(context.Runtime.Config, normalizedPath, value);
-                    yield return new ConfigMutationResult(normalizedPath, context.Runtime.ObjectAccessor.GetValue(context.Runtime.Config, normalizedPath));
+                    var normalizedPath = ConfigPathUtilities.NormalizeMemberPath(context.Shell().Config, path);
+                    context.Shell().ObjectAccessor.SetValue(context.Shell().Config, normalizedPath, value);
+                    yield return new ConfigMutationResult(normalizedPath, context.Shell().ObjectAccessor.GetValue(context.Shell().Config, normalizedPath));
                     yield break;
                 }
 
@@ -75,13 +75,13 @@ public sealed class ConfigCommand : ShellCommand
                 {
                     if (parsed.Positionals.Count == 1)
                     {
-                        context.Runtime.Config.Reset();
-                        yield return context.Runtime.Config;
+                        context.Shell().Config.Reset();
+                        yield return context.Shell().Config;
                         yield break;
                     }
 
                     var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
-                    var target = ResolveValue(context.Runtime, path);
+                    var target = ResolveValue(context.Shell(), path);
 
                     if (target is not IResettableShellConfig resettable)
                     {
@@ -96,8 +96,8 @@ public sealed class ConfigCommand : ShellCommand
             case "init":
                 {
                     var rootDirectory = parsed.Positionals.Count > 1
-                        ? PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, CommandArguments.RequireString(parsed.Positionals, 1, "path"))
-                        : context.Runtime.Config.Startup.RootDirectory;
+                        ? PathUtilities.ResolvePath(context.Shell().CurrentDirectory, CommandArguments.RequireString(parsed.Positionals, 1, "path"))
+                        : context.Shell().Config.Startup.RootDirectory;
 
                     yield return InitializeConfigDirectory(rootDirectory);
                     yield break;
@@ -123,7 +123,7 @@ public sealed class ConfigCommand : ShellCommand
     {
         try
         {
-            return await ConfigStartupUtilities.ReloadConfigurationAsync(context.Runtime, context.CancellationToken);
+            return await ConfigStartupUtilities.ReloadConfigurationAsync(context.Shell(), context.CancellationToken);
         }
         catch (InvalidOperationException)
         {

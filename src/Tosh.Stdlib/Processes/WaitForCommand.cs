@@ -27,7 +27,7 @@ public sealed class WaitForCommand : ShellCommand
 
         if (lastCompletion is not null)
         {
-            context.Runtime.SetLastExitCode(lastCompletion.ExitCode ?? 0);
+            context.Shell().SetLastExitCode(lastCompletion.ExitCode ?? 0);
         }
     }
 
@@ -46,17 +46,17 @@ public sealed class WaitForCommand : ShellCommand
 
         foreach (var argument in context.Arguments)
         {
-            AddResolvedTarget(context.Runtime, argument, AddJob);
+            AddResolvedTarget(context.Shell(), argument, AddJob);
         }
 
         await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
         {
-            AddResolvedTarget(context.Runtime, item, AddJob);
+            AddResolvedTarget(context.Shell(), item, AddJob);
         }
 
         if (targets.Count == 0)
         {
-            foreach (var job in context.Runtime.GetJobs())
+            foreach (var job in context.Shell().GetJobs())
             {
                 AddJob(job);
             }

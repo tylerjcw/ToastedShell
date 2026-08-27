@@ -42,13 +42,13 @@ public sealed class DfCommand : ShellCommand
             foreach (var entry in entries)
             {
                 yielded.Add(entry);
-                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, entry);
+                yield return CommandDisplaySelectionParser.Apply(context.Shell(), effectiveSelection, entry);
             }
 
             if (options.IncludeTotal && yielded.Count > 0)
             {
                 yield return CommandDisplaySelectionParser.Apply(
-                    context.Runtime,
+                    context.Shell(),
                     effectiveSelection,
                     FileSystemUsageUtilities.CreateTotalRow(yielded));
             }
@@ -70,14 +70,14 @@ public sealed class DfCommand : ShellCommand
             if (match is not null && yieldedMounts.Add(match.MountedOn))
             {
                 yielded.Add(match);
-                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, match);
+                yield return CommandDisplaySelectionParser.Apply(context.Shell(), effectiveSelection, match);
             }
         }
 
         if (options.IncludeTotal && yielded.Count > 0)
         {
             yield return CommandDisplaySelectionParser.Apply(
-                context.Runtime,
+                context.Shell(),
                 effectiveSelection,
                 FileSystemUsageUtilities.CreateTotalRow(yielded));
         }

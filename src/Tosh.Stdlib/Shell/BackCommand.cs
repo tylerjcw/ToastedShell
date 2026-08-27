@@ -13,21 +13,21 @@ public sealed class BackCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var oldDirectory = FileSystemEntry.From(new DirectoryInfo(context.Runtime.CurrentDirectory));
-        var previous = context.Runtime.GoBack();
+        var oldDirectory = FileSystemEntry.From(new DirectoryInfo(context.Shell().CurrentDirectory));
+        var previous = context.Shell().GoBack();
 
         if (previous is null)
         {
             throw new InvalidOperationException("No previous directory in the stack.");
         }
 
-        context.Runtime.CurrentDirectory = previous;
+        context.Shell().CurrentDirectory = previous;
         var newDirectory = FileSystemEntry.From(new DirectoryInfo(previous));
 
-        var sender = context.Runtime.EventSenderFactory?.Invoke()
+        var sender = context.Shell().EventSenderFactory?.Invoke()
             ?? new ShellEventSender(Function: null, Script: null, Line: null);
         var evt = new DirectoryChangedEvent(oldDirectory, newDirectory, sender);
-        await context.Runtime.Events.RaiseAsync(evt, context.CancellationToken);
+        await context.Shell().Events.RaiseAsync(evt, context.CancellationToken);
 
         yield return newDirectory;
     }

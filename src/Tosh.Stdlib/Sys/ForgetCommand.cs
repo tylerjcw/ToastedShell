@@ -14,7 +14,7 @@ public sealed class ForgetCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var evaluator = context.Runtime.Evaluator
+        var evaluator = context.Shell().Evaluator
             ?? throw new InvalidOperationException($"{Name} requires an active Tosh evaluator.");
 
         var results = new List<object?>();

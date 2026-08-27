@@ -65,8 +65,8 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
     {
         var atTerminal = !Console.IsInputRedirected
                       && !Console.IsOutputRedirected
-                      && ReferenceEquals(context.Runtime.Output, Console.Out)
-                      && ReferenceEquals(context.Runtime.Error, Console.Error);
+                      && ReferenceEquals(context.Shell().Output, Console.Out)
+                      && ReferenceEquals(context.Shell().Error, Console.Error);
 
         // A consumer is waiting for this value, so stdout has to be piped even at a
         // terminal — but stdin and stderr stay with the terminal, so an interactive child
@@ -102,7 +102,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         if (string.IsNullOrEmpty(_resolvedPath)) return false;
         var name = Path.GetFileNameWithoutExtension(_resolvedPath);
         if (string.IsNullOrEmpty(name)) return false;
-        return context.Runtime.Config.External.IsHybridConsumer(name);
+        return context.Shell().Config.External.IsHybridConsumer(name);
     }
 
     // Binaries shipped with TōSh that always emit TSSP when
@@ -128,13 +128,13 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
 
     private async Task ExecuteWithTerminalPassthroughAsync(CommandContext context)
     {
-        var terminal = context.Runtime.Terminal;
+        var terminal = context.Shell().Terminal;
         var processOwnershipTransferred = false;
 
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = false,
@@ -176,7 +176,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
             switch (waitResult.Outcome)
             {
                 case ForegroundWaitOutcome.Exited:
-                    context.Runtime.SetLastExitCode(waitResult.StatusOrSignal);
+                    context.Shell().SetLastExitCode(waitResult.StatusOrSignal);
                     context.PipelineExitStatusTracker?.Record(waitResult.StatusOrSignal);
                     break;
 
@@ -191,22 +191,22 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
 
                     var commandText = BuildCommandText(context);
                     var job = ShellJob.CreateSuspended(
-                        context.Runtime.AllocateJobId(),
+                        context.Shell().AllocateJobId(),
                         commandText,
                         process,
                         childOwnsGroup,
                         childTermios);
                     processOwnershipTransferred = true;
-                    context.Runtime.RegisterJob(job);
-                    context.Runtime.SetLastExitCode(148); // 128 + SIGTSTP(20)
-                    await context.Runtime.Error.WriteLineAsync(
+                    context.Shell().RegisterJob(job);
+                    context.Shell().SetLastExitCode(148); // 128 + SIGTSTP(20)
+                    await context.Shell().Error.WriteLineAsync(
                         $"\n[{job.Id}]  Stopped                 {commandText}");
                     break;
 
                 default:
                     // Fallback: non-interactive or error — use managed wait.
                     await process.WaitForExitAsync(context.CancellationToken);
-                    context.Runtime.SetLastExitCode(process.ExitCode);
+                    context.Shell().SetLastExitCode(process.ExitCode);
                     context.PipelineExitStatusTracker?.Record(process.ExitCode);
                     break;
             }
@@ -278,7 +278,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         if (Interlocked.Exchange(ref s_unframedWarningEmitted, 1) != 0) return;
         try
         {
-            context.Runtime.Error.WriteLine(
+            context.Shell().Error.WriteLine(
                 "tosh: tssp.unframed_output: hybrid consumer emitted non-TSSP bytes on stdout; forwarding verbatim.");
         }
         catch { }
@@ -295,7 +295,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         var prev = Interlocked.Exchange(ref s_lastProgressLineWidth, 0);
         if (prev > 0)
         {
-            try { context.Runtime.Error.WriteLine(string.Empty); } catch { }
+            try { context.Shell().Error.WriteLine(string.Empty); } catch { }
         }
     }
 
@@ -355,7 +355,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
             var prevWidth = Interlocked.Exchange(ref s_lastProgressLineWidth, line.Length);
             if (line.Length < prevWidth) line = line.PadRight(prevWidth);
 
-            context.Runtime.Error.Write("\r" + line);
+            context.Shell().Error.Write("\r" + line);
         }
         catch
         {
@@ -367,13 +367,13 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         CommandContext context,
         [EnumeratorCancellation] CancellationToken enumeratorCt = default)
     {
-        var terminal = context.Runtime.Terminal;
+        var terminal = context.Shell().Terminal;
         var processOwnershipTransferred = false;
 
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,    // inherit /dev/tty for interactive prompts
             RedirectStandardOutput = true,    // pipe → TSSP parser
@@ -488,7 +488,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
             switch (waitResult.Outcome)
             {
                 case ForegroundWaitOutcome.Exited:
-                    context.Runtime.SetLastExitCode(waitResult.StatusOrSignal);
+                    context.Shell().SetLastExitCode(waitResult.StatusOrSignal);
                     context.PipelineExitStatusTracker?.Record(waitResult.StatusOrSignal);
                     break;
 
@@ -501,17 +501,17 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
 
                     var commandText = BuildCommandText(context);
                     var job = ShellJob.CreateSuspended(
-                        context.Runtime.AllocateJobId(),
+                        context.Shell().AllocateJobId(),
                         commandText,
                         process,
                         childOwnsGroup,
                         childTermios);
                     processOwnershipTransferred = true;
-                    context.Runtime.RegisterJob(job);
-                    context.Runtime.SetLastExitCode(148);
+                    context.Shell().RegisterJob(job);
+                    context.Shell().SetLastExitCode(148);
                     try
                     {
-                        context.Runtime.Error.WriteLine(
+                        context.Shell().Error.WriteLine(
                             $"\n[{job.Id}]  Stopped                 {commandText}");
                     }
                     catch { }
@@ -521,7 +521,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
                     try { process.WaitForExit(); } catch { }
                     try
                     {
-                        context.Runtime.SetLastExitCode(process.ExitCode);
+                        context.Shell().SetLastExitCode(process.ExitCode);
                         context.PipelineExitStatusTracker?.Record(process.ExitCode);
                     }
                     catch { }
@@ -553,7 +553,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
             throw new InvalidOperationException($"Failed to start external command '{Name}'.");
         }
 
-        var stderrTask = PumpStandardErrorAsync(process, context.Runtime.Error, context.CancellationToken);
+        var stderrTask = PumpStandardErrorAsync(process, context.Shell().Error, context.CancellationToken);
         var stdinTask = PumpStandardInputAsync(process, context.Input, context.CancellationToken);
 
         var stdoutStream = process.StandardOutput.BaseStream;
@@ -584,7 +584,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         await AwaitAndIgnoreClosedPipeAsync(stdinTask);
         await AwaitAndIgnoreClosedPipeAsync(stderrTask);
         await process.WaitForExitAsync(CancellationToken.None);
-        context.Runtime.SetLastExitCode(process.ExitCode);
+        context.Shell().SetLastExitCode(process.ExitCode);
         context.PipelineExitStatusTracker?.Record(process.ExitCode);
     }
 
@@ -597,7 +597,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         // otherwise we key off the schema name. Only IShellCallable values
         // are honoured — anything else falls back to raw record streaming.
         IShellCallable? renderer = null;
-        var renderers = context.Runtime.Config.Renderers;
+        var renderers = context.Shell().Config.Renderers;
         var rendererKey = header.Renderer ?? header.Schema;
         if (rendererKey is not null && renderers[rendererKey] is IShellCallable callable)
             renderer = callable;
@@ -617,7 +617,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
                 }
                 catch (TsspProtocolException ex)
                 {
-                    await context.Runtime.Error.WriteLineAsync(
+                    await context.Shell().Error.WriteLineAsync(
                         $"tosh: tssp.frame_error: {ex.Message}");
                     yield break;
                 }
@@ -643,7 +643,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
                     case "err":
                         FinalizeProgressLine(context);
                         var msg = Encoding.UTF8.GetString(frame.Payload.Span);
-                        await context.Runtime.Error.WriteLineAsync(msg);
+                        await context.Shell().Error.WriteLineAsync(msg);
                         break;
                     case "meta":
                         RegisterMetaSchema(context, header, frame.Payload);
@@ -693,7 +693,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         if (record is null || schemaName is null) return record;
         if (!ShellRecordUtilities.TryGetFields(record, out var fields)) return record;
 
-        var schemas = context.Runtime.Config.Schemas;
+        var schemas = context.Shell().Config.Schemas;
         if (schemas[schemaName] is not object schemaObj) return record;
         if (!ShellRecordUtilities.TryGetFields(schemaObj, out var schemaFields)) return record;
 
@@ -785,7 +785,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
             if (name is null && meta is IReadOnlyDictionary<string, object?> dict
                 && dict.TryGetValue("schema", out var nm) && nm is string s) name = s;
             if (name is null) return;
-            context.Runtime.Config.Schemas[name] = meta;
+            context.Shell().Config.Schemas[name] = meta;
         }
         catch (System.Text.Json.JsonException) { /* malformed meta — ignore */ }
     }
@@ -853,7 +853,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,

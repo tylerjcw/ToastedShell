@@ -12,8 +12,8 @@ public sealed class ClearCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        await context.Runtime.Output.WriteAsync("\u001b[2J\u001b[H");
-        await context.Runtime.Output.FlushAsync();
+        await context.Shell().Output.WriteAsync("\u001b[2J\u001b[H");
+        await context.Shell().Output.FlushAsync();
         yield break;
     }
 }

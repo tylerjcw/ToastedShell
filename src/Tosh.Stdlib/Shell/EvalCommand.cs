@@ -50,7 +50,7 @@ public sealed class EvalCommand : ShellCommand
     /// script *files*, so it does not need the script host.
     /// </summary>
     private static IShellEvaluator RequireEvaluator(CommandContext context)
-        => context.Runtime.Evaluator
+        => context.Shell().Evaluator
            ?? throw new InvalidOperationException(
                "This host has no evaluator, so there is nothing for 'eval' to evaluate.");
 

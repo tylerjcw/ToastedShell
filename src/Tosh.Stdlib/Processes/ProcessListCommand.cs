@@ -63,7 +63,7 @@ public sealed class ProcessListCommand : ShellCommand
             foreach (var process in processes)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, process);
+                yield return CommandDisplaySelectionParser.Apply(context.Shell(), effectiveSelection, process);
             }
         }
     }

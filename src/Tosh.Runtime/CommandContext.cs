@@ -15,36 +15,6 @@ namespace Tosh.Runtime;
 public sealed record CommandContext
 {
     public CommandContext(
-        ToshRuntime Runtime,
-        IAsyncEnumerable<object?> Input,
-        IReadOnlyList<object?> Arguments,
-        CancellationToken CancellationToken,
-        CommandInvocation? Invocation = null,
-        bool IsPipelined = false,
-        ITypeResolver? ScopedTypeResolver = null,
-        PipelineExitStatusTracker? PipelineExitStatusTracker = null,
-        IShellBlockExecutor? BlockExecutor = null,
-        bool OutputIsCaptured = false,
-        IScopedCommandView? ScopedCommands = null,
-        IShellNamedTypeView? ShellTypes = null)
-        : this(
-            Runtime.Language,
-            Input,
-            Arguments,
-            CancellationToken,
-            Invocation,
-            IsPipelined,
-            ScopedTypeResolver,
-            PipelineExitStatusTracker,
-            BlockExecutor,
-            OutputIsCaptured,
-            ScopedCommands,
-            ShellTypes,
-            Runtime)
-    {
-    }
-
-    public CommandContext(
         ToastRuntime LanguageRuntime,
         IAsyncEnumerable<object?> Input,
         IReadOnlyList<object?> Arguments,
@@ -56,8 +26,7 @@ public sealed record CommandContext
         IShellBlockExecutor? BlockExecutor = null,
         bool OutputIsCaptured = false,
         IScopedCommandView? ScopedCommands = null,
-        IShellNamedTypeView? ShellTypes = null,
-        ToshRuntime? ShellRuntime = null)
+        IShellNamedTypeView? ShellTypes = null)
     {
         this.LanguageRuntime = LanguageRuntime ?? throw new ArgumentNullException(nameof(LanguageRuntime));
         this.Input = Input ?? throw new ArgumentNullException(nameof(Input));
@@ -71,21 +40,15 @@ public sealed record CommandContext
         this.OutputIsCaptured = OutputIsCaptured;
         this.ScopedCommands = ScopedCommands;
         this.ShellTypes = ShellTypes;
-        this.CommandHost = LanguageRuntime.CommandHost ?? ShellRuntime;
-        this.ShellRuntime = ShellRuntime ?? this.CommandHost as ToshRuntime;
+        this.CommandHost = LanguageRuntime.CommandHost;
     }
 
     public ToastRuntime LanguageRuntime { get; init; }
-
-    public ToshRuntime? ShellRuntime { get; init; }
 
     /// <summary>
     /// Host-specific command state carried opaquely by the language runtime.
     /// </summary>
     public IToastCommandHost? CommandHost { get; init; }
-
-    public ToshRuntime Runtime => ShellRuntime ?? throw new InvalidOperationException(
-        "This command context has no TōSh session runtime. The command requires a shell host capability.");
 
     /// <summary>Gets the invoking host as the type required by a host-specific command.</summary>
     public THost RequireCommandHost<THost>()

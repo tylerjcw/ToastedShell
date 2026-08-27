@@ -50,7 +50,7 @@ public sealed class SourceCommand : ShellCommand
     /// exists (`TOAST-0006`).
     /// </summary>
     private static IToshScriptHost RequireHost(CommandContext context)
-        => context.Runtime.Evaluator as IToshScriptHost
+        => context.Shell().Evaluator as IToshScriptHost
            ?? throw new InvalidOperationException(
                "This host cannot run scripts. Register a ToastScript engine on the runtime " +
                "before using script-running commands.");

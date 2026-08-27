@@ -62,7 +62,7 @@ public sealed class PromptDurationCommand : ShellCommand
         }
 
         var segment = PromptSegmentUtilities.BuildDurationSegment(
-            duration ?? context.Runtime.LastCommandDuration,
+            duration ?? context.Shell().LastCommandDuration,
             threshold,
             new ToshTextStyleConfig(foreground: fg, background: bg, bold: bold, dim: dim));
 

@@ -56,7 +56,7 @@ public sealed class PromptExitCodeCommand : ShellCommand
             }
         }
 
-        var segment = PromptSegmentUtilities.BuildExitCodeSegment(exitCode ?? context.Runtime.LastExitCode, fg, bg, bold, dim: dim);
+        var segment = PromptSegmentUtilities.BuildExitCodeSegment(exitCode ?? context.Shell().LastExitCode, fg, bg, bold, dim: dim);
 
         if (segment is not null)
         {

@@ -51,7 +51,7 @@ public sealed class PromptJobsCommand : ShellCommand
             }
         }
 
-        var effectiveCount = jobCount ?? context.Runtime.GetJobs().Count;
+        var effectiveCount = jobCount ?? context.Shell().GetJobs().Count;
 
         if (effectiveCount <= 0)
         {

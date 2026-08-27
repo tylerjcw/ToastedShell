@@ -311,6 +311,7 @@ public sealed class UnitRegistry
         Register("in", "inch", "Length", length, 0.0254);
         Register("ft", "foot", "Length", length, 0.3048);
         Register("yd", "yard", "Length", length, 0.9144);
+        Register("fur", "furlong", "Length", length, 201.168);
         Register("mi", "mile", "Length", length, 1609.344);
         Register("nmi", "nautical mile", "Length", length, 1852.0);
         Register("au", "astronomical unit", "Length", length, 1.495978707e11);
@@ -327,12 +328,21 @@ public sealed class UnitRegistry
         Register("t", "metric tonne", "Mass", mass, 1000.0);
 
         // ── Time ──────────────────────────────────────────────────
+
         Register("s", "second", "Duration", time, 1.0);
+        Register("jiffy", "jiffy", "Duration", time, 3 * Math.Pow(10, -24));
         Register("min", "minute", "Duration", time, 60.0);
-        Register("h", "hour", "Duration", time, 3600.0);
         Register("hr", "hour", "Duration", time, 3600.0);
-        Register("d", "day", "Duration", time, 86400.0);
+        Register("sol", "day", "Duration", time, 86400.0, allowSiPrefixes: true);
+        Register("day", "day", "Duration", time, 86400.0, allowSiPrefixes: true);
+        Register("ftnt", "fortnight", "Duration", time, 1209600);
         Register("wk", "week", "Duration", time, 604800.0);
+        Register("cy", "common year", "Duration", time, 31536000);
+        Register("lpy", "leap year", "Duration", time, 31622400);
+        Register("ty", "tropical year", "Duration", time, 31556925.216);
+        Register("jy", "julian year", "Duration", time, 31557600);
+        Register("sy", "sidereal year", "Duration", time, 31558149.7635456);
+
 
         // ── Temperature ───────────────────────────────────────────
         Register("K", "kelvin", "Temperature", temperature, 1.0,
@@ -387,9 +397,21 @@ public sealed class UnitRegistry
         Register("tsp", "teaspoon", "Volume", volume, 4.92892159375e-6);
 
         // ── Speed ─────────────────────────────────────────────────
+        Register("fps", "feet per second", "Speed", speed, 0.3048);
+        Register("mphr", "meters per hour", "Speed", speed, 1.0 / 3600);
         Register("mph", "miles per hour", "Speed", speed, 0.44704);
         Register("kph", "kilometers per hour", "Speed", speed, 1.0 / 3.6);
         Register("kn", "knot", "Speed", speed, 1852.0 / 3600.0);
+        Register("mach", "mach (ISA sea level)", "Speed", speed, 340.29);
+        Register("AUd", "astronomical units per day", "Speed", speed, 149_597_870_700.0 / 86_400.0);
+        Register("c", "× speed of light in vacuum", "Speed", speed, 299792458.0);
+        Register("c_air", "× speed of light in air", "Speed", speed, 299_706_000.0);
+        Register("c_water", "× speed of light in water", "Speed", speed, 224_900_000.0);
+        Register("c_glass", "× speed of light in glass", "Speed", speed, 199_861_639.0);
+        Register("c_diamond", "× speed of light in diamond", "Speed", speed, 123_985_000.0);
+        Register("c_ice", "× speed of light in ice", "Speed", speed, 229_000_000.0);
+        Register("c_acrylic", "× speed of light in acrylic", "Speed", speed, 201_200_000.0);
+        Register("c_fiber", "× speed of light in optical fiber", "Speed", speed, 204_190_000.0);
 
         // ── Acceleration ──────────────────────────────────────────
         // m/s² is naturally composed; provide a convenience alias
@@ -402,11 +424,12 @@ public sealed class UnitRegistry
 
         // ── Energy ────────────────────────────────────────────────
         Register("J", "joule", "Energy", energy, 1.0);
+        Register("Ws", "watt-second", "Energy", energy, 1.0);
         Register("cal", "calorie", "Energy", energy, 4.184);
         Register("kcal", "kilocalorie", "Energy", energy, 4184.0);
         Register("BTU", "British thermal unit", "Energy", energy, 1055.06);
         Register("eV", "electron volt", "Energy", energy, 1.602176634e-19);
-        Register("kWh", "kilowatt-hour", "Energy", energy, 3.6e6);
+        Register("Wh", "watt-hour", "Energy", energy, 3600.0, allowSiPrefixes: true);
 
         // ── Power ─────────────────────────────────────────────────
         Register("W", "watt", "Power", power, 1.0);
@@ -414,13 +437,18 @@ public sealed class UnitRegistry
 
         // ── Pressure ──────────────────────────────────────────────
         Register("Pa", "pascal", "Pressure", pressure, 1.0);
-        Register("bar", "bar", "Pressure", pressure, 100_000.0);
+        Register("bar", "bar", "Pressure", pressure, 100000.0);
         Register("atm", "atmosphere", "Pressure", pressure, 101_325.0);
         Register("psi", "pound per square inch", "Pressure", pressure, 6894.757293168);
         Register("mmHg", "millimeters of mercury", "Pressure", pressure, 133.322387415);
+        Register("inHg", "inches of mercury", "Pressure", pressure, 3386.38866667);
+        Register("torr", "torr", "Pressure", pressure, 101325.0 / 760.0);
+        Register("mbar", "millibar", "Pressure", pressure, 100.0);
 
         // ── Frequency ─────────────────────────────────────────────
         Register("Hz", "hertz", "Frequency", frequency, 1.0);
+        Register("Bd", "baud", "Frequency", frequency, 1.0);
+        Register("Bq", "becquerel", "Activity", frequency, 1.0);
 
         // ── Electric ──────────────────────────────────────────────
         Register("A", "ampere", "Current", current, 1.0);
@@ -445,6 +473,7 @@ public sealed class UnitRegistry
         // ── Angle ─────────────────────────────────────────────────
         Register("rad", "radian", "Angle", angle, 1.0, allowSiPrefixes: true);
         Register("deg", "degree", "Angle", angle, Math.PI / 180.0);
+        Register("grad", "gradian", "Angle", angle, Math.PI / 200.0);
         Register("°", "degree", "Angle", angle, Math.PI / 180.0);
         Register("arcmin", "arcminute", "Angle", angle, Math.PI / 10800.0);
         Register("arcsec", "arcsecond", "Angle", angle, Math.PI / 648000.0);

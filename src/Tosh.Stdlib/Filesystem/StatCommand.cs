@@ -51,7 +51,7 @@ public sealed class StatCommand : ShellCommand
                 }
 
                 yield return CommandDisplaySelectionParser.Apply(
-                    context.Runtime,
+                    context.Shell(),
                     selection.Selection,
                     match with { RequestedPath = path });
             }
@@ -65,7 +65,7 @@ public sealed class StatCommand : ShellCommand
             var entry = ResolveEntry(path);
             var resolved = options.DereferenceLinks ? Dereference(entry) : entry;
             yield return CommandDisplaySelectionParser.Apply(
-                context.Runtime,
+                context.Shell(),
                 selection.Selection,
                 FileSystemEntry.From(resolved, preferLongDisplay: true));
         }

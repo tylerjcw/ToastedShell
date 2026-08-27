@@ -45,13 +45,13 @@ public sealed class RaiseCommand : ShellCommand
             throw new InvalidOperationException("raise expects an event object or event type. Usage: raise <event> or <event> | raise");
         }
 
-        var result = await context.Runtime.Events.RaiseAsync(shellEvent, context.CancellationToken);
+        var result = await context.Shell().Events.RaiseAsync(shellEvent, context.CancellationToken);
         yield return result;
     }
 
     private static ShellEvent? ResolveEvent(object? value, CommandContext context, IDictionary<string, object?>? fieldOverrides = null)
     {
-        var sender = context.Runtime.EventSenderFactory?.Invoke()
+        var sender = context.Shell().EventSenderFactory?.Invoke()
             ?? new ShellEventSender(Function: null, Script: null, Line: null);
 
         return value switch

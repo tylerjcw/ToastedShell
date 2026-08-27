@@ -16,7 +16,7 @@ public sealed class JobsCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        foreach (var job in context.Runtime.GetJobs())
+        foreach (var job in context.Shell().GetJobs())
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             yield return job.ToInfo();

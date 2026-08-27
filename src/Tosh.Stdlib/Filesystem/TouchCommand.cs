@@ -23,7 +23,7 @@ public sealed class TouchCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var options = ParseOptions(context.Arguments, context.Runtime.CurrentDirectory);
+        var options = ParseOptions(context.Arguments, context.Shell().CurrentDirectory);
         var paths = await ShellPathArguments.CollectAsync(context, options.Positionals, context.CancellationToken);
 
         if (paths.Count == 0)
@@ -46,7 +46,7 @@ public sealed class TouchCommand : ShellCommand
                     continue;
                 }
 
-                Directory.CreateDirectory(Path.GetDirectoryName(path) ?? context.Runtime.CurrentDirectory);
+                Directory.CreateDirectory(Path.GetDirectoryName(path) ?? context.Shell().CurrentDirectory);
 
                 await using (var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite))
                 {

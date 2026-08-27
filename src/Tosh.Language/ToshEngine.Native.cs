@@ -390,8 +390,7 @@ public sealed partial class ToshEngine
             cancellationToken,
             ScopedTypeResolver: CreateScopedTypeResolver(),
             ScopedCommands: CreateScopedCommandView(),
-            ShellTypes: this,
-            ShellRuntime: ShellRuntime);
+            ShellTypes: this);
 
         return await AsyncEnumerableExtensions.ToListAsync(command.ExecuteAsync(context), cancellationToken);
     }

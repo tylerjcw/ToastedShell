@@ -33,7 +33,7 @@ public sealed class HistorySearchCommand : ShellCommand
             throw new InvalidOperationException("history-search expects a search string.");
         }
 
-        foreach (var result in context.Runtime.History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
+        foreach (var result in context.Shell().History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             yield return result;

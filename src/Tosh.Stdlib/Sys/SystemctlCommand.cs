@@ -117,7 +117,7 @@ public sealed class SystemctlCommand : ShellCommand
 
         var result = await ExecuteStructuredAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -133,7 +133,7 @@ public sealed class SystemctlCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         switch (request.Mode)
@@ -157,7 +157,7 @@ public sealed class SystemctlCommand : ShellCommand
                     foreach (var unit in units)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unit);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, unit);
                     }
 
                     yield break;
@@ -181,7 +181,7 @@ public sealed class SystemctlCommand : ShellCommand
                     foreach (var unitFile in unitFiles)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unitFile);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, unitFile);
                     }
 
                     yield break;
@@ -211,7 +211,7 @@ public sealed class SystemctlCommand : ShellCommand
                     foreach (var unit in units)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unit);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, unit);
                     }
 
                     yield break;
@@ -223,7 +223,7 @@ public sealed class SystemctlCommand : ShellCommand
 
     private static string ResolveExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "systemctl");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "systemctl");
 
         return lookup.Status switch
         {
@@ -609,7 +609,7 @@ public sealed class SystemctlCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,
@@ -655,7 +655,7 @@ public sealed class SystemctlCommand : ShellCommand
             return;
         }
 
-        var journalLookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "journalctl");
+        var journalLookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "journalctl");
 
         if (journalLookup.Status is not ExternalCommandLookupStatus.Found || journalLookup.ResolvedPath is null)
         {
@@ -716,7 +716,7 @@ public sealed class SystemctlCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

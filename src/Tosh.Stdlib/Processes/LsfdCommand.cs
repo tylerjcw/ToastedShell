@@ -81,7 +81,7 @@ public sealed class LsfdCommand : ShellCommand
 
         var result = await ExecuteStructuredLsfdAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -97,7 +97,7 @@ public sealed class LsfdCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         LsfdParseResult parsed;
@@ -117,7 +117,7 @@ public sealed class LsfdCommand : ShellCommand
         foreach (var row in parsed.Rows)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.RowSelection, row);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), request.RowSelection, row);
         }
 
         var counterSelection = parsed.Rows.Count == 0
@@ -129,13 +129,13 @@ public sealed class LsfdCommand : ShellCommand
             context.CancellationToken.ThrowIfCancellationRequested();
             yield return counterSelection is null
                 ? counter
-                : CommandDisplaySelectionParser.Apply(context.Runtime, counterSelection, counter);
+                : CommandDisplaySelectionParser.Apply(context.Shell(), counterSelection, counter);
         }
     }
 
     private static string ResolveLsfdExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "lsfd");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "lsfd");
 
         return lookup.Status switch
         {
@@ -287,7 +287,7 @@ public sealed class LsfdCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,
@@ -401,7 +401,7 @@ public sealed class LsfdCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

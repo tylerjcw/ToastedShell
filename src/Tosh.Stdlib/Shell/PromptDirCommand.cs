@@ -46,6 +46,6 @@ public sealed class PromptDirCommand : ShellCommand
             }
         }
 
-        yield return PromptSegmentUtilities.BuildDirectorySegment(context.Runtime.CurrentDirectory, depth, fg, bg, bold);
+        yield return PromptSegmentUtilities.BuildDirectorySegment(context.Shell().CurrentDirectory, depth, fg, bg, bold);
     }
 }

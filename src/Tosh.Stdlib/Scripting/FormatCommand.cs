@@ -117,7 +117,7 @@ public sealed class FormatCommand : ShellCommand
         {
             // Communicate non-zero exit via a non-throwing diagnostic so
             // pipelines can still inspect the per-file records.
-            context.Runtime.SetLastExitCode(1);
+            context.Shell().SetLastExitCode(1);
         }
     }
 

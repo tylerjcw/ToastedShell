@@ -18,10 +18,10 @@ public sealed class UndefCommand : ShellCommand
 
         foreach (var name in context.Arguments.Select((_, index) => CommandArguments.RequireString(context.Arguments, index, "name")))
         {
-            var removed = context.Runtime.Commands.TryGet(name, out var command) &&
+            var removed = context.Shell().Commands.TryGet(name, out var command) &&
                           command is ICommandResolutionMetadata metadata &&
                           metadata.ResolutionKind == CommandResolutionKind.Function &&
-                          context.Runtime.Commands.Remove(name);
+                          context.Shell().Commands.Remove(name);
 
             results.Add(ShellRecordUtilities.CreateExpando(
             [

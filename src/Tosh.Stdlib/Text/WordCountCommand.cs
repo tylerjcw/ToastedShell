@@ -135,7 +135,7 @@ public sealed class WordCountCommand : ShellCommand
     private static object ApplySelection(CommandContext context, DisplayColumnSelection selection, TextStatistics statistics)
     {
         return selection.HasOverrides
-            ? CommandDisplaySelectionParser.Apply(context.Runtime, selection, statistics)!
+            ? CommandDisplaySelectionParser.Apply(context.Shell(), selection, statistics)!
             : statistics;
     }
 }

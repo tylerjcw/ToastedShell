@@ -335,6 +335,46 @@ doc-and-metadata tests use `Get` and pass the registry by its concrete type, so 
 shell's, and the compiler said so rather than the migration hiding it. The interface was
 sized to what the *language* uses, and this is that decision holding.
 
+## `CommandContext` no longer names the shell — 2026-08-26
+
+The item predicted this: *"the remaining `CommandContext.Runtime` callers are commands in
+`Tosh.Stdlib` and can now be divided according to the standard-library boundary"*. Measured,
+that was exactly right — **320 `context.Runtime` reads, every one of them in `Tosh.Stdlib`**,
+and none in the language, the CLI, the runtime or Tui.
+
+`CommandContext` lives on the value-model side and named `ToshRuntime` in a constructor
+parameter, two properties and a legacy overload. That single type was holding a language
+type to the shell assembly, so no amount of file movement could complete the division while
+it stood.
+
+The host seam built earlier is what made this cheap. `ToshRuntime` already implements
+`IToastCommandHost` and sets `CommandHost = this` on its language runtime, so a shell command
+can recover its host by name. `ShellCommandContextExtensions.Shell()` does exactly that, and
+lives in the **shell's** assembly — declared in the `Tosh.Runtime` namespace, which every
+command file already imports for `CommandContext`, so 320 call sites changed without one
+`using` being touched and the dependency is named in one place rather than spelled at each
+call.
+
+With those migrated, the type itself came apart cleanly:
+
+| Removed from `CommandContext` | Sites fixed |
+|---|---|
+| the legacy `CommandContext(ToshRuntime, …)` overload | 3 in `Tosh.Compiler.Runtime`, 3 in tests |
+| the `ShellRuntime` constructor parameter | 9 in `Tosh.Language` |
+| the `ShellRuntime` and `Runtime` properties | 2 test reads |
+
+`CommandHost` now comes from the language runtime alone. **`CommandContext.cs` contains no
+occurrence of `ToshRuntime`.** The suite is unchanged at 6,647 across every step of this,
+which is the point: nothing here is a behaviour change.
+
+**What still holds the language to the shell**, and is the remaining work:
+
+- `ToshEngine` names `ToshRuntime` in its compatibility constructor and its `ShellRuntime` /
+  `Runtime` properties. Seventeen test reads depend on the latter, all genuinely shell —
+  `Config`, `Formatter`, the job table, `Display`, and the concrete `ShellCommandRegistry`.
+- Roughly fifteen files in `Tosh.Runtime` are shell-side by content — the config cluster,
+  the display cluster, and the command-metadata emitters — and simply move with it.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

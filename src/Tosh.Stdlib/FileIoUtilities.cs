@@ -17,7 +17,7 @@ internal static class FileIoUtilities
             throw new InvalidOperationException($"Missing required argument: {label}.");
         }
 
-        return ShellPathArguments.Resolve(context.Runtime.CurrentDirectory, context.Arguments[argumentIndex]);
+        return ShellPathArguments.Resolve(context.Shell().CurrentDirectory, context.Arguments[argumentIndex]);
     }
 
     public static void EnsureReadableFile(string path, string commandName)

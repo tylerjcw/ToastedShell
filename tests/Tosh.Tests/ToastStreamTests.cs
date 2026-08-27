@@ -265,8 +265,8 @@ public sealed class ToastStreamTests
 
         public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
         {
-            await context.Runtime.Output.WriteLineAsync("shell output");
-            await context.Runtime.Error.WriteLineAsync("shell error");
+            await context.Shell().Output.WriteLineAsync("shell output");
+            await context.Shell().Error.WriteLineAsync("shell error");
             yield break;
         }
     }

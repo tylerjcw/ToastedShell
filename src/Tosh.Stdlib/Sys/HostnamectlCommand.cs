@@ -27,7 +27,7 @@ public sealed class HostnamectlCommand : ShellCommand
         {
             var winSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
             var winHost = BuildWindowsHostInfo();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, winSelection.Selection, winHost);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), winSelection.Selection, winHost);
             yield break;
         }
 
@@ -48,7 +48,7 @@ public sealed class HostnamectlCommand : ShellCommand
 
         var result = await ExecuteStructuredAsync(context, resolvedPath, externalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -64,7 +64,7 @@ public sealed class HostnamectlCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         SystemdHostInfo host;
@@ -81,7 +81,7 @@ public sealed class HostnamectlCommand : ShellCommand
                 help: "Try running the external `hostnamectl` command directly if you are using an unsupported output mode.");
         }
 
-        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, host);
+        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, host);
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -107,7 +107,7 @@ public sealed class HostnamectlCommand : ShellCommand
 
     private static string ResolveExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "hostnamectl");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "hostnamectl");
 
         return lookup.Status switch
         {
@@ -223,7 +223,7 @@ public sealed class HostnamectlCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

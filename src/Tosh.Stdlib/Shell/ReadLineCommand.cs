@@ -23,8 +23,8 @@ public sealed class ReadLineCommand : ShellCommand
 
         if (prompt is not null)
         {
-            await context.Runtime.Output.WriteAsync(prompt);
-            await context.Runtime.Output.FlushAsync(context.CancellationToken);
+            await context.Shell().Output.WriteAsync(prompt);
+            await context.Shell().Output.FlushAsync(context.CancellationToken);
         }
 
         var line = Console.ReadLine();

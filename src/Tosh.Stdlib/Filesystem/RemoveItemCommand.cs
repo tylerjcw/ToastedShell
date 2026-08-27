@@ -91,7 +91,7 @@ public sealed class RemoveItemCommand : ShellCommand
 
     private static bool ConfirmRemoval(CommandContext context, string path)
     {
-        var provider = context.Runtime.InlinePrompts;
+        var provider = context.Shell().InlinePrompts;
 
         if (provider is null)
         {

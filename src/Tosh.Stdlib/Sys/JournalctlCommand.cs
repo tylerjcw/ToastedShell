@@ -61,7 +61,7 @@ public sealed class JournalctlCommand : ShellCommand
 
     private static string ResolveExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "journalctl");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "journalctl");
 
         return lookup.Status switch
         {
@@ -163,7 +163,7 @@ public sealed class JournalctlCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,
@@ -189,7 +189,7 @@ public sealed class JournalctlCommand : ShellCommand
                 title: "Failed to start the system 'journalctl' command.");
         }
 
-        var stderrTask = PumpStandardErrorAsync(process, context.Runtime.Error, context.CancellationToken);
+        var stderrTask = PumpStandardErrorAsync(process, context.Shell().Error, context.CancellationToken);
 
         try
         {
@@ -222,14 +222,14 @@ public sealed class JournalctlCommand : ShellCommand
                 }
 
                 context.CancellationToken.ThrowIfCancellationRequested();
-                yield return CommandDisplaySelectionParser.Apply(context.Runtime, selection, entry);
+                yield return CommandDisplaySelectionParser.Apply(context.Shell(), selection, entry);
             }
         }
         finally
         {
             await AwaitAndIgnoreAsync(stderrTask);
             await process.WaitForExitAsync(CancellationToken.None);
-            context.Runtime.SetLastExitCode(process.ExitCode);
+            context.Shell().SetLastExitCode(process.ExitCode);
             context.PipelineExitStatusTracker?.Record(process.ExitCode);
         }
 

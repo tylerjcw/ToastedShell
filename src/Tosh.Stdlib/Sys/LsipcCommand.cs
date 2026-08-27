@@ -62,7 +62,7 @@ public sealed class LsipcCommand : ShellCommand
 
         var result = await ExecuteStructuredLsipcAsync(context, resolvedPath, request);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -78,7 +78,7 @@ public sealed class LsipcCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         IReadOnlyList<ExpandoObject> rows;
@@ -98,13 +98,13 @@ public sealed class LsipcCommand : ShellCommand
         foreach (var row in rows)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, row);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, row);
         }
     }
 
     private static string ResolveLsipcExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "lsipc");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "lsipc");
 
         return lookup.Status switch
         {
@@ -249,7 +249,7 @@ public sealed class LsipcCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

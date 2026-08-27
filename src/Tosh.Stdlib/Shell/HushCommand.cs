@@ -21,7 +21,7 @@ public sealed class HushCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var evaluator = context.Runtime.Evaluator
+        var evaluator = context.Shell().Evaluator
             ?? throw new InvalidOperationException($"{Name} requires an active Tosh evaluator.");
 
         var codes = new List<string>();

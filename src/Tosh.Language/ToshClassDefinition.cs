@@ -2627,8 +2627,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 Input: System.Linq.AsyncEnumerable.Empty<object?>(),
                 Arguments: argumentValues,
                 CancellationToken: cancellationToken,
-                Invocation: syntheticInvocation,
-                ShellRuntime: _engine.ShellRuntime);
+                Invocation: syntheticInvocation);
 
             methodBindings = _engine.InferMethodTypeBindings(
                 method,

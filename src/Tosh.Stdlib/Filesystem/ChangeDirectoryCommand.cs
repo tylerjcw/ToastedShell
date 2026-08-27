@@ -31,18 +31,18 @@ public sealed class ChangeDirectoryCommand : ShellCommand
             path = pipedPaths.Count == 0 ? PathUtilities.UserHomeDirectory : pipedPaths[0];
         }
 
-        var oldDirectory = FileSystemEntry.From(new DirectoryInfo(context.Runtime.CurrentDirectory));
+        var oldDirectory = FileSystemEntry.From(new DirectoryInfo(context.Shell().CurrentDirectory));
 
         if (path == "-")
         {
-            var previous = context.Runtime.GoBack();
+            var previous = context.Shell().GoBack();
 
             if (previous is null)
             {
                 throw new InvalidOperationException("No previous directory in the stack.");
             }
 
-            context.Runtime.CurrentDirectory = previous;
+            context.Shell().CurrentDirectory = previous;
             var newEntry = FileSystemEntry.From(new DirectoryInfo(previous));
             await RaiseDirectoryChangedAsync(context, oldDirectory, newEntry);
             yield return newEntry;
@@ -51,21 +51,21 @@ public sealed class ChangeDirectoryCommand : ShellCommand
 
         if (path == "+")
         {
-            var next = context.Runtime.GoForward();
+            var next = context.Shell().GoForward();
 
             if (next is null)
             {
                 throw new InvalidOperationException("No next directory in the stack.");
             }
 
-            context.Runtime.CurrentDirectory = next;
+            context.Shell().CurrentDirectory = next;
             var newEntry = FileSystemEntry.From(new DirectoryInfo(next));
             await RaiseDirectoryChangedAsync(context, oldDirectory, newEntry);
             yield return newEntry;
             yield break;
         }
 
-        var resolvedPaths = ShellPathArguments.Expand(context.Runtime.CurrentDirectory, path);
+        var resolvedPaths = ShellPathArguments.Expand(context.Shell().CurrentDirectory, path);
 
         if (resolvedPaths.Count != 1)
         {
@@ -85,8 +85,8 @@ public sealed class ChangeDirectoryCommand : ShellCommand
                 throw new InvalidOperationException($"Directory '{resolvedPath}' does not exist.");
             }
 
-            context.Runtime.CurrentDirectory = directoryInfo.FullName;
-            context.Runtime.PushDirectory(directoryInfo.FullName);
+            context.Shell().CurrentDirectory = directoryInfo.FullName;
+            context.Shell().PushDirectory(directoryInfo.FullName);
         }
         catch (IOException exception)
         {
@@ -104,9 +104,9 @@ public sealed class ChangeDirectoryCommand : ShellCommand
 
     private static async Task RaiseDirectoryChangedAsync(CommandContext context, FileSystemEntry oldDirectory, FileSystemEntry newDirectory)
     {
-        var sender = context.Runtime.EventSenderFactory?.Invoke()
+        var sender = context.Shell().EventSenderFactory?.Invoke()
             ?? new ShellEventSender(Function: null, Script: null, Line: null);
         var evt = new DirectoryChangedEvent(oldDirectory, newDirectory, sender);
-        await context.Runtime.Events.RaiseAsync(evt, context.CancellationToken);
+        await context.Shell().Events.RaiseAsync(evt, context.CancellationToken);
     }
 }

@@ -47,7 +47,7 @@ public sealed class FindmntCommand : ShellCommand
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return CommandDisplaySelectionParser.Apply(
-                    context.Runtime,
+                    context.Shell(),
                     winSelection.Selection,
                     mount);
             }
@@ -75,7 +75,7 @@ public sealed class FindmntCommand : ShellCommand
 
         var result = await ExecuteStructuredFindmntAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -107,7 +107,7 @@ public sealed class FindmntCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         var effectiveSelection = request.PresetColumns.Count > 0 &&
@@ -122,13 +122,13 @@ public sealed class FindmntCommand : ShellCommand
         foreach (var mount in mounts)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, mount);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), effectiveSelection, mount);
         }
     }
 
     private static string ResolveFindmntExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "findmnt");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "findmnt");
 
         return lookup.Status switch
         {
@@ -262,7 +262,7 @@ public sealed class FindmntCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

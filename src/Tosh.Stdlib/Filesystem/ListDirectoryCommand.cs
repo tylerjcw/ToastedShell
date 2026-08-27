@@ -40,8 +40,8 @@ public sealed class ListDirectoryCommand : ShellCommand
         var selection = CommandDisplaySelectionParser.Parse(context.Arguments);
         var options = ParseOptions(selection.RemainingArguments);
         var paths = options.Paths.Count == 0
-            ? [context.Runtime.CurrentDirectory]
-            : ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, options.Paths);
+            ? [context.Shell().CurrentDirectory]
+            : ShellPathArguments.ExpandMany(context.Shell().CurrentDirectory, options.Paths);
 
         foreach (var path in paths)
         {
@@ -54,7 +54,7 @@ public sealed class ListDirectoryCommand : ShellCommand
                 if (options.DirectorySelf)
                 {
                     yield return CommandDisplaySelectionParser.Apply(
-                        context.Runtime,
+                        context.Shell(),
                         selection.Selection,
                         CreateEntry(directory, options));
                     continue;
@@ -66,7 +66,7 @@ public sealed class ListDirectoryCommand : ShellCommand
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
                         yield return CommandDisplaySelectionParser.Apply(
-                            context.Runtime,
+                            context.Shell(),
                             selection.Selection,
                             entry);
                     }
@@ -78,7 +78,7 @@ public sealed class ListDirectoryCommand : ShellCommand
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();
                     yield return CommandDisplaySelectionParser.Apply(
-                        context.Runtime,
+                        context.Shell(),
                         selection.Selection,
                         CreateEntry(entry, options));
                 }
@@ -89,7 +89,7 @@ public sealed class ListDirectoryCommand : ShellCommand
             if (File.Exists(path))
             {
                 yield return CommandDisplaySelectionParser.Apply(
-                    context.Runtime,
+                    context.Shell(),
                     selection.Selection,
                     CreateEntry(new FileInfo(path), options));
                 continue;

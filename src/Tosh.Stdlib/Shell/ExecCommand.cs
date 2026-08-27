@@ -46,29 +46,29 @@ public sealed class ExecCommand : ShellCommand
         }
 
         var target = SerializeTarget(context, context.Arguments[startIndex], startIndex);
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, target);
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, target);
         var executablePath = ResolveExecutablePath(context, target, lookup, startIndex);
         var arguments = context.Arguments
             .Skip(startIndex + 1)
             .Select(ExternalTextSerializer.SerializeArgument)
             .ToArray();
 
-        await context.Runtime.Output.FlushAsync(context.CancellationToken);
-        await context.Runtime.Error.FlushAsync(context.CancellationToken);
+        await context.Shell().Output.FlushAsync(context.CancellationToken);
+        await context.Shell().Error.FlushAsync(context.CancellationToken);
 
-        var result = await context.Runtime.ExecHandler.ExecuteAsync(
+        var result = await context.Shell().ExecHandler.ExecuteAsync(
             new ShellExecRequest(
                 ExecutablePath: executablePath,
                 Arguments: arguments,
-                WorkingDirectory: context.Runtime.CurrentDirectory),
+                WorkingDirectory: context.Shell().CurrentDirectory),
             context.CancellationToken);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (!result.ReplacedCurrentProcess)
         {
-            context.Runtime.RequestExit();
+            context.Shell().RequestExit();
         }
 
         yield break;

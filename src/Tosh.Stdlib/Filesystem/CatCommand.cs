@@ -102,7 +102,7 @@ public sealed class CatCommand : ShellCommand
                 }
                 else
                 {
-                    explicitSources.AddRange(ShellPathArguments.Expand(context.Runtime.CurrentDirectory, positional));
+                    explicitSources.AddRange(ShellPathArguments.Expand(context.Shell().CurrentDirectory, positional));
                 }
             }
 
@@ -124,7 +124,7 @@ public sealed class CatCommand : ShellCommand
                 continue;
             }
 
-            if (!TryExpandExistingFilePath(context.Runtime.CurrentDirectory, input, out var expanded))
+            if (!TryExpandExistingFilePath(context.Shell().CurrentDirectory, input, out var expanded))
             {
                 return Array.Empty<string>();
             }

@@ -22,7 +22,7 @@ public sealed class InspectCommand : ShellCommand
         var parsed = ParsedCommandArguments.Parse(context.Arguments);
         var includeAllMembers = parsed.HasFlag("a", "all");
         var flat = parsed.HasFlag("flat");
-        var provider = flat ? null : context.Runtime.InlinePrompts;
+        var provider = flat ? null : context.Shell().InlinePrompts;
 
         await using var enumerator = context.Input.GetAsyncEnumerator(context.CancellationToken);
 
@@ -41,7 +41,7 @@ public sealed class InspectCommand : ShellCommand
             }
             else
             {
-                yield return context.Runtime.Inspector.Inspect(enumerator.Current, index, includeAllMembers);
+                yield return context.Shell().Inspector.Inspect(enumerator.Current, index, includeAllMembers);
             }
 
             index++;

@@ -42,14 +42,14 @@ public sealed class EditCommand : ShellCommand
             var value = Environment.GetEnvironmentVariable(envVar);
             if (string.IsNullOrWhiteSpace(value)) continue;
 
-            var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, value.Trim());
+            var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, value.Trim());
             if (lookup.Status == ExternalCommandLookupStatus.Found && lookup.ResolvedPath is not null)
                 return (lookup.Name, lookup.ResolvedPath);
         }
 
         foreach (var fallback in FallbackEditors)
         {
-            var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, fallback);
+            var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, fallback);
             if (lookup.Status == ExternalCommandLookupStatus.Found && lookup.ResolvedPath is not null)
                 return (lookup.Name, lookup.ResolvedPath);
         }

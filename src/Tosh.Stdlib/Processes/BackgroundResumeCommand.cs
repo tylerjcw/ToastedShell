@@ -20,14 +20,14 @@ public sealed class BackgroundResumeCommand : ShellCommand
 
         if (context.Arguments.Count > 0)
         {
-            if (!TryResolveJob(context.Runtime, context.Arguments[0], out job))
+            if (!TryResolveJob(context.Shell(), context.Arguments[0], out job))
             {
                 throw new InvalidOperationException($"'{context.Arguments[0]}' is not a valid job reference.");
             }
         }
         else
         {
-            job = FindMostRecentSuspended(context.Runtime);
+            job = FindMostRecentSuspended(context.Shell());
 
             if (job is null)
             {
@@ -40,7 +40,7 @@ public sealed class BackgroundResumeCommand : ShellCommand
             throw new InvalidOperationException(error ?? $"Failed to resume job [{job.Id}].");
         }
 
-        await context.Runtime.Error.WriteLineAsync(
+        await context.Shell().Error.WriteLineAsync(
             $"[{job.Id}]  {job.Command} &");
 
         yield return new JobControlResult(

@@ -53,7 +53,7 @@ public sealed class LsblkCommand : ShellCommand
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return CommandDisplaySelectionParser.Apply(
-                    context.Runtime,
+                    context.Shell(),
                     winSelection.Selection,
                     device);
             }
@@ -81,7 +81,7 @@ public sealed class LsblkCommand : ShellCommand
 
         var result = await ExecuteStructuredLsblkAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -113,7 +113,7 @@ public sealed class LsblkCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         var effectiveSelection = request.PresetColumns.Count > 0 &&
@@ -128,13 +128,13 @@ public sealed class LsblkCommand : ShellCommand
         foreach (var device in devices)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, device);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), effectiveSelection, device);
         }
     }
 
     private static string ResolveLsblkExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "lsblk");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "lsblk");
 
         return lookup.Status switch
         {
@@ -315,7 +315,7 @@ public sealed class LsblkCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

@@ -220,7 +220,7 @@ public sealed class TuiCommand : ShellCommand
         {
             // For --cli file picking, list files and use the inline Pick provider
             var provider = RequireInlineProvider(context);
-            var basePath = initialPath ?? context.Runtime.CurrentDirectory;
+            var basePath = initialPath ?? context.Shell().CurrentDirectory;
 
             var entries = directoryOnly
                 ? Directory.GetDirectories(basePath).Select(Path.GetFileName).Cast<object?>().ToArray()
@@ -629,7 +629,7 @@ public sealed class TuiCommand : ShellCommand
 
     private static IInlinePromptProvider RequireInlineProvider(CommandContext context)
     {
-        return context.Runtime.InlinePrompts
+        return context.Shell().InlinePrompts
             ?? throw context.CreateDiagnostic(
                 code: "tosh.tui.no_inline_provider",
                 title: "Inline prompts (--cli) are not available in this environment.",

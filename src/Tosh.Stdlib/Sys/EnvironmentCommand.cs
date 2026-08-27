@@ -44,7 +44,7 @@ public sealed class EnvironmentCommand : ShellCommand
                 yield break;
             }
 
-            var evaluator = context.Runtime.Evaluator
+            var evaluator = context.Shell().Evaluator
                             ?? throw new InvalidOperationException("This runtime cannot evaluate nested commands for env.");
 
             var previousValues = CapturePreviousValues(parsed);

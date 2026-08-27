@@ -22,7 +22,7 @@ public sealed class DirsCommand : ShellCommand
 
         if (parsed.Positionals.Count == 0)
         {
-            foreach (var entry in context.Runtime.GetDirectoryStack())
+            foreach (var entry in context.Shell().GetDirectoryStack())
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return entry;
@@ -38,14 +38,14 @@ public sealed class DirsCommand : ShellCommand
             case "goto":
                 {
                     var index = RequireIndex(parsed, context);
-                    var path = context.Runtime.GoToStackIndex(index);
+                    var path = context.Shell().GoToStackIndex(index);
 
                     if (path is null)
                     {
                         throw new InvalidOperationException($"Invalid stack index: {index}.");
                     }
 
-                    context.Runtime.CurrentDirectory = path;
+                    context.Shell().CurrentDirectory = path;
                     yield return FileSystemEntry.From(new DirectoryInfo(path));
                     yield break;
                 }
@@ -53,15 +53,15 @@ public sealed class DirsCommand : ShellCommand
                 {
                     var index = RequireIndex(parsed, context);
 
-                    if (!context.Runtime.RemoveDirectoryStackEntry(index))
+                    if (!context.Shell().RemoveDirectoryStackEntry(index))
                     {
                         throw new InvalidOperationException(
-                            index == context.Runtime.DirectoryStackIndex
+                            index == context.Shell().DirectoryStackIndex
                                 ? "Cannot remove the current directory from the stack."
                                 : $"Invalid stack index: {index}.");
                     }
 
-                    foreach (var entry in context.Runtime.GetDirectoryStack())
+                    foreach (var entry in context.Shell().GetDirectoryStack())
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
                         yield return entry;
@@ -71,9 +71,9 @@ public sealed class DirsCommand : ShellCommand
                 }
             case "clear":
                 {
-                    context.Runtime.ClearDirectoryStack();
+                    context.Shell().ClearDirectoryStack();
 
-                    foreach (var entry in context.Runtime.GetDirectoryStack())
+                    foreach (var entry in context.Shell().GetDirectoryStack())
                     {
                         yield return entry;
                     }

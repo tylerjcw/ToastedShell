@@ -46,10 +46,10 @@ public sealed class SignalCommand : ShellCommand
         foreach (var target in targets)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return SendSignal(context.Runtime, signal, displayName, target);
+            yield return SendSignal(context.Shell(), signal, displayName, target);
         }
 
-        context.Runtime.SetLastExitCode(0);
+        context.Shell().SetLastExitCode(0);
     }
 
     private static JobControlResult SendSignal(ToshRuntime runtime, int signal, string displayName, object? target)

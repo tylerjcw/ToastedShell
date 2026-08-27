@@ -51,7 +51,7 @@ public sealed class WhichCommand : ShellCommand
                     builtIn.Usage);
             }
 
-            foreach (var path in ExternalCommandResolver.FindAllExecutables(context.Runtime.CurrentDirectory, name))
+            foreach (var path in ExternalCommandResolver.FindAllExecutables(context.Shell().CurrentDirectory, name))
             {
                 yield return new CommandResolution(
                     name,

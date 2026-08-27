@@ -13,6 +13,6 @@ public sealed class PrintWorkingDirectoryCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        yield return new DirectoryInfo(context.Runtime.CurrentDirectory);
+        yield return new DirectoryInfo(context.Shell().CurrentDirectory);
     }
 }

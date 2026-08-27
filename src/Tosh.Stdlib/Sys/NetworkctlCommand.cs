@@ -68,7 +68,7 @@ public sealed class NetworkctlCommand : ShellCommand
 
         var result = await ExecuteStructuredAsync(context, resolvedPath, externalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -84,7 +84,7 @@ public sealed class NetworkctlCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         IReadOnlyList<SystemdNetworkLinkInfo> links;
@@ -104,13 +104,13 @@ public sealed class NetworkctlCommand : ShellCommand
         foreach (var link in links)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, link);
+            yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, link);
         }
     }
 
     private static string ResolveExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "networkctl");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "networkctl");
 
         return lookup.Status switch
         {
@@ -237,7 +237,7 @@ public sealed class NetworkctlCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

@@ -36,10 +36,10 @@ public sealed class DuCommand : ShellCommand
             ? await ShellPathArguments.CollectAsync(context, Array.Empty<object?>(), context.CancellationToken)
             : Array.Empty<string>();
         var paths = options.Paths.Count > 0
-            ? ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, options.Paths)
+            ? ShellPathArguments.ExpandMany(context.Shell().CurrentDirectory, options.Paths)
             : pipedPaths.Count > 0
                 ? pipedPaths
-                : [context.Runtime.CurrentDirectory];
+                : [context.Shell().CurrentDirectory];
         var mountEntries = options.OneFileSystem ? UnixSystemServices.GetFileSystemUsage() : Array.Empty<FileSystemUsageInfo>();
         long totalBytes = 0;
 
@@ -56,7 +56,7 @@ public sealed class DuCommand : ShellCommand
                     var size = StorageSize.FromBytes(file.Length);
                     totalBytes += file.Length;
                     yield return CommandDisplaySelectionParser.Apply(
-                        context.Runtime,
+                        context.Shell(),
                         effectiveSelection,
                         new PathUsageInfo(
                             file.Name,
@@ -85,14 +85,14 @@ public sealed class DuCommand : ShellCommand
             foreach (var entry in usage.Entries)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, entry);
+                yield return CommandDisplaySelectionParser.Apply(context.Shell(), effectiveSelection, entry);
             }
         }
 
         if (options.IncludeTotal && paths.Count > 0)
         {
             yield return CommandDisplaySelectionParser.Apply(
-                context.Runtime,
+                context.Shell(),
                 effectiveSelection,
                 new PathUsageInfo(
                     "total",

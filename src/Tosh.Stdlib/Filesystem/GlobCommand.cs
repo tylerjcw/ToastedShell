@@ -45,7 +45,7 @@ public sealed class GlobCommand : ShellCommand
                 continue;
             }
 
-            var matches = PathUtilities.ExpandGlob(context.Runtime.CurrentDirectory, pattern, includeHidden);
+            var matches = PathUtilities.ExpandGlob(context.Shell().CurrentDirectory, pattern, includeHidden);
 
             foreach (var match in matches)
             {

@@ -198,7 +198,7 @@ public sealed class HttpCommand : ShellCommand
 
     private static HttpFileServerHandle ExecuteServe(CommandContext context)
     {
-        var options = ParseServeOptions(context.Arguments, 1, context.Runtime.CurrentDirectory);
+        var options = ParseServeOptions(context.Arguments, 1, context.Shell().CurrentDirectory);
 
         return HttpFileServerHandle.Start(
             options.RootPath!,
@@ -301,7 +301,7 @@ public sealed class HttpCommand : ShellCommand
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
-            context.Runtime.SetLastExitCode(1);
+            context.Shell().SetLastExitCode(1);
             context.PipelineExitStatusTracker?.Record(1);
             throw context.CreateDiagnostic(
                 code: "tosh.runtime.http_request_failed",
@@ -317,15 +317,15 @@ public sealed class HttpCommand : ShellCommand
             stopwatch.Stop();
 
             var statusCode = (int)response.StatusCode;
-            context.Runtime.SetLastExitCode(response.IsSuccessStatusCode ? 0 : statusCode);
+            context.Shell().SetLastExitCode(response.IsSuccessStatusCode ? 0 : statusCode);
             context.PipelineExitStatusTracker?.Record(response.IsSuccessStatusCode ? 0 : statusCode);
 
             string? savedTo = null;
 
             if (!string.IsNullOrWhiteSpace(options.OutputPath))
             {
-                savedTo = PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, options.OutputPath);
-                Directory.CreateDirectory(Path.GetDirectoryName(savedTo) ?? context.Runtime.CurrentDirectory);
+                savedTo = PathUtilities.ResolvePath(context.Shell().CurrentDirectory, options.OutputPath);
+                Directory.CreateDirectory(Path.GetDirectoryName(savedTo) ?? context.Shell().CurrentDirectory);
                 await File.WriteAllBytesAsync(savedTo, bodyBytes, context.CancellationToken);
             }
 
@@ -741,7 +741,7 @@ public sealed class HttpCommand : ShellCommand
     {
         var options = new HttpCommandOptions
         {
-            CurrentDirectory = context.Runtime.CurrentDirectory,
+            CurrentDirectory = context.Shell().CurrentDirectory,
         };
 
         for (var index = startIndex; index < context.Arguments.Count; index++)

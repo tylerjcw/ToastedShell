@@ -24,7 +24,7 @@ public sealed class EventsCommand : ShellCommand
 
         if (parsed.Positionals.Count == 0)
         {
-            foreach (var handler in context.Runtime.Events.GetHandlers())
+            foreach (var handler in context.Shell().Events.GetHandlers())
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return handler;
@@ -38,7 +38,7 @@ public sealed class EventsCommand : ShellCommand
         switch (action.ToLowerInvariant())
         {
             case "list":
-                foreach (var handler in context.Runtime.Events.GetHandlers())
+                foreach (var handler in context.Shell().Events.GetHandlers())
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();
                     yield return handler;
@@ -47,7 +47,7 @@ public sealed class EventsCommand : ShellCommand
                 yield break;
 
             case "names":
-                foreach (var name in context.Runtime.Events.GetRegisteredEventNames())
+                foreach (var name in context.Shell().Events.GetRegisteredEventNames())
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();
                     yield return name;
@@ -59,7 +59,7 @@ public sealed class EventsCommand : ShellCommand
                 {
                     var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
 
-                    foreach (var handler in context.Runtime.Events.GetHandlers(eventName))
+                    foreach (var handler in context.Shell().Events.GetHandlers(eventName))
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
                         yield return handler;
@@ -73,7 +73,7 @@ public sealed class EventsCommand : ShellCommand
                     var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
                     var handlerName = CommandArguments.RequireString(parsed.Positionals, 2, "handler name");
 
-                    if (!context.Runtime.Events.Remove(eventName, handlerName))
+                    if (!context.Shell().Events.Remove(eventName, handlerName))
                     {
                         throw new InvalidOperationException($"No handler '{handlerName}' found for event '{eventName}'.");
                     }
@@ -85,7 +85,7 @@ public sealed class EventsCommand : ShellCommand
             case "clear":
                 {
                     var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
-                    var count = context.Runtime.Events.RemoveAll(eventName);
+                    var count = context.Shell().Events.RemoveAll(eventName);
                     yield return new EventClearResult(eventName, count);
                     yield break;
                 }

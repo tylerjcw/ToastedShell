@@ -32,7 +32,7 @@ public sealed class VarsCommand : ShellCommand
             yield break;
         }
 
-        var evaluator = context.Runtime.Evaluator;
+        var evaluator = context.Shell().Evaluator;
 
         if (evaluator is null)
         {
@@ -64,7 +64,7 @@ public sealed class VarsCommand : ShellCommand
     {
         await Task.CompletedTask;
 
-        var evaluator = context.Runtime.Evaluator;
+        var evaluator = context.Shell().Evaluator;
         var entries = new List<ShellVariableBrowseEntry>();
         var filter = context.Arguments.Count > 1
             ? CommandArguments.RequireString(context.Arguments, 1, "filter")
@@ -73,10 +73,10 @@ public sealed class VarsCommand : ShellCommand
         entries.Add(new ShellVariableBrowseEntry(
             Section: "ToSh Runtime",
             Name: "$tosh",
-            Type: context.Runtime.RuntimeNamespace?.GetType().Name ?? "object",
+            Type: context.Shell().RuntimeNamespace?.GetType().Name ?? "object",
             Label: $"[runtime] $tosh",
             Expression: "$tosh",
-            Value: context.Runtime.RuntimeNamespace));
+            Value: context.Shell().RuntimeNamespace));
 
         if (evaluator is not null)
         {
@@ -117,7 +117,7 @@ public sealed class VarsCommand : ShellCommand
             yield break;
         }
 
-        if (context.Runtime.InlinePrompts is { } inline)
+        if (context.Shell().InlinePrompts is { } inline)
         {
             // Use the inline picker instead of inline filter because picker key handling
             // is currently more reliable across terminals.

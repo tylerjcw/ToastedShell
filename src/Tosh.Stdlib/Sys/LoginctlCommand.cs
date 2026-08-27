@@ -71,7 +71,7 @@ public sealed class LoginctlCommand : ShellCommand
 
         var result = await ExecuteStructuredAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -87,7 +87,7 @@ public sealed class LoginctlCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         switch (request.Mode)
@@ -111,7 +111,7 @@ public sealed class LoginctlCommand : ShellCommand
                     foreach (var session in sessions)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, session);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, session);
                     }
 
                     yield break;
@@ -135,7 +135,7 @@ public sealed class LoginctlCommand : ShellCommand
                     foreach (var user in users)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, user);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, user);
                     }
 
                     yield break;
@@ -159,7 +159,7 @@ public sealed class LoginctlCommand : ShellCommand
                     foreach (var seat in seats)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, seat);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, seat);
                     }
 
                     yield break;
@@ -183,7 +183,7 @@ public sealed class LoginctlCommand : ShellCommand
                     foreach (var row in rows)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, row);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), parsedSelection.Selection, row);
                     }
 
                     yield break;
@@ -195,7 +195,7 @@ public sealed class LoginctlCommand : ShellCommand
 
     private static string ResolveExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "loginctl");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "loginctl");
 
         return lookup.Status switch
         {
@@ -548,7 +548,7 @@ public sealed class LoginctlCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

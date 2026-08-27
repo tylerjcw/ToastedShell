@@ -51,6 +51,6 @@ public sealed class PromptHistoryCommand : ShellCommand
             }
         }
 
-        yield return PromptSegmentUtilities.BuildHistoryIdSegment(historyId ?? context.Runtime.NextHistoryId, fg, bg, bold, dim: dim);
+        yield return PromptSegmentUtilities.BuildHistoryIdSegment(historyId ?? context.Shell().NextHistoryId, fg, bg, bold, dim: dim);
     }
 }

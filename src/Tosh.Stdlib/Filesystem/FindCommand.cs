@@ -39,7 +39,7 @@ public sealed class FindCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var parsedOptions = ParseOptions(context.Arguments, context.Runtime.CurrentDirectory);
+        var parsedOptions = ParseOptions(context.Arguments, context.Shell().CurrentDirectory);
         var options = parsedOptions.PathRegexPattern is null
             ? parsedOptions
             : parsedOptions with
@@ -55,10 +55,10 @@ public sealed class FindCommand : ShellCommand
             ? await ShellPathArguments.CollectAsync(context, Array.Empty<object?>(), context.CancellationToken)
             : Array.Empty<string>();
         var roots = options.RootArguments.Count > 0
-            ? ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, options.RootArguments)
+            ? ShellPathArguments.ExpandMany(context.Shell().CurrentDirectory, options.RootArguments)
             : pipedRoots.Count > 0
                 ? pipedRoots
-                : [context.Runtime.CurrentDirectory];
+                : [context.Shell().CurrentDirectory];
 
         foreach (var root in roots)
         {

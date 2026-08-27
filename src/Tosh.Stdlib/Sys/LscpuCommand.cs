@@ -53,7 +53,7 @@ public sealed class LscpuCommand : ShellCommand
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();
                     yield return CommandDisplaySelectionParser.Apply(
-                        context.Runtime,
+                        context.Shell(),
                         parsedSelectionWin.Selection,
                         row);
                 }
@@ -63,7 +63,7 @@ public sealed class LscpuCommand : ShellCommand
 
             var summary = WindowsCpuServices.GetCpuInfo();
             yield return CommandDisplaySelectionParser.Apply(
-                context.Runtime,
+                context.Shell(),
                 parsedSelectionWin.Selection,
                 summary);
 
@@ -87,7 +87,7 @@ public sealed class LscpuCommand : ShellCommand
 
         var result = await ExecuteStructuredLscpuAsync(context, resolvedPath, request.ExternalArguments);
 
-        context.Runtime.SetLastExitCode(result.ExitCode);
+        context.Shell().SetLastExitCode(result.ExitCode);
         context.PipelineExitStatusTracker?.Record(result.ExitCode);
 
         if (result.ExitCode != 0)
@@ -103,7 +103,7 @@ public sealed class LscpuCommand : ShellCommand
 
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
-            await context.Runtime.Error.WriteLineAsync(result.StandardError.TrimEnd());
+            await context.Shell().Error.WriteLineAsync(result.StandardError.TrimEnd());
         }
 
         switch (request.Mode)
@@ -124,7 +124,7 @@ public sealed class LscpuCommand : ShellCommand
                             help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
                     }
 
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, summary);
+                    yield return CommandDisplaySelectionParser.Apply(context.Shell(), request.DisplaySelection, summary);
                     yield break;
                 }
             case LscpuStructuredMode.Extended:
@@ -146,7 +146,7 @@ public sealed class LscpuCommand : ShellCommand
                     foreach (var row in rows)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, row);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), request.DisplaySelection, row);
                     }
 
                     yield break;
@@ -170,7 +170,7 @@ public sealed class LscpuCommand : ShellCommand
                     foreach (var row in rows)
                     {
                         context.CancellationToken.ThrowIfCancellationRequested();
-                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, row);
+                        yield return CommandDisplaySelectionParser.Apply(context.Shell(), request.DisplaySelection, row);
                     }
 
                     yield break;
@@ -182,7 +182,7 @@ public sealed class LscpuCommand : ShellCommand
 
     private static string ResolveLscpuExecutable(CommandContext context)
     {
-        var lookup = ExternalCommandResolver.Resolve(context.Runtime.CurrentDirectory, "lscpu");
+        var lookup = ExternalCommandResolver.Resolve(context.Shell().CurrentDirectory, "lscpu");
 
         return lookup.Status switch
         {
@@ -418,7 +418,7 @@ public sealed class LscpuCommand : ShellCommand
         var startInfo = new ProcessStartInfo
         {
             FileName = resolvedPath,
-            WorkingDirectory = context.Runtime.CurrentDirectory,
+            WorkingDirectory = context.Shell().CurrentDirectory,
             UseShellExecute = false,
             RedirectStandardInput = false,
             RedirectStandardOutput = true,

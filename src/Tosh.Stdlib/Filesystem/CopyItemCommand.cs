@@ -45,8 +45,8 @@ public sealed class CopyItemCommand : ShellCommand
             throw new InvalidOperationException("cp requires at least one source path and a destination path.");
         }
 
-        var sources = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals.Take(parsed.Positionals.Count - 1).ToArray());
-        var destinationMatches = ShellPathArguments.Expand(context.Runtime.CurrentDirectory, parsed.Positionals[^1]);
+        var sources = ShellPathArguments.ExpandMany(context.Shell().CurrentDirectory, parsed.Positionals.Take(parsed.Positionals.Count - 1).ToArray());
+        var destinationMatches = ShellPathArguments.Expand(context.Shell().CurrentDirectory, parsed.Positionals[^1]);
 
         if (destinationMatches.Count != 1)
         {

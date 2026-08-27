@@ -26,20 +26,20 @@ public sealed class ExitCommand : ShellCommand
             && TypeConversion.TryConvert(codeArgument, typeof(int), out var converted)
             && converted is int exitCode)
         {
-            context.Runtime.SetLastExitCode(exitCode);
+            context.Shell().SetLastExitCode(exitCode);
         }
 
         // Background job warning (like bash/zsh): first exit warns, second exit forces.
-        var runningJobs = context.Runtime.GetJobs();
-        if (runningJobs.Count > 0 && !context.Runtime.ExitWarningIssued)
+        var runningJobs = context.Shell().GetJobs();
+        if (runningJobs.Count > 0 && !context.Shell().ExitWarningIssued)
         {
-            context.Runtime.ExitWarningIssued = true;
+            context.Shell().ExitWarningIssued = true;
             await Console.Error.WriteLineAsync(
                 $"tosh: there {(runningJobs.Count == 1 ? "is" : "are")} {runningJobs.Count} running job{(runningJobs.Count == 1 ? "" : "s")}. Use '{context.Invocation?.CommandName ?? "exit"}' again to force.");
             yield break;
         }
 
-        context.Runtime.RequestExit();
+        context.Shell().RequestExit();
         yield break;
     }
 }
