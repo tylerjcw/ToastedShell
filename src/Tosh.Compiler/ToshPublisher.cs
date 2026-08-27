@@ -92,7 +92,24 @@ public static class ToshPublisher
                          || allowedDependencies.Contains(Path.GetFileName(p)))
                      .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal))
         {
-            var dependencyAssembly = AssemblyName.GetAssemblyName(dependencyPath);
+            // `TOSH-0008`. Not every `.dll` beside the application is a managed assembly. A
+            // self-contained Windows publish ships native ones — `coreclr.dll`, `clrjit.dll`,
+            // `Microsoft.DiaSymReader.Native.amd64.dll` — and reading an assembly name out of
+            // one throws. That is not an error to report: a native library is not a managed
+            // dependency to record in `.deps.json`, so it is skipped.
+            //
+            // Invisible on Linux, where the equivalents are `.so` and never matched the
+            // `*.dll` enumeration above.
+            AssemblyName dependencyAssembly;
+            try
+            {
+                dependencyAssembly = AssemblyName.GetAssemblyName(dependencyPath);
+            }
+            catch (BadImageFormatException)
+            {
+                continue;
+            }
+
             var dependencyName = dependencyAssembly.Name ?? Path.GetFileNameWithoutExtension(dependencyPath);
             var dependencyVersion = ToDependencyVersion(dependencyAssembly.Version);
             var dependencyKey = $"{dependencyName}/{dependencyVersion}";
