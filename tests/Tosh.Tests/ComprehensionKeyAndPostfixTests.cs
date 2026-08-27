@@ -32,7 +32,7 @@ public sealed class ComprehensionKeyAndPostfixTests
     private static async Task<object?> EvalAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         return Assert.Single(await engine.ExecuteToListAsync(script));
     }
 
@@ -105,7 +105,7 @@ public sealed class ComprehensionKeyAndPostfixTests
         // Skipping the `return` means the function yields *nothing*, not null — so this
         // asserts an empty result rather than a single null one.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("func f(x: int) { return \"big\" if $x > 5 }\n(f 1)");
 

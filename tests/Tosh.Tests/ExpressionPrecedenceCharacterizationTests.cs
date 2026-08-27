@@ -35,7 +35,7 @@ public sealed class ExpressionPrecedenceCharacterizationTests
     private static async Task<object?> EvalAsync(string expression)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync($"var __r = ({expression})\n$__r");
         return Assert.Single(results);
     }
@@ -109,7 +109,7 @@ public sealed class ExpressionPrecedenceCharacterizationTests
     public async Task Indexing_binds_tighter_than_arithmetic()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(
             """
             var xs = [10, 20, 30]
@@ -126,7 +126,7 @@ public sealed class ExpressionPrecedenceCharacterizationTests
     public async Task A_parenthesised_range_produces_its_values()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync("var r = ((1 + 2) .. 5)\n($r | count)");
 
         Assert.Equal(3, Convert.ToInt32(Assert.Single(results)));
@@ -136,7 +136,7 @@ public sealed class ExpressionPrecedenceCharacterizationTests
     private static async Task<IReadOnlyList<object?>> RangeValuesAsync(string expression)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         return await engine.ExecuteToListAsync($"var __r = ({expression})\n$__r");
     }
 
@@ -175,7 +175,7 @@ public sealed class ExpressionPrecedenceCharacterizationTests
         // Below arithmetic but above comparison, so `1 .. 3 == $x` compares the range
         // rather than ranging over a boolean.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync("var r = ((1 .. 3) == (1 .. 3))\n$r");
 
         Assert.True(Convert.ToBoolean(Assert.Single(results)));

@@ -165,7 +165,7 @@ public sealed class ToastStreamTests
         try
         {
             var runtime = ToshRuntime.CreateDefault();
-            var engine = new ToshEngine(runtime);
+            var engine = new ToshEngine(runtime.Language);
             var before = runtime.Language.Output;
 
             await engine.ExecuteToListAsync($"echo \"redirected\" out> \"{path}\"");
@@ -219,7 +219,7 @@ public sealed class ToastStreamTests
         var sessionError = new StringWriter();
         var runtime = new ToshRuntime(sessionOutput, sessionError);
         runtime.Commands.RegisterOrReplace(new SessionWriteCommand());
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         try
         {

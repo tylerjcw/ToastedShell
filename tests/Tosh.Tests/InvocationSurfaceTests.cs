@@ -26,7 +26,7 @@ public class InvocationSurfaceTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -158,7 +158,7 @@ public class InvocationSurfaceTests
     [Fact]
     public async Task A_bare_variable_after_the_sigil_is_still_not_a_reference()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("var p = 1\nvar f = &$p"));
@@ -185,7 +185,7 @@ public class InvocationSurfaceTests
     [Fact]
     public async Task A_reference_to_a_name_that_does_not_exist_is_reported()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync(ReferenceFixture + "var f = &C.Nope\n$f(1)"));
@@ -265,7 +265,7 @@ public class InvocationSurfaceTests
     [Fact]
     public async Task A_missing_member_is_still_reported()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync(Fixture + "($obj.Nope(1))"));

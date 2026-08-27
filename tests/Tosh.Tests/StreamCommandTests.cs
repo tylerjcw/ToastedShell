@@ -12,7 +12,7 @@ public sealed class StreamCommandTests
         var textPath = Path.Combine(temporaryDirectory.Path, "notes.txt");
         var binaryPath = Path.Combine(temporaryDirectory.Path, "data.bin");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var writeResults = await engine.ExecuteToListAsync($"write-file {Quote(textPath)} hello world");
         var appendResults = await engine.ExecuteToListAsync($"append-file {Quote(textPath)} \" more\"");
@@ -41,7 +41,7 @@ public sealed class StreamCommandTests
         var textPath = Path.Combine(temporaryDirectory.Path, "notes.txt");
         await File.WriteAllTextAsync(textPath, "alpha\nbeta");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var wholeText = await engine.ExecuteToListAsync($"echo {Quote(textPath)} | read-file");
         var lines = await engine.ExecuteToListAsync($"echo {Quote(textPath)} | read-lines");

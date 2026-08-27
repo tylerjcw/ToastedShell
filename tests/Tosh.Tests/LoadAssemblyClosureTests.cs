@@ -23,7 +23,7 @@ public class LoadAssemblyClosureTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(v => v?.ToString() ?? "null"));
     }
@@ -66,7 +66,7 @@ public class LoadAssemblyClosureTests
     public async Task A_missing_assembly_is_still_reported()
     {
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault())
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language)
                 .ExecuteToListAsync("load-assembly \"/tmp/tosh-no-such-assembly.dll\""));
 
         Assert.Contains("does not exist", exception.Message);

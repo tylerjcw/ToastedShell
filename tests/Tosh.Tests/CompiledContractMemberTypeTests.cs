@@ -91,7 +91,7 @@ public sealed class CompiledContractMemberTypeTests
             Assert.Single(ContractDiagnostics(Source)),
             ToshDiagnosticSeverity.Error);
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(Source, "<compiled-contract>", CancellationToken.None));
         var interpreted = Assert.Single(exception.Diagnostics);
@@ -102,7 +102,7 @@ public sealed class CompiledContractMemberTypeTests
     private static IReadOnlyList<ToshDiagnostic> ContractDiagnostics(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, "<compiled-contract>");
         Assert.Empty(parse.Diagnostics);
 

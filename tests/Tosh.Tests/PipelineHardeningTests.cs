@@ -9,7 +9,7 @@ public sealed class PipelineHardeningTests
     public async Task Shell_commands_record_exit_code_zero_in_pipeline_tracker()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("echo hello | type-of");
 
@@ -25,7 +25,7 @@ public sealed class PipelineHardeningTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // First set a non-zero exit code
         await engine.ExecuteToListAsync("/bin/sh -c \"exit 7\"");
@@ -45,7 +45,7 @@ public sealed class PipelineHardeningTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.Pipefail = true;
 
@@ -58,7 +58,7 @@ public sealed class PipelineHardeningTests
     public async Task Redirection_to_unwritable_path_produces_diagnostic()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("echo hello out> /proc/nonexistent/impossible/file.txt"));

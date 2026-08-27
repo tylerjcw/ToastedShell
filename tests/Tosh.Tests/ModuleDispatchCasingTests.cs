@@ -20,7 +20,7 @@ public sealed class ModuleDispatchCasingTests
     [InlineData("snake_mod")]
     public async Task Module_dispatch_works_for_any_casing(string moduleName)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             $$"""
             module {{moduleName}} { export func twice(r) { return $r * 2 } }
@@ -34,7 +34,7 @@ public sealed class ModuleDispatchCasingTests
     [Fact]
     public async Task Static_clr_access_still_resolves_in_command_position()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var alone = (Math.PI)
@@ -56,7 +56,7 @@ public sealed class ModuleDispatchCasingTests
         // The discriminator is confined to command position: here the
         // second dotted name is a sibling argument to `echo`, not an
         // argument to the first.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             class Config {

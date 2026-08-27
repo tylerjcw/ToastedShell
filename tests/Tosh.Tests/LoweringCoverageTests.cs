@@ -26,7 +26,7 @@ public sealed class LoweringCoverageTests
     private static BoundUnit Lower(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, "<lowering>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse errors: {string.Join(", ", parse.Diagnostics)}");
         return Lowerer.Lower(parse, runtime.Commands);

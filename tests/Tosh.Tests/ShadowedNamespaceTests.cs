@@ -21,7 +21,7 @@ public class ShadowedNamespaceTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(v => v?.ToString() ?? "null"));
     }
@@ -107,7 +107,7 @@ public class ShadowedNamespaceTests
     public async Task A_name_in_neither_the_module_nor_the_namespace_still_fails()
     {
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault())
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language)
                 .ExecuteToListAsync(SystemModule + "System.NoSuchThing.Nope()"));
 
         Assert.Contains("NoSuchThing", exception.Message);

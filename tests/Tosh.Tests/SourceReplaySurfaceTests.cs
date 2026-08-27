@@ -38,7 +38,7 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// <summary>Emits under the `runtime` profile, which refuses source replay.</summary>
     private bool EmitsWithoutReplay(string source, out string reasons)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<replay-surface>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 
@@ -147,7 +147,7 @@ public sealed class SourceReplaySurfaceTests : IClassFixture<ToshRuntimeFixture>
     /// </summary>
     private string RunWithoutReplay(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<replay-surface-run>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 

@@ -23,7 +23,7 @@ public sealed class MixedPipelineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./" + commandName + " <(echo null)");
 
@@ -49,7 +49,7 @@ public sealed class MixedPipelineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo 42 true hello | ./" + commandName);
 
@@ -60,7 +60,7 @@ public sealed class MixedPipelineTests
     public async Task Shell_to_shell_pipeline_preserves_typed_objects()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // echo 42 → type-of → get Name should show Int32 (the object stays typed in shell-to-shell pipes)
         var results = await engine.ExecuteToListAsync("echo 42 | type-of | get Name");
@@ -87,7 +87,7 @@ public sealed class MixedPipelineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./" + commandName + " | type-of");
         var typeNames = results.Select(r => r?.ToString()!).ToArray();
@@ -113,7 +113,7 @@ public sealed class MixedPipelineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo hello world | ./" + commandName + " | type-of");
         var typeNames = results.Select(r => r?.ToString()!).ToArray();
@@ -152,7 +152,7 @@ public sealed class MixedPipelineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync($"./{producer} | ./{sorter}");
 
@@ -177,7 +177,7 @@ public sealed class MixedPipelineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | where $_ > 100 | ./" + commandName);
         Assert.Empty(results);

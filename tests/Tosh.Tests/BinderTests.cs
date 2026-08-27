@@ -23,7 +23,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
 
     private ParseResult ParseSource(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         return engine.Parse(source, "<binder-test>");
     }
 
@@ -141,7 +141,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         // here that the binder did not promote to an exception under Warn.
         var stderr = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, stderr);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         Assert.Equal(BinderStrictness.Warn, engine.BinderStrictness);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
@@ -155,7 +155,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public async Task Engine_throws_binder_diagnostic_under_strict_strictness()
     {
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         engine.BinderStrictness = BinderStrictness.Strict;
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
@@ -169,7 +169,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     {
         var stderr = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, stderr);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         engine.BinderStrictness = BinderStrictness.Lenient;
 
         // Still throws at runtime because flatmap is not a registered command and
@@ -183,7 +183,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void PushBinderStrictness_restores_previous_value_on_dispose()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var original = engine.BinderStrictness;
 
         using (engine.PushBinderStrictness(BinderStrictness.Strict))
@@ -199,7 +199,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     {
         var stderr = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, stderr);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         engine.BinderStrictness = BinderStrictness.Strict;
 
         var previous = Environment.GetEnvironmentVariable("TOSH_DISABLE_BINDER");
@@ -243,7 +243,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public async Task Engine_throws_at_bind_time_for_shell_only_command_in_script_mode()
     {
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         // Default IsInteractiveSession=false; default Strictness=Warn.
         // Binder emits tosh.shell_only as a Warn under Warn, but under Strict
         // (which scripts use) it throws before any evaluation runs.
@@ -260,7 +260,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public async Task Engine_does_not_flag_shell_only_command_in_interactive_session()
     {
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
         engine.BinderStrictness = BinderStrictness.Strict;
 
         // Even under Strict, an interactive session must let shell-only

@@ -24,7 +24,7 @@ public class InterpolationFormatTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -111,7 +111,7 @@ public class InterpolationFormatTests
     [Fact]
     public async Task An_inapplicable_format_is_reported()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var error = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("var s = \"hi\"\n$\"{$s:F2}\""));

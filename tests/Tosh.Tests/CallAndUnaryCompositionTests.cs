@@ -31,7 +31,7 @@ public sealed class CallAndUnaryCompositionTests
     private static async Task<object?> EvalAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         return Assert.Single(await engine.ExecuteToListAsync(script));
     }
 

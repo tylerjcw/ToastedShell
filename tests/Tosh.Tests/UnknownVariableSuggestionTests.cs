@@ -34,7 +34,7 @@ public sealed class UnknownVariableSuggestionTests
     /// </remarks>
     private static async Task<string> HelpFor(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var error = await Assert.ThrowsAnyAsync<ToshDiagnosticException>(
             async () => await engine.ExecuteToListAsync(source));
 
@@ -69,7 +69,7 @@ public sealed class UnknownVariableSuggestionTests
     [InlineData("$tosh.Last.ExitCode")]
     public async Task Every_suggested_spelling_resolves(string expression)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Throwing would mean the suggestion names something that is not there.
         await engine.ExecuteToListAsync($"echo ({expression})");

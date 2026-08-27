@@ -196,13 +196,13 @@ public sealed class DocCommentTests
     [Fact]
     public async Task FunctionCommand_Description_uses_doc_comment()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("""
             ## Adds two numbers together.
             func add(a: int, b: int) -> int { $a + $b }
             """);
 
-        var command = engine.Runtime.Commands.Get("add");
+        var command = engine.Shell().Commands.Get("add");
 
         Assert.NotNull(command);
         Assert.Equal("Adds two numbers together.", command.Description);
@@ -211,7 +211,7 @@ public sealed class DocCommentTests
     [Fact]
     public async Task FunctionCommand_implements_IDocumentedCommand()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("""
             ## Doubles a number.
             ## @param=n The number to double.
@@ -220,7 +220,7 @@ public sealed class DocCommentTests
             func double(n: int) -> int { $n * 2 }
             """);
 
-        var command = engine.Runtime.Commands.Get("double");
+        var command = engine.Shell().Commands.Get("double");
 
         Assert.NotNull(command);
         var documented = Assert.IsAssignableFrom<IDocumentedCommand>(command);
@@ -233,10 +233,10 @@ public sealed class DocCommentTests
     [Fact]
     public async Task FunctionCommand_without_doc_comment_uses_default_description()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func greet(name) { echo hello $name }");
 
-        var command = engine.Runtime.Commands.Get("greet");
+        var command = engine.Shell().Commands.Get("greet");
 
         Assert.NotNull(command);
         Assert.Equal("User-defined Tosh function.", command.Description);
@@ -247,7 +247,7 @@ public sealed class DocCommentTests
     [Fact]
     public async Task Help_topic_for_documented_function_includes_examples()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("""
             ## Generates Fibonacci numbers.
             ## @param=count How many numbers.

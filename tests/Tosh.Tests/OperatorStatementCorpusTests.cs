@@ -227,7 +227,7 @@ public sealed class OperatorStatementCorpusTests
     public async Task Each_binary_operator_parses_in_every_position(string symbol, string script)
     {
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
 
         var exception = await Record.ExceptionAsync(
             () => engine.ExecuteToListAsync(Preamble + script));
@@ -322,7 +322,7 @@ public sealed class OperatorStatementCorpusTests
     public async Task Each_operator_parses_in_bare_statement_position(string symbol)
     {
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
 
         var exception = await Record.ExceptionAsync(
             () => engine.ExecuteToListAsync(Preamble + Probes[symbol]));

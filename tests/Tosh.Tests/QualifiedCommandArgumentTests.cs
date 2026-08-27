@@ -46,7 +46,7 @@ public sealed class QualifiedCommandArgumentTests
     [InlineData("(1 + 2)")]
     public async Task A_qualified_command_accepts_the_argument(string argument)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"{Module}\nM.F {argument}");
 
         Assert.Equal("called", Assert.Single(results)?.ToString());
@@ -57,7 +57,7 @@ public sealed class QualifiedCommandArgumentTests
     {
         // The reported case used a `rune`, which was a red herring — the failure was
         // in command-argument recognition and had nothing to do with the callee kind.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             module M {
@@ -72,7 +72,7 @@ public sealed class QualifiedCommandArgumentTests
     [Fact]
     public async Task An_unqualified_command_still_accepts_a_block()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             func F(b) -> string { return "called" }

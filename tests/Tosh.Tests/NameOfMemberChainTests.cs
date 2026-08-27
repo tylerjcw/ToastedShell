@@ -25,7 +25,7 @@ public sealed class NameOfMemberChainTests
 {
     private static async Task<object?> EvalAsync(string script)
     {
-        var engine = new ToshEngine(new ToshRuntime());
+        var engine = new ToshEngine(new ToshRuntime().Language);
         return (await engine.ExecuteToListAsync(script)).LastOrDefault();
     }
 

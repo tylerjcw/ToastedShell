@@ -21,7 +21,7 @@ public class ParserBenchmarks
     public void Setup()
     {
         var runtime = ToshRuntime.CreateDefault();
-        _engine = new ToshEngine(runtime);
+        _engine = new ToshEngine(runtime.Language);
 
         _tiny = "ls -la";
         _small = "ls -la | where _.Size > 1024 | sort-by Size | head 10";

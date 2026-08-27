@@ -35,7 +35,7 @@ public sealed class StaticPropertyTests
 {
     private static async Task<object?> EvaluateAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? null : results[^1];
     }
@@ -84,7 +84,7 @@ public sealed class StaticPropertyTests
         // It is a getter, not a cached initializer, so a second read re-runs it. Asserted
         // because the stored path this shared code with does cache, and conflating them
         // would make a stale value look correct.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             var counter = 0
@@ -110,7 +110,7 @@ public sealed class StaticPropertyTests
         // in the list; case-insensitive de-duplication dropped one, and which one
         // depended on enumeration order.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -137,7 +137,7 @@ public sealed class StaticPropertyTests
         // The reporter's other observation: the property did not appear at all. Kept
         // separate from the case-collision test so a regression names which cause.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("hermit class C { shared prop Computed => 1 }");
 
@@ -153,7 +153,7 @@ public sealed class StaticPropertyTests
         // Making de-duplication case-sensitive must not have stopped it de-duplicating
         // the case that matters: the same spelling arriving twice.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("hermit class C { shared prop Only = 1 }");
 

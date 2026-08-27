@@ -388,7 +388,7 @@ public sealed class CompiledDeferSemanticsTests : IClassFixture<ToshRuntimeFixtu
 
     private CompiledExecution CompileAndRun(string source, params string[] arguments)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<compiled-defer-test>");
         Assert.True(
             parse.Diagnostics.Count == 0,

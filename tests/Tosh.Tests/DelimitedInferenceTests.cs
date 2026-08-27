@@ -23,7 +23,7 @@ public sealed class DelimitedInferenceTests
 {
     private static async Task<object?> FirstFieldAsync(string csv, string field)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             $"echo {Quote(csv)} | from csv | first 1 | get {field}");
 
@@ -85,7 +85,7 @@ public sealed class DelimitedInferenceTests
     {
         // The one pair that combines rather than degrading: a column of 1, 2, 2.5
         // is numeric, and typing it int would lose the 2.5.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "echo \"n\\n1\\n2.5\\n3\" | from csv | each { $_.n }");
 
@@ -100,7 +100,7 @@ public sealed class DelimitedInferenceTests
         // would put an int beside a string in one column, so values in that column
         // could not be compared with each other — a failure that shows up only on
         // the rows that differ, which is worse than leaving the column textual.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "echo \"n\\n7\\nn/a\\n9\" | from csv | each { $_.n }");
 
@@ -119,7 +119,7 @@ public sealed class DelimitedInferenceTests
         // contributes nothing to the pipeline, matching PowerShell. That elision is
         // orthogonal to inference and would have made this assertion measure the
         // wrong thing.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "echo \"n,m\\n1,a\\n,b\\n3,c\" | from csv");
 
@@ -138,7 +138,7 @@ public sealed class DelimitedInferenceTests
     [Fact]
     public async Task Raw_turns_inference_off()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "echo \"n\\n150\" | from csv --raw | first 1 | get n");
 
@@ -150,7 +150,7 @@ public sealed class DelimitedInferenceTests
     {
         // The example that found this. It is asserted end to end rather than by
         // column type, because "the documented pipeline runs" is the actual claim.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             echo "Date,Customer,Amount\n2026-01-01,Alice,150\n2026-01-02,Bob,50\n2026-01-03,Cara,300"
@@ -178,7 +178,7 @@ public sealed class DelimitedInferenceTests
     {
         // The inference lives in the shared delimited format, so tab-separated
         // input gets it too. Asserted rather than assumed.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "echo \"n\\tm\\n150\\talpha\" | from tsv | first 1 | get n");
 
@@ -188,7 +188,7 @@ public sealed class DelimitedInferenceTests
     [Fact]
     public async Task A_typed_column_round_trips_back_to_csv()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "echo \"n,b\\n150,true\" | from csv | to csv");
 

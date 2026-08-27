@@ -22,7 +22,7 @@ public sealed class TypedCollectionAndMatchTests
 {
     private static string RunInterpreted(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = engine.ExecuteToListAsync(source).GetAwaiter().GetResult();
         return string.Join("\n", results.Select(v => ToastRenderer.Render(v)?.Trim())).Trim();
     }
@@ -30,7 +30,7 @@ public sealed class TypedCollectionAndMatchTests
     private static (bool Clean, string Output, IReadOnlyList<string> Shapes) Compile(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, "<typed>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 
@@ -83,7 +83,7 @@ public sealed class TypedCollectionAndMatchTests
     [Fact]
     public void A_wrong_element_type_is_still_rejected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var source = Tokens + "func make() -> list<Token> { return [new Other()] }\necho $\"{((make) | count)}\"";
 
         var thrown = Assert.ThrowsAny<Exception>(
@@ -106,7 +106,7 @@ public sealed class TypedCollectionAndMatchTests
     public void A_property_annotated_with_a_declared_type_is_not_a_mismatch()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(
             "class Node { prop Kind: string = \"n\" }\n" +
             "class Unary(operand: Node) extends Node { prop Operand: Node = $operand }",
@@ -160,7 +160,7 @@ public sealed class TypedCollectionAndMatchTests
     public void A_refused_shape_reports_instead_of_crashing()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse("bind libc {\n    func getpid() -> int\n}\necho \"x\"", "<refused>");
         var unit = Lowerer.Lower(parse, runtime.Commands);
 

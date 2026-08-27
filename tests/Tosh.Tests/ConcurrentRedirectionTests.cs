@@ -29,7 +29,7 @@ public sealed class ConcurrentRedirectionTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             $"./{emitter} out> \"{stdoutFile}\" err> \"{stderrFile}\"");
@@ -62,7 +62,7 @@ public sealed class ConcurrentRedirectionTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             $"./{emitter} o+e> \"{combinedFile}\"");
@@ -93,7 +93,7 @@ public sealed class ConcurrentRedirectionTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync($"./{emitter} out>> \"{file}\"");
 
@@ -142,7 +142,7 @@ public sealed class ConcurrentRedirectionTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             $"""
@@ -159,7 +159,7 @@ public sealed class ConcurrentRedirectionTests
     public async Task Redirection_to_nonexistent_path_produces_diagnostic()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("echo hello out> /proc/nonexistent/impossible/file.txt"));
@@ -189,7 +189,7 @@ public sealed class ConcurrentRedirectionTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             $"var so = \"{stdoutFile}\"\nvar se = \"{stderrFile}\"");

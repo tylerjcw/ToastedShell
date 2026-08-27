@@ -8,7 +8,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Construction_binds_each_layer_locals_and_runs_base_to_leaf_once()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -42,7 +42,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Leading_super_call_is_lifted_before_derived_initialization()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -75,7 +75,7 @@ public sealed class ClassConstructionSemanticsTests
     [InlineData("extends Base()")]
     public async Task Zero_argument_base_constructor_is_invoked_implicitly(string extendsClause)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             $$"""
@@ -92,7 +92,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Header_and_super_initializers_are_rejected_before_side_effects()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var calls = 0
@@ -116,7 +116,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Non_leading_super_initializer_is_rejected_before_side_effects()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var trace = ""
@@ -143,7 +143,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Nested_super_call_cannot_reinitialize_a_completed_base_layer()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var calls = 0
@@ -169,7 +169,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Required_base_arguments_without_initializer_report_targeted_diagnostic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             class Base { Base(value) { } }
@@ -187,7 +187,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Generic_root_binding_survives_non_generic_intermediate_class()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -206,7 +206,7 @@ public sealed class ClassConstructionSemanticsTests
     [Fact]
     public async Task Clr_base_is_initialized_before_derived_properties()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

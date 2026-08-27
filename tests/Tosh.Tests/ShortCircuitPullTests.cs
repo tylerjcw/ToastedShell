@@ -50,7 +50,7 @@ public sealed class ShortCircuitPullTests
         var runtime = ToshRuntime.CreateDefault();
         runtime.Output = writer;
 
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         await engine.ExecuteToListAsync($"{Generator}\n{consumer}");
 
         return writer.ToString()
@@ -77,7 +77,7 @@ public sealed class ShortCircuitPullTests
 
     private static async Task<object?> EvaluateAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? null : results[^1];
     }

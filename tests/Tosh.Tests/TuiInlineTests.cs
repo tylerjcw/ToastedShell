@@ -12,7 +12,7 @@ public sealed class TuiInlineTests
         runtime.InlinePrompts = provider;
         // tui commands are [ShellOnly]; mark interactive so the bind-time guard
         // doesn't reject these tests.
-        return new ToshEngine(runtime) { IsInteractiveSession = true };
+        return new ToshEngine(runtime.Language) { IsInteractiveSession = true };
     }
 
     // ── --cli flag requires provider ──────────────────────────

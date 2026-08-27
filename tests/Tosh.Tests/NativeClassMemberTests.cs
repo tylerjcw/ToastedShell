@@ -11,7 +11,7 @@ namespace Tosh.Tests;
 /// </summary>
 public class NativeClassMemberTests
 {
-    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault());
+    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault().Language);
 
     private static bool SkipOffLinux => !OperatingSystem.IsLinux();
 

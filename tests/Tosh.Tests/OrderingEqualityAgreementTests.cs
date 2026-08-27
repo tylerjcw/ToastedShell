@@ -37,7 +37,7 @@ public sealed class OrderingEqualityAgreementTests
     /// </summary>
     private static async Task<IReadOnlyList<(string Label, object? Left, object? Right)>> BuildCorpusAsync()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("enum Level : int { Low = 0, Mid = 1, High = 2 }");
 
         var pairs = new (string Label, string Left, string Right)[]
@@ -149,7 +149,7 @@ public sealed class OrderingEqualityAgreementTests
     {
         // The evaluator and the engine hold separate equality implementations
         // (TS-P1-24). Any type added to one must behave the same in the other.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var failures = new List<string>();
 
         foreach (var (label, left, right) in await BuildCorpusAsync())

@@ -25,7 +25,7 @@ public sealed class LowererTests : IClassFixture<ToshRuntimeFixture>
 
     private ParseResult ParseSource(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         return engine.Parse(source, "<lowerer-test>");
     }
 

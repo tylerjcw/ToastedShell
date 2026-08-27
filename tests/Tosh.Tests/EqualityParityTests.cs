@@ -71,7 +71,7 @@ public sealed class EqualityParityTests
     [MemberData(nameof(Corpus))]
     public async Task Sync_and_async_equality_agree(object? left, object? right)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var sync = OperatorEvaluator.AreEqual(left, right);
         var async = await engine.AreEqualAsync(left, right, CancellationToken.None);
@@ -87,7 +87,7 @@ public sealed class EqualityParityTests
         // `5 > "abc"` disagreed. Equality has to hold the same property, and it
         // has to hold on both implementations rather than just the one a script
         // happens to reach.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         Assert.Equal(
             OperatorEvaluator.AreEqual(left, right),
@@ -106,7 +106,7 @@ public sealed class EqualityParityTests
         // rather than the first successful *equality*: `"true" == true`
         // converted the bool to "True", compared it against "true", and returned
         // false without ever trying string-to-bool.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         Assert.True(OperatorEvaluator.AreEqual(true, "true"));
         Assert.True(OperatorEvaluator.AreEqual("true", true));
@@ -131,7 +131,7 @@ public sealed class EqualityParityTests
     {
         // TS-P1-15's rule, and the one that exposed the divergence in the first
         // place: a member equals its backing value in both directions.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("enum Level : int { Low = 0, Mid = 1, High = 2 }");
 
         var mid = Assert.Single(await engine.ExecuteToListAsync("Level.Mid"));

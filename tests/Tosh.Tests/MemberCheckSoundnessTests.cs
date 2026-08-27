@@ -37,7 +37,7 @@ public sealed class MemberCheckSoundnessTests : IClassFixture<ToshRuntimeFixture
 
     private IReadOnlyList<ToshDiagnostic> Check(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<member-check-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         return TypeChecker.Check(unit);

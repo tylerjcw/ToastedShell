@@ -13,7 +13,7 @@ public sealed class VarsCommandTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.InlinePrompts = null;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -33,7 +33,7 @@ public sealed class VarsCommandTests
         var runtime = ToshRuntime.CreateDefault();
         var inline = new VarsInlineProvider();
         runtime.InlinePrompts = inline;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """

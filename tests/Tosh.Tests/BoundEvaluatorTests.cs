@@ -23,7 +23,7 @@ public sealed class BoundEvaluatorTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task BoundEvaluator_runs_a_simple_echo_and_returns_its_value()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var results = await BoundEvaluator.EvaluateToListAsync(engine, "echo hello");
 
         Assert.Single(results);
@@ -35,8 +35,8 @@ public sealed class BoundEvaluatorTests : IClassFixture<ToshRuntimeFixture>
     {
         const string source = "var x = 42\necho $x";
 
-        var engineA = new ToshEngine(_runtime);
-        var engineB = new ToshEngine(_runtime);
+        var engineA = new ToshEngine(_runtime.Language);
+        var engineB = new ToshEngine(_runtime.Language);
 
         var fromBound = await BoundEvaluator.EvaluateToListAsync(engineA, source);
         var fromParse = await engineB.ExecuteToListAsync(source);
@@ -49,8 +49,8 @@ public sealed class BoundEvaluatorTests : IClassFixture<ToshRuntimeFixture>
     {
         const string source = "1..5 | sum";
 
-        var engineA = new ToshEngine(_runtime);
-        var engineB = new ToshEngine(_runtime);
+        var engineA = new ToshEngine(_runtime.Language);
+        var engineB = new ToshEngine(_runtime.Language);
 
         var fromBound = await BoundEvaluator.EvaluateToListAsync(engineA, source);
         var fromParse = await engineB.ExecuteToListAsync(source);
@@ -61,7 +61,7 @@ public sealed class BoundEvaluatorTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task BoundEvaluator_evaluates_explicitly_pre_lowered_unit()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("echo $env.HOME", "<bound-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
 

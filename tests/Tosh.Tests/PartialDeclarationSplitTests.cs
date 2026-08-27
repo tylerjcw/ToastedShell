@@ -74,7 +74,7 @@ public sealed class PartialDeclarationSplitTests
         var path = scripts.Script(main);
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = scripts.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         return await engine.ExecuteToListAsync(File.ReadAllText(path), path);
     }
@@ -154,7 +154,7 @@ public sealed class PartialDeclarationSplitTests
     {
         // The case that already worked. The shared ModuleExportTable is what makes
         // it work, and the fix must not have replaced sharing with copying.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             partial module Sys { export func alpha() -> string { return "from-a" } }
@@ -173,7 +173,7 @@ public sealed class PartialDeclarationSplitTests
         // lets a later part build on an earlier one rather than merely sit beside
         // it. Asserted because it is the property that distinguishes merging from
         // two independent declarations that happen to share a name.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             partial module Sys { export func base() -> string { return "base" } }
@@ -189,7 +189,7 @@ public sealed class PartialDeclarationSplitTests
     {
         // A partial with nothing to merge into is not an error — the same rule the
         // other three kinds follow, and the one that makes file order irrelevant.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             partial module Sys { export func alpha() -> string { return "only" } }
@@ -204,7 +204,7 @@ public sealed class PartialDeclarationSplitTests
     {
         // Modules accepted this silently while classes, records and structs all
         // refused it — the one place the four kinds disagreed.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
             async () => await engine.ExecuteToListAsync(
@@ -224,7 +224,7 @@ public sealed class PartialDeclarationSplitTests
         // Deliberate and consistent across all four kinds, not a defect: a bare
         // redeclaration replaces, which is what a REPL wants. Pinned here so it is
         // not mistaken for the partial-merge bug and "fixed".
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             module Sys { export func alpha() -> string { return "first" } }

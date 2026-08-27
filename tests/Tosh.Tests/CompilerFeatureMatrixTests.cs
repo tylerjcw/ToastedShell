@@ -919,7 +919,7 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
         try
         {
             var source = c.Render(tmpPath);
-            var engine = new ToshEngine(_runtime);
+            var engine = new ToshEngine(_runtime.Language);
             var parse = engine.Parse(source, "<conformance>");
             Assert.True(parse.Diagnostics.Count == 0,
                 $"parse errors in '{c.Id}': {string.Join(", ", parse.Diagnostics)}");
@@ -968,7 +968,7 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
     {
         try
         {
-            var engine = new ToshEngine(_runtime);
+            var engine = new ToshEngine(_runtime.Language);
             var parse = engine.Parse(source, "<compiler-feature-matrix>");
             if (parse.Diagnostics.Count > 0)
             {

@@ -32,7 +32,7 @@ public sealed class StatementStreamingTests
     private static async Task<IReadOnlyList<object?>> RunAsync(string script, TimeSpan? budget = null)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         using var cts = new CancellationTokenSource(budget ?? TimeSpan.FromSeconds(30));
 
         var results = new List<object?>();

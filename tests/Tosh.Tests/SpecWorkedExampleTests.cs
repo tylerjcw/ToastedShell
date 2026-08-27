@@ -127,7 +127,7 @@ public sealed class SpecWorkedExampleTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void The_command_walk_actually_finds_commands()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
 
         var found = Harvest()
             .SelectMany(e => CollectCommandNames(engine.Parse(e.Source, $"<spec:{e.Title}>").Statement))
@@ -147,7 +147,7 @@ public sealed class SpecWorkedExampleTests : IClassFixture<ToshRuntimeFixture>
     [MemberData(nameof(WorkedExamples))]
     public void A_worked_example_parses(string title, string source)
     {
-        var parse = new ToshEngine(_runtime).Parse(source, $"<spec:{title}>");
+        var parse = new ToshEngine(_runtime.Language).Parse(source, $"<spec:{title}>");
 
         Assert.True(parse.Diagnostics.Count == 0,
             $"'{title}' does not parse:\n  " +
@@ -177,7 +177,7 @@ public sealed class SpecWorkedExampleTests : IClassFixture<ToshRuntimeFixture>
     [MemberData(nameof(WorkedExamples))]
     public void A_worked_example_names_only_commands_that_exist(string title, string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, $"<spec:{title}>");
 
         var declared = CollectDeclaredFunctionNames(parse.Statement);
@@ -335,7 +335,7 @@ public sealed class SpecWorkedExampleTests : IClassFixture<ToshRuntimeFixture>
     }
 
     private static async Task<IReadOnlyList<object?>> RunAsync(string source)
-        => await new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(source);
+        => await new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(source);
 
     [Fact]
     public async Task The_CSV_example_filters_sorts_and_projects_its_fixture()

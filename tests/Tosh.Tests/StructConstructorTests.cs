@@ -30,13 +30,13 @@ public sealed class StructConstructorTests : IClassFixture<ToshRuntimeFixture>
 
     private async Task<object?> EvalAsync(string script)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         return (await engine.ExecuteToListAsync(script)).LastOrDefault();
     }
 
     private async Task<string> FailureAsync(string script)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             async () => await engine.ExecuteToListAsync(script));
 

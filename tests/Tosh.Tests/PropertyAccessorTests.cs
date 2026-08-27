@@ -27,7 +27,7 @@ public sealed class PropertyAccessorTests
 {
     private static async Task<object?> EvaluateAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? null : results[^1];
     }
@@ -146,7 +146,7 @@ public sealed class PropertyAccessorTests
     public async Task An_unknown_accessor_name_is_still_refused()
     {
         // Accepting brace bodies must not have widened the accessor names accepted.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var parse = Tosh.Language.Parsing.ToshParser.Parse(
             """
             class C {

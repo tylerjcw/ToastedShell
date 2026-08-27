@@ -26,7 +26,7 @@ public class ExtensionMethodTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -128,7 +128,7 @@ public class ExtensionMethodTests
     [Fact]
     public async Task An_extension_cannot_declare_state()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("extend string { prop X: int = 1 }"));
 
@@ -144,7 +144,7 @@ public class ExtensionMethodTests
     [Fact]
     public async Task A_method_that_exists_nowhere_still_fails()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync(ShoutString + "\"hi\".NoSuchMethod()"));

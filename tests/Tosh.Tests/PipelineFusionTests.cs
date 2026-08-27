@@ -22,7 +22,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Lowering_attaches_sort_first_fusion()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("1..100 | where $_ > 50 | sort | first 5", "<fuse>");
         Lowerer.Lower(parse, _runtime.Commands);
 
@@ -38,7 +38,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Lowering_recognises_reverse_flag()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("1..100 | sort -r | first 3", "<fuse>");
         Lowerer.Lower(parse, _runtime.Commands);
 
@@ -52,7 +52,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Lowering_refuses_when_sort_has_key_selector()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("ls | sort Name | first 5", "<fuse>");
         Lowerer.Lower(parse, _runtime.Commands);
 
@@ -63,7 +63,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Lowering_refuses_when_sort_has_unique_or_numeric_flag()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("1..10 | sort -u | first 3", "<fuse>");
         Lowerer.Lower(parse, _runtime.Commands);
 
@@ -74,7 +74,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Lowering_refuses_when_first_count_is_dynamic()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("var n = 5\n1..10 | sort | first $n", "<fuse>");
         Lowerer.Lower(parse, _runtime.Commands);
 
@@ -87,13 +87,13 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task Fused_path_matches_unfused_path_default()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var fused = await engine.ExecuteToListAsync("1..100 | where $_ > 50 | sort | first 5");
 
         Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
         try
         {
-            var unfused = await new ToshEngine(_runtime).ExecuteToListAsync("1..100 | where $_ > 50 | sort | first 5");
+            var unfused = await new ToshEngine(_runtime.Language).ExecuteToListAsync("1..100 | where $_ > 50 | sort | first 5");
             Assert.Equal(unfused, fused);
             Assert.Equal(new object?[] { 51, 52, 53, 54, 55 }, fused);
         }
@@ -106,13 +106,13 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task Fused_path_matches_unfused_path_reverse()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var fused = await engine.ExecuteToListAsync("1..100 | sort -r | first 3");
 
         Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
         try
         {
-            var unfused = await new ToshEngine(_runtime).ExecuteToListAsync("1..100 | sort -r | first 3");
+            var unfused = await new ToshEngine(_runtime.Language).ExecuteToListAsync("1..100 | sort -r | first 3");
             Assert.Equal(unfused, fused);
             Assert.Equal(new object?[] { 100, 99, 98 }, fused);
         }
@@ -125,7 +125,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task Fused_path_handles_first_with_no_count()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var result = await engine.ExecuteToListAsync("1..10 | sort | first");
         Assert.Equal(new object?[] { 1 }, result);
     }
@@ -133,7 +133,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task Fused_path_handles_strings()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         // `each` flattens the list so each string flows through the pipeline
         // individually. This once *had* to be written with the `each`: without it the
         // fusion received the array as one item and returned it unsorted (`TOAST-0025`).
@@ -168,7 +168,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("[\"c\",\"a\",\"b\"] | sort | first 2", new object?[] { "a", "b" })]
     public async Task Fused_path_expands_a_collection_literal_source(string source, object?[] expected)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         Assert.Equal(expected, await engine.ExecuteToListAsync(source));
     }
 
@@ -177,13 +177,13 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     {
         const string Source = "[3,1,2] | sort | first 2";
 
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var fused = await engine.ExecuteToListAsync(Source);
 
         Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
         try
         {
-            var unfused = await new ToshEngine(_runtime).ExecuteToListAsync(Source);
+            var unfused = await new ToshEngine(_runtime.Language).ExecuteToListAsync(Source);
             Assert.Equal(unfused, fused);
             Assert.Equal(new object?[] { 1, 2 }, fused);
         }
@@ -205,7 +205,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task A_string_source_is_not_expanded_into_characters()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         Assert.Equal(new object?[] { "hello" }, await engine.ExecuteToListAsync("\"hello\" | sort | first"));
     }
 
@@ -225,7 +225,7 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("([[3,4],[1,2]] | sort | first).GetType().Name")]
     public async Task A_collection_of_collections_expands_exactly_one_level(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var results = await engine.ExecuteToListAsync(source);
         Assert.Equal("Int32[]", results[^1]);
     }

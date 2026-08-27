@@ -48,7 +48,7 @@ public sealed class IntrinsicLiteralAndRangeTests
     [Fact]
     public async Task Dotted_numeric_typo_is_not_silently_coerced_in_expression_position()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("var value = 1.2.3"));
@@ -98,7 +98,7 @@ public sealed class IntrinsicLiteralAndRangeTests
     [Fact]
     public async Task Negative_integer_ranges_evaluate_normally()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("-1..2");
 

@@ -427,7 +427,7 @@ public sealed class CompilerOperatorParityTests
     private static async Task AssertValueParityAsync(string label, string source)
     {
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var interpretedValues = await engine.ExecuteToListAsync(source, label);
         var interpreted = Assert.Single(interpretedValues);
 
@@ -484,7 +484,7 @@ public sealed class CompilerOperatorParityTests
     {
         var source = BuildProbe(setup, expression, echoResult: false) + "probe";
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var interpreted = await Record.ExceptionAsync(
             () => engine.ExecuteToListAsync(source, label));
 
@@ -518,7 +518,7 @@ public sealed class CompilerOperatorParityTests
     private static (MethodInfo Main, MethodInfo Probe) Compile(string source, string label)
     {
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, label);
         Assert.Empty(parse.Diagnostics);
 

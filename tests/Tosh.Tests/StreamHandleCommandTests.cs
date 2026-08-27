@@ -12,7 +12,7 @@ public sealed class StreamHandleCommandTests
         var textPath = Path.Combine(temporaryDirectory.Path, "notes.txt");
         var binaryPath = Path.Combine(temporaryDirectory.Path, "data.bin");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync($"var writer = open-file --write {Quote(textPath)}");
         await engine.ExecuteToListAsync("write-line-to $writer alpha");
@@ -56,7 +56,7 @@ public sealed class StreamHandleCommandTests
         await File.WriteAllBytesAsync(sourcePath, [1, 2, 3, 4]);
 
         var baselineHandles = ManagedFileHandle.GetOpenHandles().Count;
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync($"var reader = open-file --binary {Quote(sourcePath)}");
         var openHandleCount = await engine.ExecuteToListAsync("echo $tosh.Session.OpenHandleCount");

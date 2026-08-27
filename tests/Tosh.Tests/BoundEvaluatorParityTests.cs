@@ -94,8 +94,8 @@ public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture
         // declarations, and any other engine-level state do not leak.
         // Both paths receive the same sourceName so that values which
         // capture their origin (e.g. ShellBlock) compare equal.
-        var parseEngine = new ToshEngine(_runtime);
-        var boundEngine = new ToshEngine(_runtime);
+        var parseEngine = new ToshEngine(_runtime.Language);
+        var boundEngine = new ToshEngine(_runtime.Language);
 
         var fromParse = await parseEngine.ExecuteToListAsync(source, label);
         var fromBound = await BoundEvaluator.EvaluateToListAsync(boundEngine, source, sourceName: label);
@@ -116,8 +116,8 @@ public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture
         Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
         try
         {
-            var parseEngine = new ToshEngine(_runtime);
-            var boundEngine = new ToshEngine(_runtime);
+            var parseEngine = new ToshEngine(_runtime.Language);
+            var boundEngine = new ToshEngine(_runtime.Language);
 
             var fromParse = await parseEngine.ExecuteToListAsync(source, label);
             var fromBound = await BoundEvaluator.EvaluateToListAsync(boundEngine, source, sourceName: label);

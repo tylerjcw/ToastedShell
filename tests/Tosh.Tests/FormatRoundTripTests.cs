@@ -45,7 +45,7 @@ public sealed class FormatRoundTripTests
     {
         var results = await engine.ExecuteToListAsync(source);
         var value = Assert.Single(results);
-        return (value, engine.Runtime.Formatter.Format(value));
+        return (value, engine.Shell().Formatter.Format(value));
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ public sealed class FormatRoundTripTests
     /// </summary>
     private static async Task AssertRoundTripsAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var first = await EvaluateAndFormatAsync(engine, source);
 
@@ -128,7 +128,7 @@ public sealed class FormatRoundTripTests
     [Fact]
     public async Task A_root_collection_no_longer_carries_a_type_header()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var (_, text) = await EvaluateAndFormatAsync(engine, "[1, 2, 3]");
 
         Assert.Equal("[1, 2, 3]", text);
@@ -138,7 +138,7 @@ public sealed class FormatRoundTripTests
     [Fact]
     public async Task A_nested_collection_drops_it()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var (_, text) = await EvaluateAndFormatAsync(engine, "{| v = [1, 2, 3] |}");
 
         Assert.Equal("{| v = [1, 2, 3] |}", text);
@@ -161,10 +161,10 @@ public sealed class FormatRoundTripTests
     [Fact]
     public async Task A_nested_container_stays_on_one_line()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var value = Assert.Single(await engine.ExecuteToListAsync("[[1, 2], [3]]"));
 
-        var text = engine.Runtime.Formatter.Format(
+        var text = engine.Shell().Formatter.Format(
             value,
             new ObjectFormattingOptions(ObjectRenderStyle.Detail));
 
@@ -178,7 +178,7 @@ public sealed class FormatRoundTripTests
         // Negative control. `{ a = 1 }` is what records rendered as before the
         // TS-P2-25 follow-up; feeding it back now fails to parse, which is the
         // failure this property is built to produce.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(
             async () => await engine.ExecuteToListAsync("{ a = 1 }"));

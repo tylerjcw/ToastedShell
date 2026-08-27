@@ -8,7 +8,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Tuple_assignment_evaluates_rhs_once()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -31,7 +31,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Tuple_assignment_updates_nearest_existing_scope()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -50,7 +50,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Tuple_assignment_rejects_undeclared_target_without_partial_commit()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("var first = 1");
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
@@ -64,7 +64,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Tuple_assignment_rejects_const_target_without_partial_commit()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var first = 1
@@ -82,7 +82,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Tuple_assignment_enforces_annotations_without_partial_commit()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var first = 1
@@ -100,7 +100,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_assignment_sets_null_variable_and_evaluates_rhs_once()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -121,7 +121,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_assignment_skips_rhs_for_non_null_variable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -142,7 +142,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_assignment_initializes_allocated_typed_variable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -157,7 +157,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_assignment_rejects_unknown_variable_without_rhs_effect()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var calls = 0
@@ -178,7 +178,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_assignment_rejects_const_without_rhs_effect()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var calls = 0
@@ -200,7 +200,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_member_assignment_is_lazy()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -223,7 +223,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Null_coalescing_index_assignment_is_lazy()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -245,7 +245,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Compound_assignment_uses_left_biased_class_operator_dispatch()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -267,7 +267,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Compound_assignment_preserves_symmetric_right_operand_fallback()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -289,7 +289,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Member_and_index_compound_assignments_use_class_operators()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -316,7 +316,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Compound_assignment_preserves_annotation_conversion()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -335,7 +335,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Power_and_floor_division_compound_assignments_are_supported()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -365,10 +365,10 @@ public sealed class AssignmentSemanticsTests
             """;
 
         var compoundFailure = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            () => new ToshEngine(ToshRuntime.CreateDefault())
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language)
                 .ExecuteToListAsync(compoundSource));
         var expandedFailure = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            () => new ToshEngine(ToshRuntime.CreateDefault())
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language)
                 .ExecuteToListAsync(expandedSource));
 
         var compoundDiagnostic = Assert.Single(compoundFailure.Diagnostics);
@@ -381,7 +381,7 @@ public sealed class AssignmentSemanticsTests
     [Fact]
     public async Task Compound_class_operator_preserves_user_throw_payload()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

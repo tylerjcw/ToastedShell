@@ -26,14 +26,14 @@ public class NumericLiteralWidthTests
 {
     private static async Task<string> TypeOfAsync(string literal)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"({literal}).GetType().Name");
         return results.Single()?.ToString() ?? "null";
     }
 
     private static async Task<string> ValueOfAsync(string literal)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"\"\" + {literal}");
         return results.Single()?.ToString() ?? "null";
     }
@@ -122,7 +122,7 @@ public class NumericLiteralWidthTests
     [InlineData("99999999999999999999L")]
     public async Task A_literal_past_every_integer_type_is_refused(string literal)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAnyAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync($"writeline {literal}"));
 
@@ -149,7 +149,7 @@ public class NumericLiteralWidthTests
     [Fact]
     public async Task A_full_width_mask_converts_to_ulong()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("(0xFFFFFFFFFFFFFFFF as ulong).ToString()");
 
         Assert.Equal("18446744073709551615", results.Single()?.ToString());

@@ -27,7 +27,7 @@ public sealed class VoidReturnTests
     private static async Task<(string Output, IReadOnlyList<string> Warnings)> RunAsync(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(source);
         return (
             results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null",

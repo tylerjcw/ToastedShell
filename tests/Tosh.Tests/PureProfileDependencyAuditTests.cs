@@ -179,7 +179,7 @@ public sealed class PureProfileDependencyAuditTests
     private static (EmitResult Result, byte[] Image) Emit(string source, CompileProfile profile)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var parse = engine.Parse(source, "<pure-profile-audit>");
         Assert.Empty(parse.Diagnostics);

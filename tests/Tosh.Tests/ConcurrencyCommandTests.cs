@@ -11,7 +11,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Race_returns_first_settled_value()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -25,7 +25,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Race_throws_when_first_completion_fails()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(async () =>
         {
@@ -41,7 +41,7 @@ public sealed class ConcurrencyCommandTests
     {
         // If the two arms execute concurrently each 150 ms sleep overlaps.
         // Sequential execution would take ≥ 300 ms; concurrent takes ~150 ms.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var sw = Stopwatch.StartNew();
 
         var results = await engine.ExecuteToListAsync(
@@ -59,7 +59,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Race_faster_arm_wins()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -74,7 +74,7 @@ public sealed class ConcurrencyCommandTests
     public async Task Race_isolated_scopes_do_not_share_mutations()
     {
         // Each arm declares its own local var — should not collide.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -89,7 +89,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Settle_returns_fulfilled_and_rejected_outcomes()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -116,7 +116,7 @@ public sealed class ConcurrencyCommandTests
     public async Task Settle_is_truly_concurrent_not_sequential()
     {
         // Two 150 ms arms must complete concurrently in ~150 ms, not ~300 ms.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var sw = Stopwatch.StartNew();
 
         var results = await engine.ExecuteToListAsync(
@@ -135,7 +135,7 @@ public sealed class ConcurrencyCommandTests
     {
         // Four items each sleeping 150 ms — concurrent execution finishes in ~150 ms,
         // sequential would take ~600 ms.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var sw = Stopwatch.StartNew();
 
         var results = await engine.ExecuteToListAsync(
@@ -153,7 +153,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Timeout_throws_when_operation_exceeds_duration()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
@@ -167,7 +167,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Timeout_replays_outputs_when_operation_finishes_in_time()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -181,7 +181,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Async_and_await_round_trip_outputs()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -197,7 +197,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Channel_select_returns_first_available_value()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -407,7 +407,7 @@ public sealed class ConcurrencyCommandTests
     [Fact]
     public async Task Channel_recv_streams_null_payload_but_no_value_for_completion()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

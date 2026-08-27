@@ -34,7 +34,7 @@ public sealed class ChainedComparisonTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("1 < 2", true)]
     public async Task Chains_evaluate_as_a_conjunction_of_adjacent_pairs(string expression, bool expected)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         await engine.ExecuteToListAsync($"var result = ({expression})");
 
         Assert.True(engine.TryGetVariableValue("result", out var result));
@@ -46,7 +46,7 @@ public sealed class ChainedComparisonTests : IClassFixture<ToshRuntimeFixture>
     {
         // The reason a chain is its own node: desugaring to
         // `(1 < mid()) and (mid() < 3)` would call mid twice.
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         await engine.ExecuteToListAsync(
             """
             var calls = 0
@@ -63,7 +63,7 @@ public sealed class ChainedComparisonTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task A_failing_pair_short_circuits_the_rest_of_the_chain()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         await engine.ExecuteToListAsync(
             """
             var calls = 0
@@ -82,7 +82,7 @@ public sealed class ChainedComparisonTests : IClassFixture<ToshRuntimeFixture>
     {
         // `is` has no useful chained reading, so it keeps its
         // left-associative behaviour.
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         await engine.ExecuteToListAsync("var result = (1 is int)");
 
         Assert.True(engine.TryGetVariableValue("result", out var result));
@@ -123,7 +123,7 @@ public sealed class ChainedComparisonTests : IClassFixture<ToshRuntimeFixture>
 
     private string CompileAndRun(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<chained-comparison-test>");
         Assert.True(
             parse.Diagnostics.Count == 0,

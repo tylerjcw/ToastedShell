@@ -23,7 +23,7 @@ public class ShyStaticAccessTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -70,7 +70,7 @@ public class ShyStaticAccessTests
     public async Task A_shy_shared_func_is_still_refused_from_outside()
     {
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(Bits + "Bits.Value(1)"));
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(Bits + "Bits.Value(1)"));
 
         Assert.Contains("shy", exception.Message);
     }
@@ -86,7 +86,7 @@ public class ShyStaticAccessTests
     public async Task A_nested_class_is_outside_for_methods_and_properties_alike()
     {
         var method = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(
                 """
                 class Outer {
                     shy shared func Hidden() -> string => "h"
@@ -96,7 +96,7 @@ public class ShyStaticAccessTests
                 """));
 
         var property = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(
                 """
                 class Outer {
                     shy shared prop Hidden = "h"
@@ -135,7 +135,7 @@ public class ShyStaticAccessTests
     public async Task A_missing_static_still_reports_as_missing()
     {
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(Bits + "Bits.Nope(1)"));
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(Bits + "Bits.Nope(1)"));
 
         Assert.Contains("was not found", exception.Message);
         Assert.DoesNotContain("shy", exception.Message);

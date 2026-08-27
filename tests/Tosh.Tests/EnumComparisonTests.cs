@@ -66,7 +66,7 @@ public sealed class EnumComparisonTests
     [Fact]
     public async Task Explicit_backing_values_are_honoured()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             enum Permissions : int {
@@ -88,7 +88,7 @@ public sealed class EnumComparisonTests
     [Fact]
     public async Task Sort_orders_members_by_backing_value()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             enum E { Low, Mid, High }
@@ -105,7 +105,7 @@ public sealed class EnumComparisonTests
     {
         // E.Low and F.A both back onto 0, so without the type guard they
         // would silently compare as equal-ranked.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
             engine.ExecuteToListAsync(
@@ -117,7 +117,7 @@ public sealed class EnumComparisonTests
 
     private static async Task<bool> EvaluateAsync(string expression)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             $"""
             {Declaration}

@@ -16,7 +16,7 @@ public sealed class SelfInParameterDefaultTests
     [Fact]
     public async Task Method_default_can_read_an_instance_property()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -34,7 +34,7 @@ public sealed class SelfInParameterDefaultTests
     [Fact]
     public async Task Method_default_sees_both_this_and_earlier_parameters()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -52,7 +52,7 @@ public sealed class SelfInParameterDefaultTests
     [Fact]
     public async Task Method_default_can_read_an_inherited_property()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -68,7 +68,7 @@ public sealed class SelfInParameterDefaultTests
     [Fact]
     public async Task Constructor_default_referencing_this_is_diagnosed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -93,7 +93,7 @@ public sealed class SelfInParameterDefaultTests
     [Fact]
     public async Task Ordinary_method_and_static_defaults_are_unaffected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -112,7 +112,7 @@ public sealed class SelfInParameterDefaultTests
     [Fact]
     public async Task A_constructor_default_that_does_not_use_this_still_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """

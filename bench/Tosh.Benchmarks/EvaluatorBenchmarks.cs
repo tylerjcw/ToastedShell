@@ -20,7 +20,7 @@ public class EvaluatorBenchmarks
     public void Setup()
     {
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        _engine = new ToshEngine(runtime);
+        _engine = new ToshEngine(runtime.Language);
     }
 
     /// <summary>Trivial expression — single literal pipeline.</summary>

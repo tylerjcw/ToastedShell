@@ -28,7 +28,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Scope_awaits_spawned_jobs_and_returns_completions()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -57,7 +57,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Scope_kills_jobs_and_rethrows_when_block_throws()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var spawnCommand = OperatingSystem.IsWindows()
             ? "spawn ping -n 31 127.0.0.1"
             : "spawn sleep 30";
@@ -80,7 +80,7 @@ public sealed class ScopeAndChannelTests
         // Both commands deliberately outlive the block, so scope must signal them all
         // before awaiting their monitors; sequential kill-and-wait would leave the
         // second process running while the first one shuts down.
-        var jobs = engine.Runtime.GetJobsSnapshot();
+        var jobs = engine.Shell().GetJobsSnapshot();
         Assert.Equal(2, jobs.Count);
         Assert.All(jobs, job =>
         {
@@ -89,13 +89,13 @@ public sealed class ScopeAndChannelTests
         });
 
         // The normal listing path can now reap the terminal job immediately.
-        Assert.Empty(engine.Runtime.GetJobs());
+        Assert.Empty(engine.Shell().GetJobs());
     }
 
     [Fact]
     public async Task Scope_with_no_spawned_jobs_returns_empty()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("scope { echo hello }");
 
@@ -107,7 +107,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Channel_creates_unbounded_channel()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -121,7 +121,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Channel_creates_bounded_channel()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -135,7 +135,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Channel_send_recv_roundtrip()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -154,7 +154,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Channel_send_pipeline_input()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -173,7 +173,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Channel_recv_completes_when_closed_before_send()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Close a fresh channel with no items → recv should return nothing.
         var results = await engine.ExecuteToListAsync(
@@ -189,7 +189,7 @@ public sealed class ScopeAndChannelTests
     [Fact]
     public async Task Channel_close_is_idempotent()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Closing twice must not throw.
         await engine.ExecuteToListAsync(

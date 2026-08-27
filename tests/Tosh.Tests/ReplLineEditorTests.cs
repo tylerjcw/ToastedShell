@@ -1002,7 +1002,7 @@ public sealed class ToshReplCancellationTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.Shell.MaxRecursionDepth = 8;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var repl = new ToshRepl(engine);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
@@ -1030,7 +1030,7 @@ public sealed class ToshReplCancellationTests
         var gate = new AwaitReplCancellationCommand();
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(gate);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var repl = new ToshRepl(engine);
 
         Assert.False(repl.TryInterruptCurrentExecution());

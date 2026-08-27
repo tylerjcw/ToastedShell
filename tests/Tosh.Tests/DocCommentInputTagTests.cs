@@ -40,7 +40,7 @@ public sealed class DocCommentInputTagTests
             var output = new StringWriter();
             runtime.Output = output;
 
-            var engine = new ToshEngine(runtime);
+            var engine = new ToshEngine(runtime.Language);
             var results = new List<object?>();
 
             await foreach (var value in engine.ExecuteScriptFileAsync(path, arguments))
@@ -210,7 +210,7 @@ public sealed class DocCommentInputTagTests
     public async Task A_function_param_tag_is_unchanged()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """

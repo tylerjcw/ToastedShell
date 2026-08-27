@@ -360,7 +360,7 @@ public sealed class LanguageSurfaceParityTests
         // example: documented in the LSP feature table, proposed as TS-P3-02, and
         // not a binding keyword today.
         var result = Tosh.Language.Parsing.ToshParser.Parse("let x = 1", "<probe:let>");
-        var executed = new ToshEngine(ToshRuntime.CreateDefault());
+        var executed = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // It may parse — `let x = 1` is a plausible command line — so the check is
         // that it does not *behave* as a binding.

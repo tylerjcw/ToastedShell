@@ -12,7 +12,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob \"*.nonexistent\"");
 
@@ -28,7 +28,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob \"*\"");
         var names = results.Select(r => ((FileSystemEntry)r!).Name).ToArray();
@@ -46,7 +46,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob -a \"*\"");
         var names = results.Select(r => ((FileSystemEntry)r!).Name).ToArray();
@@ -65,7 +65,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob \".*\"");
         var names = results.Select(r => ((FileSystemEntry)r!).Name).ToArray();
@@ -94,7 +94,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // ** descends into both real directories and symlinked ones
         var results = await engine.ExecuteToListAsync("glob \"**/*.txt\"");
@@ -122,7 +122,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob \"**/*.txt\"");
         var names = results.Select(r => ((FileSystemEntry)r!).Name).ToArray();
@@ -141,7 +141,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob \"*.@(md,txt)\"");
         var names = results.Select(r => ((FileSystemEntry)r!).Name).ToArray();
@@ -158,7 +158,7 @@ public sealed class GlobEdgeCaseTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("glob \"nonexistent-dir/*.txt\"");
         Assert.Empty(results);

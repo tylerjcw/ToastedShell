@@ -8,7 +8,7 @@ public sealed class SpawnCommandTests
     [Fact]
     public async Task Spawn_starts_external_job_and_wait_for_completes_it()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -24,7 +24,7 @@ public sealed class SpawnCommandTests
     [Fact]
     public async Task Spawn_throws_for_unknown_external_command()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {

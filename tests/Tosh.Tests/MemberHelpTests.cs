@@ -23,7 +23,7 @@ public sealed class MemberHelpTests
     private static async Task<HelpTopic?> ResolveAsync(string source, string topic)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         await engine.ExecuteToListAsync(source);
 
         return HelpCatalog.ResolveTopic(runtime, topic);

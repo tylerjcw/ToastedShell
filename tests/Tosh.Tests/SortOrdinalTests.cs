@@ -44,7 +44,7 @@ public sealed class SortOrdinalTests
     private static async Task<IReadOnlyList<string>> RunAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(script);
         return results.Select(v => v?.ToString() ?? string.Empty).ToArray();
     }

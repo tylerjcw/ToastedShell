@@ -127,7 +127,7 @@ public sealed class ToastOptionsTests
     public async Task A_depth_set_from_script_reaches_the_evaluator()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("$tosh.Config.Shell.MaxRecursionDepth = 12");
 

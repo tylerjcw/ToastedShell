@@ -21,7 +21,7 @@ public sealed class ImplicitCurrentItemCallTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -138,7 +138,7 @@ public sealed class ImplicitCurrentItemCallTests
     [Fact]
     public async Task An_explicit_receiver_does_not_fall_back_to_a_function()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(
             """
@@ -157,7 +157,7 @@ public sealed class ImplicitCurrentItemCallTests
     [Fact]
     public async Task A_name_that_is_neither_reports_both_readings()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("[1] | where { nosuch() == 1 }"));

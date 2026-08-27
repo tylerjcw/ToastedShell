@@ -98,7 +98,7 @@ public sealed class StartupProfileTests
         File.WriteAllText(configPath, "# empty config");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await ToshStartupLoader.LoadAsync(engine, tempDir.Path, skipProfile: false, errorWriter: TextWriter.Null, profileStartup: true);
 
@@ -113,7 +113,7 @@ public sealed class StartupProfileTests
         using var tempDir = new TemporaryDirectory();
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await ToshStartupLoader.LoadAsync(engine, tempDir.Path, skipProfile: false, errorWriter: TextWriter.Null, profileStartup: false);
 
@@ -182,7 +182,7 @@ public sealed class DebugHookTests
     [Fact]
     public async Task DebugHook_fires_for_each_statement_in_block()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var statementsHit = new List<string>();
 
         engine.DebugHook = context =>
@@ -207,7 +207,7 @@ public sealed class DebugHookTests
     [Fact]
     public async Task DebugHook_abort_stops_execution()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var hitCount = 0;
 
         engine.DebugHook = context =>
@@ -230,7 +230,7 @@ public sealed class DebugHookTests
     [Fact]
     public async Task DebugHook_provides_line_numbers()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var lines = new List<int?>();
 
         engine.DebugHook = context =>
@@ -257,7 +257,7 @@ public sealed class DebugHookTests
     {
         var errorOutput = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, errorOutput);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.ScriptTrace = true;
 
@@ -280,7 +280,7 @@ public sealed class DebugHookTests
     {
         var errorOutput = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(TextWriter.Null, errorOutput);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.ScriptTrace = false;
 

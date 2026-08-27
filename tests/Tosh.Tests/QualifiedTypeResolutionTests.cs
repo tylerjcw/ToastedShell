@@ -162,7 +162,7 @@ public sealed class QualifiedTypeResolutionTests
     [Fact]
     public async Task A_qualified_annotation_is_still_inferred()
     {
-        var engine = new Tosh.Language.ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new Tosh.Language.ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "var h: System.Collections.Hashtable = new System.Collections.Hashtable()\necho $h.Count");
 

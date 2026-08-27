@@ -111,37 +111,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
     }
 
-    public ToshEngine(ToshRuntime? runtime = null)
-    {
-        ShellRuntime = runtime ?? ToshRuntime.CreateDefault();
-        LanguageRuntime = ShellRuntime.Language;
-        LanguageRuntime.BlockExecutor = new EngineBlockExecutor(this);
-        LanguageRuntime.Evaluator = this;
-        LanguageRuntime.EventSenderFactory = CreateEventSender;
-
-        // `extend` methods are the engine's knowledge — lexically scoped, arriving
-        // with imported modules, written in ToastScript — so the invoker asks for
-        // them rather than knowing about them (`TS-P3-27`). Set beside the other
-        // engine-owned hooks, and for the same reason they are.
-        LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
-        _toshNamespace = CreateRuntimeNamespace();
-        _environmentNamespace = new ShellEnvironmentNamespace(LanguageRuntime.EnvironmentExporter);
-        // `source`, `eval`, `debug` and `format` used to be constructed and registered
-        // here, which made the *language* own a set of commands. A command is a shell
-        // concept: the language exposes what it can do — see `IToshScriptHost` — and TōSh
-        // decides what to call it. They now live in Tosh.Stdlib and are registered with
-        // the rest of the built-ins (`TOAST-0006`).
-
-        // Load built-in rune definitions
-        LoadBuiltinRunesAsync().GetAwaiter().GetResult();
-
-        // Register the trait-constraint resolver for the `is` / `is-not` operators so
-        // expressions like `$x is Numeric` consult the same registry used by generic
-        // type-parameter constraint validation.
-        Tosh.Runtime.OperatorEvaluator.ResolveTraitConstraint ??= static (name, type) =>
-            ToshTypeParameterConstraintRegistry.TryGet(name, out var predicate) && predicate(type);
-    }
-
     /// <summary>
     /// Creates a language engine without constructing a TōSh session runtime.
     /// </summary>
@@ -167,39 +136,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
-    /// Creates a forked child engine that shares the same <see cref="ToshRuntime"/> but has
+    /// Creates a forked child engine that shares the same <see cref="ToastRuntime"/> but has
     /// its own isolated scope stack pre-seeded with cloned copies of <paramref name="capturedScopes"/>.
     /// The fork does NOT write back to <c>LanguageRuntime.BlockExecutor</c> /
     /// <c>LanguageRuntime.Evaluator</c> /
     /// <c>LanguageRuntime.EventSenderFactory</c>; instead it propagates its executor via
     /// <see cref="CommandContext.BlockExecutor"/>.
     /// </summary>
-    private ToshEngine(ToshRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
-    {
-        ShellRuntime = runtime;
-        LanguageRuntime = runtime.Language;
-        _toshNamespace = CreateRuntimeNamespace();
-        _environmentNamespace = new ShellEnvironmentNamespace(LanguageRuntime.EnvironmentExporter);
-        // Pre-seed the scope stack with clones of the parent's visible scopes.
-        // capturedScopes is ordered outer-to-inner; pushing outer-first means
-        // the inner-most scope ends up on top of the stack — correct lookup order.
-        if (capturedScopes is not null)
-        {
-            foreach (var scope in capturedScopes)
-            {
-                _scopes.Push(scope.Clone());
-            }
-        }
-        // Own executor — propagated through CommandContext so nested commands
-        // (including race/settle/parallel) continue using this fork's engine.
-        _ownBlockExecutor = new EngineBlockExecutor(this);
-
-        // `extend` methods are the engine's knowledge — lexically scoped, arriving
-        // with imported modules, written in ToastScript — so the invoker asks for
-        // them rather than knowing about them (`TS-P3-27`).
-        LanguageRuntime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
-    }
-
     private ToshEngine(ToastRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
     {
         LanguageRuntime = runtime;
@@ -223,9 +166,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// execution state. Pass <see cref="CaptureVisibleScopes"/> as the snapshot.
     /// </summary>
     internal ToshEngine Fork(IReadOnlyList<LexicalScope>? capturedScopes)
-        => ShellRuntime is { } shell
-            ? new ToshEngine(shell, capturedScopes)
-            : new ToshEngine(LanguageRuntime, capturedScopes);
+        => new ToshEngine(LanguageRuntime, capturedScopes);
 
     private IShellRecordObject CreateRuntimeNamespace()
         => LanguageRuntime.RuntimeNamespaceFactory?.CreateRuntimeNamespace(
@@ -240,18 +181,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         await foreach (var _ in EvaluateAsync(_builtinRunesParseResult, CancellationToken.None)) { }
     }
-
-    /// <summary>The TōSh session runtime, when this engine is hosted by TōSh.</summary>
-    public ToshRuntime? ShellRuntime { get; }
-
-    /// <summary>
-    /// Compatibility view of the TōSh runtime for shell hosts.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// This engine was constructed from a language-only <see cref="ToastRuntime"/>.
-    /// </exception>
-    public ToshRuntime Runtime => ShellRuntime ?? throw new InvalidOperationException(
-        "This Tōast engine has no TōSh session runtime. Supply the required host capability on ToastRuntime instead.");
 
     /// <summary>
     /// The language-owned runtime state used by parsing, binding, and evaluation.

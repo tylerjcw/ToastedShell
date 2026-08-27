@@ -213,8 +213,8 @@ public sealed class DocumentationCoverageTests
     private static (ShellCommandRegistry registry, IReadOnlyList<CommandMetadata> entries) GetRegistryAndEntries()
     {
         var engine = ShellEngine.CreateFullShell();
-        var entries = CommandMetadataExporter.BuildMetadata(engine.Runtime.Commands);
-        return (engine.Runtime.Commands, entries);
+        var entries = CommandMetadataExporter.BuildMetadata(engine.Shell().Commands);
+        return (engine.Shell().Commands, entries);
     }
 
     private static bool HasOptOut(IShellCommand command, string field)

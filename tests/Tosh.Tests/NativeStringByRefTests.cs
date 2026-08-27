@@ -31,7 +31,7 @@ public class NativeStringByRefTests
 
     private static async Task<object?> RunAsync(string source)
     {
-        var results = await new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(source);
+        var results = await new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(source);
         return results.Count == 0 ? null : results[^1];
     }
 

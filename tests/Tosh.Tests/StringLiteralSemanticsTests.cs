@@ -18,7 +18,7 @@ public sealed class StringLiteralSemanticsTests
         string source,
         string expected)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var result = Assert.Single(await engine.ExecuteToListAsync(source));
 
@@ -35,7 +35,7 @@ public sealed class StringLiteralSemanticsTests
         string source,
         string expected)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var result = Assert.Single(await engine.ExecuteToListAsync(source));
 
@@ -45,7 +45,7 @@ public sealed class StringLiteralSemanticsTests
     [Fact]
     public async Task Regex_patterns_work_in_raw_and_double_quoted_strings()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

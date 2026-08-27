@@ -48,7 +48,7 @@ public sealed class UnitSystemStabilizationTests
     [Fact]
     public async Task As_with_a_backtick_target_is_the_language_conversion_form()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var result = Assert.Single(await engine.ExecuteToListAsync("2`mi as `ft"));
         var distance = Assert.IsAssignableFrom<Quantity>(result);
 
@@ -73,7 +73,7 @@ public sealed class UnitSystemStabilizationTests
         Assert.True(power.TryGetMember("base-value", out var baseValue));
         Assert.Equal(483_060_000.0, Assert.IsType<double>(baseValue), 6);
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             var power = 483.06`MW
@@ -277,7 +277,7 @@ public sealed class UnitSystemStabilizationTests
     [Fact]
     public async Task Friendly_quantity_annotations_convert_function_argument_strings()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var result = Assert.Single(await engine.ExecuteToListAsync(
             """
             func in-feet(distance: length) -> length {
@@ -294,7 +294,7 @@ public sealed class UnitSystemStabilizationTests
     [Fact]
     public async Task Quantity_aliases_share_is_and_as_type_resolution()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "var d = 2`mi\necho ($d is quantity)\necho ($d as length)");
 
@@ -305,7 +305,7 @@ public sealed class UnitSystemStabilizationTests
     [Fact]
     public async Task Named_quantities_satisfy_inherited_arithmetic_traits()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var result = Assert.Single(await engine.ExecuteToListAsync("echo (2`m is Add)"));
 
         Assert.True(Assert.IsType<bool>(result));
@@ -314,7 +314,7 @@ public sealed class UnitSystemStabilizationTests
     [Fact]
     public async Task Sleep_accepts_a_zero_duration_quantity_without_delaying()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         Assert.Empty(await engine.ExecuteToListAsync("sleep 0`ms"));
     }
@@ -432,7 +432,7 @@ public sealed class UnitSystemStabilizationTests
             AppContext.BaseDirectory,
             "../../../../../examples/reactor-block.tosh"));
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await AsyncEnumerableExtensions.ToListAsync(
             engine.ExecuteScriptFileAsync(
                 path,

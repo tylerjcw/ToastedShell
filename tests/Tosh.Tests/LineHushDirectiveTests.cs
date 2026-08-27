@@ -14,7 +14,7 @@ public sealed class LineHushDirectiveTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             "var _ = 1\n" +
@@ -29,7 +29,7 @@ public sealed class LineHushDirectiveTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             "var _ = 1\n" +
@@ -45,7 +45,7 @@ public sealed class LineHushDirectiveTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             "var _ = 1\n" +

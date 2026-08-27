@@ -63,7 +63,7 @@ public sealed class CompiledProgramDiagnosticTests
     private static (Assembly Assembly, string AssemblyName) EmitToMemory(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, "<compiled-boundary>");
         Assert.Empty(parse.Diagnostics);
 
@@ -82,7 +82,7 @@ public sealed class CompiledProgramDiagnosticTests
         try
         {
             var runtime = ToshRuntime.CreateDefault();
-            var engine = new ToshEngine(runtime);
+            var engine = new ToshEngine(runtime.Language);
             var parse = engine.Parse(source, "boundary.tosh");
             Assert.Empty(parse.Diagnostics);
 

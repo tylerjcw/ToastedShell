@@ -22,7 +22,7 @@ public class InterpolationHoleReuseTests
     private static async Task<string> RunAsync(string source)
     {
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
         await engine.ExecuteToListAsync(source);
         return output.ToString().Replace("\r", "").Trim();
     }
@@ -106,7 +106,7 @@ public class InterpolationHoleReuseTests
     [Fact]
     public async Task A_hole_that_does_not_parse_reports_every_time()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         for (var attempt = 0; attempt < 2; attempt++)
         {
@@ -146,14 +146,14 @@ public class InterpolationHoleReuseTests
     [Fact]
     public async Task One_parse_tree_can_be_evaluated_by_two_engines()
     {
-        var shared = new ToshEngine(ToshRuntime.CreateDefault())
+        var shared = new ToshEngine(ToshRuntime.CreateDefault().Language)
             .Parse("writeline $\"[{name()}]\"");
         var unit = Tosh.Language.Binding.Lowerer.Lower(shared, ToshRuntime.CreateDefault().Commands);
 
         static async Task<string> EvaluateAsync(Tosh.Compiler.IR.BoundUnit unit, string definition)
         {
             var output = new StringWriter();
-            var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+            var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
             await engine.ExecuteToListAsync(definition);
 
             await foreach (var _ in engine.EvaluateAsync(unit)) { }

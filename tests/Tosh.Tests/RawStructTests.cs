@@ -34,7 +34,7 @@ public class RawStructTests
         }
         """;
 
-    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault());
+    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault().Language);
 
     /// <summary>
     /// The load-bearing assertion of the whole design. No padding is declared —

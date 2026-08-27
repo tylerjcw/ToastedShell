@@ -21,7 +21,7 @@ public sealed class TypeInferenceTests : IClassFixture<ToshRuntimeFixture>
 
     private BoundUnit Lower(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<inference-test>");
         return Lowerer.Lower(parse, _runtime.Commands);
     }

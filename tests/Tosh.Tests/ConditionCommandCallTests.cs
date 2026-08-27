@@ -19,7 +19,7 @@ public class ConditionCommandCallTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -94,7 +94,7 @@ public class ConditionCommandCallTests
     [Fact]
     public async Task An_unterminated_condition_is_still_reported()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("if (is-dir \"/tmp\" { \"t\" }"));
@@ -109,7 +109,7 @@ public class ConditionCommandCallTests
     [Fact]
     public void A_successful_retry_leaves_no_diagnostics()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var parse = engine.Parse(
             Positive + "if (positive 5) { \"t\" }",
             "<condition-test>");

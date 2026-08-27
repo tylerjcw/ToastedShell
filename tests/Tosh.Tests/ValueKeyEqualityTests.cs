@@ -25,7 +25,7 @@ public sealed class ValueKeyEqualityTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -106,7 +106,7 @@ public sealed class ValueKeyEqualityTests
     [InlineData("null", "null")]
     public async Task Equal_keys_hash_alike(string left, string right)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var leftValue = (await engine.ExecuteToListAsync($"({left})"))[^1];
         var rightValue = (await engine.ExecuteToListAsync($"({right})"))[^1];
 

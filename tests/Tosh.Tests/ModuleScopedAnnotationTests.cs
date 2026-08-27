@@ -16,7 +16,7 @@ public class ModuleScopedAnnotationTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -165,7 +165,7 @@ public class ModuleScopedAnnotationTests
     [Fact]
     public async Task An_unknown_annotation_is_still_rejected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(

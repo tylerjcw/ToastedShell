@@ -306,7 +306,7 @@ public sealed class RuneTests
     public async Task Constant_folding_outside_a_rune_still_happens()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse("echo (3 + 4)", "<fold>");
         _ = Tosh.Language.Binding.Lowerer.Lower(parse, runtime.Commands);
 

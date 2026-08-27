@@ -66,7 +66,7 @@ public sealed class ObjectFormatterTests
         //
         // Interpolation is the path most likely to be used to show a type, so it
         // is asserted alongside the nested cases rather than the root one.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var direct = await engine.ExecuteToListAsync(
             $$"""
@@ -92,7 +92,7 @@ public sealed class ObjectFormatterTests
     {
         // The other half of the TS-P1-23 acceptance: a CLR value still reports its
         // CLR type, so the descriptor rule must not capture System.Type.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

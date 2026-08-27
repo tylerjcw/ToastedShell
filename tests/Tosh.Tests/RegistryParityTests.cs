@@ -107,7 +107,7 @@ public sealed class RegistryParityTests
 
         foreach (var (canonical, aliases) in aliasMap)
         {
-            var topic = HelpCatalog.ResolveTopic(engine.Runtime, canonical);
+            var topic = HelpCatalog.ResolveTopic(engine.Shell(), canonical);
             Assert.NotNull(topic);
 
             foreach (var alias in aliases)

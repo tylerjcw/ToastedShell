@@ -10,7 +10,7 @@ public sealed class ComplexCommandTests
     [Fact]
     public async Task Complex_commands_build_complex_numbers_from_args_and_pipeline_input()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -29,7 +29,7 @@ public sealed class ComplexCommandTests
     [Fact]
     public async Task Complex_values_resolve_to_shell_types_for_typeof_describe_type_and_new_command()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -45,7 +45,7 @@ public sealed class ComplexCommandTests
     [Fact]
     public async Task Complex_type_metadata_and_operations_work()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -88,7 +88,7 @@ public sealed class ComplexCommandTests
     [Fact]
     public async Task Complex_cast_parses_compact_complex_strings_and_imaginary_literals()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

@@ -37,7 +37,7 @@ public sealed class ClassMemberAnnotationTests : IClassFixture<ToshRuntimeFixtur
     /// <summary>Runs the type-check pass, the way `MemberCheckSoundnessTests` does.</summary>
     private IReadOnlyList<ToshDiagnostic> Diagnose(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<annotation-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         return TypeChecker.Check(unit);

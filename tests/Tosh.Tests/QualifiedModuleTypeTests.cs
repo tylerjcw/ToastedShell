@@ -48,7 +48,7 @@ public sealed class QualifiedModuleTypeTests
 
     private static async Task<object?> EvaluateAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? null : results[^1];
     }

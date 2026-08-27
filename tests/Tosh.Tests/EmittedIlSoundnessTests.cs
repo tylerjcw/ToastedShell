@@ -164,7 +164,7 @@ public sealed class EmittedIlSoundnessTests
         Assert.True(File.Exists(path), $"missing {path}");
 
         var runtime = Tosh.Runtime.ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
         var parse = engine.Parse(File.ReadAllText(path), path);
         Assert.True(parse.Diagnostics.Count == 0, string.Join(", ", parse.Diagnostics));
 

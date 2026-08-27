@@ -34,7 +34,7 @@ public sealed class UserClassMemberCheckTests : IClassFixture<ToshRuntimeFixture
 
     private IReadOnlyList<ToshDiagnostic> Check(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var unit = Lowerer.Lower(engine.Parse(source, "<user-member-test>"), _runtime.Commands);
         return TypeChecker.Check(unit);
     }
@@ -153,7 +153,7 @@ public sealed class UserClassMemberCheckTests : IClassFixture<ToshRuntimeFixture
 
         foreach (var path in scripts)
         {
-            var engine = new ToshEngine(_runtime);
+            var engine = new ToshEngine(_runtime.Language);
             var parse = engine.Parse(File.ReadAllText(path), path);
             if (parse.Diagnostics.Count > 0) continue;
 

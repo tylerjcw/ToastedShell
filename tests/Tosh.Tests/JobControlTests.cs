@@ -360,7 +360,7 @@ public sealed class JobControlTests
     public async Task Fg_throws_when_no_suspended_jobs()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync("fg"));
@@ -370,7 +370,7 @@ public sealed class JobControlTests
     public async Task Bg_throws_when_no_suspended_jobs()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync("bg"));
@@ -380,7 +380,7 @@ public sealed class JobControlTests
     public async Task Fg_throws_for_invalid_job_id()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync("fg 999"));
@@ -390,7 +390,7 @@ public sealed class JobControlTests
     public async Task Bg_throws_for_invalid_job_id()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync("bg 999"));

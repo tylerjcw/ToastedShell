@@ -8,7 +8,7 @@ public sealed class VectorCommandTests
     [Fact]
     public async Task Vec_command_builds_vectors_from_arguments_pipeline_and_empty_input()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -27,7 +27,7 @@ public sealed class VectorCommandTests
     [Fact]
     public async Task Vector_values_resolve_to_shell_types_for_typeof_describe_type_and_new_command()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -43,7 +43,7 @@ public sealed class VectorCommandTests
     [Fact]
     public async Task Vector_type_metadata_exposes_members_methods_and_aliases()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

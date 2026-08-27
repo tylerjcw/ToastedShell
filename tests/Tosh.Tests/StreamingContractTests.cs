@@ -14,7 +14,7 @@ public sealed class StreamingContractTests(ToshRuntimeFixture fixture) : IClassF
     [Fact]
     public async Task First_short_circuits_a_large_upstream_range()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         // A 10-million-element range; if `first 3` did not short-circuit, this
         // would visibly hang. The xUnit default timeout will catch a regression.
@@ -28,7 +28,7 @@ public sealed class StreamingContractTests(ToshRuntimeFixture fixture) : IClassF
     [Fact]
     public async Task TakeWhile_short_circuits_at_first_false()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("1..10000000 | take-while { _ < 5 } | collect");
 
@@ -40,7 +40,7 @@ public sealed class StreamingContractTests(ToshRuntimeFixture fixture) : IClassF
     [Fact]
     public async Task Any_short_circuits_at_first_match()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("1..10000000 | any { _ == 3 }");
 

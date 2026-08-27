@@ -20,7 +20,7 @@ public sealed class DisplayScalarCellTests
     private static async Task<string> RenderTableAsync(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(source);
 
         // A width is required, not incidental: the structural expansion this item is about

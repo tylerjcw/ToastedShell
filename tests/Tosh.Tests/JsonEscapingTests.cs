@@ -24,7 +24,7 @@ public sealed class JsonEscapingTests
     private static async Task<string> ToJsonAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(script);
 
         return string.Join("\n", results.Select(value => value?.ToString() ?? string.Empty));

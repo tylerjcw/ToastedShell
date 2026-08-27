@@ -21,7 +21,7 @@ public class StructComputedPropertyTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -107,7 +107,7 @@ public class StructComputedPropertyTests
     public async Task A_missing_member_is_still_reported()
     {
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(
                 """
                 struct S { prop Stored = 5 }
                 (new S()).Nope

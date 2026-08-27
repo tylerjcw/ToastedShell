@@ -283,7 +283,7 @@ public sealed class ClassCancellationTests
     [Fact]
     public async Task Constructor_state_and_method_return_value_are_preserved()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -305,7 +305,7 @@ public sealed class ClassCancellationTests
         var initializer = new CancelOnceThenReturnCommand(GateSafetyTimeout);
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(initializer);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -343,7 +343,7 @@ public sealed class ClassCancellationTests
         var initializer = new GatedReturnCommand(GateSafetyTimeout);
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(initializer);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -380,7 +380,7 @@ public sealed class ClassCancellationTests
     [Fact]
     public async Task Recursive_lazy_property_read_is_rejected_without_poisoning_the_instance()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -408,7 +408,7 @@ public sealed class ClassCancellationTests
         var gate = new AwaitCancellationCommand(GateSafetyTimeout);
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(gate);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         using var cancellation = new CancellationTokenSource();
 
         var execution = Task.Run(

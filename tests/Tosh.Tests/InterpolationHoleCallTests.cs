@@ -24,7 +24,7 @@ public class InterpolationHoleCallTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -85,7 +85,7 @@ public class InterpolationHoleCallTests
     [Fact]
     public async Task A_type_name_still_says_to_construct_it()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("class Widget { prop N = 1 }\n$\"{Widget(3)}\""));
@@ -101,7 +101,7 @@ public class InterpolationHoleCallTests
     [Fact]
     public async Task An_invocation_yielding_several_values_is_still_rejected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("func many() { 1\n2 }\n(many() + 0)"));

@@ -25,7 +25,7 @@ public sealed class ValueOrderingTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -149,7 +149,7 @@ public sealed class ValueOrderingTests
     [InlineData("enum E { A }\nenum F { A }\n(E.A < F.A)")]
     public async Task A_pair_with_no_order_raises(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(source));
     }
 
@@ -170,7 +170,7 @@ public sealed class ValueOrderingTests
     [InlineData("[2mb, 1kb, 1gb]")]
     public async Task The_fused_and_unfused_sorts_agree(string literal)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var sorted = await engine.ExecuteToListAsync($"{literal} | sort");
         var fused = await engine.ExecuteToListAsync($"{literal} | sort | first {sorted.Count}");

@@ -57,7 +57,7 @@ public sealed class NestedModuleImportTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = scripts.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         return await engine.ExecuteToListAsync(main, path);
     }

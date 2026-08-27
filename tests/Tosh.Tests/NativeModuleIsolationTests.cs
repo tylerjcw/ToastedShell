@@ -24,7 +24,7 @@ public class NativeModuleIsolationTests
     private static bool SkipOffLinux => !OperatingSystem.IsLinux();
 
     private static async Task<IReadOnlyList<object?>> RunAsync(string source)
-        => await new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(source);
+        => await new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(source);
 
     private const string TwoModules = """
         module A { bind native "libc.so.6" as L1 { func abs(v: int) -> int } }
@@ -58,7 +58,7 @@ public class NativeModuleIsolationTests
         if (SkipOffLinux) return;
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(TwoModules + call));
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(TwoModules + call));
 
         Assert.Contains(symbol, exception.Message);
     }
@@ -111,7 +111,7 @@ public class NativeModuleIsolationTests
         if (SkipOffLinux) return;
 
         await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(
                 """
                 hermit class One { bind native "libc.so.6" { func abs(v: int) -> int } }
                 hermit class Two { bind native "libc.so.6" { func labs(v: long) -> long } }

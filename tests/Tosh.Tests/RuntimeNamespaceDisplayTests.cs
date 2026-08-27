@@ -9,7 +9,7 @@ public sealed class RuntimeNamespaceDisplayTests
     public async Task Root_tosh_renders_as_runtime_summary()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync("$tosh");
         var rendered = StyledText.StripAnsi(runtime.Display.RenderMany(values));

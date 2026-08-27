@@ -45,7 +45,7 @@ public sealed class ModuleIntrospectionTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = directory;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         await engine.ExecuteToListAsync($"require \"{path}\"");
 
         return (engine, directory);
@@ -77,7 +77,7 @@ public sealed class ModuleIntrospectionTests
             Assert.Equal("a.txt", called[0]?.ToString());
 
             var topic = HelpCatalog.ResolveTopic(
-                engine.Runtime,
+                engine.Shell(),
                 "ToastLib.Filesystem.GetFileName",
                 engine.CreateScopedCommandView());
 
@@ -94,7 +94,7 @@ public sealed class ModuleIntrospectionTests
         await UsingLibraryAsync(Library, engine =>
         {
             var topic = HelpCatalog.ResolveTopic(
-                engine.Runtime,
+                engine.Shell(),
                 "ToastLib.Filesystem.GetFileName",
                 engine.CreateScopedCommandView());
 
@@ -112,7 +112,7 @@ public sealed class ModuleIntrospectionTests
     {
         await UsingLibraryAsync(Library, engine =>
         {
-            var topic = HelpCatalog.ResolveTopic(engine.Runtime, "GetFileName", engine.CreateScopedCommandView());
+            var topic = HelpCatalog.ResolveTopic(engine.Shell(), "GetFileName", engine.CreateScopedCommandView());
 
             Assert.NotNull(topic);
             Assert.Equal("ToastLib.Filesystem.GetFileName", topic!.Name);
@@ -139,7 +139,7 @@ public sealed class ModuleIntrospectionTests
             Assert.True(view.TryGet("Beta.Shared", out _));
 
             // Neither topic claims the bare name as an alias.
-            var alpha = HelpCatalog.ResolveTopic(engine.Runtime, "Alpha.Shared", view);
+            var alpha = HelpCatalog.ResolveTopic(engine.Shell(), "Alpha.Shared", view);
             Assert.DoesNotContain("Shared", alpha!.Aliases, StringComparer.Ordinal);
             return Task.FromResult(0);
         });
@@ -153,7 +153,7 @@ public sealed class ModuleIntrospectionTests
         await UsingLibraryAsync(Library, engine =>
         {
             var view = engine.CreateScopedCommandView();
-            var topic = HelpCatalog.ResolveTopic(engine.Runtime, "ToastLib.Filesystem", view);
+            var topic = HelpCatalog.ResolveTopic(engine.Shell(), "ToastLib.Filesystem", view);
 
             Assert.NotNull(topic);
             Assert.Equal("Modules", topic!.Category);
@@ -168,7 +168,7 @@ public sealed class ModuleIntrospectionTests
     {
         await UsingLibraryAsync(Library, engine =>
         {
-            var topic = HelpCatalog.ResolveTopic(engine.Runtime, "ToastLib", engine.CreateScopedCommandView());
+            var topic = HelpCatalog.ResolveTopic(engine.Shell(), "ToastLib", engine.CreateScopedCommandView());
 
             Assert.NotNull(topic);
             Assert.Contains("ToastLib.Filesystem", topic!.Notes ?? string.Empty, StringComparison.Ordinal);
@@ -221,7 +221,7 @@ public sealed class ModuleIntrospectionTests
     public async Task A_script_declared_function_is_still_found_by_its_own_name()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         await engine.ExecuteToListAsync("## Local.\nfunc localfn() { return 1 }");
 
         var topic = HelpCatalog.ResolveTopic(runtime, "localfn", engine.CreateScopedCommandView());

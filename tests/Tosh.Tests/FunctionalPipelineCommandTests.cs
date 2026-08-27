@@ -10,7 +10,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task FlatMap_flattens_nested_arrays_from_block()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | flat-map { [_, (_ * 10)] }");
 
@@ -20,7 +20,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task FlatMap_passes_through_non_collection_results()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | flat-map { _ * 2 }");
 
@@ -30,7 +30,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task FlatMap_with_anonymous_function()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | flat-map { [_, _] }");
 
@@ -42,7 +42,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Zip_pairs_two_sequences()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         await engine.ExecuteToListAsync("var b = [\"a\", \"b\", \"c\"]");
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | zip $b");
@@ -56,7 +56,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Zip_stops_at_shorter_sequence()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         await engine.ExecuteToListAsync("var b = [\"x\"]");
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | zip $b");
@@ -67,7 +67,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Zip_with_combiner_block()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         await engine.ExecuteToListAsync("var b = [10, 20, 30]");
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | zip $b { _ + $acc }");
@@ -78,7 +78,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Zip_exposes_clearer_other_side_locals_in_combiner_block()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         await engine.ExecuteToListAsync("var b = [10, 20, 30]");
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | zip $b { $left + $other + $right }");
@@ -91,7 +91,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Scan_yields_running_totals()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3, 4] | scan 0 { $acc + _ }");
 
@@ -101,7 +101,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Scan_with_string_accumulator()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("[\"a\", \"b\", \"c\"] | scan \"\" { $acc + _ }");
 
@@ -111,7 +111,7 @@ public sealed class FunctionalPipelineCommandTests(ToshRuntimeFixture fixture) :
     [Fact]
     public async Task Scan_yields_nothing_for_empty_input()
     {
-        var engine = new ToshEngine(fixture.Runtime);
+        var engine = new ToshEngine(fixture.Runtime.Language);
 
         var results = await engine.ExecuteToListAsync("[] | scan 0 { $acc + _ }");
 

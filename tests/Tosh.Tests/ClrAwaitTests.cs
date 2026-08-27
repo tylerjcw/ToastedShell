@@ -32,7 +32,7 @@ public sealed class ClrAwaitTests
 {
     private static async Task<IReadOnlyList<object?>> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         return await engine.ExecuteToListAsync(source);
     }
 
@@ -214,7 +214,7 @@ public sealed class ClrAwaitTests
     [Fact]
     public async Task Awaiting_a_non_awaitable_is_refused_with_guidance()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
             async () => await engine.ExecuteToListAsync("await 42"));
@@ -233,11 +233,11 @@ public sealed class ClrAwaitTests
 
         try
         {
-            var engine = new ToshEngine(ToshRuntime.CreateDefault());
+            var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
             var results = await engine.ExecuteToListAsync(
                 $"System.IO.File.ReadAllTextAsync(\"{path}\")");
 
-            var rendered = engine.Runtime.Formatter.Format(Assert.Single(results));
+            var rendered = engine.Shell().Formatter.Format(Assert.Single(results));
 
             Assert.StartsWith("Task<String>", rendered, StringComparison.Ordinal);
             Assert.DoesNotContain("AsyncStateMachineBox", rendered, StringComparison.Ordinal);

@@ -34,7 +34,7 @@ public sealed class TernaryArmMultiplicityTests
     private static async Task<IReadOnlyList<object?>> RunAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         return await engine.ExecuteToListAsync(script);
     }
 

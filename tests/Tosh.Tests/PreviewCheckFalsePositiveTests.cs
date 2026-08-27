@@ -31,14 +31,14 @@ public sealed class PreviewCheckFalsePositiveTests : IClassFixture<ToshRuntimeFi
 
     private IReadOnlyList<ToshDiagnostic> Check(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var unit = Lowerer.Lower(engine.Parse(source, "<preview-test>"), _runtime.Commands);
         return TypeChecker.Check(unit);
     }
 
     private async Task<object?> EvalAsync(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         return (await engine.ExecuteToListAsync(source)).LastOrDefault();
     }
 

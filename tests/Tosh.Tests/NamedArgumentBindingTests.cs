@@ -15,7 +15,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Unknown_named_argument_on_a_function_is_diagnosed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -31,7 +31,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Duplicate_named_argument_on_a_function_is_diagnosed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -46,7 +46,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Unknown_named_argument_on_a_method_is_diagnosed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -61,7 +61,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Duplicate_named_argument_on_a_method_is_diagnosed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -80,7 +80,7 @@ public sealed class NamedArgumentBindingTests
         // the one-parameter candidate 'b' is unknown, so it loses, and
         // the two-parameter candidate wins instead of the whole call
         // failing.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -96,7 +96,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Method_overloads_resolve_by_named_argument_too()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -114,7 +114,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Valid_named_arguments_bind_out_of_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -129,7 +129,7 @@ public sealed class NamedArgumentBindingTests
     [Fact]
     public async Task Rest_receives_only_unconsumed_positional_values_in_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -151,7 +151,7 @@ public sealed class NamedArgumentBindingTests
     public async Task An_arity_failure_is_still_reported_as_an_arity_failure()
     {
         // The new name checks must not swallow ordinary arity errors.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(

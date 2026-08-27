@@ -57,7 +57,7 @@ public sealed class AnnotatedConversionParityTests
     [MemberData(nameof(Corpus))]
     public async Task Sync_and_async_annotated_conversion_agree(string annotation, object? value)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var syncSucceeded = engine.TryConvertAnnotatedValue(annotation, value, out var syncConverted);
         var asyncResult = await engine.TryConvertAnnotatedValueAsync(annotation, value, CancellationToken.None);
@@ -80,7 +80,7 @@ public sealed class AnnotatedConversionParityTests
     {
         // Refinement clauses are the reason the two paths exist at all:
         // a `where` predicate and a `coerce` expression are user code.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             type Port = int where (_ >= 1 and _ <= 65535) coerce 80
@@ -100,7 +100,7 @@ public sealed class AnnotatedConversionParityTests
     {
         // A refinement over a refinement exercises the recursive branch,
         // where each level's predicate must run innermost-first.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             type Small = int where (_ < 100)
@@ -138,7 +138,7 @@ public sealed class AnnotatedConversionParityTests
         // side-effecting predicate. It was latent, not live. This test therefore
         // guards diagnostic agreement going forward rather than reproducing a
         // historical failure.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             type Fussy = string where (_.Substring(0, 2) == "ok") coerce "x"

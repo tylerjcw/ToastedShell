@@ -34,7 +34,7 @@ public sealed class RuneReplayTests : IClassFixture<ToshRuntimeFixture>
 
     private bool EmitsWithoutReplay(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<rune-replay>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 
@@ -123,7 +123,7 @@ public sealed class RuneReplayTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task A_called_rune_still_produces_its_effect()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             "rune do-twice(body) {\n    $body\n    $body\n}\nvar n = 0\ndo-twice { $n = $n + 1 }\necho $n");
 

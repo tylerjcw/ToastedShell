@@ -1219,7 +1219,7 @@ public sealed class DisplayEngineTests
     public async Task Config_theme_values_render_as_structured_records()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync("config get theme");
         var text = runtime.Display.RenderMany(values);
@@ -1235,7 +1235,7 @@ public sealed class DisplayEngineTests
     public async Task Root_config_value_renders_as_structured_record()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync("config");
         var text = runtime.Display.RenderMany(values);
@@ -1251,7 +1251,7 @@ public sealed class DisplayEngineTests
     public async Task Direct_clr_enum_type_names_render_as_enum_tables()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync("echo System.DayOfWeek");
         var text = runtime.Display.RenderMany(values);

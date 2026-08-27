@@ -375,6 +375,43 @@ which is the point: nothing here is a behaviour change.
 - Roughly fifteen files in `Tosh.Runtime` are shell-side by content — the config cluster,
   the display cluster, and the command-metadata emitters — and simply move with it.
 
+## `ToshEngine` no longer names the shell — 2026-08-27
+
+The last public API coupling. `ToshEngine` carried a `ToshRuntime` constructor, a
+`ShellRuntime` property and a `Runtime` compatibility view, and `Fork` branched on whether a
+shell runtime was present. Shipping code was already migrated — every production call site
+constructs from `runtime.Language` — so the whole surface was tests, benchmarks and one tool.
+
+All of it is gone:
+
+| Removed | Sites migrated |
+|---|---|
+| `ToshEngine(ToshRuntime? = null)` | **1,110** test constructions, plus 3 benchmarks and 2 in `Tosh.ParityCheck` |
+| the private `ToshEngine(ToshRuntime, capturedScopes)` used by `Fork` | `Fork` now always forks the language runtime — the two constructors differed only in setting `ShellRuntime` |
+| `ShellRuntime` and `Runtime` | 17 reads, through a new `ShellEngine.Shell()` in the test project |
+
+**The compiler adjudicated the migration.** `ToastRuntime` has no `Language` member, so
+appending `.Language` to something that was already a language runtime is a build error
+rather than a silent mistake. Six known-ToshRuntime spellings were rewritten mechanically and
+the remaining 120 errors were then read off the build and fixed individually — which is how
+`bench/` and `tools/Tosh.ParityCheck`, neither of which the first pass touched, were found.
+
+One replacement was wrong and the suite caught it. Eleven tests asserted
+`Assert.Null(engine.ShellRuntime)`, meaning "no shell runtime here"; ten became
+`Assert.Null(engine.LanguageRuntime.CommandHost)` correctly, but
+`A_language_engine_carries_an_opaque_command_host` *sets* a host deliberately, so asserting
+it null contradicted the test's own name. It now asserts the host is the recording one and
+is not a `ToshRuntime` — which is what the original line meant.
+
+**`Tosh.Language` now names no shell runtime type.** What survives a grep is a comment, a
+stale `.lscache` entry, and two string literals used as display names. Suite unchanged at
+6,647 throughout.
+
+**One coupling remains before the project can split**: `ToshEngine.Subcommands.cs` builds a
+`HelpTopic` for a script's auto-help, and help metadata is shell-side by this item's own
+classification. It wants the same treatment as background jobs and AutoCd — a capability the
+host supplies — rather than the language constructing the shell's type.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.

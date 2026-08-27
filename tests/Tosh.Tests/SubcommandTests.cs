@@ -118,7 +118,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["witcher3"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -138,7 +138,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["list"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -171,7 +171,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["greet", "World"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -190,7 +190,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["math", "add", "3", "4"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -211,7 +211,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["run"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -230,7 +230,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["build", "release"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -251,7 +251,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["build", "release"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -270,7 +270,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["build"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -289,7 +289,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["--verbose", "run"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -306,7 +306,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["run", "--verbose"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -322,7 +322,7 @@ public sealed class SubcommandTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.InvocationArguments = ["--loud", "run"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
             await engine.ExecuteToListAsync(
@@ -343,7 +343,7 @@ public sealed class SubcommandTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.InvocationArguments = ["math"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
             await engine.ExecuteToListAsync(
@@ -364,7 +364,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["--help"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -388,7 +388,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["--help"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -406,7 +406,7 @@ public sealed class SubcommandTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.InvocationArguments = ["foo"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
             await engine.ExecuteToListAsync(
@@ -424,7 +424,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["run", "--", "--not-a-flag"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -443,7 +443,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["double", "5"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -459,7 +459,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["math", "double", "7"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -484,7 +484,7 @@ public sealed class SubcommandTests
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
         runtime.InvocationArguments = ["fib"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """

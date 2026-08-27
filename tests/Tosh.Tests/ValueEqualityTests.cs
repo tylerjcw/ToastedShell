@@ -27,7 +27,7 @@ public sealed class ValueEqualityTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -193,7 +193,7 @@ public sealed class ValueEqualityTests
 
     private static async Task<object?> EvaluateAsync(string expression)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"({expression})");
         return results.Count == 0 ? null : results[^1];
     }

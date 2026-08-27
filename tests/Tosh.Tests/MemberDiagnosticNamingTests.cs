@@ -30,7 +30,7 @@ public sealed class MemberDiagnosticNamingTests : IClassFixture<ToshRuntimeFixtu
 
     private async Task<string> FailureAsync(string script)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var exception = await Assert.ThrowsAnyAsync<Exception>(
             async () => await engine.ExecuteToListAsync(script));
 
@@ -120,7 +120,7 @@ public sealed class MemberDiagnosticNamingTests : IClassFixture<ToshRuntimeFixtu
     [Fact]
     public async Task A_visible_member_is_unaffected()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var results = await engine.ExecuteToListAsync("class S { prop A: int = 7 }\nvar s = new S()\n$s.A");
 
         Assert.Equal(7, Convert.ToInt32(results.LastOrDefault()));
@@ -129,7 +129,7 @@ public sealed class MemberDiagnosticNamingTests : IClassFixture<ToshRuntimeFixtu
     [Fact]
     public async Task A_private_member_is_still_reachable_from_inside_the_class()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var results = await engine.ExecuteToListAsync(
             "class S { shy prop Secret: int = 7\nfunc reveal() { return $this.Secret } }\nvar s = new S()\n$s.reveal()");
 

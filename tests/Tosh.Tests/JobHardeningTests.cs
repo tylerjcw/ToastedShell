@@ -23,7 +23,7 @@ public sealed class JobHardeningTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // Start a fast background job
         await engine.ExecuteToListAsync("./" + commandName + " &");
@@ -66,7 +66,7 @@ public sealed class JobHardeningTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // Start and wait for a job to complete
         await engine.ExecuteToListAsync("./" + firstCommand + " &");
@@ -101,7 +101,7 @@ public sealed class JobHardeningTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // Start a long-running background job
         await engine.ExecuteToListAsync("./" + commandName + " &");

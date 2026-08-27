@@ -101,7 +101,7 @@ public sealed class StructuredDataCommandTests
     public async Task Summarize_auto_mode_applies_all_ops_to_scalar_numerics()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // Inject integer scalars directly
         runtime.Variables["nums"] = new object?[] { 1, 2, 3, 4, 5 };
@@ -120,7 +120,7 @@ public sealed class StructuredDataCommandTests
     public async Task Summarize_auto_mode_string_columns_get_count_min_max_only()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // Inject string-valued records directly
         var rows = new object?[]
@@ -149,7 +149,7 @@ public sealed class StructuredDataCommandTests
     public async Task Summarize_auto_mode_numeric_records_get_all_ops()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         // Inject records with integer Size field directly
         var rows = new object?[]
@@ -174,7 +174,7 @@ public sealed class StructuredDataCommandTests
     public async Task Summarize_single_column_name_applies_auto_ops_to_that_column_only()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var rows = new object?[]
         {
@@ -197,7 +197,7 @@ public sealed class StructuredDataCommandTests
     public async Task Summarize_auto_mode_discovers_columns_on_typed_rows()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Variables["rows"] = new object?[]
         {
@@ -225,7 +225,7 @@ public sealed class StructuredDataCommandTests
     public async Task Summarize_single_member_path_shorthand_normalizes_underscore_prefix()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Variables["rows"] = new object?[]
         {

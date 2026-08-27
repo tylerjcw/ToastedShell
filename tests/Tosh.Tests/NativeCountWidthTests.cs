@@ -30,7 +30,7 @@ public class NativeCountWidthTests
     private static bool SkipOffLinux => !OperatingSystem.IsLinux();
 
     private static async Task<IReadOnlyList<object?>> RunAsync(string source)
-        => await new ToshEngine(ToshRuntime.CreateDefault()).ExecuteToListAsync(source);
+        => await new ToshEngine(ToshRuntime.CreateDefault().Language).ExecuteToListAsync(source);
 
     /// <summary>
     /// `open(2)` returns an `int` file descriptor, or -1 with errno — the exact
@@ -166,7 +166,7 @@ public class NativeCountWidthTests
         if (SkipOffLinux) return;
 
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
 
         await engine.ExecuteToListAsync(
             """

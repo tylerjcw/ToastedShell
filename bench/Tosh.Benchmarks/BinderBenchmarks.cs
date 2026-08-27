@@ -30,7 +30,7 @@ public class BinderBenchmarks
     public void Setup()
     {
         _runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
 
         _tiny = engine.Parse("ls -la", "<bench-tiny>");
 

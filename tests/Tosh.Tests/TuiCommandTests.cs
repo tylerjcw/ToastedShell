@@ -10,7 +10,7 @@ public sealed class TuiCommandTests
 {
     // tui commands are [ShellOnly]; mark the test engine as interactive so they
     // bypass the bind-time shell-only check.
-    private static ToshEngine CreateEngine() => new(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+    private static ToshEngine CreateEngine() => new(ToshRuntime.CreateDefault().Language) { IsInteractiveSession = true };
 
     [Fact]
     public void Tui_request_probe_ignores_ordinary_output()

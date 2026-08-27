@@ -50,7 +50,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Interpreter_conditions_follow_the_canonical_matrix()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -81,7 +81,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Logical_operators_use_truthiness_and_return_booleans()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -98,7 +98,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Match_and_comprehension_guards_use_truthiness()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -118,7 +118,7 @@ public sealed class TruthinessTests
     public async Task Event_when_guards_use_truthiness()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -143,7 +143,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Standard_library_predicates_use_truthiness()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -159,7 +159,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Assert_accepts_truthy_values_and_rejects_falsy_values()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         Assert.Empty(await engine.ExecuteToListAsync("""assert { "false" }"""));
 
@@ -174,7 +174,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Refinement_predicates_remain_strictly_boolean()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -191,7 +191,7 @@ public sealed class TruthinessTests
     [Fact]
     public async Task Refinement_coercion_guards_use_broad_truthiness()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

@@ -158,7 +158,7 @@ public sealed class TerminalControlTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new Tosh.Language.ToshEngine(runtime);
+        var engine = new Tosh.Language.ToshEngine(runtime.Language);
 
         // When piped, output is captured — this exercises the piped path
         // which should still work unchanged.

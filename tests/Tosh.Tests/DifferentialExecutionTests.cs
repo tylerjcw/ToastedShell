@@ -968,7 +968,7 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
     {
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = engine.ExecuteToListAsync(source).GetAwaiter().GetResult();
 
         // `TOAST-0018`. Rendered, not `ToString`d. The compiled side is captured *stdout*,
@@ -992,7 +992,7 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         string source,
         CompileProfile profile = CompileProfile.Permissive)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<differential>");
 
         Assert.True(parse.Diagnostics.Count == 0,
@@ -1115,7 +1115,7 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         Assert.True(File.Exists(path), $"missing {path}");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(File.ReadAllText(path), "<readiness-probe>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 

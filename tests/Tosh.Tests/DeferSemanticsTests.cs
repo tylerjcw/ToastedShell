@@ -8,7 +8,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Body_and_cleanup_failures_are_preserved_after_exhaustive_lifo_cleanup()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -39,7 +39,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Cleanup_only_failures_remain_cleanup_failures_in_lifo_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -66,7 +66,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Unreached_defer_is_not_registered()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -92,7 +92,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Defer_preserves_output_emitted_before_return()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -113,7 +113,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Cleanup_control_flow_is_suppressed_without_replacing_the_pending_return()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -133,7 +133,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Cleanup_failures_supersede_pending_return_break_and_continue()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -180,7 +180,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Cleanup_local_break_and_continue_are_suppressed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -212,7 +212,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Nested_defer_failures_flatten_in_execution_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -239,7 +239,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Unhandled_cleanup_failure_uses_the_stable_cleanup_diagnostic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -265,7 +265,7 @@ public sealed class DeferSemanticsTests
     [Fact]
     public async Task Unhandled_competing_failures_render_in_body_then_cleanup_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -297,7 +297,7 @@ public sealed class DeferSemanticsTests
         using var cancellation = new CancellationTokenSource();
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(new CancelNowCommand(cancellation));
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -321,7 +321,7 @@ public sealed class DeferSemanticsTests
         using var cancellation = new CancellationTokenSource();
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(new CancelNowCommand(cancellation));
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """

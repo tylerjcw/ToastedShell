@@ -27,7 +27,7 @@ public sealed class ExecCommandTests
         runtime.CurrentDirectory = tempDirectory.Path;
         var handler = new FakeExecHandler(new ShellExecResult(ReplacedCurrentProcess: true, ExitCode: 0));
         runtime.ExecHandler = handler;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("exec ./" + commandName + " alpha beta");
 
@@ -59,7 +59,7 @@ public sealed class ExecCommandTests
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
         runtime.ExecHandler = new FakeExecHandler(new ShellExecResult(ReplacedCurrentProcess: false, ExitCode: 7));
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("exec ./" + commandName);
 
@@ -73,7 +73,7 @@ public sealed class ExecCommandTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.ExecHandler = new FakeExecHandler(new ShellExecResult(ReplacedCurrentProcess: true, ExitCode: 0));
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () => await engine.ExecuteToListAsync("echo hello | exec /bin/sh"));
         var diagnostic = Assert.Single(exception.Diagnostics);

@@ -81,7 +81,7 @@ public sealed class CommandTableBoundaryTests
     public async Task An_exported_function_becomes_a_callable_name()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("export func greet() => \"hi\"\ngreet");
 

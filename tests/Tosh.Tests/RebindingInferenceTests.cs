@@ -22,14 +22,14 @@ public class RebindingInferenceTests : IClassFixture<ToshRuntimeFixture>
 
     private IReadOnlyList<ToshDiagnostic> Check(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var unit = Lowerer.Lower(engine.Parse(source, "<rebinding-test>"), _runtime.Commands);
         return TypeChecker.Check(unit);
     }
 
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -92,7 +92,7 @@ public class RebindingInferenceTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task An_annotated_variable_keeps_its_declared_type()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(

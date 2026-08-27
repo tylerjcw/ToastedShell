@@ -18,7 +18,7 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
 
     private IReadOnlyList<ToshDiagnostic> Check(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<check-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         return TypeChecker.Check(unit);
@@ -273,7 +273,7 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
 
     private IReadOnlyList<ToshDiagnostic> CheckCompile(string source, bool allowDynamic)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<compile-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         return TypeChecker.CheckCompileAnnotations(unit, allowDynamic);

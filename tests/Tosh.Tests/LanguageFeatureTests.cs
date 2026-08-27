@@ -11,7 +11,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task ArrayDestructuring_binds_elements()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var [a, b, c] = [10, 20, 30]");
         var results = await engine.ExecuteToListAsync("echo $a $b $c");
@@ -22,7 +22,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task ArrayDestructuring_missing_elements_are_null()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var [x, y, z] = [1]");
         var results = await engine.ExecuteToListAsync("echo $x");
@@ -36,7 +36,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task ArrayDestructuring_from_pipeline()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var [first, second] = echo hello world");
         var results = await engine.ExecuteToListAsync("echo $first $second");
@@ -50,7 +50,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task RecordDestructuring_binds_fields()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var rec = {| Name = Alice, Age = 30 |}");
         await engine.ExecuteToListAsync("var { Name, Age } = $rec");
@@ -63,7 +63,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task RecordDestructuring_missing_fields_are_null()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var rec = {| X = 1 |}");
         await engine.ExecuteToListAsync("var { X, Y } = $rec");
@@ -80,7 +80,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Spread_in_array_literal()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var a = [1, 2, 3]");
         var results = await engine.ExecuteToListAsync("[0, ...$a, 4] | each { _ }");
@@ -91,7 +91,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Spread_concatenates_two_arrays()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var x = [1, 2]");
         await engine.ExecuteToListAsync("var y = [3, 4]");
@@ -105,7 +105,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Spread_in_record_literal()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var base = {| Name = Tosh, Version = 1 |}");
         var results = await engine.ExecuteToListAsync("{| ...$base, Version = 2 |}");
@@ -118,7 +118,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Spread_merges_multiple_records()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var a = {| X = 1 |}");
         await engine.ExecuteToListAsync("var b = {| Y = 2 |}");
@@ -134,7 +134,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Computed_property_name_from_variable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var key = echo status");
         var results = await engine.ExecuteToListAsync("{| ($key) = active |}");
@@ -146,7 +146,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Computed_property_with_static_fields()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var k = echo color");
         var results = await engine.ExecuteToListAsync("{| Name = widget, ($k) = blue |}");
@@ -161,7 +161,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_reference_returns_callable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Define a function, then get a reference to it
         await engine.ExecuteToListAsync("func greet(name) { echo hello $name }");
@@ -173,7 +173,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_reference_to_builtin()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var f = &sum\n$f.Name");
 
@@ -183,7 +183,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_reference_with_pipe()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Use &map to get a reference, confirm it's a command
         await engine.ExecuteToListAsync("var m = &map");
@@ -197,7 +197,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Index_access_returns_array_item()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -211,7 +211,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Index_access_can_chain_into_member_access()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -225,7 +225,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Index_access_returns_string_character()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -239,7 +239,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Index_access_can_lookup_record_values_by_key()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -255,7 +255,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Index_access_can_lookup_record_keys_by_value()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -271,7 +271,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Compose_chains_two_functions()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("func dbl(x) { return ($x * 2) }");
         await engine.ExecuteToListAsync("func inc(x) { return ($x + 1) }");
@@ -285,7 +285,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Compose_chains_three_functions()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("func a(x) { return ($x + 1) }");
         await engine.ExecuteToListAsync("func b(x) { return ($x * 2) }");
@@ -300,7 +300,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Compose_preserves_callable_metadata()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("func dbl(x) { return ($x * 2) }");
         await engine.ExecuteToListAsync("func inc(x) { return ($x + 1) }");
@@ -315,7 +315,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Assert_passes_when_true()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var x = echo 10");
         // Should not throw
@@ -325,7 +325,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Assert_throws_when_false()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var x = echo 5");
 
@@ -338,7 +338,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Assert_throws_with_custom_message()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var x = echo 0");
 
@@ -353,7 +353,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Defer_runs_after_block_exits()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Defer should not affect the function's return value
         await engine.ExecuteToListAsync(
@@ -371,7 +371,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Defer_runs_even_on_exception()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // The original exception should still propagate through defers
         await engine.ExecuteToListAsync(
@@ -389,7 +389,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Defer_runs_on_early_return()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Return value should be preserved even with a defer block
         await engine.ExecuteToListAsync(
@@ -407,7 +407,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Defer_multiple_blocks_all_execute()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Multiple defers should all execute without error
         await engine.ExecuteToListAsync(
@@ -428,7 +428,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partition_splits_by_predicate()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo 1 2 3 4 5 6 | partition { _ > 3 }");
 
@@ -443,7 +443,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partition_with_callable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "echo 10 20 30 40 | partition func(x) { return ($x >= 30) }");
@@ -459,7 +459,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task TakeUntil_stops_at_predicate()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo 1 2 3 4 5 | take-until { _ == 4 }");
 
@@ -470,7 +470,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task TakeUntil_yields_all_if_predicate_never_true()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | take-until { _ > 100 }");
 
@@ -481,7 +481,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task SkipUntil_skips_before_predicate()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo 1 2 3 4 5 | skip-until { _ >= 3 }");
 
@@ -492,7 +492,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task SkipUntil_yields_nothing_if_predicate_never_true()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | skip-until { _ > 100 }");
 
@@ -502,7 +502,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task FindIndex_returns_first_match()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo a b c d | find-index { _ == c }");
 
@@ -513,7 +513,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task FindIndex_returns_negative_one_if_no_match()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo a b c | find-index { _ == z }");
 
@@ -526,7 +526,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Unfold_generates_values_from_seed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Generate countdown: 5, 4, 3, 2, 1 then stop
         await engine.ExecuteToListAsync(
@@ -543,7 +543,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Unfold_stops_on_null()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Immediately return null → empty output
         await engine.ExecuteToListAsync("func stop(n) { return null }");
@@ -555,7 +555,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Iterate_generates_sequence_with_take()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Powers of 2: 1, 2, 4, 8, 16
         await engine.ExecuteToListAsync("func dbl(x) { return ($x * 2) }");
@@ -568,7 +568,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Iterate_with_take_while()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Count up from 1, stop before 6
         await engine.ExecuteToListAsync("func inc(x) { return ($x + 1) }");
@@ -581,7 +581,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Converge_finds_fixed_point()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Clamp to 0: repeatedly subtract 1, min 0 → converges at 0
         await engine.ExecuteToListAsync(
@@ -599,7 +599,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Converge_immediate_fixed_point()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Identity function converges immediately
         await engine.ExecuteToListAsync("func id(x) { return $x }");
@@ -612,7 +612,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Converge_uses_structural_equality_for_arrays()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("converge [1, 2] func(x) => ([1, 2])");
 
@@ -624,7 +624,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Converge_uses_structural_equality_for_records()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -644,7 +644,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task TupleAssignment_swaps_variables()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("var a = 1");
         await engine.ExecuteToListAsync("var b = 2");
         await engine.ExecuteToListAsync("($a, $b) = [$b, $a]");
@@ -661,7 +661,7 @@ public sealed class LanguageFeatureTests
         // of one (`var [first, second] = $fiveItems`). `TS-P2-59` made only a *tuple* mismatch a
         // diagnostic, because a tuple's shape is fixed and naming the wrong number of targets
         // for one is a miscount every time. See TupleDestructuringTests for that half.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("var x = 10");
         await engine.ExecuteToListAsync("var y = 20");
         await engine.ExecuteToListAsync("var z = 30");
@@ -685,7 +685,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task BlockComment_is_ignored_by_parser()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("##{ This is a block comment }##\nvar x = 42");
         var results = await engine.ExecuteToListAsync("echo $x");
@@ -696,7 +696,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task BlockComment_multiline_is_ignored()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("##{\nThis spans\nmultiple lines\n}##\nvar y = 99");
         var results = await engine.ExecuteToListAsync("echo $y");
@@ -707,7 +707,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task BlockComment_inline_preserves_surrounding_code()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var a = 10\n##{ skipped }##\nvar b = 20");
         var results = await engine.ExecuteToListAsync("echo $a $b");
@@ -721,7 +721,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Const_declaration_stores_value()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("const pi = 3.14");
         var results = await engine.ExecuteToListAsync("echo $pi");
@@ -732,7 +732,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Const_reassignment_throws()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("const x = 42");
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
@@ -744,7 +744,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Const_compound_assignment_throws()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("const n = 10");
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
@@ -756,7 +756,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Power_operator_basic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("echo (2 ** 3)");
         Assert.Equal(8, results[0]);
     }
@@ -764,7 +764,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Power_operator_right_associative()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         // 2 ** 3 ** 2 should be 2 ** (3 ** 2) = 2 ** 9 = 512
         var results = await engine.ExecuteToListAsync("echo (2 ** 3 ** 2)");
         Assert.Equal(512, results[0]);
@@ -773,7 +773,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Power_operator_zero_exponent()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("echo (10 ** 0)");
         Assert.Equal(1, results[0]);
     }
@@ -781,7 +781,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Power_compound_assignment()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("var x = 3");
         await engine.ExecuteToListAsync("$x **= 2");
         var results = await engine.ExecuteToListAsync("echo $x");
@@ -791,7 +791,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_default_parameter_used_when_omitted()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func greet(name = \"world\") { echo $name }");
         var results = await engine.ExecuteToListAsync("greet");
         Assert.Equal("world", results[0]);
@@ -800,7 +800,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_default_parameter_overridden_by_argument()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func greet(name = \"world\") { echo $name }");
         var results = await engine.ExecuteToListAsync("greet Alice");
         Assert.Equal("Alice", results[0]);
@@ -809,7 +809,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_default_parameter_mixed_required_and_default()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func connect(host, port = 8080) { echo $port }");
         var results = await engine.ExecuteToListAsync("connect example.com");
         Assert.Equal(8080, results[0]);
@@ -818,7 +818,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_default_parameter_expression()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func calc(x, y = (2 + 3)) { echo ($x + $y) }");
         var results = await engine.ExecuteToListAsync("calc 10");
         Assert.Equal(15, results[0]);
@@ -827,7 +827,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Named_arguments_basic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func greet(name, greeting) { echo $greeting }");
         var results = await engine.ExecuteToListAsync("greet(name = \"Alice\", greeting = \"Hello\")");
         Assert.Equal("Hello", results[0]);
@@ -836,7 +836,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Named_arguments_out_of_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func connect(host, port) { echo $port }");
         var results = await engine.ExecuteToListAsync("connect(port = 8080, host = \"example.com\")");
         Assert.Equal(8080, results[0]);
@@ -845,7 +845,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Named_arguments_with_defaults()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func connect(host, port = 443) { echo $port }");
         var results = await engine.ExecuteToListAsync("connect(host = \"example.com\")");
         Assert.Equal(443, results[0]);
@@ -856,7 +856,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_call_multiple_args_not_tuple()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func test_args(a, b, c) { echo $a $b $c }");
         var results = await engine.ExecuteToListAsync("test_args(1, 2, 3)");
         Assert.Equal(3, results.Count);
@@ -868,7 +868,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_call_two_args_not_tuple()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func add(a, b) { echo ($a + $b) }");
         var results = await engine.ExecuteToListAsync("add(3, 4)");
         Assert.Single(results);
@@ -878,7 +878,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Function_call_single_arg_no_tuple()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func double(x) { echo ($x * 2) }");
         var results = await engine.ExecuteToListAsync("double(5)");
         Assert.Single(results);
@@ -889,7 +889,7 @@ public sealed class LanguageFeatureTests
     public async Task Function_call_with_space_before_paren_is_tuple_arg()
     {
         // When there's a space: `echo (1, 2, 3)` the (1,2,3) is a tuple argument
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("echo (1, 2, 3) | type-of | get Name");
         Assert.Contains("tuple", results[0]?.ToString()?.ToLower() ?? "");
     }
@@ -899,7 +899,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task PipeForward_passes_value_as_first_argument()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("\"hello\" |> echo");
         Assert.Single(results);
         Assert.Equal("hello", results[0]?.ToString());
@@ -908,7 +908,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task PipeForward_expression_as_first_argument()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("(2 + 3) |> echo");
         Assert.Single(results);
         Assert.Equal(5L, Convert.ToInt64(results[0]));
@@ -917,7 +917,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task PipeForward_prepends_before_existing_arguments()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func add(a, b) { echo ($a + $b) }");
         var results = await engine.ExecuteToListAsync("5 |> add 3");
         Assert.Single(results);
@@ -927,7 +927,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task PipeForward_chains_multiple_stages()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func double(n) { echo ($n * 2) }");
         var results = await engine.ExecuteToListAsync("5 |> double |> double");
         Assert.Single(results);
@@ -939,7 +939,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Yield_emits_values_from_generator_function()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func gen() { yield 1; yield 2; yield 3 }");
         var results = await engine.ExecuteToListAsync("gen");
         Assert.Equal([1L, 2L, 3L], results.Select(Convert.ToInt64).ToArray());
@@ -948,7 +948,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Yield_in_loop_produces_sequence()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func countdown(n) { var i = $n; while ($i > 0) { yield $i; $i = $i - 1 } }");
         var results = await engine.ExecuteToListAsync("countdown 3");
         Assert.Equal([3L, 2L, 1L], results.Select(Convert.ToInt64).ToArray());
@@ -957,7 +957,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Yield_with_return_stops_early()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func partial() { yield 10; yield 20; return 30 }");
         var results = await engine.ExecuteToListAsync("partial");
         Assert.Equal([10L, 20L, 30L], results.Select(Convert.ToInt64).ToArray());
@@ -966,7 +966,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Yield_works_with_pipeline()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func squares(n) { for i in (1..$n) { yield ($i * $i) } }");
         var results = await engine.ExecuteToListAsync("squares 4");
         Assert.Equal([1L, 4L, 9L, 16L], results.Select(Convert.ToInt64).ToArray());
@@ -977,7 +977,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Parallel_processes_items_with_block()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | parallel { echo (_ * 2) }");
         Assert.Equal([2L, 4L, 6L], results.Select(Convert.ToInt64).ToArray());
     }
@@ -985,7 +985,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Parallel_preserves_input_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("echo 5 3 1 4 2 | parallel { _ }");
         Assert.Equal([5L, 3L, 1L, 4L, 2L], results.Select(Convert.ToInt64).ToArray());
     }
@@ -993,7 +993,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Parallel_with_callable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("func triple(n) { echo ($n * 3) }");
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | parallel { triple $_ }");
         Assert.Equal([3L, 6L, 9L], results.Select(Convert.ToInt64).ToArray());
@@ -1004,7 +1004,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Interface_definition_and_class_implementing_it()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("interface Greeter { func greet(name) }");
         await engine.ExecuteToListAsync(@"
             class Hello fulfills Greeter {
@@ -1018,7 +1018,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Interface_missing_method_throws_error()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("interface Printable { func toString() }");
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
@@ -1030,7 +1030,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Interface_multiple_methods_validated()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("interface Serializable { func serialize(); func deserialize(data) }");
         await engine.ExecuteToListAsync(@"
             class JsonObj fulfills Serializable {
@@ -1045,7 +1045,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Interface_multiple_interfaces_on_class()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("interface Readable { func read() }");
         await engine.ExecuteToListAsync("interface Writable { func write(data) }");
         await engine.ExecuteToListAsync(@"
@@ -1063,7 +1063,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_inherits_method_from_base()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Animal {
                 func speak() { echo ""..."" }
@@ -1081,7 +1081,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_overrides_base_method()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Animal {
                 func speak() { echo ""..."" }
@@ -1099,7 +1099,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_inherits_property_from_base()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Vehicle {
                 prop wheels = 4
@@ -1117,7 +1117,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_super_calls_base_method()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Base {
                 func greet() { echo ""hello"" }
@@ -1136,7 +1136,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_extends_unknown_class_throws_error()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync("class Broken extends NonExistent { }");
@@ -1147,7 +1147,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_extends_dotted_type_name_parses_correctly()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         // System.Drawing.Point may or may not be loadable, but the parser must accept dotted names.
         // If it resolves, the class definition succeeds; if not, it throws unknown_base_class.
         // Either way, we should NOT get a parser error.
@@ -1166,7 +1166,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_extends_clr_type_and_accesses_base_properties()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class MyUri extends System.Uri {
                 prop Label = ''
@@ -1187,7 +1187,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_extends_clr_type_and_calls_base_method()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class SmartList extends System.Collections.ArrayList {
                 SmartList() {
@@ -1209,7 +1209,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Implicit_using_resolves_common_types_without_using_statement()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         // StringBuilder is in System.Text which is an implicit using
         var results = await engine.ExecuteToListAsync("var sb = new StringBuilder(); $sb.Append('hello'); echo $sb.ToString()");
         Assert.Equal("hello", results[0]?.ToString());
@@ -1218,7 +1218,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Implicit_using_resolves_generic_types()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         // List<string> is in System.Collections.Generic
         await engine.ExecuteToListAsync("var items = new List<string>(); $items.Add('a'); $items.Add('b')");
         var results = await engine.ExecuteToListAsync("echo $items.Count");
@@ -1228,7 +1228,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Explicit_using_resolves_non_default_namespace()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         // System.Globalization is not in the default implicit usings
         var results = await engine.ExecuteToListAsync("using System.Globalization; var ci = new CultureInfo('en-US'); echo $ci.Name");
         Assert.Equal("en-US", results[0]?.ToString());
@@ -1237,7 +1237,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_extends_clr_type_via_implicit_using()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         // Uri is in System (implicit) — should work with short name in extends
         await engine.ExecuteToListAsync(@"
             class TaggedUri extends Uri {
@@ -1257,7 +1257,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_super_call_invokes_base_constructor()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Pt {
                 prop X
@@ -1286,7 +1286,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Union_variant_with_fields()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             union Shape {
                 Circle(radius)
@@ -1300,7 +1300,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Union_unit_variant()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             union Color {
                 Red
@@ -1315,7 +1315,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Union_variant_tag_accessible()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             union Result {
                 Ok(value)
@@ -1329,7 +1329,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Union_variant_toString()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             union Option {
                 Some(value)
@@ -1343,7 +1343,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Union_variant_fields_accept_named_and_positional_type_annotations()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             union TypedResult<T> {
                 Ok(T)
@@ -1361,7 +1361,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Generic_union_supports_nested_type_arguments()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             union NestedResult<T, E> { Ok(T) Error(E) }
             var value: NestedResult<list<int>, string> = NestedResult.Ok<list<int>, string>([1, 2])
@@ -1377,7 +1377,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Recursive_union_constructs_typed_children()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             union ExprTree {
                 Lit(value: double)
@@ -1393,7 +1393,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Union_field_type_failure_names_the_field()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var failure = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
             await engine.ExecuteToListAsync("union TypedLit { Lit(value: double) }\nTypedLit.Lit(\"bad\")"));
 
@@ -1405,7 +1405,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_checks_primitive_types()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             var x = 42
             var s = ""hello""
@@ -1418,7 +1418,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_not_operator_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             var x = 42
             echo ($x is-not string) ($x is-not int)
@@ -1429,7 +1429,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_null_checks_nullity()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             var x = null
             var y = 42
@@ -1441,7 +1441,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_checks_tosh_class_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Dog {
                 prop Name = ""Rex""
@@ -1457,7 +1457,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_recognises_numeric_trait_constraint()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             var i = 42
             var f = 3.14
@@ -1470,7 +1470,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_recognises_comparable_trait_constraint()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             var i = 42
             var s = ""hello""
@@ -1485,7 +1485,7 @@ public sealed class LanguageFeatureTests
         // Regression: previously `default => throw new ...` was parsed as a
         // pipeline starting with the bareword command `throw`, producing
         // 'tosh.runtime.unknown_command' instead of raising the exception.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             func classify(x) {
                 return match ($x) {
@@ -1508,7 +1508,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Match_arm_pipeline_body_supports_return_statement()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             func classify(x) {
                 match ($x) {
@@ -1530,7 +1530,7 @@ public sealed class LanguageFeatureTests
     {
         // Phase 6.16 — `new Box(42)` ⇒ `T = int` from the ctor argument
         // type, no `<int>` ceremony required.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Box<T>(initial: T) where T: Numeric {
                 prop value: T = $initial
@@ -1548,7 +1548,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Generic_class_inference_still_enforces_constraints()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Box<T>(initial: T) where T: Numeric {
                 prop value: T = $initial
@@ -1566,7 +1566,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Generic_record_infers_type_arguments_from_ctor_args()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             record Pair<A, B>(first: A, second: B)
             var p = new Pair(""hello"", 7)
@@ -1581,7 +1581,7 @@ public sealed class LanguageFeatureTests
     {
         // Phase 6.16 — nested annotations: `class Box<T>(values: list<T>)`
         // should infer T from the element type of the supplied list.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Box<T>(values: list<T>) {
                 prop values = $values
@@ -1597,7 +1597,7 @@ public sealed class LanguageFeatureTests
     {
         // Phase 6.16 — `Head<T>` annotation matched against any generic
         // CLR runtime type unifies pointwise.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Wrap<T>(items: list<T>) {
                 prop items = $items
@@ -1611,7 +1611,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_walks_tosh_class_hierarchy()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Animal {
                 prop Name = ""Rex""
@@ -1630,7 +1630,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_checks_tosh_interfaces()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             interface IGreetable {
                 func greet() : string
@@ -1652,7 +1652,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_checks_tosh_enum()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             enum Color {
                 Red = 1
@@ -1670,7 +1670,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task As_operator_converts_primitive_types()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             echo (42 as double) (""123"" as int)
         ");
@@ -1681,7 +1681,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task As_operator_returns_tosh_instance_when_compatible()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(@"
             class Animal {
                 prop Name = ""Rex""
@@ -1701,7 +1701,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Is_operator_with_type_aliases()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             var n = 42
             var text = ""hello""
@@ -1713,7 +1713,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Shared_property_is_accessible_on_class_type()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Counter {
                 shared prop count = 0
@@ -1727,7 +1727,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Shared_property_with_initial_value()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Config {
                 shared prop version = ""1.0""
@@ -1741,7 +1741,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Shared_property_not_on_instance()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Foo {
                 shared prop bar = 42
@@ -1757,7 +1757,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Sealed_class_cannot_be_extended()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -1775,7 +1775,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Sealed_class_can_be_instantiated()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             sealed class Leaf {
                 prop value = 99
@@ -1789,7 +1789,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hollow_class_cannot_be_instantiated()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -1805,7 +1805,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hollow_class_subclass_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hollow class Shape {
                 prop name = ""shape""
@@ -1825,7 +1825,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hollow_method_must_be_implemented_by_subclass()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -1846,7 +1846,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hollow_method_implemented_by_subclass_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hollow class Shape {
                 hollow func area() {
@@ -1868,7 +1868,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Public_modifier_is_noop()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Demo {
                 public prop name = 42
@@ -1882,7 +1882,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Shared_alias_works_same_as_static_for_methods()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class MathHelper {
                 shared func multiply(n) {
@@ -1897,7 +1897,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_IsAbstract_reflects_hollow()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hollow class AbstractBase { }
             class ConcreteChild extends AbstractBase { }
@@ -1910,7 +1910,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Class_IsSealed_reflects_sealed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             sealed class Sealed {
                 prop value = 10
@@ -1924,7 +1924,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Shy_sealed_class_combination()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             func test() {
                 shy sealed class Internal {
@@ -1941,7 +1941,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Proud_modifier_is_explicit_public()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Demo {
                 proud prop name = 99
@@ -1957,7 +1957,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Fixed_property_cannot_be_reassigned()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -1974,7 +1974,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Fixed_property_initial_value_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Config {
                 fixed prop version = ""1.0""
@@ -1988,7 +1988,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Fixed_property_can_be_set_in_constructor()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Point {
                 fixed prop x = 0
@@ -2007,7 +2007,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Vital_property_must_be_set_in_constructor()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2024,7 +2024,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Vital_property_works_when_set_in_constructor()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class User {
                 vital prop name
@@ -2041,7 +2041,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Guarded_property_not_accessible_externally()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Account {
                 guarded prop balance = 100
@@ -2060,7 +2060,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Guarded_property_accessible_from_subclass()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Account {
                 guarded prop balance = 100
@@ -2079,7 +2079,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Guarded_method_accessible_from_subclass()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Base {
                 guarded func secret() {
@@ -2100,7 +2100,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Overrule_method_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Animal {
                 func speak() {
@@ -2121,7 +2121,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Overrule_without_parent_method_fails()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2138,7 +2138,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Overrule_without_base_class_fails()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2155,7 +2155,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Fixed_vital_combination()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Immutable {
                 fixed vital prop id
@@ -2172,7 +2172,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Fixed_vital_cannot_reassign_after_construction()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2192,7 +2192,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Overrule_hollow_method_works()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hollow class Shape {
                 hollow func area() { }
@@ -2214,7 +2214,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hermit_class_cannot_be_instantiated()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2233,7 +2233,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hermit_class_shared_members_work()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hermit class MathUtils {
                 shared prop pi = 3.14
@@ -2251,7 +2251,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hermit_class_auto_promotes_properties_to_shared()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hermit class Config {
                 prop version = ""2.0""
@@ -2264,7 +2264,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hermit_class_auto_promotes_methods_to_shared()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hermit class Util {
                 func greet() {
@@ -2279,7 +2279,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Strict_class_properties_are_fixed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2301,7 +2301,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Strict_class_allows_reading_properties()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             strict class Point {
                 prop x = 0
@@ -2322,7 +2322,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Lazy_property_initializes_on_first_access()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Config {
                 lazy prop value = 42
@@ -2336,7 +2336,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Lazy_property_evaluates_only_once()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Cached {
                 lazy prop data = 99
@@ -2356,7 +2356,7 @@ public sealed class LanguageFeatureTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(@"
             class Legacy {
                 fading prop oldName = ""bob""
@@ -2374,7 +2374,7 @@ public sealed class LanguageFeatureTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(@"
             class Legacy {
                 fading func oldGreet() {
@@ -2391,7 +2391,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Local_property_hidden_from_outside()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class MyClass {
                 local prop secret = ""hidden""
@@ -2408,7 +2408,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Raw_method_is_recognized()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Interop {
                 raw func execute() {
@@ -2426,7 +2426,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partial_class_merges_properties()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             partial class User { prop Name = ""Alice"" }
             partial class User { prop Age = 30 }
@@ -2442,7 +2442,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partial_class_merges_methods()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             partial class Greeter {
                 prop Name = ""World""
@@ -2461,7 +2461,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partial_class_rejects_merge_without_partial_on_original()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2475,7 +2475,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partial_class_duplicate_property_is_skipped()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             partial class Cfg { prop Host = ""original"" }
             partial class Cfg { prop Host = ""replaced"" }
@@ -2489,7 +2489,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partial_class_merges_static_members()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             partial class Utils {
                 static func add(a, b) { return ($a + $b) }
@@ -2510,7 +2510,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Shadowing_parent_method_without_overrule_raises_error()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2528,7 +2528,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Overrule_method_works_correctly()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Animal {
                 func speak() { echo ""..."" }
@@ -2545,7 +2545,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Overrule_without_parent_method_raises_error()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2562,7 +2562,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hollow_prop_enforced_in_subclass()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2580,7 +2580,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Hollow_prop_satisfied_by_subclass()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             hollow class Shape {
                 hollow prop Area: double
@@ -2601,7 +2601,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Sealed_record_is_recognized()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             sealed record Point(X: int, Y: int)
             var p = new Point(3, 4)
@@ -2616,7 +2616,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Partial_record_merges_fields()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             partial record Vec2(X: int, Y: int)
             partial record Vec2(Z?: int = 0)
@@ -2634,7 +2634,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Strict_record_is_recognized()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             strict record Config(Host: string, Port: int)
             var c = new Config(""localhost"", 8080)
@@ -2648,7 +2648,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_basic_creation_and_field_access()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             struct Point(x, y) { }
             var p = new Point(3, 4)
@@ -2660,7 +2660,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_is_immutable_by_default()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2675,7 +2675,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_fluid_allows_mutation()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             fluid struct Point(x, y) { }
             var p = new Point(1, 2)
@@ -2688,7 +2688,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_copy_on_assign()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             fluid struct Point(x, y) { }
             var a = new Point(1, 2)
@@ -2702,7 +2702,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_with_methods()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             struct Point(x, y) {
                 func sum() { echo ($this.x + $this.y) }
@@ -2716,7 +2716,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_static_method()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             struct Point(x, y) {
                 static func origin() { new Point(0, 0) }
@@ -2730,7 +2730,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_structural_equality()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             struct Point(x, y) { }
             var a = new Point(1, 2)
@@ -2744,7 +2744,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_sealed_parses()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             sealed struct Frozen(x) { }
             var f = new Frozen(42)
@@ -2756,7 +2756,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Struct_partial_merges()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             partial struct Vec(x) { }
             partial struct Vec(y) { }
@@ -2771,7 +2771,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Trait_basic_required_method()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             trait Speakable { func speak() }
             class Dog uses Speakable {
@@ -2786,7 +2786,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Trait_missing_required_method_throws()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
         {
             await engine.ExecuteToListAsync(@"
@@ -2800,7 +2800,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Trait_default_method_injected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             trait Greetable {
                 func greet(name) { echo $""Hello, {$name}!"" }
@@ -2815,7 +2815,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Trait_default_property_injected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             trait Tagged {
                 prop Tag = ""default""
@@ -2830,7 +2830,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Trait_is_operator_checks_trait()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             trait Speakable { func speak() }
             class Dog uses Speakable {
@@ -2847,7 +2847,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Fulfills_keyword_works_for_interfaces()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             interface Runnable { func run() }
             class Task fulfills Runnable {
@@ -2864,7 +2864,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Extends_clause_args_auto_call_parent_constructor()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Base {
                 prop X
@@ -2880,7 +2880,7 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task Constructor_chain_with_super_call()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(@"
             class Base {
                 prop X

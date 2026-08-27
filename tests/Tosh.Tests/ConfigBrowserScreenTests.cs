@@ -654,7 +654,7 @@ public sealed class ConfigBrowserScreenTests
             runtime.Config.Startup.ApplyRootDirectory(configDirectory);
             runtime.Config.Prompt.NameText = "stale";
             runtime.Config.Repl.GhostTextEnabled = false;
-            _ = new ToshEngine(runtime);
+            _ = new ToshEngine(runtime.Language);
             var screen = new ConfigBrowserScreen(runtime, new ConfigBrowseRequest(null, "Startup"));
 
             screen.HandleKey(new ConsoleKeyInfo('l', ConsoleKey.L, shift: false, alt: false, control: false));

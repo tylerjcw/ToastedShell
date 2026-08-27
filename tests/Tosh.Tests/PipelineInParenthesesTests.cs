@@ -25,7 +25,7 @@ public sealed class PipelineInParenthesesTests
 {
     private static async Task<IReadOnlyList<object?>> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         return await engine.ExecuteToListAsync(source);
     }
 

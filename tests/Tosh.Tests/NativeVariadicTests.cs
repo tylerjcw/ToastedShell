@@ -43,7 +43,7 @@ public class NativeVariadicTests
     /// <summary>Formats through the tail and reads back what C actually saw.</summary>
     private static async Task<string> FormatAsync(string format, string arguments)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             Snprintf +
             $"""
@@ -112,7 +112,7 @@ public class NativeVariadicTests
     {
         if (SkipOffLinux) return;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             Snprintf +
             """
@@ -132,7 +132,7 @@ public class NativeVariadicTests
     {
         if (SkipOffLinux) return;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(Snprintf + "C.snprintf($dest)"));
 
@@ -150,7 +150,7 @@ public class NativeVariadicTests
     {
         if (SkipOffLinux) return;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
                 """
@@ -174,7 +174,7 @@ public class NativeVariadicTests
     {
         if (SkipOffLinux) return;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
                 """

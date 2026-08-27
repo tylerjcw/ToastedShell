@@ -63,7 +63,7 @@ public sealed class CompiledScriptArgumentTests : IClassFixture<ToshRuntimeFixtu
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.InvocationArguments = new object?[] { argument };
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = engine
             .ExecuteToListAsync(source, "<args>", CancellationToken.None)
@@ -79,7 +79,7 @@ public sealed class CompiledScriptArgumentTests : IClassFixture<ToshRuntimeFixtu
 
     private string RunCompiled(string source, string argument)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<args>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 

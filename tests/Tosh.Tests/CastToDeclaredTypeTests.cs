@@ -38,14 +38,14 @@ public sealed class CastToDeclaredTypeTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
 
     private static async Task<ToshDiagnostic> RunForDiagnosticAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(source));
         return exception.Diagnostics[0];
@@ -298,7 +298,7 @@ public sealed class CastToDeclaredTypeTests
                 scriptPath,
                 "enum Fuel : int { Mox = 3, Uranium = 8 }\ncast Fuel 8\n");
 
-            var engine = new ToshEngine(ToshRuntime.CreateDefault());
+            var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
             var results = new List<object?>();
 
             await foreach (var value in engine.ExecuteScriptFileAsync(scriptPath))
@@ -329,7 +329,7 @@ public sealed class CastToDeclaredTypeTests
                 scriptPath,
                 "enum Fuel : int { Mox = 3 }\ndescribe-type Fuel | to json\n");
 
-            var engine = new ToshEngine(ToshRuntime.CreateDefault());
+            var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
             var results = new List<object?>();
 
             await foreach (var value in engine.ExecuteScriptFileAsync(scriptPath))

@@ -25,7 +25,7 @@ public class GenericStaticOverloadTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(v => v?.ToString() ?? "null"));
     }
@@ -73,7 +73,7 @@ public class GenericStaticOverloadTests
     public async Task A_missing_generic_static_is_still_reported()
     {
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault())
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language)
                 .ExecuteToListAsync("System.Collections.Immutable.ImmutableArray.Nope<int>()"));
 
         Assert.Contains("Nope", exception.Message);
@@ -87,7 +87,7 @@ public class GenericStaticOverloadTests
     public async Task An_unsupported_arity_is_still_refused()
     {
         await Assert.ThrowsAnyAsync<Exception>(
-            () => new ToshEngine(ToshRuntime.CreateDefault())
+            () => new ToshEngine(ToshRuntime.CreateDefault().Language)
                 .ExecuteToListAsync("Array.Empty<int>(1, 2, 3)"));
     }
 }

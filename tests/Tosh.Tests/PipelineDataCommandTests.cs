@@ -8,7 +8,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Flatten_expands_top_level_collections_only_when_requested()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var arrayResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | type-of | get Name");
         var flattenedResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten");
@@ -20,7 +20,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Distinct_and_group_by_work_with_projected_object_members()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         const string json = "[{\"kind\":\"a\",\"value\":1},{\"kind\":\"a\",\"value\":2},{\"kind\":\"b\",\"value\":3}]";
         var escapedJson = Quote(json);
 
@@ -40,7 +40,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Aggregates_support_numeric_and_storage_size_values()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var sumResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten | sum");
         var averageResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten | average");
@@ -68,7 +68,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Summarize_returns_structured_summary_for_scalar_pipeline()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"[1,2,3,4,5]\" | from json | flatten | summarize --sum --avg --min --max --count");
 
@@ -86,7 +86,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Summarize_supports_projected_columns_and_alias()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         const string json = "[{\"size\":1,\"used\":1},{\"size\":3,\"used\":2},{\"size\":null,\"used\":4}]";
         var escapedJson = Quote(json);
 
@@ -119,7 +119,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task To_json_and_to_csv_serialize_pipeline_values()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var jsonResults = await engine.ExecuteToListAsync(
             "echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from json | to json -c");
@@ -142,7 +142,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task To_json_and_to_csv_serialize_tosh_classes_by_shell_members()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var jsonResults = await engine.ExecuteToListAsync(
             """
@@ -185,7 +185,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Lines_splits_multiline_text_into_individual_lines()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"alpha\\nbeta\\ngamma\" | lines");
 
@@ -195,7 +195,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Lines_passes_single_line_text_through()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"hello\" | lines");
 
@@ -205,7 +205,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Lines_handles_multiple_pipeline_items()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"a\\nb\" \"c\\nd\" | lines");
 
@@ -215,7 +215,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Lines_skips_empty_text()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"\" | lines");
 
@@ -225,7 +225,7 @@ public sealed class PipelineDataCommandTests
     [Fact]
     public async Task Lines_handles_windows_line_endings()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"one\\r\\ntwo\\r\\nthree\" | lines");
 

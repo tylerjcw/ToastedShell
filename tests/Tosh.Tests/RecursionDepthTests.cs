@@ -91,7 +91,7 @@ public sealed class RecursionDepthTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.Shell.MaxRecursionDepth = 8;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert
             .ThrowsAsync<ToshDiagnosticException>(
@@ -125,7 +125,7 @@ public sealed class RecursionDepthTests
 
             var runtime = ToshRuntime.CreateDefault();
             runtime.Config.Shell.MaxRecursionDepth = 6;
-            var engine = new ToshEngine(runtime);
+            var engine = new ToshEngine(runtime.Language);
 
             var exception = await Assert
                 .ThrowsAsync<ToshDiagnosticException>(
@@ -150,7 +150,7 @@ public sealed class RecursionDepthTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.Shell.MaxRecursionDepth = 16;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var values = await engine.ExecuteToListAsync(
             """
@@ -171,7 +171,7 @@ public sealed class RecursionDepthTests
     public async Task Recursion_limit_is_configurable_from_toastscript()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             "$tosh.Config.Shell.MaxRecursionDepth = 5");
@@ -198,7 +198,7 @@ public sealed class RecursionDepthTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.Shell.MaxRecursionDepth = 1;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 

@@ -20,14 +20,14 @@ public class NarrowingConversionTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
 
     private static async Task<string> ErrorOf(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(source));
         return exception.Message;
     }
@@ -117,7 +117,7 @@ public class NarrowingConversionTests
     [InlineData("var x: int = \"7.9\"")]
     public async Task An_annotation_refusing_a_fraction_says_so(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(source));
 

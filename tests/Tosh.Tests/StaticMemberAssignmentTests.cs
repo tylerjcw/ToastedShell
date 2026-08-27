@@ -36,14 +36,14 @@ public sealed class StaticMemberAssignmentTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
 
     private static async Task<ToshDiagnostic> RunForDiagnosticAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(source));
         return Assert.Single(exception.Diagnostics);
@@ -283,7 +283,7 @@ public sealed class StaticMemberAssignmentTests
         // hit exactly that — a compiler test had emitted a `Person`, and `person.Name = "x"`
         // stopped reporting the forgotten `$`. The variable is asked about first because a
         // wrong hint costs a message while a wrong static write mutates shared state.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Half one: the collision is real, or the rest of this test proves nothing.
         Assert.NotNull(engine.TryResolveTypeName("staticassignmentprobe"));

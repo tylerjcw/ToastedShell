@@ -55,7 +55,7 @@ public sealed class ErrorCancellationTests
     [Fact]
     public async Task Computed_error_diagnostic_members_map_normally()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -82,7 +82,7 @@ public sealed class ErrorCancellationTests
         var gate = new AwaitErrorCancellationCommand(GateSafetyTimeout);
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(gate);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         using var cancellation = new CancellationTokenSource();
 
         var execution = Task.Run(

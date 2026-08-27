@@ -15,7 +15,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Free_function_default_sees_earlier_bound_parameter()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -31,7 +31,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Free_function_defaults_chain_left_to_right()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -47,7 +47,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Free_function_default_evaluates_at_call_time_in_lexical_scope()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -67,7 +67,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Named_argument_binds_out_of_order_and_defaults_fill_the_gap()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -83,7 +83,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Lambda_default_sees_earlier_bound_parameter()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -98,7 +98,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Class_method_default_evaluates_with_earlier_parameter_visible()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -113,7 +113,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Static_method_default_evaluates_with_earlier_parameter_visible()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -128,7 +128,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Primary_constructor_default_evaluates_with_earlier_parameter_visible()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -143,7 +143,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Explicit_constructor_default_is_bound_before_the_body_runs()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -158,7 +158,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Defaults_reevaluate_on_every_call()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -180,7 +180,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Provided_arguments_suppress_default_evaluation()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -199,7 +199,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Losing_overload_candidates_never_evaluate_their_defaults()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -221,7 +221,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Typed_default_converts_through_the_parameter_annotation()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -236,7 +236,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Unconvertible_default_produces_the_structured_diagnostic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -251,7 +251,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Default_referencing_a_later_parameter_is_an_unknown_variable()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() =>
             engine.ExecuteToListAsync(
@@ -266,7 +266,7 @@ public sealed class CallableDefaultBindingTests
     [Fact]
     public async Task Rest_parameters_still_collect_unconsumed_positional_arguments()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync(
             """

@@ -14,7 +14,7 @@ namespace Tosh.Tests;
 /// </summary>
 public class NativeBufferSafetyTests
 {
-    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault());
+    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault().Language);
 
     private static async Task<ToshDiagnostic> ExpectDiagnostic(string source)
     {

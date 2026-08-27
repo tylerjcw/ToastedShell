@@ -24,7 +24,7 @@ public sealed class ConstantFoldingTests : IClassFixture<ToshRuntimeFixture>
 
     private (ParseResult Parse, BoundUnit Unit) Lower(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<fold-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         return (parse, unit);
@@ -177,13 +177,13 @@ public sealed class ConstantFoldingTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task Evaluator_returns_same_result_for_folded_and_non_folded()
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var folded = await engine.ExecuteToListAsync("echo (60 * 60 * 24)");
 
         Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
         try
         {
-            var noFold = await new ToshEngine(_runtime).ExecuteToListAsync("echo (60 * 60 * 24)");
+            var noFold = await new ToshEngine(_runtime.Language).ExecuteToListAsync("echo (60 * 60 * 24)");
             Assert.Equal(noFold, folded);
         }
         finally

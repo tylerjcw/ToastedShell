@@ -25,7 +25,7 @@ public class CommandArityMetadataTests : IClassFixture<ToshRuntimeFixture>
 
     private IReadOnlyList<ToshDiagnostic> Check(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var unit = Lowerer.Lower(engine.Parse(source, "<arity-test>"), _runtime.Commands);
         return TypeChecker.Check(unit);
     }
@@ -65,7 +65,7 @@ public class CommandArityMetadataTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task Both_commands_still_produce_their_values()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var call = Assert.Single(await engine.ExecuteToListAsync(
             "new System.Random | call Next 5 6"));

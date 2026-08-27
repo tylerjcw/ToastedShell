@@ -53,7 +53,7 @@ public sealed class InfiniteGeneratorTests
     private static async Task<string> RunAsync(string source)
     {
         using var deadline = new CancellationTokenSource(Deadline);
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         IReadOnlyList<object?> results;
         try
@@ -85,7 +85,7 @@ public sealed class InfiniteGeneratorTests
 
         try
         {
-            await new ToshEngine(runtime).ExecuteToListAsync(source, deadline.Token);
+            await new ToshEngine(runtime.Language).ExecuteToListAsync(source, deadline.Token);
         }
         catch (OperationCanceledException)
         {

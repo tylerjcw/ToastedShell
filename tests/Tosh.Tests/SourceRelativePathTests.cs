@@ -43,7 +43,7 @@ public sealed class SourceRelativePathTests : IDisposable
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = workingDirectory;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await AsyncEnumerableExtensions.ToListAsync(
             engine.ExecuteScriptFileAsync(scriptPath, Array.Empty<object?>()), default);

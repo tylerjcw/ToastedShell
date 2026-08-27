@@ -8,7 +8,7 @@ public sealed class ToshRuntimeFixture
     public ToshRuntimeFixture()
     {
         Runtime = ToshRuntime.CreateDefault();
-        Engine = new ToshEngine(Runtime);
+        Engine = new ToshEngine(Runtime.Language);
     }
 
     public ToshRuntime Runtime { get; }

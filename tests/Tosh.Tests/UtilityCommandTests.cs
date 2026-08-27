@@ -14,7 +14,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Seq_generates_numeric_sequences()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("seq 3");
 
@@ -24,7 +24,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Dirname_and_basename_split_paths()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var dirname = await engine.ExecuteToListAsync("dirname /usr/bin/bash");
         var basename = await engine.ExecuteToListAsync("basename /usr/bin/bash");
@@ -36,7 +36,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Head_tail_wc_uniq_cut_tr_and_grep_work_on_text_pipelines()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var head = await engine.ExecuteToListAsync("echo one two three | head -n 2");
         var tail = await engine.ExecuteToListAsync("echo one two three | tail -n 2");
@@ -71,7 +71,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Grep_supports_shared_regex_flags_and_regex_objects()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var ignoreCaseResults = await engine.ExecuteToListAsync("echo Alpha beta | grep -i \"^alpha$\"");
         var multilineResults = await engine.ExecuteToListAsync("echo \"first\nsecond\" | grep -m \"^second$\"");
@@ -91,7 +91,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var textResults = await engine.ExecuteToListAsync("echo alpha beta | cat");
         var fileResults = await engine.ExecuteToListAsync("ls alpha.txt | cat");
@@ -118,7 +118,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("wc -l -w -L alpha.txt beta.txt");
 
@@ -141,7 +141,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Xargs_invokes_nested_commands()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo alpha beta | xargs echo prefix");
 
@@ -152,7 +152,7 @@ public sealed class UtilityCommandTests
     public async Task Prompt_segment_commands_return_styled_segments()
     {
         // prompt-* commands are [ShellOnly]; mark interactive to bypass the guard.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language) { IsInteractiveSession = true };
 
         var timeResults = await engine.ExecuteToListAsync("prompt-time --format HH --dim");
         var userHostResults = await engine.ExecuteToListAsync("prompt-userhost");
@@ -192,7 +192,7 @@ public sealed class UtilityCommandTests
     {
         // The consolidated `prompt <segment>` form must produce identical
         // output to the legacy `prompt-<segment>` form for every segment.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language) { IsInteractiveSession = true };
 
         var pairs = new (string Legacy, string Dispatched)[]
         {
@@ -224,7 +224,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Prompt_dispatcher_reports_missing_subcommand()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language) { IsInteractiveSession = true };
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("prompt"));
@@ -235,7 +235,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Prompt_dispatcher_reports_unknown_subcommand()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language) { IsInteractiveSession = true };
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("prompt frobnicate"));
@@ -246,7 +246,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Guid_command_supports_creation_parsing_formatting_and_info()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -271,7 +271,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Free_and_uptime_return_system_info_objects()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var free = await engine.ExecuteToListAsync("free");
         var uptime = await engine.ExecuteToListAsync("uptime");
@@ -284,7 +284,7 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Env_supports_temporary_assignments_and_unsets_for_nested_commands()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var variableName = $"TOSH_TEST_TEMP_ENV_{Guid.NewGuid():N}";
 
         Environment.SetEnvironmentVariable(variableName, "original");
@@ -323,7 +323,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("ip addr");
 
@@ -349,7 +349,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var linkResults = await engine.ExecuteToListAsync("ip link");
         var routeResults = await engine.ExecuteToListAsync("ip route");
@@ -375,7 +375,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var units = await engine.ExecuteToListAsync("systemctl --type service | first 5");
 
@@ -399,7 +399,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var rows = await engine.ExecuteToListAsync("systemctl list-unit-files --type service | first 5");
 
         Assert.NotEmpty(rows);
@@ -416,7 +416,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var units = await engine.ExecuteToListAsync("systemctl --type service | first 5");
 
         if (units.Count == 0)
@@ -441,7 +441,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("journalctl -n 2");
 
         Assert.NotEmpty(results);
@@ -458,7 +458,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var users = await engine.ExecuteToListAsync("loginctl list-users");
 
         if (users.Count == 0)
@@ -485,7 +485,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var result = Assert.IsType<SystemdHostInfo>(Assert.Single(await engine.ExecuteToListAsync("hostnamectl")));
 
         Assert.False(string.IsNullOrWhiteSpace(result.DisplayHostname));
@@ -501,7 +501,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("networkctl");
 
         Assert.NotEmpty(results);
@@ -526,7 +526,7 @@ public sealed class UtilityCommandTests
             context.Response.Close();
         });
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"http get {server.Url} --as json");
 
         var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
@@ -557,7 +557,7 @@ public sealed class UtilityCommandTests
             context.Response.Close();
         });
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"http post {server.Url} --json ({{| Name = \"Toast\" |}}) --header X-Test alpha --as response");
 
         var response = Assert.IsType<HttpResponseInfo>(Assert.Single(results));
@@ -590,7 +590,7 @@ public sealed class UtilityCommandTests
             context.Response.Close();
         });
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var requestResults = await engine.ExecuteToListAsync($"http request GET {server.Url} --header Accept text/plain");
         var request = Assert.IsType<HttpRequestDefinition>(Assert.Single(requestResults));
         Assert.Equal("GET", request.Method);
@@ -611,7 +611,7 @@ public sealed class UtilityCommandTests
         var filePath = Path.Combine(temporaryDirectory.Path, "hello.txt");
         await File.WriteAllTextAsync(filePath, "hello from server");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --browse""");
         var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
 
@@ -645,7 +645,7 @@ public sealed class UtilityCommandTests
     {
         using var temporaryDirectory = new TemporaryDirectory();
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --upload --once""");
         var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
 
@@ -678,7 +678,7 @@ public sealed class UtilityCommandTests
         var filePath = Path.Combine(temporaryDirectory.Path, "hello.txt");
         await File.WriteAllTextAsync(filePath, "protected hello");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --browse --token secret-token""");
         var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
 
@@ -717,7 +717,7 @@ public sealed class UtilityCommandTests
         using var temporaryDirectory = new TemporaryDirectory();
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "existing.txt"), "already here");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --upload --generate-token""");
         var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
 
@@ -768,7 +768,7 @@ public sealed class UtilityCommandTests
         using var temporaryDirectory = new TemporaryDirectory();
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "hello.txt"), "lan hello");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --lan --browse""");
         var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
 
@@ -808,7 +808,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("lsblk");
 
@@ -834,7 +834,7 @@ public sealed class UtilityCommandTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("lsblk -o NAME,PATH");
 
@@ -865,7 +865,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("findmnt");
 
@@ -891,7 +891,7 @@ public sealed class UtilityCommandTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("findmnt -o TARGET,SOURCE,FSTYPE");
 
@@ -923,7 +923,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var summaryResults = await engine.ExecuteToListAsync("lscpu");
         var extendedResults = await engine.ExecuteToListAsync("lscpu -e | first 2");
@@ -951,7 +951,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var rows = await engine.ExecuteToListAsync("lsfd | first 3");
         var summary = await engine.ExecuteToListAsync("lsfd --summary=only | first 3");
@@ -977,7 +977,7 @@ public sealed class UtilityCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var summaryRows = await engine.ExecuteToListAsync("lsipc | first 3");
 
@@ -997,7 +997,7 @@ public sealed class UtilityCommandTests
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "child", "a.txt"), "hello");
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "b.txt"), "world");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var du = await engine.ExecuteToListAsync($"du -s {Quote(temporaryDirectory.Path)}");
         var find = await engine.ExecuteToListAsync($"find {Quote(temporaryDirectory.Path)} -maxdepth 1 -type d | get Name");
@@ -1024,7 +1024,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("touch -c missing.txt");
         await engine.ExecuteToListAsync("touch -r reference.txt target.txt");
@@ -1068,7 +1068,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("mv overwrite-source.txt overwrite-target.txt");
         await engine.ExecuteToListAsync("mv -n skip-source.txt skip-target.txt");
@@ -1093,7 +1093,7 @@ public sealed class UtilityCommandTests
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "child", "alpha.txt"), "hello");
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "README.MD"), "readme");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var regexResults = await engine.ExecuteToListAsync($"find {Quote(temporaryDirectory.Path)} -regex \".*\\\\.txt$\" | get Name");
         var ignoreCaseResults = await engine.ExecuteToListAsync($"find {Quote(temporaryDirectory.Path)} -iregex \".*readme\\\\.md$\" | get Name");
@@ -1109,7 +1109,7 @@ public sealed class UtilityCommandTests
         Directory.CreateDirectory(Path.Combine(temporaryDirectory.Path, "child"));
         await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "child", "a.txt"), "hello");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var df = await engine.ExecuteToListAsync($"echo {Quote(temporaryDirectory.Path)} | df");
         var du = await engine.ExecuteToListAsync($"echo {Quote(temporaryDirectory.Path)} | du -s");
@@ -1129,7 +1129,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls --show Name,FullName");
 
@@ -1150,7 +1150,7 @@ public sealed class UtilityCommandTests
     public async Task Ps_o_changes_rendering_without_changing_output_objects()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ps -o Name,Id");
 
@@ -1176,7 +1176,7 @@ public sealed class UtilityCommandTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("df --output FileSystem,UsePercent /");
 
@@ -1197,7 +1197,7 @@ public sealed class UtilityCommandTests
     public async Task Df_total_appends_total_row()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync($"df --total {Quote(Directory.GetCurrentDirectory())}");
 
@@ -1210,7 +1210,7 @@ public sealed class UtilityCommandTests
     public async Task Df_type_filters_and_local_flag_work()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var current = Assert.IsType<FileSystemUsageInfo>(Assert.Single(await engine.ExecuteToListAsync($"df {Quote(Directory.GetCurrentDirectory())}")));
         var localOnly = await engine.ExecuteToListAsync("df -l");
@@ -1259,7 +1259,7 @@ public sealed class UtilityCommandTests
         Directory.CreateDirectory(Path.Combine(temporaryDirectory.Path, "child"));
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync($"ls -d {Quote(temporaryDirectory.Path)}");
 
@@ -1278,7 +1278,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -R");
         var names = results.Cast<FileSystemEntry>().Select(item => item.Name).ToArray();
@@ -1298,7 +1298,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -S");
         var names = results.Cast<FileSystemEntry>().Select(item => item.Name).ToArray();
@@ -1315,7 +1315,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -r");
         var names = results.Cast<FileSystemEntry>().Select(item => item.Name).ToArray();
@@ -1332,7 +1332,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls --group-directories-first");
         var names = results.Cast<FileSystemEntry>().Select(item => item.Name).ToArray();
@@ -1360,7 +1360,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -F");
 
@@ -1376,7 +1376,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -i");
 
@@ -1395,7 +1395,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -l --time access");
 
@@ -1411,7 +1411,7 @@ public sealed class UtilityCommandTests
     public async Task Ps_p_filters_by_process_id()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var currentId = Process.GetCurrentProcess().Id;
 
         var results = await engine.ExecuteToListAsync($"ps -p {currentId}");
@@ -1429,7 +1429,7 @@ public sealed class UtilityCommandTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var currentUser = UnixSystemServices.GetCurrentIdentity().User.DisplayName;
 
         var results = await engine.ExecuteToListAsync($"ps -u {currentUser}");
@@ -1449,7 +1449,7 @@ public sealed class UtilityCommandTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var currentUser = UnixSystemServices.GetCurrentIdentity().User.DisplayName;
 
         var results = await engine.ExecuteToListAsync($"ps -u {currentUser}");
@@ -1464,7 +1464,7 @@ public sealed class UtilityCommandTests
     public async Task Ps_sort_descending_id_orders_highest_ids_first()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ps --sort -Id");
         var ids = results.Cast<ProcessInfo>().Select(item => item.Id).Take(5).ToArray();
@@ -1483,7 +1483,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("du -a -c --time");
 
@@ -1516,7 +1516,7 @@ public sealed class UtilityCommandTests
         File.CreateSymbolicLink(linkPath, targetPath);
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var linked = Assert.IsType<FileSystemEntry>(Assert.Single(await engine.ExecuteToListAsync($"stat {Quote(linkPath)}")));
         var dereferenced = Assert.IsType<FileSystemEntry>(Assert.Single(await engine.ExecuteToListAsync($"stat -L {Quote(linkPath)}")));
@@ -1540,7 +1540,7 @@ public sealed class UtilityCommandTests
         var linkPath = Path.Combine(temporaryDirectory.Path, "link.txt");
         await File.WriteAllTextAsync(targetPath, "toast");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var linkResults = await engine.ExecuteToListAsync($"ln -s {Quote(targetPath)} {Quote(linkPath)}");
         var readlinkResults = await engine.ExecuteToListAsync($"readlink {Quote(linkPath)}");
@@ -1567,7 +1567,7 @@ public sealed class UtilityCommandTests
         var targetPath = Path.Combine(temporaryDirectory.Path, "target.txt");
         await File.WriteAllTextAsync(targetPath, "toast");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var currentUser = UnixSystemServices.GetCurrentIdentity().User.DisplayName;
 
         await engine.ExecuteToListAsync($"chmod 444 {Quote(targetPath)}");
@@ -1596,7 +1596,7 @@ public sealed class UtilityCommandTests
         var linkPath = Path.Combine(temporaryDirectory.Path, "link.txt");
         await File.WriteAllTextAsync(targetPath, "toast");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var linkResults = await engine.ExecuteToListAsync($"ln {Quote(targetPath)} {Quote(linkPath)}");
         var created = Assert.IsType<FileSystemEntry>(Assert.Single(linkResults));
@@ -1622,7 +1622,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var alternationResults = await engine.ExecuteToListAsync("glob **/*.@(txt,md)");
         var alternationNames = alternationResults
@@ -1659,7 +1659,7 @@ public sealed class UtilityCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = temporaryDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var echoExpanded = await engine.ExecuteToListAsync("echo *.txt");
         var echoQuoted = await engine.ExecuteToListAsync("echo \"*.txt\"");

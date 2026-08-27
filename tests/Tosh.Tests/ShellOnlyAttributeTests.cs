@@ -26,7 +26,7 @@ public sealed class ShellOnlyAttributeTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
 
         await engine.ExecuteToListAsync("prompt-time", "<test>");
 

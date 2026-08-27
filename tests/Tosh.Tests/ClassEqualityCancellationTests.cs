@@ -101,7 +101,7 @@ public sealed class ClassEqualityCancellationTests
         var gate = new AwaitEqualityCancellationCommand(GateSafetyTimeout);
         var runtime = ToshRuntime.CreateDefault();
         runtime.Commands.Register(gate);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         using var cancellation = new CancellationTokenSource();
 
         var execution = Task.Run(

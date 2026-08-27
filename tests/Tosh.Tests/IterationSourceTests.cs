@@ -25,7 +25,7 @@ public sealed class IterationSourceTests
     private static async Task<int> CountAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(script + "\n$__n");
         return Convert.ToInt32(Assert.Single(results));
     }

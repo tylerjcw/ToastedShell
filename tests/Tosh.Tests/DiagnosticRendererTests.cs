@@ -13,7 +13,7 @@ public sealed class DiagnosticRendererTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var renderer = new DiagnosticRenderer();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>

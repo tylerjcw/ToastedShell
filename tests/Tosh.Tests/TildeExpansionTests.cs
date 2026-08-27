@@ -35,7 +35,7 @@ public sealed class TildeExpansionTests
 
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return string.Join(",", results.Select(value => value?.ToString() ?? "null"));
     }
@@ -110,7 +110,7 @@ public sealed class TildeExpansionTests
     [Fact]
     public async Task An_unknown_tilde_name_is_a_diagnostic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("echo ~nosuchuseranywhere"));
         var diagnostic = Assert.Single(exception.Diagnostics);
@@ -125,7 +125,7 @@ public sealed class TildeExpansionTests
         // The help text offers a directory-alias assignment. An earlier draft named a config
         // path that does not exist, which is the kind of advice that costs a reader more time
         // than the original error did — so the suggested spelling is executed here.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("echo ~nosuchuseranywhere"));
 
@@ -160,7 +160,7 @@ public sealed class TildeExpansionTests
     [Fact]
     public async Task A_glob_under_a_tilde_matches()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var probeDirectory = Path.Combine(Path.GetTempPath(), $"tosh-tilde-{Guid.NewGuid():N}");
         Directory.CreateDirectory(probeDirectory);
 
@@ -191,7 +191,7 @@ public sealed class TildeExpansionTests
             await File.WriteAllTextAsync(Path.Combine(probeDirectory, "one.probe"), "x");
             await File.WriteAllTextAsync(Path.Combine(probeDirectory, "two.probe"), "x");
 
-            var engine = new ToshEngine(ToshRuntime.CreateDefault());
+            var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
             var results = await engine.ExecuteToListAsync(
                 $"echo {probeDirectory}/*.probe");
 
@@ -216,7 +216,7 @@ public sealed class TildeExpansionTests
     [Fact]
     public async Task Cd_still_follows_a_tilde()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync("cd ~");
 
         Assert.Equal(Home, engine.LanguageRuntime.CurrentDirectory);
@@ -225,7 +225,7 @@ public sealed class TildeExpansionTests
     [Fact]
     public async Task Cd_still_follows_a_tilde_path()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var probeDirectory = Path.Combine(Home, $".tosh-tilde-{Guid.NewGuid():N}");
         Directory.CreateDirectory(probeDirectory);
 
@@ -256,7 +256,7 @@ public sealed class TildeExpansionTests
     private static async Task<IReadOnlyList<ToshDiagnostic>> BindWithShortCommandAsync(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         await engine.ExecuteToListAsync("func f => ls");
         var parse = engine.Parse(source, "<tilde-test>");
 
@@ -315,8 +315,8 @@ public sealed class TildeExpansionTests
         // for the tilde here: it expands to a path and the existing rule applies. The setting
         // is written down rather than assumed — the runtime default is off, and the shell's
         // shipped config is what turns it on.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
-        engine.Runtime.Config.Shell.AutoCd = true;
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        engine.Shell().Config.Shell.AutoCd = true;
         await engine.ExecuteToListAsync("~");
 
         Assert.Equal(Home, engine.LanguageRuntime.CurrentDirectory);
@@ -325,8 +325,8 @@ public sealed class TildeExpansionTests
     [Fact]
     public async Task A_tilde_path_in_command_position_changes_directory()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
-        engine.Runtime.Config.Shell.AutoCd = true;
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        engine.Shell().Config.Shell.AutoCd = true;
         var probeDirectory = Path.Combine(Home, $".tosh-cmd-{Guid.NewGuid():N}");
         Directory.CreateDirectory(probeDirectory);
 
@@ -347,8 +347,8 @@ public sealed class TildeExpansionTests
         // The command head is expanded too, so `~` and the absolute path it stands for get the
         // same answer. Without that it came back "Command '~' was not found" — one input,
         // described two different ways depending on how it was spelled.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
-        engine.Runtime.Config.Shell.AutoCd = false;
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        engine.Shell().Config.Shell.AutoCd = false;
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("~"));
@@ -361,8 +361,8 @@ public sealed class TildeExpansionTests
     public async Task With_auto_cd_off_an_absolute_path_reports_the_same_way()
     {
         // The control that makes the test above mean something: the two spellings agree.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
-        engine.Runtime.Config.Shell.AutoCd = false;
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        engine.Shell().Config.Shell.AutoCd = false;
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync($"{Home}"));
@@ -376,8 +376,8 @@ public sealed class TildeExpansionTests
         // The binder is not the only place that guesses. With `auto_cd` off and nothing to
         // resolve, the engine writes its own "did you mean" — and answered `~` with `bg`
         // until the rule moved to the registry both of them read.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
-        engine.Runtime.Config.Shell.AutoCd = false;
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        engine.Shell().Config.Shell.AutoCd = false;
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("%%%"));

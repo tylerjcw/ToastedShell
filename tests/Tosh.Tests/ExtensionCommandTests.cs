@@ -8,7 +8,7 @@ public sealed class ExtensionCommandTests
     [Fact]
     public async Task Var_alias_and_get_projection_commands_work()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var variableResults = await engine.ExecuteToListAsync("var greeting = \"hello\"\necho $greeting");
         var projectionResults = await engine.ExecuteToListAsync(
@@ -27,7 +27,7 @@ public sealed class ExtensionCommandTests
     public async Task Take_while_skip_while_and_tee_can_shape_and_capture_pipelines()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var takeResults = await engine.ExecuteToListAsync("echo 1 2 3 1 | take-while (_ < 3) and not (_ == 0)");
         var skipResults = await engine.ExecuteToListAsync("echo 1 2 3 1 | skip-while (_ < 3) or (_ == 0)");
@@ -44,7 +44,7 @@ public sealed class ExtensionCommandTests
     [Fact]
     public async Task Text_shaping_commands_work_together()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var splitResults = await engine.ExecuteToListAsync("echo \"alpha,beta,gamma\" | split \",\"");
         var replaceResults = await engine.ExecuteToListAsync("echo alpha-beta | replace beta BETA");
@@ -69,7 +69,7 @@ public sealed class ExtensionCommandTests
     [Fact]
     public async Task Text_regex_commands_support_regex_mode_and_regex_objects()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var splitResults = await engine.ExecuteToListAsync("echo \"alpha,beta;gamma\" | split -r \"[,;]\"");
         var replaceResults = await engine.ExecuteToListAsync("echo \"A1 B2\" | replace -r \"[0-9]\" \"#\"");
@@ -87,7 +87,7 @@ public sealed class ExtensionCommandTests
         var filePath = Path.Combine(temporaryDirectory.Path, "alpha.txt");
         await File.WriteAllTextAsync(filePath, "alpha");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var existsResults = await engine.ExecuteToListAsync($"exists {Quote(filePath)}");
         var fileResults = await engine.ExecuteToListAsync($"is-file {Quote(filePath)}");
@@ -111,7 +111,7 @@ public sealed class ExtensionCommandTests
     [Fact]
     public async Task Clr_cast_and_reflection_commands_work()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var castResults = await engine.ExecuteToListAsync("echo 42 | cast int | type-of");
         var typeResults = await engine.ExecuteToListAsync("describe-type string | get Name");
@@ -131,7 +131,7 @@ public sealed class ExtensionCommandTests
     [Fact]
     public async Task Load_assembly_accepts_pipeline_paths()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
         var dllPath = ToshCli.AssemblyPath;
 
@@ -144,7 +144,7 @@ public sealed class ExtensionCommandTests
     public async Task Shell_state_commands_manage_functions_environment_and_history()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
         var variableName = $"TOSH_TEST_{Guid.NewGuid():N}";
 
         await engine.ExecuteToListAsync("func tosh_wrapper => echo hi");
@@ -184,7 +184,7 @@ public sealed class ExtensionCommandTests
     public async Task Discovery_commands_accept_pipeline_input()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
 
         runtime.RecordHistory("echo hello world");
         runtime.RecordHistory("ls -la");

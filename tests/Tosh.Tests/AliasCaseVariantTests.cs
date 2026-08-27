@@ -36,7 +36,7 @@ public sealed class AliasCaseVariantTests : IClassFixture<ToshRuntimeFixture>
     /// </summary>
     private async Task<object?> EvalAsync(string script)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         return (await engine.ExecuteToListAsync(script)).LastOrDefault();
     }
 

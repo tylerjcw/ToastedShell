@@ -33,7 +33,7 @@ public sealed class SpecConformanceTests
 {
     private static async Task<string?> EvaluateAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 1 ? results[0]?.ToString() : string.Join(", ", results);
     }
@@ -101,9 +101,9 @@ public sealed class SpecConformanceTests
     {
         // Formatted rather than ToString'd: a CLR array's ToString is its type
         // name, which would have compared a type against a value.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var squares = Assert.Single(await engine.ExecuteToListAsync("[$x * $x <| for x in 1..5]"));
-        Assert.Equal("[1, 4, 9, 16, 25]", engine.Runtime.Formatter.Format(squares));
+        Assert.Equal("[1, 4, 9, 16, 25]", engine.Shell().Formatter.Format(squares));
 
         var doubled = await engine.ExecuteToListAsync("[1, 2, 3] | map func(x) => ($x * 2)");
         Assert.Equal(["2", "4", "6"], doubled.Select(v => v?.ToString()));

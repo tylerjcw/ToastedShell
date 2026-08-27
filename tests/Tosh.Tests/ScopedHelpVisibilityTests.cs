@@ -51,7 +51,7 @@ public sealed class ScopedHelpVisibilityTests
 
             var runtime = ToshRuntime.CreateDefault();
             runtime.CurrentDirectory = directory;
-            var engine = new ToshEngine(runtime);
+            var engine = new ToshEngine(runtime.Language);
 
             // `ExecuteScriptFileAsync`, not `ExecuteToListAsync`. Running a *file* is what
             // pushes the scope this whole item is about; evaluating the same text as a string
@@ -172,7 +172,7 @@ public sealed class ScopedHelpVisibilityTests
     public async Task Help_still_reports_a_name_that_exists_nowhere()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("help no_such_topic_anywhere"));
@@ -184,7 +184,7 @@ public sealed class ScopedHelpVisibilityTests
         // The view is a snapshot of the scopes the command was called from, so a function
         // declared inside a block is not a permanent addition to the shell's help.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("if (true) { func inner_fn() { return 1 } }");
 
@@ -211,7 +211,7 @@ public sealed class ScopedHelpVisibilityTests
         // `xbox · benchmark · compress · cpu-info · dbg`, five commands sharing nothing with it
         // but the category every user function lands in.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             "## Adds two numbers.\nfunc add(a: int, b: int) -> int { return ($a + $b) }");

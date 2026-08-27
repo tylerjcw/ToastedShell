@@ -30,7 +30,7 @@ public sealed class SyncAsyncParityTests
 {
     private static async Task<ToshClassInstance> ConstructAsync(string source, string className)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(source);
 
         Assert.True(engine.TryGetNamedType(className, out var type), $"'{className}' was not declared");
@@ -171,7 +171,7 @@ public sealed class SyncAsyncParityTests
         IReadOnlyList<FunctionParameterDefinition> parameters,
         params object?[] arguments)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         string sync;
         try
@@ -473,7 +473,7 @@ public sealed class SyncAsyncParityTests
         string source,
         string className)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(source);
 
         Assert.True(engine.TryGetNamedType(className, out var type));
@@ -543,7 +543,7 @@ public sealed class SyncAsyncParityTests
             }
             """;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(source);
         Assert.True(engine.TryGetNamedType("Tied", out var type));
         var definition = Assert.IsType<ToshClassDefinition>(type);
@@ -581,7 +581,7 @@ public sealed class SyncAsyncParityTests
         string path,
         params object?[] arguments)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         if (declarations.Length > 0)
         {

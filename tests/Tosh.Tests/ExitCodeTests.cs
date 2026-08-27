@@ -31,7 +31,7 @@ public sealed class ExitCodeTests
     private static async Task<int> ExitCodeAfterAsync(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        await new ToshEngine(runtime).ExecuteToListAsync(source);
+        await new ToshEngine(runtime.Language).ExecuteToListAsync(source);
         return runtime.LastExitCode;
     }
 

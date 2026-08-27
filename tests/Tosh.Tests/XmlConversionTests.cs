@@ -26,7 +26,7 @@ public sealed class XmlConversionTests
     private static async Task<string> RunAsync(string script)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var results = await engine.ExecuteToListAsync(script);
         return string.Join("\n", results.Select(v => v?.ToString() ?? string.Empty)).Trim();
     }

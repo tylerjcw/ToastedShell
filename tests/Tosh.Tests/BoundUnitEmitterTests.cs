@@ -684,7 +684,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
 
     private (string Output, EmitResult Result, Assembly Assembly) CompileLoadAndRun(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<emit-test>");
         Assert.True(parse.Diagnostics.Count == 0,
             $"parse errors: {string.Join(", ", parse.Diagnostics)}");
@@ -721,7 +721,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
 
     private EmitResult EmitWithProfile(string source, CompileProfile profile)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<profile-test>");
         Assert.True(parse.Diagnostics.Count == 0,
             $"parse errors: {string.Join(", ", parse.Diagnostics)}");
@@ -735,7 +735,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         CompileProfile profile,
         IReadOnlyList<string> siblings)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<profile-test>");
         Assert.True(parse.Diagnostics.Count == 0,
             $"parse errors: {string.Join(", ", parse.Diagnostics)}");
@@ -2119,7 +2119,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     {
         // The compiler always embeds a Portable PDB so single-file
         // .dll output carries debug info — no companion .pdb on disk.
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("var x = 1\necho $x", "<pdb-test>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         using var stream = new MemoryStream();
@@ -2139,7 +2139,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         // Read the embedded PDB back and confirm each top-level
         // statement got at least one sequence point — that's what
         // makes stack traces show "in <file>:line N".
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("echo a\necho b\necho c", "<pdb-seq>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         using var stream = new MemoryStream();
@@ -2176,7 +2176,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     /// </summary>
     private string CompileAndRunWithArgs(string source, string[] argv)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<sub-test>");
         Assert.True(parse.Diagnostics.Count == 0,
             $"parse errors: {string.Join(", ", parse.Diagnostics)}");
@@ -2264,7 +2264,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         // After Family 4, subcommand dispatch compiles natively (no source-replay).
         // Positional `writeline` now emits directly too. Pure profile still rejects the
         // compiled subcommand-tree dispatcher as Tier 2, but never regains Tier 3 replay.
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("subcommand run { writeline 1 }", "<sub-tier>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         using var stream = new MemoryStream();
@@ -2280,7 +2280,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     public void Subcommand_dispatch_compiles_with_runtime_profile()
     {
         // With Runtime profile, a simple subcommand should compile cleanly (no source-replay).
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("subcommand run { writeline 1 }", "<sub-runtime>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         using var stream = new MemoryStream();
@@ -2319,7 +2319,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         // The same shape as above must not require Tier-3 source replay
         // anymore: pure profile rejects it for command-dispatch (Tier 2),
         // but never for "subcommand-tree dispatch (argv-driven entry point)".
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(
             "var greeting = \"hi\"\nsubcommand run { writeline $greeting }",
             "<sub-toplevel-var>");
@@ -3412,7 +3412,7 @@ func pick(a: int, b: int) -> string { return ""two"" }
 
     private (byte[] Impl, byte[] Refasm, string AssemblyName) EmitImplAndRefasm(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<refasm-test>");
         Assert.True(parse.Diagnostics.Count == 0,
             $"parse errors: {string.Join(", ", parse.Diagnostics)}");

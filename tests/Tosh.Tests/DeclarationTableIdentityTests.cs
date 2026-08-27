@@ -22,7 +22,7 @@ public sealed class DeclarationTableIdentityTests
         // A capitalized user function was previously read as a static
         // call on a CLR type of that name and failed, while the same
         // function spelled in lowercase worked.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             $$"""
             func {{name}}(x) { return $x * 3 }
@@ -36,7 +36,7 @@ public sealed class DeclarationTableIdentityTests
     [Fact]
     public async Task Clr_static_access_is_unaffected()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             var root = (Math.Sqrt(16))
@@ -54,7 +54,7 @@ public sealed class DeclarationTableIdentityTests
     {
         // Module members travel the same qualified path as CLR static
         // access, so the table must not divert them.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             module Lib { var greeting = "hello" }
@@ -70,7 +70,7 @@ public sealed class DeclarationTableIdentityTests
     {
         // TS-P2-08: the previous raw scan registered any bareword after
         // the word `func`, so `echo func bar` made `bar` look declared.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("echo func bar");
 
         Assert.Equal(["func", "bar"], results);
@@ -79,7 +79,7 @@ public sealed class DeclarationTableIdentityTests
     [Fact]
     public async Task Modifiers_before_a_declaration_still_register_it()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(
             """
             export func Exported(x) { return $x + 1 }
@@ -134,7 +134,7 @@ public sealed class DeclarationTableIdentityTests
     [InlineData("bool.Parse(\"true\")", true)]
     public async Task Static_access_works_on_a_lower_case_type_alias(string source, object expected)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
 
         Assert.Equal(expected, Assert.Single(results));
@@ -146,7 +146,7 @@ public sealed class DeclarationTableIdentityTests
         // `string` used to be named in the predicate itself. It is now one entry
         // in DotNetTypeResolver.BuiltInAliases like any other, so this asserts the
         // general mechanism carries the case the special case used to.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync("string.Join(\"-\", [\"a\", \"b\"])");
 
         Assert.Equal("a-b", Assert.Single(results));
@@ -208,7 +208,7 @@ public sealed class DeclarationTableIdentityTests
         string call,
         long expected)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(declaration);
 
         var results = await engine.ExecuteToListAsync(call);

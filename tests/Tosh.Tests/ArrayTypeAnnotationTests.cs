@@ -96,7 +96,7 @@ public sealed class ArrayTypeAnnotationTests
     public async Task A_cast_produces_a_real_clr_array()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -111,7 +111,7 @@ public sealed class ArrayTypeAnnotationTests
     public async Task An_annotated_variable_holds_that_array()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -128,7 +128,7 @@ public sealed class ArrayTypeAnnotationTests
         // `list<T>` was the only spelling before this and keeps its own meaning: a
         // List<T>, not an array. Adding `T[]` must not quietly redefine it.
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """

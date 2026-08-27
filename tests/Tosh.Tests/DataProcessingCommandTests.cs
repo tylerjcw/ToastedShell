@@ -10,7 +10,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Chunk_groups_into_fixed_size_batches()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3, 4, 5] | chunk 2");
 
@@ -23,7 +23,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Chunk_exact_multiple_produces_full_batches()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3, 4] | chunk 2");
 
@@ -33,7 +33,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Chunk_empty_input_produces_nothing()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[] | chunk 3");
 
@@ -45,7 +45,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Window_yields_sliding_windows()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3, 4, 5] | window 3");
 
@@ -58,7 +58,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Window_with_combiner_block()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Combiner receives the window array as _; use .Length member access
         var results = await engine.ExecuteToListAsync("[1, 2, 3, 4, 5] | window 3 { _.Length }");
@@ -69,7 +69,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Window_smaller_input_than_size_produces_nothing()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2] | window 5");
 
@@ -81,7 +81,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task GroupWhile_splits_on_predicate_failure()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Items 1,2,3 all match _ < 10; then 10 fails; starts new group; 11 also fails; new group; etc.
         var results = await engine.ExecuteToListAsync("[1, 2, 3, 10, 11] | group-while { _ < 10 }");
@@ -95,7 +95,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task GroupWhile_single_group_when_predicate_always_true()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | group-while { _ > 0 }");
 
@@ -108,7 +108,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Frequencies_counts_occurrences()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[\"a\", \"b\", \"a\", \"c\", \"b\", \"a\"] | frequencies");
 
@@ -126,7 +126,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Frequencies_preserves_insertion_order()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("[\"x\", \"y\", \"x\"] | frequencies");
 
@@ -141,7 +141,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Interleave_alternates_two_sequences()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var other = [\"a\", \"b\", \"c\"]");
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | interleave $other");
@@ -153,7 +153,7 @@ public sealed class DataProcessingCommandTests
     [Fact]
     public async Task Interleave_drains_longer_other_sequence()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("var other = [\"a\", \"b\", \"c\", \"d\"]");
         var results = await engine.ExecuteToListAsync("[1] | interleave $other");

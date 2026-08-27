@@ -23,7 +23,7 @@ public class TopLevelDeferTests
     private static async Task<string> RunAsync(string source)
     {
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
         await engine.ExecuteToListAsync(source);
         return output.ToString().Replace("\r", "").Trim();
     }
@@ -57,7 +57,7 @@ public class TopLevelDeferTests
     public async Task Cleanup_runs_when_the_body_throws_and_the_failure_still_surfaces()
     {
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
 
         await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(
             """
@@ -76,7 +76,7 @@ public class TopLevelDeferTests
     [Fact]
     public async Task Values_from_a_script_with_a_defer_are_still_produced()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             defer { }

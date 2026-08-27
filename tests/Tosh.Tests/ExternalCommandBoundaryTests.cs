@@ -60,7 +60,7 @@ public class ExternalCommandBoundaryTests
         var runtime = ToshRuntime.CreateDefault();
         runtime.ExternalCommands = null;
 
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("git --version"));
@@ -88,7 +88,7 @@ public class ExternalCommandBoundaryTests
     {
         if (!OperatingSystem.IsLinux()) return;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("$(/usr/bin/echo boundary-intact)");
 
@@ -131,7 +131,7 @@ public class ExternalCommandBoundaryTests
     {
         if (!OperatingSystem.IsLinux()) return;
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("/usr/bin/sleep 0.2 &");
 

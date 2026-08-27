@@ -473,7 +473,7 @@ public sealed class EngineTests
     public async Task Partial_modules_merge_within_the_same_scope()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -492,7 +492,7 @@ public sealed class EngineTests
     public async Task Dotted_module_names_create_nested_modules()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -990,7 +990,7 @@ public sealed class EngineTests
     public async Task Variables_can_bind_objects_from_csharp_style_new_expressions()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var declarationResults = await engine.ExecuteToListAsync("var builder = new System.Text.StringBuilder(\"hello\")");
         var results = await engine.ExecuteToListAsync("$builder | call Append \" world\" | call ToString");
@@ -1003,7 +1003,7 @@ public sealed class EngineTests
     public async Task Variables_can_be_reassigned_after_declaration()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var answer = 1");
         var assignmentResults = await engine.ExecuteToListAsync("$answer = 2");
@@ -1022,7 +1022,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var files = ls | where _.Type == file");
         var results = await engine.ExecuteToListAsync("$files | get Name");
@@ -1036,7 +1036,7 @@ public sealed class EngineTests
     public async Task Result_is_available_between_successful_script_statements()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo toast\necho $tosh.Last.Result");
 
@@ -1048,7 +1048,7 @@ public sealed class EngineTests
     public async Task Result_stores_multi_value_results_as_a_collection_object()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("echo one two");
         var result = Assert.IsType<object[]>(runtime.LastResult);
@@ -1062,7 +1062,7 @@ public sealed class EngineTests
     public async Task Result_is_available_inside_function_bodies_between_statements()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync(
             """
@@ -1085,7 +1085,7 @@ public sealed class EngineTests
     public async Task Failed_commands_do_not_overwrite_result()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("echo toast");
         await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("definitely_not_a_tosh_command"));
@@ -1098,7 +1098,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Commands_are_case_sensitive()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("LS"));
         await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("ECHO toast"));
@@ -1108,7 +1108,7 @@ public sealed class EngineTests
     public async Task Variable_member_access_can_project_properties_inside_expressions()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var builder = new System.Text.StringBuilder(\"hello\")");
         var results = await engine.ExecuteToListAsync("echo $builder.Length");
@@ -1120,7 +1120,7 @@ public sealed class EngineTests
     public async Task Fluent_method_call_expressions_can_chain_over_objects()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var builder = new System.Text.StringBuilder(\"hello\")");
         var results = await engine.ExecuteToListAsync("echo $builder.Append(\" world\").ToString()");
@@ -1485,7 +1485,7 @@ public sealed class EngineTests
     public async Task Variables_can_store_results_of_static_method_calls()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var someString = String.Join(\" \", [\"Hello\", \"World\"])");
         var results = await engine.ExecuteToListAsync("echo $someString");
@@ -1519,7 +1519,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("func ll => ls -la");
         var results = await engine.ExecuteToListAsync("ll nested | get Name");
@@ -1552,7 +1552,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("func bigger(size: StorageSize) { where _.Size >= $size }");
         var results = await engine.ExecuteToListAsync("ls -la | bigger 1kb | get Name");
@@ -1677,7 +1677,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("if ((ls | first | get Name) == \"keep.txt\") { echo matched }");
 
@@ -1791,7 +1791,7 @@ public sealed class EngineTests
     public async Task While_loops_re_evaluate_conditions_and_allow_assignments()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var count = 0");
         var results = await engine.ExecuteToListAsync("while (($count < 3)) { echo $count; $count = ($count + 1) }");
@@ -1805,7 +1805,7 @@ public sealed class EngineTests
     public async Task Until_loops_re_evaluate_conditions_and_support_compound_assignment()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var count = 0");
         var results = await engine.ExecuteToListAsync("until (($count >= 3)) { echo $count; $count += 1 }");
@@ -2001,7 +2001,7 @@ public sealed class EngineTests
     public async Task Block_locals_shadow_globals_without_leaking_back_out()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var item = \"GLOBAL\"");
         var blockResults = await engine.ExecuteToListAsync("echo Hello | each { var item = _.ToLower(); $item }");
@@ -2088,7 +2088,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("require defs.tosh\nrequire defs.tosh\nwhich ll names | get Kind\nnames\ntry { private_names } catch { echo missing }");
 
@@ -2101,7 +2101,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Using_is_lexical_by_default_inside_functions()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -2134,7 +2134,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -2159,7 +2159,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Require_can_load_dll_targets_for_following_using_statements()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var projectRoot = GetProjectRoot();
         var dllPath = ToshCli.AssemblyPath;
 
@@ -2171,7 +2171,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Require_can_load_project_targets_for_following_using_statements()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var projectRoot = GetProjectRoot();
         var projectPath = System.IO.Path.Combine(projectRoot, "src", "Tosh.Cli", "Tosh.Cli.csproj");
 
@@ -2183,7 +2183,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Global_declarations_can_escape_local_scopes()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("""
             var item = "GLOBAL"
@@ -2294,7 +2294,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var scalarResults = await engine.ExecuteToListAsync("echo 3 1 2 | sort");
         var objectResults = await engine.ExecuteToListAsync("ls -la | reverse | sort Name | get Name");
@@ -2323,7 +2323,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var echoCount = await engine.ExecuteToListAsync("echo 1 2 3 | count");
         var lsCount = await engine.ExecuteToListAsync("ls -la | count");
@@ -2436,7 +2436,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var sourceResults = await engine.ExecuteToListAsync("source defs.tosh");
         var functionKinds = await engine.ExecuteToListAsync("which ll | get Kind");
@@ -2462,7 +2462,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("source argv.tosh --trimmed ./out");
 
@@ -2484,7 +2484,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./argv.tosh --trimmed ./out");
 
@@ -2513,7 +2513,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./argv --trimmed ./out");
 
@@ -2540,7 +2540,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("var value = (./value)\n$value");
 
@@ -2575,7 +2575,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./vars.tosh");
         Assert.Equal(["hidden"], results);
@@ -2598,7 +2598,7 @@ public sealed class EngineTests
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
         runtime.InvocationArguments = ["outer"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("source argv.tosh inner\n$tosh.Script.Args | first");
 
@@ -2608,7 +2608,7 @@ public sealed class EngineTests
     [Fact]
     public async Task Flat_args_variable_is_no_longer_available()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("echo $args"));
         var diagnostic = Assert.Single(exception.Diagnostics);
@@ -2621,7 +2621,7 @@ public sealed class EngineTests
     {
         var runtime = ToshRuntime.CreateDefault();
         runtime.InvocationArguments = ["alpha", "beta"];
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("$tosh.Script.Args | first\n$tosh.Script.Args | last");
 
@@ -2685,7 +2685,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls | where _.Extension == .txt | get Name");
 
@@ -2700,7 +2700,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var sizeResults = await engine.ExecuteToListAsync("ls | get Size");
         var typeResults = await engine.ExecuteToListAsync("ls | get Type");
@@ -2758,7 +2758,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var targetResults = await engine.ExecuteToListAsync("ls -la | where _.Name == keep-link.txt | get Target");
 
@@ -2774,7 +2774,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls | where _.Type == file | get Name");
 
@@ -2791,7 +2791,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -la | where _.Size? > 1000 | get Name");
 
@@ -2807,7 +2807,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var numericResults = await engine.ExecuteToListAsync("ls -la | where _.Size? > 1000 | get Name");
         var unitResults = await engine.ExecuteToListAsync("ls -la | where _.Size? > 1kb | get Name");
@@ -2826,7 +2826,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -la | where _.Size >= 1kb | get Name");
 
@@ -2846,7 +2846,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -la | where _.Type == file | where _.Modified < (date now | date sub (timespan 2d)) | get Name");
 
@@ -2863,7 +2863,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -la | where _.Name.ToString().ToLower().Contains(\".x\") | get Name");
 
@@ -2881,7 +2881,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var suffix = \".x\"");
         var results = await engine.ExecuteToListAsync("ls -la | where _.Name.ToLower().EndsWith($suffix) | get Name");
@@ -2902,7 +2902,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -la | where { _.Type == file; _.Size >= 1kb; _.Modified < ((date now) - (timespan 2d)); } | get Name");
 
@@ -2920,7 +2920,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             "ls -la | where { (_.Size >= 1kb) and ((_.Name == [alpha.txt, beta.txt]) or (_.Modified > ((date now) - 2d))) and not (_.Type == dir) } | get Name");
@@ -2934,7 +2934,7 @@ public sealed class EngineTests
     public async Task New_expression_works_for_imported_and_fully_qualified_clr_types()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var importedResults = await engine.ExecuteToListAsync("using System.Drawing\nvar pt = new Point(2, 2)\necho $pt.X $pt.Y");
         var qualifiedResults = await engine.ExecuteToListAsync("var size = new System.Drawing.Size(3, 4)\necho $size.Width $size.Height");
@@ -2952,7 +2952,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var defaultResults = await engine.ExecuteToListAsync("ls");
         var allResults = await engine.ExecuteToListAsync("ls -a");
@@ -2974,7 +2974,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ls -la");
 
@@ -2989,7 +2989,7 @@ public sealed class EngineTests
         using var tempDirectory = new TemporaryDirectory();
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("mkdir -p nested");
         await engine.ExecuteToListAsync("touch nested/original.txt");
@@ -3013,7 +3013,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("rm -r nested");
 
@@ -3058,7 +3058,7 @@ public sealed class EngineTests
         Assert.Equal(2, engine.LanguageRuntime.ObjectAccessor.GetValue(instance, "Quantity"));
         Assert.Equal("Food", engine.LanguageRuntime.ObjectAccessor.GetValue(instance, "Category"));
 
-        var rendered = engine.Runtime.Display.RenderMany(results);
+        var rendered = engine.Shell().Display.RenderMany(results);
         Assert.Contains("Name", rendered, StringComparison.Ordinal);
         Assert.Contains("Bread", rendered, StringComparison.Ordinal);
         Assert.DoesNotContain("ShellTypeName", rendered, StringComparison.Ordinal);
@@ -3457,7 +3457,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3544,7 +3544,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3589,7 +3589,7 @@ public sealed class EngineTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var source = await File.ReadAllTextAsync(scriptPath);
         var results = await engine.ExecuteToListAsync(source, scriptPath);
@@ -3608,7 +3608,7 @@ public sealed class EngineTests
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             $@"require native ""{libraryName}"" as LibC
@@ -3633,7 +3633,7 @@ LibC.myAbs(-9)");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             $@"bind native ""{libraryName}"" as LibC {{
@@ -3655,7 +3655,7 @@ LibC.abs(-11)");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var strlenSymbol = OperatingSystem.IsWindows() ? "strlen" : "strlen";
 
         var results = await engine.ExecuteToListAsync(
@@ -3689,7 +3689,7 @@ $length");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -3712,7 +3712,7 @@ bind LibC {{
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync(
@@ -3735,7 +3735,7 @@ bind LibC {{
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             $@"require native ""{libraryName}"" as LibC
@@ -3758,7 +3758,7 @@ LibC.getenv(""PATH"")");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             $@"require native ""{libraryName}"" as LibC
@@ -3781,7 +3781,7 @@ LibC.abs(-7)");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             $@"require native ""{libraryName}"" as LibC
@@ -3810,7 +3810,7 @@ native-free $dest");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             $@"require native ""{libraryName}"" as LibC
@@ -3832,7 +3832,7 @@ $output");
     public async Task Native_buffer_helpers_support_struct_layout_round_trips()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3854,7 +3854,7 @@ $output");
     public async Task Short_native_buffer_surface_supports_size_of_and_offset_of()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3869,7 +3869,7 @@ $output");
     public async Task Alloc_statement_accepts_simple_interop_type_names()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3885,7 +3885,7 @@ $output");
     public async Task Forget_value_form_removes_native_buffer_variables_and_frees_them()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3911,7 +3911,7 @@ $output");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3940,7 +3940,7 @@ $output");
         }
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3961,7 +3961,7 @@ $output");
     [Fact]
     public async Task Flatten_preserves_dynamic_record_values()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3975,7 +3975,7 @@ $output");
     [Fact]
     public async Task Null_expression_statements_do_not_emit_placeholder_results()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -3995,7 +3995,7 @@ $output");
     [Fact]
     public async Task Enums_support_string_parameter_binding_and_static_members()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -4020,7 +4020,7 @@ $output");
     [Fact]
     public async Task Enums_expose_synthetic_members_through_runtime_access()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -4042,7 +4042,7 @@ $output");
     [Fact]
     public async Task Members_distinguish_enum_helpers_from_real_clr_members()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -4061,7 +4061,7 @@ $output");
     [Fact]
     public async Task Qualified_clr_type_names_resolve_to_type_objects()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -4077,7 +4077,7 @@ $output");
     public async Task Raw_command_emits_plain_shell_text_lines()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo 1317 System.DayOfWeek.Friday | raw");
 
@@ -4091,7 +4091,7 @@ $output");
     [Fact]
     public async Task Named_records_support_defaults_and_structural_equality()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -4134,7 +4134,7 @@ $output");
     public async Task View_changes_formatter_style_through_a_normal_command()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("view detail");
 
@@ -4148,7 +4148,7 @@ $output");
     {
         using var output = new StringWriter();
         var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var writeResults = await engine.ExecuteToListAsync("write \"hello\"");
         var writeLineResults = await engine.ExecuteToListAsync("writeline \" world\"");
@@ -4164,7 +4164,7 @@ $output");
     public async Task View_can_configure_datetime_timespan_and_storage_size_preferences()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var dateResults = await engine.ExecuteToListAsync("view datetime table unix");
         var timeSpanResults = await engine.ExecuteToListAsync("view duration table seconds");
@@ -4212,7 +4212,7 @@ $output");
     public async Task View_can_configure_dateonly_and_timeonly_preferences()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var dateOnlyResults = await engine.ExecuteToListAsync("view dateonly scalar relative");
         var timeOnlyResults = await engine.ExecuteToListAsync("view timeonly table 24h");
@@ -4254,7 +4254,7 @@ $output");
     public async Task View_can_configure_permissions_and_file_attribute_preferences()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var permissionResults = await engine.ExecuteToListAsync("view permissions both");
         var attributeResults = await engine.ExecuteToListAsync("view attributes hex");
@@ -4275,7 +4275,7 @@ $output");
     public async Task View_can_configure_type_specific_table_columns()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var setResults = await engine.ExecuteToListAsync("view columns table Kind Name");
 
@@ -4299,7 +4299,7 @@ $output");
     public async Task Exit_requests_shell_exit_through_a_normal_command()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("exit");
 
@@ -4313,7 +4313,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.RecordHistory("help");
         runtime.RecordHistory("ls -la");
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
 
         var results = await engine.ExecuteToListAsync("history");
 
@@ -4332,7 +4332,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.RecordHistory("echo alpha");
         runtime.RecordHistory("echo beta gamma");
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
 
         var expandedById = await engine.ExecuteToListAsync("history expand 1");
         Assert.Equal("echo alpha", Assert.IsType<string>(Assert.Single(expandedById)));
@@ -4369,7 +4369,7 @@ $output");
         runtime.RecordHistory("echo alpha");
         runtime.RecordHistory("git status");
         runtime.RecordHistory("echo beta");
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
 
         var searchResults = await engine.ExecuteToListAsync("history search echo | get Text");
         Assert.Collection(
@@ -4401,7 +4401,7 @@ $output");
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.History.FilePath = historyPath;
-        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        var engine = new ToshEngine(runtime.Language) { IsInteractiveSession = true };
 
         var pathResults = await engine.ExecuteToListAsync("history path");
         Assert.Equal(historyPath, Assert.IsType<string>(Assert.Single(pathResults)));
@@ -4426,7 +4426,7 @@ $output");
     public async Task Uname_returns_kernel_information()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("uname");
 
@@ -4439,7 +4439,7 @@ $output");
     public async Task Hostname_and_whoami_return_identity_scalars()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var hostResults = await engine.ExecuteToListAsync("hostname");
         var userResults = await engine.ExecuteToListAsync("whoami");
@@ -4452,7 +4452,7 @@ $output");
     public async Task Id_returns_current_identity_information()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("id");
 
@@ -4466,7 +4466,7 @@ $output");
     public async Task Df_returns_file_system_usage_objects()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("df | first");
 
@@ -4478,7 +4478,7 @@ $output");
     public async Task Ping_returns_typed_reply_objects()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("ping -c 1 127.0.0.1");
 
@@ -4509,7 +4509,7 @@ $output");
     [Fact]
     public async Task Nameof_returns_variable_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var thisIsAVar = 13\necho nameof($thisIsAVar)");
 
@@ -4519,7 +4519,7 @@ $output");
     [Fact]
     public async Task Nameof_works_with_dollar_prefix()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var greeting = \"hello\"\necho nameof($greeting)");
 
@@ -4529,7 +4529,7 @@ $output");
     [Fact]
     public async Task Nameof_works_in_interpolated_string()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var myVar = 42\necho $\"Name: {nameof($myVar)}\"");
 
@@ -4539,7 +4539,7 @@ $output");
     [Fact]
     public async Task Nameof_works_with_bareword_function_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo nameof(echo)");
 
@@ -4549,7 +4549,7 @@ $output");
     [Fact]
     public async Task Nameof_rejects_bare_variable_name_without_dollar()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("var myVar = 1\necho nameof(myVar)"));
@@ -4560,7 +4560,7 @@ $output");
     [Fact]
     public async Task Has_prop_returns_true_for_existing_property()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json | has-prop name");
 
@@ -4570,7 +4570,7 @@ $output");
     [Fact]
     public async Task Has_prop_returns_false_for_missing_property()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json | has-prop missing");
 
@@ -4580,7 +4580,7 @@ $output");
     [Fact]
     public async Task Has_prop_works_with_direct_argument()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var obj = {| Name = \"toast\" |}\nhas-prop $obj Name");
 
@@ -4590,7 +4590,7 @@ $output");
     [Fact]
     public async Task Has_method_checks_clr_methods()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo hello | has-method Contains");
 
@@ -4600,7 +4600,7 @@ $output");
     [Fact]
     public async Task Get_props_lists_record_fields()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var obj = {| Name = \"toast\", Size = 2 |}\nget-props $obj");
 
@@ -4610,7 +4610,7 @@ $output");
     [Fact]
     public async Task Get_methods_lists_object_methods()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo hello | get-methods");
 
@@ -4621,7 +4621,7 @@ $output");
     [Fact]
     public async Task ThisFunc_returns_current_function_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("func greet() { echo $tosh.Function.Name }\ngreet");
 
@@ -4631,7 +4631,7 @@ $output");
     [Fact]
     public async Task ThisFunc_returns_empty_string_outside_functions()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo $tosh.Function.Name");
 
@@ -4641,7 +4641,7 @@ $output");
     [Fact]
     public async Task ThisFunc_reflects_innermost_function_in_nested_calls()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "func inner() { echo $tosh.Function.Name }\nfunc outer() { inner }\nouter");
@@ -4652,7 +4652,7 @@ $output");
     [Fact]
     public async Task ThisScript_returns_source_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo $tosh.Script.Path", "my-script.tosh");
 
@@ -4662,7 +4662,7 @@ $output");
     [Fact]
     public async Task ThisScript_returns_input_for_repl()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo $tosh.Script.Path");
 
@@ -4672,7 +4672,7 @@ $output");
     [Fact]
     public async Task Get_prop_reads_dynamic_property_by_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "var obj = {| Name = \"toast\", Size = 2 |}\nvar prop = \"Name\"\nget-prop $obj $prop");
@@ -4683,7 +4683,7 @@ $output");
     [Fact]
     public async Task Get_prop_reads_clr_property()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo hello | get-prop Length");
 
@@ -4693,7 +4693,7 @@ $output");
     [Fact]
     public async Task Set_prop_adds_property_to_record()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "var obj = {| Name = \"toast\" |}\nset-prop $obj Size 42\nget-prop $obj Size");
@@ -4705,7 +4705,7 @@ $output");
     [Fact]
     public async Task Set_prop_updates_existing_property()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "var obj = {| Name = \"toast\" |}\nset-prop $obj Name \"bread\" | get-prop Name");
@@ -4716,7 +4716,7 @@ $output");
     [Fact]
     public async Task Del_prop_removes_property_from_record()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "var obj = {| Name = \"toast\", Size = 2 |}\ndel-prop $obj Size | has-prop Size");
@@ -4727,7 +4727,7 @@ $output");
     [Fact]
     public async Task Call_method_invokes_by_dynamic_name()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo hello | call-method ToUpper");
 
@@ -4737,7 +4737,7 @@ $output");
     [Fact]
     public async Task Call_method_passes_arguments()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("echo hello | call-method Contains ell");
 
@@ -4747,7 +4747,7 @@ $output");
     [Fact]
     public async Task Clone_creates_independent_copy_of_record()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "var obj = {| Name = \"toast\" |}\nvar copy = (clone $obj)\nvar ignored = (set-prop $copy Name \"bread\")\nget-prop $obj Name");
@@ -4758,7 +4758,7 @@ $output");
     [Fact]
     public async Task Clone_works_in_pipeline()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             "var obj = {| A = 1, B = 2 |}\n$obj | clone | get-props");
@@ -4769,7 +4769,7 @@ $output");
     [Fact]
     public async Task String_concatenation_with_plus_in_subexpression()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("var a = \"hello\"\nvar b = \"world\"\necho ($a + \" \" + $b)");
 
@@ -4779,7 +4779,7 @@ $output");
     [Fact]
     public async Task String_plus_in_command_argument_subexpression()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Simplest case: echo ($a + $b) where $a and $b are strings
         var results = await engine.ExecuteToListAsync("var a = \"hello\"\nvar b = \"world\"\necho ($a + $b)");
@@ -4790,7 +4790,7 @@ $output");
     [Fact]
     public async Task String_plus_with_comma_literal_in_subexpression()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // This is the pattern from inventory.tosh: set-prop $item Tags ($existing + "," + $tag)
         var results = await engine.ExecuteToListAsync("var a = \"hello\"\nvar b = \"world\"\necho ($a + \",\" + $b)");
@@ -4801,7 +4801,7 @@ $output");
     [Fact]
     public async Task Set_prop_with_plus_concat_subexpression()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         // Reproduces the inventory.tosh pattern: set-prop $item Tags ($existing + "," + $tag)
         var results = await engine.ExecuteToListAsync(
@@ -4855,7 +4855,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
         runtime.Config.Shell.AutoCd = true;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("mydir");
 
@@ -4874,7 +4874,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
         runtime.Config.Shell.AutoCd = true;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("./nested");
 
@@ -4890,7 +4890,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
         runtime.Config.Shell.AutoCd = false;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("./mydir"));
@@ -4905,7 +4905,7 @@ $output");
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync($"cd \"{subDir}\"");
 
@@ -5889,7 +5889,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
         runtime.Config.Shell.Dirs.TrySetMember("myalias", targetPath);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("cd ~myalias");
 
@@ -5905,7 +5905,7 @@ $output");
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("$tosh.Config.Shell.Dirs = {| myalias = \"" + targetPath.Replace("\\", "\\\\") + "\" |}");
         await engine.ExecuteToListAsync("cd ~myalias");

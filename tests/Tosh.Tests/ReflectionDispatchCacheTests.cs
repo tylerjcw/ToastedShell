@@ -27,7 +27,7 @@ public class ReflectionDispatchCacheTests
     private static async Task<string> RunAsync(string source)
     {
         var output = new StringWriter();
-        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);
         await engine.ExecuteToListAsync(source);
         return output.ToString().Replace("\r", "").Trim();
     }

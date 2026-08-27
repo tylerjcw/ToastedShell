@@ -75,7 +75,7 @@ public sealed class ToastRuntimeTests
         var results = await engine.ExecuteToListAsync("var x = 2\n$x + 3");
 
         Assert.Same(language, engine.LanguageRuntime);
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
         Assert.Equal(5, Assert.Single(results));
     }
 
@@ -106,7 +106,7 @@ public sealed class ToastRuntimeTests
         var results = await engine.ExecuteToListAsync("external-probe alpha &");
 
         Assert.Empty(results);
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
         var request = Assert.IsType<ToastBackgroundPipelineRequest>(jobs.Request);
         var stage = Assert.Single(request.Stages);
         Assert.Equal("/virtual/external-probe", stage.ResolvedPath);
@@ -139,7 +139,7 @@ public sealed class ToastRuntimeTests
         var results = await engine.ExecuteToListAsync("$tosh.Marker");
 
         Assert.Equal(42, Assert.Single(results));
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
         Assert.NotNull(factory.Script);
         Assert.NotNull(factory.Function);
     }
@@ -158,7 +158,11 @@ public sealed class ToastRuntimeTests
         var results = await engine.ExecuteToListAsync("command-host-probe");
 
         Assert.Equal(42, Assert.Single(results));
-        Assert.Null(engine.ShellRuntime);
+
+        // The host is carried opaquely and is *not* a shell runtime — which is what the
+        // removed `engine.ShellRuntime` was asserting here (`TOAST-0006`).
+        Assert.Same(host, engine.LanguageRuntime.CommandHost);
+        Assert.IsNotType<ToshRuntime>(engine.LanguageRuntime.CommandHost);
     }
 
     [Fact]
@@ -172,7 +176,7 @@ public sealed class ToastRuntimeTests
             await engine.ExecuteToListAsync($"$env.{variableName} = \"standalone\"");
 
             Assert.Equal("standalone", Environment.GetEnvironmentVariable(variableName));
-            Assert.Null(engine.ShellRuntime);
+            Assert.Null(engine.LanguageRuntime.CommandHost);
         }
         finally
         {
@@ -192,7 +196,7 @@ public sealed class ToastRuntimeTests
             "new System.Text.StringBuilder hello | call Append \" world\" | call ToString");
 
         Assert.Equal("hello world", Assert.Single(results));
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
     }
 
     [Fact]
@@ -206,7 +210,7 @@ public sealed class ToastRuntimeTests
 
         Assert.Equal(3, results[0]);
         Assert.IsType<CommandTimingInfo>(results[1]);
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
     }
 
     [Fact]
@@ -228,7 +232,7 @@ public sealed class ToastRuntimeTests
 
         Assert.Equal(["alpha", "beta"], results);
         Assert.Contains("alpha", output.ToString(), StringComparison.Ordinal);
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
     }
 
     [Fact]
@@ -249,7 +253,7 @@ public sealed class ToastRuntimeTests
 
         Assert.Empty(results);
         Assert.Equal($"alpha{Environment.NewLine}beta{Environment.NewLine}", output.ToString());
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
     }
 
     [Fact]
@@ -262,7 +266,7 @@ public sealed class ToastRuntimeTests
         var results = await engine.ExecuteToListAsync("timeout 1 { 1 + 2 }");
 
         Assert.Equal(3, Assert.Single(results));
-        Assert.Null(engine.ShellRuntime);
+        Assert.Null(engine.LanguageRuntime.CommandHost);
     }
 
     [Fact]
@@ -270,7 +274,7 @@ public sealed class ToastRuntimeTests
     {
         var variableName = "TOAST_HOSTED_ENV_" + Guid.NewGuid().ToString("N");
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         try
         {
@@ -307,7 +311,7 @@ public sealed class ToastRuntimeTests
 
             Assert.Equal(target, Assert.Single(results));
             Assert.Equal(target, factory.ResolvedPath);
-            Assert.Null(engine.ShellRuntime);
+            Assert.Null(engine.LanguageRuntime.CommandHost);
         }
         finally
         {
@@ -418,7 +422,7 @@ public sealed class ToastRuntimeTests
     public void The_shell_runtime_namespace_is_published_from_the_runtime_assembly()
     {
         var runtime = ToshRuntime.CreateDefault();
-        _ = new ToshEngine(runtime);
+        _ = new ToshEngine(runtime.Language);
 
         Assert.NotNull(runtime.RuntimeNamespace);
         Assert.Equal(typeof(ToshRuntime).Assembly, runtime.RuntimeNamespace.GetType().Assembly);
@@ -432,7 +436,7 @@ public sealed class ToastRuntimeTests
     public async Task A_global_declared_from_script_lands_in_the_language_runtime()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         Assert.Same(runtime.Language, engine.LanguageRuntime);
 

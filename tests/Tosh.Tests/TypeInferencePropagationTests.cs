@@ -32,7 +32,7 @@ public sealed class TypeInferencePropagationTests
     private static IReadOnlyList<ToshDiagnostic> StrictDiagnostics(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, "<inference>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 
@@ -132,7 +132,7 @@ public sealed class TypeInferencePropagationTests
     [InlineData("var r = {| a = {| b = 2 |} |}\necho $r.a.b", "2")]
     public async Task An_inferred_record_still_reads_its_fields(string source, string expected)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
 
         Assert.Equal(expected, results[^1]?.ToString());

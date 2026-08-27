@@ -104,7 +104,7 @@ public sealed class CompiledPipelineValueTests : IClassFixture<ToshRuntimeFixtur
             echo $n
             """;
 
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         await engine.ExecuteToListAsync(source);
         Assert.True(engine.TryGetVariableValue("n", out var interpreted));
 
@@ -117,7 +117,7 @@ public sealed class CompiledPipelineValueTests : IClassFixture<ToshRuntimeFixtur
 
     private CompiledExecution CompileAndRun(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<compiled-pipeline-value-test>");
         Assert.True(
             parse.Diagnostics.Count == 0,

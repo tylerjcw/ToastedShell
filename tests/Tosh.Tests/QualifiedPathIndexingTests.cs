@@ -15,7 +15,7 @@ namespace Tosh.Tests;
 /// </summary>
 public class QualifiedPathIndexingTests
 {
-    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault());
+    private static ToshEngine NewEngine() => new(ToshRuntime.CreateDefault().Language);
 
     private const string Fixture =
         """

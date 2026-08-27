@@ -10,7 +10,7 @@ public sealed class MatrixCommandTests
     [Fact]
     public async Task Matrix_commands_build_matrices_from_rows_and_pipeline_input()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -27,7 +27,7 @@ public sealed class MatrixCommandTests
     [Fact]
     public async Task Matrix_values_resolve_to_shell_types_for_typeof_describe_type_and_new_command()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -44,7 +44,7 @@ public sealed class MatrixCommandTests
     [Fact]
     public async Task Matrix_type_metadata_and_operations_work()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """

@@ -22,7 +22,7 @@ public sealed class NullableAnnotationTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -54,7 +54,7 @@ public sealed class NullableAnnotationTests
     [Fact]
     public async Task A_nullable_annotation_still_refuses_a_wrong_type()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("var x: int? = \"abc\""));
@@ -66,7 +66,7 @@ public sealed class NullableAnnotationTests
     [Fact]
     public async Task A_non_nullable_annotation_still_refuses_null()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("var x: int = null"));
@@ -80,7 +80,7 @@ public sealed class NullableAnnotationTests
     [Fact]
     public async Task An_unknown_nullable_type_reports_as_a_type()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var error = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("var x: Nonexistent? = null"));

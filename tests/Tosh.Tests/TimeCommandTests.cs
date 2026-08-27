@@ -8,7 +8,7 @@ public sealed class TimeCommandTests
     [Fact]
     public async Task Time_block_returns_timing_info()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("time { seq 100 | reduce 0 { $acc + _ } }");
 
@@ -26,7 +26,7 @@ public sealed class TimeCommandTests
     [Fact]
     public async Task Time_command_with_args_returns_timing_info()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("time echo hello");
 
@@ -39,7 +39,7 @@ public sealed class TimeCommandTests
     [Fact]
     public async Task Time_user_function_returns_timing_info()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await engine.ExecuteToListAsync("func fib(n) { if ($n <= 1) { $n } else { (fib ($n - 1)) + (fib ($n - 2)) } }");
         var results = await engine.ExecuteToListAsync("time fib 15");
@@ -54,7 +54,7 @@ public sealed class TimeCommandTests
     [Fact]
     public async Task Time_sleep_measures_wall_clock_accurately()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("time { sleep 200ms }");
 
@@ -71,7 +71,7 @@ public sealed class TimeCommandTests
             return;
         }
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync("time { seq 1000 | collect }");
 
@@ -83,7 +83,7 @@ public sealed class TimeCommandTests
     [Fact]
     public async Task Time_without_arguments_produces_diagnostic()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("time"));

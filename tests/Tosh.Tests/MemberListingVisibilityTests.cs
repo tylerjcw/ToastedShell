@@ -24,7 +24,7 @@ public sealed class MemberListingVisibilityTests
 {
     private static async Task<string[]> ListedMembersAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         await engine.ExecuteToListAsync(source);
 
         Assert.True(engine.TryGetNamedType("C", out var type));

@@ -29,7 +29,7 @@ public class DeclarationDocumentationTests
     /// </remarks>
     private static async Task<string> DescriptionAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return Assert.Single(results)?.ToString() ?? string.Empty;
     }

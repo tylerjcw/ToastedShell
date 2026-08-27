@@ -64,7 +64,7 @@ public sealed class StartupLoaderTests
         File.WriteAllText(System.IO.Path.Combine(autoloadDirectory, "functions.tosh"), "func stringifyCount() -> String { count }");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await ToshStartupLoader.LoadAsync(engine, configDirectory);
 
@@ -87,7 +87,7 @@ public sealed class StartupLoaderTests
         File.WriteAllText(System.IO.Path.Combine(autoloadDirectory, "functions.tosh"), "func autoloaded() -> String { \"ok\" }");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var errorOutput = new StringWriter();
 
         await ToshStartupLoader.LoadAsync(engine, configDirectory, skipProfile: false, errorWriter: errorOutput);
@@ -110,7 +110,7 @@ public sealed class StartupLoaderTests
         File.WriteAllText(System.IO.Path.Combine(autoloadDirectory, "20-good.tosh"), "func goodFunc() -> String { \"loaded\" }");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var errorOutput = new StringWriter();
 
         await ToshStartupLoader.LoadAsync(engine, configDirectory, skipProfile: false, errorWriter: errorOutput);
@@ -133,7 +133,7 @@ public sealed class StartupLoaderTests
         File.WriteAllText(System.IO.Path.Combine(autoloadDirectory, "helpers.tosh"), "func autoloadFunc() -> String { \"autoloaded\" }");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await ToshStartupLoader.LoadAsync(engine, configDirectory, skipProfile: true);
 
@@ -161,7 +161,7 @@ public sealed class StartupLoaderTests
         File.WriteAllText(System.IO.Path.Combine(redirectedAutoload, "helpers.tosh"), "func helper() -> String { \"ok\" }");
 
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await ToshStartupLoader.LoadAsync(engine, configDirectory);
 

@@ -54,7 +54,7 @@ public sealed class ScriptHelpAndDocCommentTests
             var runtime = ToshRuntime.CreateDefault();
             runtime.Output = writer;
 
-            var engine = new ToshEngine(runtime);
+            var engine = new ToshEngine(runtime.Language);
 
             // Answering `--help` asks the runtime to exit rather than throwing: the script simply
             // stops before its body, the way `exit` does.
@@ -88,7 +88,7 @@ public sealed class ScriptHelpAndDocCommentTests
     private static async Task<HelpTopic> TopicForAsync(string source, string name)
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         await engine.ExecuteToListAsync(source);
 
         var topic = HelpCatalog.ResolveTopic(runtime, name);

@@ -36,7 +36,7 @@ public sealed class EnclosingMemberSuggestionTests : IClassFixture<ToshRuntimeFi
 
     private IReadOnlyList<ToshDiagnostic> Bind(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<enclosing-member-test>");
         return Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
     }
@@ -45,7 +45,7 @@ public sealed class EnclosingMemberSuggestionTests : IClassFixture<ToshRuntimeFi
 
     private async Task<object?> EvalAsync(string source)
     {
-        var engine = new ToshEngine(new ToshRuntime());
+        var engine = new ToshEngine(new ToshRuntime().Language);
         return (await engine.ExecuteToListAsync(source)).LastOrDefault();
     }
 
@@ -131,7 +131,7 @@ public sealed class EnclosingMemberSuggestionTests : IClassFixture<ToshRuntimeFi
     public void A_real_executable_of_the_same_name_still_wins()
     {
         // A class that declares `prop git` must not stop `git status` in one of its methods.
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse("class K { prop git: int = 1\nfunc g() { git --version } }", "<probe>");
 
         var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: name => name == "git");
@@ -190,7 +190,7 @@ public sealed class EnclosingMemberSuggestionTests : IClassFixture<ToshRuntimeFi
     {
         // Collecting local functions from struct bodies is the other half of the walk; without
         // it, visiting the body would newly flag a call that resolves perfectly well.
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var results = await engine.ExecuteToListAsync(
             "struct S { func g() { func inner() { return 3 }\nreturn inner() } }\nvar s = new S()\n$s.g()");
 
@@ -220,7 +220,7 @@ public sealed class EnclosingMemberSuggestionTests : IClassFixture<ToshRuntimeFi
             var library = Path.Combine(directory, "lib.tosh");
             await File.WriteAllTextAsync(library, "export var LIBV = 1\n");
 
-            var engine = new ToshEngine(new ToshRuntime());
+            var engine = new ToshEngine(new ToshRuntime().Language);
             var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
                 await engine.ExecuteToListAsync(
                     $"require \"{library.Replace("\\", "/")}\"\n" +

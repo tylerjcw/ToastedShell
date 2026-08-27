@@ -57,7 +57,7 @@ public sealed class CrossTestTypeLeakTests : IClassFixture<ToshRuntimeFixture>
     /// </summary>
     private Assembly EmitAndLoad(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<leak-emit>");
         Assert.Empty(parse.Diagnostics);
 
@@ -82,7 +82,7 @@ public sealed class CrossTestTypeLeakTests : IClassFixture<ToshRuntimeFixture>
         // Now the interpreted script declares its *own* Circle and constrains against its own
         // interface. Before the fix this threw "produced a value that could not be converted to
         // 'ToshTest_….Circle'" — the constraint had bound to the emitted type.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             interface IShape { func area() }
@@ -107,7 +107,7 @@ public sealed class CrossTestTypeLeakTests : IClassFixture<ToshRuntimeFixture>
         // not look like a fix for the whole problem.
         EmitAndLoad("class CrossTestLeakProbe { prop Name = \"emitted\" }");
 
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(
             """
             class CrossTestLeakProbe { prop Name = "scripted" }

@@ -18,7 +18,7 @@ public sealed class P1SemanticsTests
 {
     private static async Task<object?> EvaluateAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? null : results[^1];
     }
@@ -59,7 +59,7 @@ public sealed class P1SemanticsTests
         // TS-P1-24 was filed for, and the first attempt at TS-P1-10 landed only on the
         // synchronous one — `==` goes through the async path, so the defect survived a
         // change that looked complete. They now share one helper; this asserts they agree.
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var left = Assert.Single(await engine.ExecuteToListAsync("{| a = 1, b = 2 |}"));
         var right = Assert.Single(await engine.ExecuteToListAsync("{| b = 2, a = 1 |}"));
@@ -149,7 +149,7 @@ public sealed class P1SemanticsTests
     [InlineData("var a = 10\nvar b = 0\n$a % $b")]
     public async Task Integral_division_by_zero_still_throws(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         await Assert.ThrowsAnyAsync<Exception>(
             async () => await engine.ExecuteToListAsync(source));

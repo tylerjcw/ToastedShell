@@ -31,7 +31,7 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
 
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -62,7 +62,7 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     /// </remarks>
     private (EmitResult Result, IReadOnlyList<ToshDiagnostic> Strictness) Compile(string source)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<function-type-test>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse errors: {string.Join(", ", parse.Diagnostics)}");
 

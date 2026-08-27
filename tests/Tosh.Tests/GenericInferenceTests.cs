@@ -30,7 +30,7 @@ public sealed class GenericInferenceTests : IClassFixture<ToshRuntimeFixture>
 
     private async Task<object?> EvalAsync(string script)
     {
-        var engine = new ToshEngine(_runtime);
+        var engine = new ToshEngine(_runtime.Language);
         return (await engine.ExecuteToListAsync(script)).LastOrDefault();
     }
 

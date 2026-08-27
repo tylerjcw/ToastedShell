@@ -75,8 +75,9 @@ static string ResolveSourceHint(string repoRoot, Type type)
 
 static void CheckDocumentationCompleteness(string repoRoot, List<string> warnings)
 {
-    var engine = new ToshEngine();
-    foreach (var command in engine.Runtime.Commands.All.OfType<ShellCommand>())
+    var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime.Language);
+    foreach (var command in runtime.Commands.All.OfType<ShellCommand>())
     {
         var type = command.GetType();
         var optOuts = type.GetCustomAttributes<UndocumentedForAttribute>(inherit: false).ToList();
@@ -124,10 +125,11 @@ static void CheckParserNameRegistryParity(string repoRoot, List<string> warnings
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    var engine = new ToshEngine();
+    var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime.Language);
     foreach (var name in hardcoded)
     {
-        if (!engine.Runtime.Commands.TryGet(name, out _))
+        if (!runtime.Commands.TryGet(name, out _))
         {
             warnings.Add(FormatWarning(repoRoot, "src/Tosh.Language/Parsing/ToshParser.cs", "TOSH004",
                 $"parser hardcodes command name '{name}' which does not resolve via the registry."));

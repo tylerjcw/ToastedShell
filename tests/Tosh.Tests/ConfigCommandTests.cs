@@ -11,7 +11,7 @@ public sealed class ConfigCommandTests
     public async Task Config_command_can_get_and_set_runtime_configuration()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("config set display.style detail; config get display.style");
 
@@ -30,7 +30,7 @@ public sealed class ConfigCommandTests
     public async Task Config_command_normalizes_dash_cased_paths()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("config set repl.continuation-prompt \"..> \"; config get repl.continuation-prompt");
 
@@ -49,7 +49,7 @@ public sealed class ConfigCommandTests
     public async Task Config_command_can_customize_theme_paths()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("config set theme.syntax.valid-command.foreground bright-magenta; config get theme.syntax.valid-command.foreground");
 
@@ -68,7 +68,7 @@ public sealed class ConfigCommandTests
     public async Task Config_command_can_customize_table_box_style()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("config set theme.tables.box-style double");
 
@@ -80,7 +80,7 @@ public sealed class ConfigCommandTests
     public async Task Config_command_can_request_interactive_browser()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("config browse box style");
 
@@ -93,7 +93,7 @@ public sealed class ConfigCommandTests
     public async Task Config_variable_can_be_used_to_customize_runtime_directly()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("$tosh.Config.Display.StorageSize.Mode = \"Bytes\"");
 
@@ -104,7 +104,7 @@ public sealed class ConfigCommandTests
     public async Task Config_set_can_consume_a_pipelined_value()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo toast | config set prompt.name-text");
 
@@ -118,7 +118,7 @@ public sealed class ConfigCommandTests
     public async Task Config_init_creates_startup_layout_without_overwriting_existing_files()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
         var rootDirectory = Directory.CreateTempSubdirectory().FullName;
         var existingProfile = Path.Combine(rootDirectory, "profile.tosh");
         File.WriteAllText(existingProfile, "# existing profile");
@@ -158,7 +158,7 @@ public sealed class ConfigCommandTests
         runtime.Config.Startup.ApplyRootDirectory(configDirectory);
         runtime.Config.Prompt.NameText = "stale";
         runtime.Config.Repl.GhostTextEnabled = false;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("config reload");
 
@@ -194,7 +194,7 @@ public sealed class ConfigCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.Startup.ApplyRootDirectory(configDirectory);
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("config reload");
 

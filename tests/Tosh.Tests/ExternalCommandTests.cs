@@ -24,7 +24,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./" + commandName);
 
@@ -50,7 +50,7 @@ public sealed class ExternalCommandTests
 
         using var _ = new TemporaryPathScope(tempDirectory.Path);
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("path-hello");
 
@@ -76,7 +76,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("echo alpha beta | ./" + commandName);
 
@@ -102,7 +102,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () => await engine.ExecuteToListAsync("./not-executable"));
         var diagnostic = Assert.Single(exception.Diagnostics);
@@ -166,7 +166,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./" + commandName);
 
@@ -195,7 +195,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var equalityResults = await engine.ExecuteToListAsync("./" + commandName + " | where _ == \"hello\"");
         var methodResults = await engine.ExecuteToListAsync("./" + commandName + " | each { _.ToUpper() }");
@@ -224,7 +224,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var file = (echo alpha beta | as-file text)");
         var results = await engine.ExecuteToListAsync("./" + commandName + " $file");
@@ -251,7 +251,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("./" + commandName + " <(echo alpha beta)");
 
@@ -283,7 +283,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -313,7 +313,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync("<<< \"alpha\\nbeta\" | ./" + commandName);
 
@@ -339,7 +339,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var started = await engine.ExecuteToListAsync("<<< \"alpha\\nbeta\" | ./" + commandName + " &");
         Assert.Empty(started);
@@ -405,7 +405,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var stdout = (tempfile stdout txt)\nvar stderr = (tempfile stderr txt)\nvar combined = (tempfile combined txt)");
         await engine.ExecuteToListAsync($"./{emitBoth} out> $stdout err> $stderr");
@@ -463,7 +463,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var combined = (tempfile combined txt)");
         await engine.ExecuteToListAsync($"./{emitBoth} o+e> $combined");
@@ -504,7 +504,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var combined = (tempfile combined txt)");
         await engine.ExecuteToListAsync($"./{emitBoth} out> $combined err>> $combined");
@@ -544,7 +544,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var stdout = (tempfile stdout txt)\nvar stderr = (tempfile stderr txt)");
         var started = await engine.ExecuteToListAsync($"./{emitBoth} out> $stdout err> $stderr &");
@@ -594,7 +594,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync("var combined = (tempfile combined txt)");
         var started = await engine.ExecuteToListAsync($"./{emitBoth} o+e> $combined &");
@@ -639,7 +639,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         await engine.ExecuteToListAsync($"./{failCommand} | ./{successCommand}");
         var defaultExitCode = runtime.LastExitCode;
@@ -672,7 +672,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var started = await engine.ExecuteToListAsync("./" + commandName + " &");
         Assert.Empty(started);
@@ -709,7 +709,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var started = await engine.ExecuteToListAsync("./" + commandName + " &");
         Assert.Empty(started);
@@ -754,7 +754,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var started = await engine.ExecuteToListAsync($"./{producer} | ./{consumer} &");
         Assert.Empty(started);
@@ -785,7 +785,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var started = await engine.ExecuteToListAsync("./" + commandName + " &");
         Assert.Empty(started);
@@ -819,7 +819,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var started = await engine.ExecuteToListAsync("./" + commandName + " &");
         Assert.Empty(started);
@@ -866,7 +866,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var results = await engine.ExecuteToListAsync(
             "var file = (echo Bread Coffee | as-file text)\n" +
@@ -904,7 +904,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         var expanded = await engine.ExecuteToListAsync("./" + commandName + " *.txt");
         var quoted = await engine.ExecuteToListAsync("./" + commandName + " \"*.txt\"");
@@ -933,7 +933,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.ExitOnError = true;
 
@@ -960,7 +960,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.ExitOnError = true;
 
@@ -997,7 +997,7 @@ public sealed class ExternalCommandTests
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.CurrentDirectory = tempDirectory.Path;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.ExitOnError = true;
         runtime.Config.Shell.Pipefail = true;
@@ -1013,7 +1013,7 @@ public sealed class ExternalCommandTests
         var runtime = ToshRuntime.CreateDefault();
         var errorWriter = new StringWriter();
         runtime.Error = errorWriter;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime.Language);
 
         runtime.Config.Shell.Trace = true;
 

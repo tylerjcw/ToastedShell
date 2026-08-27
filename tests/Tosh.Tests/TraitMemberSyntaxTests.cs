@@ -25,7 +25,7 @@ public sealed class TraitMemberSyntaxTests
 {
     private static async Task<string> RunAsync(string source)
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = await engine.ExecuteToListAsync(source);
         return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
     }
@@ -73,7 +73,7 @@ public sealed class TraitMemberSyntaxTests
     [Fact]
     public async Task A_missing_typed_property_is_still_reported()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(
             """
@@ -127,7 +127,7 @@ public sealed class TraitMemberSyntaxTests
     [Fact]
     public async Task A_declared_return_type_is_enforced()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var error = await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(
             """

@@ -46,7 +46,7 @@ public sealed class StorageSizeLiteralSemanticsTests
     [Fact]
     public async Task Storage_literals_are_typed_in_declarations_and_collections()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -66,7 +66,7 @@ public sealed class StorageSizeLiteralSemanticsTests
     [Fact]
     public async Task Specification_storage_comparison_and_arithmetic_examples_are_typed()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var results = await engine.ExecuteToListAsync(
             """
@@ -84,7 +84,7 @@ public sealed class StorageSizeLiteralSemanticsTests
     [Fact]
     public async Task Raw_command_arguments_remain_strings()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var result = Assert.Single(await engine.ExecuteToListAsync("echo 10kb | type-of"));
 
@@ -94,7 +94,7 @@ public sealed class StorageSizeLiteralSemanticsTests
     [Fact]
     public async Task Invalid_storage_suffixes_do_not_fall_back_to_expression_strings()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("var size = 10xb"));
