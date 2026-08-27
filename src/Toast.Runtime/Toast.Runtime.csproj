@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!--
+      `TOAST-0064`. The cross-run platform-type cache is a sorted record file searched by
+      binary search, and a binary search that is wrong returns the *wrong type* rather than
+      failing. It cannot be exercised from the test host through the public surface: the
+      cache is keyed to the trusted-platform assembly set, and `dotnet test` has a different
+      one from a published shell, so the file is simply never read there. A negative control
+      proved that — skewing the search by one record failed nothing.
+
+      This is for the search, not a general opening of the assembly.
+    -->
+    <!--
+      `TOAST-0006`. The shell half was the same assembly until the split, so it still reaches
+      internals the division did not intend to sever — reflection helpers, the member adapter,
+      compact formatting. Making them public would widen the language's public surface to suit
+      one consumer; this keeps the surface honest and records that the two were one.
+    -->
+    <InternalsVisibleTo Include="Tosh.Runtime" />
+  </ItemGroup>
+
+  <!--
+    `TOAST-0006`. The namespace stays `Tosh.Runtime` while the assembly is `Toast.Runtime`.
+    Namespaces span assemblies, so splitting the assembly needs no `using` change anywhere;
+    renaming the namespace as well is `TOAST-0008`'s job and is a separate, larger move.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Tosh.Runtime</RootNamespace>
+    <AssemblyName>Toast.Runtime</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Toast.Runtime</PackageId>
+    <Description>The Tōast language runtime: value model, type system, operators, CLR interop and the host capability contracts. Carries no shell concept — display, help, jobs and session state live in Tosh.Runtime, which references this.</Description>
+  </PropertyGroup>
+
+</Project>

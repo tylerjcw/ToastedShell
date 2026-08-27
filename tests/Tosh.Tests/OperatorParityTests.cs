@@ -341,11 +341,11 @@ public sealed class OperatorParityTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            var candidate = Path.Combine(dir.FullName, "src", "Tosh.Runtime", "OperatorEvaluator.cs");
+            var candidate = Path.Combine(dir.FullName, "src", "Toast.Runtime", "OperatorEvaluator.cs");
             if (File.Exists(candidate)) return candidate;
             dir = dir.Parent;
         }
-        throw new FileNotFoundException("Could not locate src/Tosh.Runtime/OperatorEvaluator.cs.");
+        throw new FileNotFoundException("Could not locate src/Toast.Runtime/OperatorEvaluator.cs.");
     }
 
     /// <summary>

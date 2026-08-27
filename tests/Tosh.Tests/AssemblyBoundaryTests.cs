@@ -26,6 +26,12 @@ public sealed class AssemblyBoundaryTests
     /// </summary>
     private static readonly string[] ShellAssemblies =
     [
+        // `TOAST-0006`. `Tosh.Runtime` joined this list when the assembly was divided: it is
+        // now display, help, jobs, session configuration and the composition root, while the
+        // value model the language needs is `Toast.Runtime`. Until the split this file could
+        // not name it — it was the assembly both halves shared — so the boundary was true by
+        // inspection and enforced by nothing.
+        "Tosh.Runtime",
         "Tosh.Tui",
         "Tosh.Stdlib",
         "Tosh.Cli",
@@ -53,8 +59,17 @@ public sealed class AssemblyBoundaryTests
         {
             foreach (var reference in queue.Dequeue().GetReferencedAssemblies())
             {
+                // `TOAST-0006`. Both prefixes, or the walk stops at the language's own main
+                // dependency: `Toast.Runtime` does not begin with `Tosh.`, so filtering on that
+                // alone would follow nothing past `Tosh.Language` and every assertion built on
+                // this walk would pass by finding nothing.
                 var name = reference.Name;
-                if (name is null || !name.StartsWith("Tosh.", StringComparison.Ordinal)) continue;
+                if (name is null
+                    || !(name.StartsWith("Tosh.", StringComparison.Ordinal)
+                        || name.StartsWith("Toast.", StringComparison.Ordinal)))
+                {
+                    continue;
+                }
                 if (!seen.Add(name)) continue;
 
                 try
@@ -116,7 +131,9 @@ public sealed class AssemblyBoundaryTests
     {
         var reachable = TransitiveToshReferences(typeof(ToshEngine).Assembly);
 
-        Assert.Contains("Tosh.Runtime", reachable);
+        // The language reaches the value model, and that is the whole of what it reaches on
+        // this side of the division.
+        Assert.Contains("Toast.Runtime", reachable);
         Assert.True(
             reachable.Count >= 2,
             "The transitive walk found almost nothing, so the boundary assertions above " +

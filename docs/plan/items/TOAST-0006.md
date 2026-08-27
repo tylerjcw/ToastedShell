@@ -1,7 +1,7 @@
 ---
 id: TOAST-0006
 title: "Divide the assemblies along the language/shell boundary"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-16
@@ -25,9 +25,9 @@ The split runs through it, not around it.
 
 ## Acceptance
 
-- [ ] `Tosh.Runtime` divided, with the value model on the language side and display, help and command metadata on the shell side
-- [ ] No language assembly references a shell assembly, verified by project references rather than by inspection
-- [ ] The suite passes; assembly moves do not change behaviour
+- [x] `Tosh.Runtime` divided, with the value model on the language side and display, help and command metadata on the shell side — `Toast.Runtime` (304 files, 1.4 MB) and `Tosh.Runtime` (46 files, 616 KB)
+- [x] No language assembly references a shell assembly, verified by project references rather than by inspection — `Tosh.Language` references `Toast.Runtime` and nothing else of ours, and `AssemblyBoundaryTests` now names `Tosh.Runtime` as a shell assembly
+- [x] The suite passes; assembly moves do not change behaviour — 6,648, unchanged
 - [x] The language's transitive dependency on `Tosh.Tui` cut, and guarded by `AssemblyBoundaryTests` walking the emitted assembly graph
 - [x] `src/Tosh.Language/Bridge/Shell/` resolved — all four commands moved to Tosh.Stdlib; the language registers none. `Bridge/` now holds only language machinery
 
@@ -447,6 +447,70 @@ Worth stating plainly: until that split lands, **nothing prevents this regressin
 `AssemblyBoundaryTests` walks the assembly graph, and `Tosh.Language` referencing
 `Tosh.Runtime` is still legitimate, so a new `HelpTopic` use in the language would compile
 and pass. The project reference is the guard, and it arrives with the split.
+
+## The split — 2026-08-27
+
+`Toast.Runtime` holds the value model; `Tosh.Runtime` holds display, help, jobs, session
+configuration and the composition root, and references it. Nothing goes back the other way,
+and that is now a project reference rather than a claim.
+
+**The namespace stayed `Tosh.Runtime` while the assembly became `Toast.Runtime`.** Namespaces
+span assemblies, so dividing the assembly needed no `using` change anywhere — 350 files moved
+and not one import was touched. Renaming the namespace as well is `TOAST-0008`'s job and is a
+much larger move; conflating the two would have buried this one.
+
+Only two projects changed reference: `Tosh.Language` and `Tosh.Compiler.IR` now point at
+`Toast.Runtime`. The other ten still reference `Tosh.Runtime` and get the value model
+transitively, so the division cost them nothing.
+
+### What the compiler moved that judgement had not
+
+The membership was decided by building and reading the errors, not by classifying 350 files
+in advance. Five things came back from the shell side that way, and each is a correction to
+the 2026-08-17 classification rather than an exception to it:
+
+| Returned to the language | Because |
+|---|---|
+| `DiagnosticRenderer`, `ToshDiagnosticsConfig` | `CompiledProgramBoundary` is *emitted into compiled programs* to report an unhandled exception. If the renderer is shell-side, every compiled program drags the shell in — the opposite of Phase B |
+| the diagnostic theme and terminal style classes | named by that renderer, so they follow it |
+| `CommandMetadata` and its six sibling records | describing a command is language-shaped; *writing it to disk* is not, so `CommandMetadataExporter` stayed behind |
+| `ToshHushedDiagnosticList` | `hush` is a language feature, as this item already recorded |
+| `ToshDirectoryAliasConfig` | language-side path resolution reads it |
+
+The root `ToshConfig` stayed on the shell side. It composes display settings as well as
+language ones, which is exactly the entanglement `ToastOptions` was chosen to resolve — the
+language should read its own options rather than the shell's configuration tree.
+
+**One wrinkle is recorded rather than hidden.** Colour is presentation and belongs to the
+shell by this item's own classification, but `DiagnosticRenderer` names the theme classes and
+cannot follow them there for the reason above. Removing that means the renderer taking a
+contract instead of concrete config — a change to the renderer, not to where a file lives.
+
+### A rename creates prefix bugs, and two were live
+
+`Toast.Runtime` does not begin with `Tosh.`, and two pieces of code matched on that prefix:
+
+- `AssemblyBoundaryTests.TransitiveToshReferences` stopped following the language's *own main
+  dependency*, so every boundary assertion built on it would have passed by finding nothing.
+- `SyncAsyncTwinInventoryTests.OwnAssemblyPrefixes` began reading `Toast.Runtime` interfaces
+  as foreign contracts, which walked into `GetInterfaceMap` on an interface and threw.
+
+Both were caught by the suite. The parser's `Tosh.` check is *namespace* matching and is
+correct untouched — which is the second reason keeping the namespace was worth it.
+
+### What the split proved immediately
+
+`PureProfileDependencyAuditTests` asserted that a pure-profile artifact references
+`Tosh.Runtime`. It now references **`Toast.Runtime`, and nothing else of ours**:
+
+```
+["System.Private.CoreLib", "Toast.Runtime", "System.Linq.Expressions", "System.Console"]
+```
+
+Before the division that assertion could not mean anything — `Tosh.Runtime` was the only
+runtime there was, so referencing it said nothing about whether the shell came too. The
+forbidden list now names `Tosh.Runtime`, `Tosh.Stdlib` and `Tosh.Tui`, so the pair of
+assertions says the artifact carries the language and stops.
 
 ## Staging
 

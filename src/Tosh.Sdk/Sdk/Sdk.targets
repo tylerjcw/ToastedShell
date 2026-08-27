@@ -235,6 +235,7 @@
       <_ToshOutputs Include="$(OutputPath)Tosh.Compiler.IR.dll" />
       <_ToshOutputs Include="$(OutputPath)Tosh.Compiler.Runtime.dll" />
       <_ToshOutputs Include="$(OutputPath)Tosh.Language.dll" />
+      <_ToshOutputs Include="$(OutputPath)Toast.Runtime.dll" />
       <_ToshOutputs Include="$(OutputPath)Tosh.Runtime.dll" />
       <_ToshOutputs Include="$(OutputPath)Tosh.Stdlib.dll" />
       <_ToshOutputs Include="$(OutputPath)Tosh.Core.dll" />
@@ -257,6 +258,7 @@
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Compiler.IR.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Compiler.IR.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Compiler.Runtime.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Compiler.Runtime.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Language.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Language.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)Toast.Runtime.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Toast.Runtime.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Runtime.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Runtime.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Stdlib.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Stdlib.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Core.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Core.dll')" />

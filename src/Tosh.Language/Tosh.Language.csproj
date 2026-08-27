@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tosh.Compiler.IR\Tosh.Compiler.IR.csproj" />
-    <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
+    <ProjectReference Include="..\Toast.Runtime\Toast.Runtime.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -7,7 +7,6 @@
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
-| [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 2/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |

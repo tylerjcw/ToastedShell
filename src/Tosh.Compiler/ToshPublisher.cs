@@ -14,6 +14,10 @@ public static class ToshPublisher
         "Tosh.Compiler.IR.dll",
         "Tosh.Compiler.Runtime.dll",
         "Tosh.Language.dll",
+        // `TOAST-0006`. The value model moved to its own assembly, so a compiled program
+        // needs both halves: `Toast.Runtime` for the language, `Tosh.Runtime` for the shell
+        // services it still reaches through the host.
+        "Toast.Runtime.dll",
         "Tosh.Runtime.dll",
         "Tosh.Stdlib.dll",
         "Tosh.Tui.dll",

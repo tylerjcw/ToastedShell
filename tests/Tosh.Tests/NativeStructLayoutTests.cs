@@ -38,7 +38,7 @@ public sealed class NativeStructLayoutTests
 
     private static Type Runtime(string typeName, string nested)
     {
-        var owner = typeof(ToshRuntime).Assembly.GetType($"Tosh.Runtime.{typeName}")
+        var owner = typeof(OperatorEvaluator).Assembly.GetType($"Tosh.Runtime.{typeName}")
             ?? throw new InvalidOperationException($"Tosh.Runtime.{typeName} was not found.");
 
         // Some interop structs sit inside a private nested holder class.

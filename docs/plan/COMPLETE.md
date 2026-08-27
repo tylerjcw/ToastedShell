@@ -5,6 +5,7 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOAST-0042`](items/TOAST-0042.md) | P2 | complete | 6/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
+| [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | complete | 9/9 | Suite reliability on a clean checkout: four flakes named and resolved |
 | [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |

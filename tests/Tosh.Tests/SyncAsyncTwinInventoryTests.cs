@@ -225,7 +225,10 @@ public sealed class SyncAsyncTwinInventoryTests
         BindingFlags.Public | BindingFlags.NonPublic |
         BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-    private static readonly string[] OwnAssemblyPrefixes = ["Tosh."];
+    // `TOAST-0006`. Both prefixes since the runtime was divided: `Toast.Runtime` is as much
+    // "our own" as any `Tosh.*` assembly, and matching only the latter made its interfaces
+    // read as foreign contracts — which walked into `GetInterfaceMap` on an interface.
+    private static readonly string[] OwnAssemblyPrefixes = ["Tosh.", "Toast."];
 
     private static bool IsOwnType(Type type) =>
         OwnAssemblyPrefixes.Any(prefix =>
@@ -263,7 +266,15 @@ public sealed class SyncAsyncTwinInventoryTests
 
     private static IEnumerable<string> DiscoverTwins()
     {
-        var assemblies = new[] { typeof(ToshEngine).Assembly, typeof(ToshRuntime).Assembly };
+        // `TOAST-0006`. Three assemblies since the runtime was divided: the language, the
+        // value model and the shell. Scanning only the first two would quietly stop finding
+        // the twins in `Toast.Runtime` and read as though they had been converged.
+        var assemblies = new[]
+        {
+            typeof(ToshEngine).Assembly,
+            typeof(OperatorEvaluator).Assembly,
+            typeof(ToshRuntime).Assembly,
+        };
 
         foreach (var assembly in assemblies)
         {

@@ -38,6 +38,13 @@ public sealed class PureProfileDependencyAuditTests
         "Tosh.Compiler.Runtime",
         "Tosh.Compiler.IR",
         "Tosh.Language",
+        // `TOAST-0006`. The shell became nameable here when the runtime assembly was divided.
+        // Before that, a pure artifact referenced `Tosh.Runtime` because that was the only
+        // runtime there was, and the reference proved nothing about whether the shell came
+        // with it.
+        "Tosh.Runtime",
+        "Tosh.Stdlib",
+        "Tosh.Tui",
     ];
 
     /// <summary>A program made only of tier-1 shapes: no builtins, no dynamic dispatch.</summary>
@@ -111,7 +118,11 @@ public sealed class PureProfileDependencyAuditTests
             $"expected a clean pure readiness probe, got: {string.Join("; ", result.UnsupportedShapes)}");
 
         var references = ReadAssemblyReferences(image);
-        Assert.Contains("Tosh.Runtime", references);
+
+        // The language runtime, and nothing else of ours. `Toast.Runtime` is the value model;
+        // the shell, the interpreter and the compiler are all in the forbidden list, so this
+        // pair says the artifact carries the language and stops there.
+        Assert.Contains("Toast.Runtime", references);
         Assert.DoesNotContain(ForbiddenAssemblies, references.Contains);
     }
 

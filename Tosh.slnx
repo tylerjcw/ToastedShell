@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Tosh.Cli/Tosh.Cli.csproj" />
     <Project Path="src/Tosh.Client/Tosh.Client.csproj" />
+    <Project Path="src/Toast.Runtime/Toast.Runtime.csproj" />
     <Project Path="src/Tosh.Runtime/Tosh.Runtime.csproj" />
     <Project Path="src/Tosh.Language/Tosh.Language.csproj" />
     <Project Path="src/Tosh.LanguageServices/Tosh.LanguageServices.csproj" />

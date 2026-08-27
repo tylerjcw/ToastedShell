@@ -1,16 +1,20 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    `TOAST-0006`. The shell half of what used to be one assembly: display, help, jobs,
+    session configuration and the composition root. It references the language half; nothing
+    goes back the other way, and that direction is now enforced by this project reference
+    rather than by inspection.
+
+    Consumers that want both keep referencing this project and get `Toast.Runtime`
+    transitively, so the split cost them no change. `Tosh.Language` references
+    `Toast.Runtime` directly, which is the whole point of the division.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Toast.Runtime\Toast.Runtime.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
-    <!--
-      `TOAST-0064`. The cross-run platform-type cache is a sorted record file searched by
-      binary search, and a binary search that is wrong returns the *wrong type* rather than
-      failing. It cannot be exercised from the test host through the public surface: the
-      cache is keyed to the trusted-platform assembly set, and `dotnet test` has a different
-      one from a published shell, so the file is simply never read there. A negative control
-      proved that — skewing the search by one record failed nothing.
-
-      This is for the search, not a general opening of the assembly.
-    -->
     <InternalsVisibleTo Include="Tosh.Tests" />
   </ItemGroup>
 
@@ -25,7 +29,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Tosh.Runtime</PackageId>
-    <Description>Core runtime types and services for TōSh: object model, pipelines, environment, and host APIs consumed by compiled tosh assemblies.</Description>
+    <Description>TōSh shell services: the display engine, help catalog, job table, session configuration and the runtime composition root.</Description>
   </PropertyGroup>
 
 </Project>

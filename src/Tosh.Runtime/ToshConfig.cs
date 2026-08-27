@@ -1,10 +1,5 @@
 namespace Tosh.Runtime;
 
-public interface IResettableShellConfig
-{
-    void Reset();
-}
-
 public sealed class ToshConfig : IResettableShellConfig
 {
     public ToshConfig(
@@ -146,88 +141,6 @@ public sealed class ToshShellConfig : IResettableShellConfig
     }
 }
 
-public sealed class ToshDirectoryAliasConfig : IResettableShellConfig, IShellRecordObject
-{
-    private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
-
-    public string ShellTypeName => "DirectoryAliases";
-
-    public IReadOnlyDictionary<string, string> Aliases => _aliases;
-
-    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
-    {
-        if (_aliases.TryGetValue(name, out var path))
-        {
-            value = path;
-            return true;
-        }
-
-        value = null;
-        return false;
-    }
-
-    public bool TrySetMember(string name, object? value)
-    {
-        if (value is null)
-        {
-            _aliases.Remove(name);
-            return true;
-        }
-
-        var path = value.ToString();
-
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            _aliases.Remove(name);
-            return true;
-        }
-
-        _aliases[name] = Path.GetFullPath(path);
-        return true;
-    }
-
-    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
-    {
-        return _aliases
-            .OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(entry => new KeyValuePair<string, object?>(entry.Key, entry.Value))
-            .ToArray();
-    }
-
-    public bool TryResolve(string name, out string resolvedPath)
-    {
-        return _aliases.TryGetValue(name, out resolvedPath!);
-    }
-
-    public string? TryReverseLookup(string absolutePath)
-    {
-        string? bestAlias = null;
-        var bestLength = 0;
-
-        foreach (var (alias, aliasPath) in _aliases)
-        {
-            if (absolutePath.Equals(aliasPath, PathUtilities.GetPathComparison()) ||
-                (absolutePath.StartsWith(aliasPath, PathUtilities.GetPathComparison()) &&
-                 absolutePath.Length > aliasPath.Length &&
-                 absolutePath[aliasPath.Length] == Path.DirectorySeparatorChar))
-            {
-                if (aliasPath.Length > bestLength)
-                {
-                    bestLength = aliasPath.Length;
-                    bestAlias = alias;
-                }
-            }
-        }
-
-        return bestAlias;
-    }
-
-    public void Reset()
-    {
-        _aliases.Clear();
-    }
-}
-
 public sealed class ToshThemeConfig : IResettableShellConfig
 {
     public ToshThemeConfig()
@@ -263,79 +176,10 @@ public sealed class ToshThemeConfig : IResettableShellConfig
     }
 }
 
-public enum ToshTableBoxStyle
-{
-    Rounded,
-    Square,
-    Heavy,
-    Ascii,
-    Double,
-}
-
 public enum ToshTuiTreeStyle
 {
     Clean,
     Dense,
-}
-
-public sealed class ToshTextStyleConfig : IResettableShellConfig
-{
-    private readonly string? _defaultForeground;
-    private readonly string? _defaultBackground;
-    private readonly bool _defaultBold;
-    private readonly bool _defaultItalic;
-    private readonly bool _defaultUnderline;
-    private readonly bool _defaultDim;
-
-    public ToshTextStyleConfig(
-        string? foreground = null,
-        string? background = null,
-        bool bold = false,
-        bool italic = false,
-        bool underline = false,
-        bool dim = false)
-    {
-        _defaultForeground = foreground;
-        _defaultBackground = background;
-        _defaultBold = bold;
-        _defaultItalic = italic;
-        _defaultUnderline = underline;
-        _defaultDim = dim;
-
-        Foreground = foreground;
-        Background = background;
-        Bold = bold;
-        Italic = italic;
-        Underline = underline;
-        Dim = dim;
-    }
-
-    public string? Foreground { get; set; }
-
-    public string? Background { get; set; }
-
-    public bool Bold { get; set; }
-
-    public bool Italic { get; set; }
-
-    public bool Underline { get; set; }
-
-    public bool Dim { get; set; }
-
-    public StyledText Apply(string text)
-    {
-        return new StyledText(text, Foreground, Background, Bold, Italic, Underline, Dim);
-    }
-
-    public void Reset()
-    {
-        Foreground = _defaultForeground;
-        Background = _defaultBackground;
-        Bold = _defaultBold;
-        Italic = _defaultItalic;
-        Underline = _defaultUnderline;
-        Dim = _defaultDim;
-    }
 }
 
 public sealed class ToshPromptThemeConfig : IResettableShellConfig
@@ -536,67 +380,6 @@ public sealed class ToshCompletionThemeConfig : IResettableShellConfig
         Detail.Reset();
         Footer.Reset();
         GhostText.Reset();
-    }
-}
-
-public sealed class ToshDiagnosticThemeConfig : IResettableShellConfig
-{
-    public ToshDiagnosticThemeConfig()
-    {
-        Heading = new ToshTextStyleConfig(foreground: "red", bold: true);
-        Title = new ToshTextStyleConfig(foreground: "red");
-        SourceLocation = new ToshTextStyleConfig(foreground: "gray", dim: true);
-        Underline = new ToshTextStyleConfig(foreground: "red");
-        Label = new ToshTextStyleConfig(foreground: "red");
-        Help = new ToshTextStyleConfig(foreground: "bright-cyan");
-        Frame = new ToshTextStyleConfig(foreground: "gray", dim: true);
-        Code = new ToshTextStyleConfig(foreground: "gray", dim: true);
-        ErrorGlyph = new ToshTextStyleConfig(foreground: "bright-red", bold: true);
-        WarningGlyph = new ToshTextStyleConfig(foreground: "bright-yellow", bold: true);
-        InfoGlyph = new ToshTextStyleConfig(foreground: "bright-blue", bold: true);
-        HintGlyph = new ToshTextStyleConfig(foreground: "gray", dim: true);
-    }
-
-    public ToshTextStyleConfig Heading { get; }
-
-    public ToshTextStyleConfig Title { get; }
-
-    public ToshTextStyleConfig SourceLocation { get; }
-
-    public ToshTextStyleConfig Underline { get; }
-
-    public ToshTextStyleConfig Label { get; }
-
-    public ToshTextStyleConfig Help { get; }
-
-    /// <summary>Style applied to half-frame border characters (`│ ╰─`).</summary>
-    public ToshTextStyleConfig Frame { get; }
-
-    /// <summary>Style applied to the diagnostic code in the header (`tosh.runtime.unknown_command`).</summary>
-    public ToshTextStyleConfig Code { get; }
-
-    public ToshTextStyleConfig ErrorGlyph { get; }
-
-    public ToshTextStyleConfig WarningGlyph { get; }
-
-    public ToshTextStyleConfig InfoGlyph { get; }
-
-    public ToshTextStyleConfig HintGlyph { get; }
-
-    public void Reset()
-    {
-        Heading.Reset();
-        Title.Reset();
-        SourceLocation.Reset();
-        Underline.Reset();
-        Label.Reset();
-        Help.Reset();
-        Frame.Reset();
-        Code.Reset();
-        ErrorGlyph.Reset();
-        WarningGlyph.Reset();
-        InfoGlyph.Reset();
-        HintGlyph.Reset();
     }
 }
 
@@ -1494,107 +1277,6 @@ public sealed class ToshStartupConfig : IResettableShellConfig
         }
 
         return configuredPath;
-    }
-}
-
-public sealed class ToshTtyConfig : IResettableShellConfig
-{
-    private ToshTableBoxStyle _boxStyle = ToshTableBoxStyle.Square;
-    private string _indicator = " > ";
-    private string _errorMarker = "x";
-
-    public bool Enabled { get; set; } = true;
-
-    public ToshTableBoxStyle BoxStyle
-    {
-        get => _boxStyle;
-        set => _boxStyle = value is ToshTableBoxStyle.Rounded ? ToshTableBoxStyle.Square : value;
-    }
-
-    public string Indicator
-    {
-        get => _indicator;
-        set => _indicator = string.IsNullOrEmpty(value) ? " > " : value;
-    }
-
-    public string ErrorMarker
-    {
-        get => _errorMarker;
-        set => _errorMarker = string.IsNullOrEmpty(value) ? "x" : value;
-    }
-
-    public ToshTtyGlyphConfig Glyphs { get; } = new();
-
-    public void Reset()
-    {
-        Enabled = true;
-        _boxStyle = ToshTableBoxStyle.Square;
-        _indicator = " > ";
-        _errorMarker = "x";
-        Glyphs.Reset();
-    }
-}
-
-public sealed class ToshTtyGlyphConfig : IResettableShellConfig, IShellRecordObject
-{
-    private readonly Dictionary<string, string> _glyphs = new(StringComparer.Ordinal);
-
-    public string ShellTypeName => "TtyGlyphs";
-
-    public ToshTtyGlyphConfig()
-    {
-        SetDefaults();
-    }
-
-    public string? Resolve(string glyph)
-    {
-        return _glyphs.TryGetValue(glyph, out var fallback) ? fallback : null;
-    }
-
-    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
-    {
-        if (_glyphs.TryGetValue(name, out var fallback))
-        {
-            value = fallback;
-            return true;
-        }
-
-        value = null;
-        return false;
-    }
-
-    public bool TrySetMember(string name, object? value)
-    {
-        if (value is null)
-        {
-            _glyphs.Remove(name);
-            return true;
-        }
-
-        _glyphs[name] = value.ToString() ?? string.Empty;
-        return true;
-    }
-
-    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
-    {
-        return _glyphs
-            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
-            .Select(entry => new KeyValuePair<string, object?>(entry.Key, entry.Value))
-            .ToArray();
-    }
-
-    public void Reset()
-    {
-        _glyphs.Clear();
-        SetDefaults();
-    }
-
-    private void SetDefaults()
-    {
-        _glyphs["\u2718"] = "x";      // ✘ → x
-        _glyphs["\u276f"] = ">";      // ❯ → >
-        _glyphs["\ue0a0"] = "";       //  → (empty, Nerd Font)
-        _glyphs["\u00d7"] = "x";      // × → x
     }
 }
 

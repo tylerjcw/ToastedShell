@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
+    <ProjectReference Include="..\Toast.Runtime\Toast.Runtime.csproj" />
   </ItemGroup>
 
 </Project>
