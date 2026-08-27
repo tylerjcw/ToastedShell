@@ -809,6 +809,16 @@ module Build {
             return $info.Size
         }
 
+        ## @remarks
+        ##   `Run` is annotated `dynamic` rather than `Result`, and that is not a
+        ##   preference. A return annotation is checked against every value the function
+        ##   *produces*, not against the value it returns, and `Run` produces plenty:
+        ##   `dotnet` writes build output through it. So `-> Result` refused a perfectly
+        ##   good `Result` because it arrived behind a hundred lines of restore output,
+        ##   and every publish ended by reporting a failure that had not happened.
+        ##
+        ##   Piping the `dotnet` calls to `ignore` would fix the type and lose the build
+        ##   log, which is the wrong trade. See `TOSH-0010` for the language question.
         record Result(
             Binary: string,
             Size: StorageSize,
@@ -826,7 +836,7 @@ module Build {
             frameworkDependent: bool,
             noInstall: bool,
             noBump: bool,
-            packageTargets) -> Result {
+            packageTargets) -> dynamic {
 
             var plan = new Plan()
             if ($rid != "") { $plan.RuntimeId = $rid }

@@ -223,4 +223,95 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
             "a feature that compiled before this item no longer does: " +
             string.Join(", ", strictness.Select(d => d.Code)));
     }
+
+    // --- A return annotation is checked against everything produced (`TOSH-0010`) ---
+
+    /// <summary>
+    /// A function that emits a value before returning fails its own return annotation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This characterises current behaviour rather than endorsing it. A function's body
+    /// statement that produces a value contributes it to the function's output, and the
+    /// return annotation is then applied to *every* value produced — so a function that
+    /// emits anything before `return` is checked against the emission as well.
+    /// </para>
+    /// <para>
+    /// `§Refinement Types` describes `-> T where (_)` as a predicate over the **return
+    /// value**, which is not what happens here. The ambiguity is a function that both emits
+    /// and returns: the emitted values are output, the returned one is the return value, and
+    /// only one of them is what the annotation is about.
+    /// </para>
+    /// <para>
+    /// It is not academic. `scripts/build.tosh`'s publish command emits `dotnet` build output
+    /// through an annotated function, so every release ended by reporting a conversion
+    /// failure that had not happened — the work had all succeeded. `TOSH-0010` carries the
+    /// decision; this test exists so that changing it is deliberate and visible.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_return_annotation_is_checked_against_emitted_values_too()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("""
+                record R(A: string)
+                func Make() -> R {
+                    42
+                    return new R("v")
+                }
+                var v = Make()
+                """));
+
+        Assert.Contains(
+            error.Diagnostics,
+            d => d.Code == "tosh.runtime.return_type_conversion_failed");
+    }
+
+    /// <summary>The same function without the emission returns cleanly.</summary>
+    /// <remarks>
+    /// The control. Without it the test above would pass for a function that simply cannot
+    /// return a record at all, which is a different and much larger claim.
+    /// </remarks>
+    [Fact]
+    public async Task The_same_function_without_an_emission_returns_its_record()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var results = await engine.ExecuteToListAsync("""
+            record R(A: string)
+            func Make() -> R {
+                return new R("v")
+            }
+            var made = Make()
+            echo $made.A
+            """);
+
+        Assert.Equal("v", results[^1]?.ToString());
+    }
+
+    /// <summary>A function with no `return` still has its emitted value checked.</summary>
+    /// <remarks>
+    /// Why the fix is not simply "stop checking emitted values": for a function whose result
+    /// *is* its trailing expression, the emission is the return value, and checking it is the
+    /// annotation doing its job.
+    /// </remarks>
+    [Fact]
+    public async Task An_emitted_value_is_still_checked_when_there_is_no_return()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("""
+                func Make() -> int {
+                    "not an int"
+                }
+                var v = Make()
+                """));
+
+        Assert.Contains(
+            error.Diagnostics,
+            d => d.Code == "tosh.runtime.return_type_conversion_failed");
+    }
 }

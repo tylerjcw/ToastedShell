@@ -4,7 +4,6 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TOSH-0010`](items/TOSH-0010.md) | P2 | proposed | 0/5 | `build.tosh publish` reports failure after succeeding, on every RID |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0053`](items/TOAST-0053.md) | P1 | proposed | 0/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
