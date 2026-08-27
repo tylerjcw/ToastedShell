@@ -382,6 +382,41 @@ public sealed class SubcommandTests
         Assert.DoesNotContain("secret", names);
     }
 
+    /// <summary>
+    /// Without a host, auto-help is the language's own description — <c>TOAST-0006</c>.
+    /// </summary>
+    /// <remarks>
+    /// The language used to build a `HelpTopic`, which is the shell's help metadata. It now
+    /// describes the interface and asks the host what that should become; TōSh answers with a
+    /// `HelpTopic`, and a host with no opinion leaves the description itself as the value.
+    /// The hosted half is pinned by the test above, which still asserts `HelpTopic`.
+    /// </remarks>
+    [Fact]
+    public async Task Auto_help_without_a_host_yields_the_language_description()
+    {
+        var language = new ToastRuntime
+        {
+            InvocationArguments = ["--help"],
+        };
+        var engine = new ToshEngine(language);
+
+        var values = await engine.ExecuteToListAsync(
+            """
+            subcommand visible { writeline "v" }
+            hidden subcommand secret { writeline "s" }
+            """);
+
+        var help = Assert.IsType<ToastScriptHelp>(
+            Assert.Single(values, value => value is ToastScriptHelp));
+        var names = (help.Subcommands ?? []).Select(entry => entry.Name).ToArray();
+
+        Assert.Contains("visible", names);
+        Assert.DoesNotContain("secret", names);
+
+        // And nothing shell-shaped came back.
+        Assert.DoesNotContain(values, value => value is HelpTopic);
+    }
+
     [Fact]
     public async Task User_declared_help_flag_suppresses_auto_help()
     {

@@ -631,16 +631,20 @@ public sealed partial class ToshEngine
     }
 
     /// <summary>
-    /// Describes a subcommand level as a <see cref="HelpTopic"/>, so that `script.tosh sub
-    /// --help` is rendered by the same panel renderer as `help &lt;name&gt;` — colour, boxes and
-    /// column layout included.
+    /// Describes a subcommand level as a <see cref="ToastScriptHelp"/>, which the host turns
+    /// into whatever it renders, so that `script.tosh sub --help` is drawn by the same panel
+    /// renderer as `help &lt;name&gt;` — colour, boxes and column layout included.
     /// </summary>
     /// <remarks>
     /// This replaces a hand-written plain-text writer. Two renderers for the same kind of content
     /// is how they drift: the text one had gained an Arguments section only just now, and had
     /// never had the styling the panel renderer applies to names, types and usage lines.
+    ///
+    /// It described the level as a `HelpTopic` until `TOAST-0006`, which is the shell's help
+    /// metadata — the language now says what the interface *is* and asks the host to present
+    /// it, keeping the same rendering while naming no shell type.
     /// </remarks>
-    private HelpTopic BuildAutoHelpTopic(SubcommandNode target, IReadOnlyList<DispatchFrame> path)
+    private object BuildAutoHelpTopic(SubcommandNode target, IReadOnlyList<DispatchFrame> path)
     {
         var usageLine = BuildSubcommandUsageLine(path, target);
 
@@ -657,11 +661,11 @@ public sealed partial class ToshEngine
 
         var subcommands = target.Children
             .Where(child => (child.Value.Modifiers & SubcommandModifier.Hidden) == 0)
-            .Select(child => new HelpArgumentInfo(child.Key, child.Value.Description ?? string.Empty))
+            .Select(child => new ToastScriptHelpArgument(child.Key, child.Value.Description ?? string.Empty))
             .ToList();
 
         var arguments = target.Arguments
-            .Select(argument => new HelpArgumentInfo(
+            .Select(argument => new ToastScriptHelpArgument(
                 Name: argument.IsRest ? argument.Name + "..." : argument.Name,
                 Description: argument.Description ?? string.Empty,
                 Required: !argument.IsOptional && argument.DefaultValue is null,
@@ -670,7 +674,7 @@ public sealed partial class ToshEngine
 
         // Every flag reachable at this level: those declared here, and those declared by the
         // levels dispatched through to reach it.
-        var options = new List<HelpOptionInfo>();
+        var options = new List<ToastScriptHelpOption>();
         foreach (var frame in path)
         {
             foreach (var flag in frame.Node.Flags)
@@ -689,35 +693,32 @@ public sealed partial class ToshEngine
 
         if (!PathHasUserHelpFlag(path) && !target.UserDeclaredHelpFlag)
         {
-            options.Add(new HelpOptionInfo("--help", "Show this help message", null));
+            options.Add(new ToastScriptHelpOption("--help", "Show this help message"));
         }
 
-        return new HelpTopic(
+        var help = new ToastScriptHelp(
             Name: string.IsNullOrWhiteSpace(displayName) ? scriptDisplayName : displayName,
-            Kind: HelpSubjectKind.External,
-            Category: "Script",
             Description: target.Description ?? string.Empty,
             Usage: usageLine.StartsWith("Usage: ", StringComparison.Ordinal)
                 ? usageLine["Usage: ".Length..]
                 : usageLine,
-            Aliases: Array.Empty<string>(),
-            Related: Array.Empty<string>(),
             Examples: target.Examples ?? Array.Empty<string>(),
-            Path: null,
-            Notes: null,
             Arguments: arguments.Count > 0 ? arguments : null,
             Options: options.Count > 0 ? options : null,
             Subcommands: subcommands.Count > 0 ? subcommands : null);
+
+        // No factory means no host opinion about help, so the description is the value. It
+        // still renders — as a record rather than a panel.
+        return LanguageRuntime.ScriptHelpFactory?.CreateScriptHelpTopic(help) ?? help;
     }
 
-    private static HelpOptionInfo ToHelpOption(FunctionParameterSyntax flag)
+    private static ToastScriptHelpOption ToHelpOption(FunctionParameterSyntax flag)
     {
         var syntax = "--" + GetPrimaryScriptOptionName(flag.Name);
         var badge = RenderTypeBadge(flag.TypeName);
-        return new HelpOptionInfo(
+        return new ToastScriptHelpOption(
             badge is null ? syntax : $"{syntax} {badge}",
-            flag.Description ?? string.Empty,
-            null);
+            flag.Description ?? string.Empty);
     }
 
     private void WriteAutoHelp(SubcommandNode target, IReadOnlyList<DispatchFrame> path)

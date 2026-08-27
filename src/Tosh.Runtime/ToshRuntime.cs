@@ -12,6 +12,7 @@ public sealed class ToshRuntime :
     IToastRuntimeNamespaceFactory,
     IToastEnvironmentExporter,
     IToastAutoCdCommandFactory,
+    IToastScriptHelpFactory,
     IToastCommandHost
 {
     private int _nextJobId;
@@ -61,6 +62,7 @@ public sealed class ToshRuntime :
             RuntimeNamespaceFactory = this,
             EnvironmentExporter = this,
             AutoCdCommandFactory = this,
+            ScriptHelpFactory = this,
             CommandHost = this,
         };
         DisplayPreferences = new DisplayPreferences();
@@ -658,6 +660,47 @@ public sealed class ToshRuntime :
     }
 
     /// <summary>Creates TōSh's directory-navigation command for AutoCd.</summary>
+    /// <summary>
+    /// Presents a script's own help as a <see cref="HelpTopic"/> — <c>TOAST-0006</c>.
+    /// </summary>
+    /// <remarks>
+    /// The language describes a script's interface without naming shell help metadata; this
+    /// is where that description becomes the thing TōSh renders, so `script.tosh sub --help`
+    /// is drawn by the same panel renderer as `help &lt;name&gt;`.
+    /// </remarks>
+    public object CreateScriptHelpTopic(ToastScriptHelp help)
+    {
+        ArgumentNullException.ThrowIfNull(help);
+
+        return new HelpTopic(
+            Name: help.Name,
+            Kind: HelpSubjectKind.External,
+            Category: "Script",
+            Description: help.Description,
+            Usage: help.Usage,
+            Aliases: Array.Empty<string>(),
+            Related: Array.Empty<string>(),
+            Examples: help.Examples,
+            Path: null,
+            Notes: null,
+            Arguments: Map(help.Arguments),
+            Options: help.Options is null
+                ? null
+                : help.Options
+                    .Select(static option => new HelpOptionInfo(option.Syntax, option.Description))
+                    .ToList(),
+            Subcommands: Map(help.Subcommands));
+
+        static IReadOnlyList<HelpArgumentInfo>? Map(IReadOnlyList<ToastScriptHelpArgument>? entries)
+            => entries?
+                .Select(static entry => new HelpArgumentInfo(
+                    entry.Name,
+                    entry.Description,
+                    entry.Required,
+                    entry.TypeName))
+                .ToList();
+    }
+
     public IShellCommand CreateAutoCdCommand(string resolvedPath)
         => new HostedAutoCdCommand(this, resolvedPath);
 

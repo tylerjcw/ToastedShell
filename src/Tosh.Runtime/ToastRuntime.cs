@@ -138,6 +138,11 @@ public sealed class ToastRuntime
     /// <summary>Creates host navigation commands for AutoCd resolution.</summary>
     public IToastAutoCdCommandFactory? AutoCdCommandFactory { get; init; }
 
+    /// <summary>
+    /// Renders a script's own help, when the host has an opinion — <c>TOAST-0006</c>.
+    /// </summary>
+    public IToastScriptHelpFactory? ScriptHelpFactory { get; init; }
+
     /// <summary>Opaque host state available to commands that belong to that host.</summary>
     public IToastCommandHost? CommandHost { get; init; }
 

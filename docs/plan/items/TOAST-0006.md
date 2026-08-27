@@ -412,6 +412,42 @@ stale `.lscache` entry, and two string literals used as display names. Suite unc
 classification. It wants the same treatment as background jobs and AutoCd — a capability the
 host supplies — rather than the language constructing the shell's type.
 
+## The last type coupling is gone — 2026-08-27
+
+`ToshEngine.Subcommands.cs` built a `HelpTopic` so that `script.tosh sub --help` renders
+through the same panel renderer as `help <name>`. The rendering is right and worth keeping;
+the type is the shell's help metadata — 58 uses in the shell runtime and 13 in the standard
+library against 3 in the language, so the language was the odd one out rather than the
+classification being wrong.
+
+Resolved the way background jobs, AutoCd and the `$tosh` root were: **the language describes,
+the host decides what that becomes.** A script knows its own arguments, flags and children,
+so it says so in `ToastScriptHelp`; `IToastScriptHelpFactory` turns that into whatever the
+host renders. TōSh answers with a `HelpTopic` and the panel is byte-for-byte what it was. A
+host with no opinion receives the description itself, which still renders as a value.
+
+Both halves are pinned. The existing `Hidden_children_are_omitted_from_auto_help` still
+asserts `HelpTopic`, so the hosted contract is unchanged; a new
+`Auto_help_without_a_host_yields_the_language_description` asserts the unhosted one and that
+nothing shell-shaped comes back. Removing the factory wiring fails the first and leaves the
+second passing.
+
+**`Tosh.Language` now names no shell type.** Checked against all twelve the 2026-08-17
+measurement listed: what a grep still finds is two comments and two string literals used as
+display names, and nothing else.
+
+That completes the *type* separation. The remaining acceptance — "no language assembly
+references a shell assembly, verified by project references" — is the physical split itself:
+`Tosh.Language` still carries `<ProjectReference Include="..\Tosh.Runtime\...">`, because
+`ToastRuntime`, `CommandContext` and the value model all live in that project. Extracting
+`Toast.Runtime` is now file movement against a boundary nothing crosses, rather than a design
+problem.
+
+Worth stating plainly: until that split lands, **nothing prevents this regressing**.
+`AssemblyBoundaryTests` walks the assembly graph, and `Tosh.Language` referencing
+`Tosh.Runtime` is still legitimate, so a new `HelpTopic` use in the language would compile
+and pass. The project reference is the guard, and it arrives with the split.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
