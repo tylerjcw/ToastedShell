@@ -959,6 +959,13 @@ module Build {
                 }
                 var binaryInfo = ls $plan.Binary | first
 
+                # A Windows bundle gets its installer here, in the same place the Arch path
+                # gets its package. Cross-published output cannot be *installed* from Linux,
+                # so this produces the artifact and stops there (`TOSH-0009`).
+                if ($plan.RuntimeId starts-with "win-") {
+                    WindowsPackage.Create($root, $plan.Directory, $version, $plan.RuntimeId) | ignore
+                }
+
                 if ($plan.NoInstall) {
                     $releaseCommitted = true
                     $transaction.Commit()
@@ -1839,6 +1846,57 @@ StartupNotify=false
             Helpers.Info($"  MIME:         {$mime}/packages/tosh.xml")
             Helpers.Info($"  App launcher: {$applications}/tosh.desktop")
             Helpers.Info($"  Open With:    {$applications}/tosh-open.desktop")
+        }
+    }
+
+    ## @summary Windows packaging: a zip anyone can unpack and a script that installs it.
+    ## @remarks
+    ##   TōSh installs on Arch by publishing a bundle and handing it to `makepkg`. Windows has
+    ##   no such packager to hand it to, so this *is* the packager — but it sits in the same
+    ##   place in the same pipeline, after the bundle is promoted, rather than being a second
+    ##   build system that would have to re-learn versioning, target selection and manifest
+    ##   validation.
+    ##
+    ##   A zip and a script rather than an MSI because it cross-builds from Linux with no
+    ##   toolchain at all, which is what lets a Windows package be produced and smoke-tested
+    ##   from the machine the rest of the build runs on.
+    module WindowsPackage {
+
+        ## @summary Stages the install scripts into a promoted bundle and zips it.
+        ## @param root The repository root.
+        ## @param bundleDirectory The promoted publish output.
+        ## @param version The release version, used in the archive name.
+        ## @param runtimeId The target RID, likewise.
+        ## @returns The path of the archive written.
+        func Create(
+            root: Types.NonEmptyString,
+            bundleDirectory: Types.DirectoryPath,
+            version: Types.NonEmptyString,
+            runtimeId: Types.NonEmptyString) -> string {
+
+            var scriptSource = $root | join -p "packaging" "windows"
+            for name in ["install.ps1", "uninstall.ps1"] {
+                var from = $scriptSource | join -p $name
+                if (not (is-file $from).IsFile) {
+                    throw $"Windows packaging script is missing: {$from}"
+                }
+                System.IO.File.Copy($from, ($bundleDirectory | join -p $name), true)
+            }
+
+            # The Arch package installs the licence to /usr/share/licenses; a zip has nowhere
+            # comparable, so it travels beside the binaries.
+            var licence = $root | join -p "LICENSE"
+            if ((is-file $licence).IsFile) {
+                System.IO.File.Copy($licence, ($bundleDirectory | join -p "LICENSE"), true)
+            }
+
+            var archive = $bundleDirectory | join -p ".." $"tosh-{$version}-{$runtimeId}.zip"
+            $archive = System.IO.Path.GetFullPath($archive)
+            if ((is-file $archive).IsFile) { System.IO.File.Delete($archive) }
+
+            System.IO.Compression.ZipFile.CreateFromDirectory($bundleDirectory, $archive)
+            Helpers.Ok($"Windows package → {$archive}")
+            return $archive
         }
     }
 
