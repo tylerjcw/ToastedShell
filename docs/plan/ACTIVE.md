@@ -9,7 +9,7 @@
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |
-| [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
+| [`TOAST-0007`](items/TOAST-0007.md) | P2 | partial | 4/5 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |

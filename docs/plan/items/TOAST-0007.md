@@ -1,7 +1,7 @@
 ---
 id: TOAST-0007
 title: "Split Tosh.Stdlib into language-level and shell-level commands"
-status: open
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-16
@@ -21,12 +21,91 @@ category, which makes it unusually tractable:
 `map`, `where`, `count` and `sort` are as much part of Tōast as `for` is. `ls`, `ps`
 and `systemctl` are not.
 
+
+## Registrar division — 2026-08-28
+
+`RegisterDefaults` is now the composition of `RegisterLanguageDefaults` and
+`RegisterShellDefaults`, so an existing host sees the table it always did while the two halves
+become separately addressable. **178 language registrations, 97 shell**, all 275 preserved.
+
+### The line was drawn from evidence, not from where a file sits
+
+A command can only obtain a `ToshRuntime` through `context.Shell()` or
+`RequireCommandHost<ToshRuntime>()`. Scanning for those two gives a *lower bound* on what must
+be shell-side, and it confirmed every reclassification this item had argued by hand:
+
+| category | reaches the host | of |
+|---|---:|---:|
+| Shell | 27 | 34 |
+| Filesystem | 19 | 45 |
+| Sys | 11 | 19 |
+| Processes | 8 | 8 |
+| Scripting | 3 | 4 |
+| Net | 2 | 4 |
+| Concurrency | 2 | 12 |
+| Pipeline | 1 | 58 |
+| Text | 1 | 17 |
+| Clr, Data, Time, Maths, Functional | 0 | 52 |
+
+Pipeline's one is `InspectCommand`. Text's one is `WordCountCommand`. Concurrency's two are
+`SpawnCommand` and `ScopeCommand`. Those are the three reclassifications the 2026-08-25 note
+named, arrived at independently.
+
+### The judgements above the lower bound
+
+**`Sys` stays shell wholesale — the question this item asked, answered.** Every command in it
+names a shell verb: `uname`, `hostname`, `whoami`, `id`, `free`, `uptime`. A language reaches
+that information through the CLR bridge, which is already language-level, so moving them would
+duplicate what `new` and `call` already reach. `seq` and `guid` go with them for the same
+reason — `1..10` and `System.Guid.NewGuid()` are the language spellings.
+
+**`Net` stays shell.** `ping` needs no shell mechanically, but ICMP and HTTP are library
+territory, not language.
+
+**`Filesystem` splits, as the 2026-08-17 correction said it must.** Language-level: the `Stream`
+surface (`open`, `close`, `read-from`, `write-to`, `flush`, `seek`, `position`, `length`,
+`copy-to`), the `File` surface (`read-file`, `read-lines`, `write-file`, `append-file`,
+`read-bytes`, `write-bytes`), the `Path` surface (`dirname`, `basename`, `realpath`,
+`readlink`), `mkdir`, the temp-file pair, and the `exists` / `is-file` / `is-dir` / `is-link`
+predicates. Shell-level: `ls`, `df`, `du`, `stat`, `tree`, `lsblk`, `findmnt`, `find`, `glob`,
+`cat`, `pwd`, `cd`, `chmod`, `chown`, and — for now — `cp`, `mv`, `rm`, `touch`, `link`, which
+resolve against the shell's working directory rather than being shell verbs in themselves.
+
+**`Processes` stays shell wholesale**, which is the other question the correction asked. All
+eight reach the host, and the category is job control and process listing. A language that
+needs to *spawn* a process reaches external execution, which is a different mechanism.
+
+### One command was language-level in name only
+
+`read-file` and `write-file` failed in a bare host despite their own sources naming no shell.
+The dependency reached them through `FileIoUtilities.ResolveRequiredPath`, which asked
+`context.Shell()` for the directory to resolve a relative path against.
+
+That did not need the shell. TōSh keeps a working directory per session — what `cd` moves — and
+a host with no session has the process's directory, which is the only answer there is. The
+helper now falls back, and the item's central reclassification is true rather than aspirational:
+a self-hosting Tōast can read its own source.
+
+The first version of the source scan passed while this was still broken, because it read each
+command's own file. It follows shared helpers one level now, and the negative control that
+restores the old resolver fails both the scan and the behavioural test.
+
+## What is left
+
+The two sets are separately addressable but still one assembly. Moving them is now mechanical —
+a relocation rather than a behavioural change, which is what this slice was for.
+
 ## Acceptance
 
-- [ ] Categories divided as above, with any reclassification argued in this file rather than done silently
-- [ ] Language-level commands work in a host with no shell present
-- [ ] Command help, metadata and completion still resolve across both halves
-- [ ] The suite passes unchanged
+- [x] Categories divided as above, with every reclassification argued above — and each one
+      cross-checked against which commands actually reach the shell host
+- [x] Language-level commands work in a host with no shell present — a scan covering all of
+      them, and behavioural tests for a pipeline and for file IO
+- [x] Command help, metadata and completion still resolve across both halves — the composed
+      registrar builds one table, and the nine help/metadata/completion test files pass
+- [x] The suite passes unchanged — 6,751, no test altered
+- [ ] The two sets live in separate projects, with the language half free of any shell
+      reference — the physical move this item's title names, now a relocation
 
 ## Correction 2026-08-17: `Filesystem` splits *within itself*
 

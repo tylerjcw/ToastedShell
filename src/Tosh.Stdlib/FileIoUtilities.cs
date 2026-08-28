@@ -17,8 +17,29 @@ internal static class FileIoUtilities
             throw new InvalidOperationException($"Missing required argument: {label}.");
         }
 
-        return ShellPathArguments.Resolve(context.Shell().CurrentDirectory, context.Arguments[argumentIndex]);
+        return ShellPathArguments.Resolve(CurrentDirectory(context), context.Arguments[argumentIndex]);
     }
+
+    /// <summary>
+    /// The directory a relative path is resolved against — <c>TOAST-0007</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// TōSh keeps its own working directory per session, which is what <c>cd</c> moves and what
+    /// a relative path in a script must resolve against. A host with no shell has no session,
+    /// and the process's directory is the only answer there is.
+    /// </para>
+    /// <para>
+    /// This was the single thing keeping <c>read-file</c> and <c>write-file</c> shell-level, and
+    /// it did not need to: reading a file is <c>Stream</c> in C#, not a shell verb, and a
+    /// self-hosting Tōast has to read its own source. The dependency reached them through this
+    /// shared helper rather than their own sources, which is why a per-file scan for
+    /// <c>Shell()</c> did not show it — <c>BuiltInCommandSplitTests</c> caught it by running
+    /// the commands in a bare host instead.
+    /// </para>
+    /// </remarks>
+    private static string CurrentDirectory(CommandContext context)
+        => (context.CommandHost as ToshRuntime)?.CurrentDirectory ?? Environment.CurrentDirectory;
 
     public static void EnsureReadableFile(string path, string commandName)
     {
