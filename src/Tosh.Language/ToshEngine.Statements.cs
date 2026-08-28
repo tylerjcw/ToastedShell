@@ -1305,9 +1305,8 @@ public sealed partial class ToshEngine
             // shape the item was filed for, and a guard that cannot read what the pattern
             // bound would make it useless.
             var bindings = arm.Pattern is VariantPatternSyntax variantPattern
-                && value is ToshUnionVariantInstance matchedInstance
-                    ? BindVariantFields(variantPattern, matchedInstance)
-                    : null;
+                ? BindVariantFields(variantPattern, value)
+                : null;
 
             if (arm.Guard is not null)
             {
@@ -1364,21 +1363,147 @@ public sealed partial class ToshEngine
     /// </remarks>
     private static Dictionary<string, object?> BindVariantFields(
         VariantPatternSyntax pattern,
-        ToshUnionVariantInstance instance)
+        object? instance)
     {
         var bindings = new Dictionary<string, object?>(StringComparer.Ordinal);
-        var fields = VariantFieldNames(instance);
+        CollectVariantBindings(pattern, instance, bindings);
+        return bindings;
+    }
 
-        for (var index = 0; index < pattern.Bindings.Count && index < fields.Count; index++)
+    /// <summary>
+    /// Gathers every name a pattern binds, to any depth — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// Runs after the pattern has already matched, so it can assume the shape fits and simply
+    /// walk it. A nested pattern contributes its own bindings to the same flat set: the arm
+    /// sees `Some(Point(x, y))`'s `x` and `y` as ordinary names, which is the point of writing
+    /// it that way rather than reaching through two member accesses.
+    /// </remarks>
+    private static void CollectVariantBindings(
+        VariantPatternSyntax pattern,
+        object? instance,
+        Dictionary<string, object?> bindings)
+    {
+        if (!TryDescribePatternSubject(instance, out var subject)) { return; }
+
+        for (var index = 0; index < pattern.Positional.Count && index < subject.Positional.Count; index++)
         {
-            var name = pattern.Bindings[index];
-            if (string.Equals(name, "_", StringComparison.Ordinal)) { continue; }
-
-            instance.TryGetMember(fields[index], out var value);
-            bindings[name] = value;
+            TryReadPatternMember(instance, subject.Positional[index], out var value);
+            BindSubPattern(pattern.Positional[index], value, bindings);
         }
 
-        return bindings;
+        foreach (var named in pattern.Named)
+        {
+            TryReadPatternMember(instance, named.Field, out var value);
+            BindSubPattern(named.Pattern, value, bindings);
+        }
+    }
+
+    /// <summary>Binds one sub-pattern: a name takes the value, a nested pattern recurses.</summary>
+    private static void BindSubPattern(
+        ArgumentSyntax pattern,
+        object? value,
+        Dictionary<string, object?> bindings)
+    {
+        switch (pattern)
+        {
+            case BarewordArgumentSyntax { Value: var name } when !string.Equals(name, "_", StringComparison.Ordinal):
+                bindings[name] = value;
+                break;
+
+            case VariantPatternSyntax nested:
+                CollectVariantBindings(nested, value, bindings);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// What a destructuring pattern can match against — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <param name="TypeName">The name the pattern has to spell to match this value.</param>
+    /// <param name="Positional">Declared fields in order, empty when the shape has no order.</param>
+    /// <param name="Named">Every field a pattern may name, including inherited ones.</param>
+    /// <param name="Kind">"variant", "record", "struct" or "class", for diagnostics.</param>
+    /// <remarks>
+    /// A union variant, a record, a struct and a class all answer the same three questions, so
+    /// the matcher asks them here rather than switching on the instance type in four places.
+    /// A class has an empty <paramref name="Positional"/> deliberately: its properties may be
+    /// inherited, reordered or added without changing what the class means, so there is no
+    /// order a positional pattern could rely on. Naming the fields is the only safe spelling,
+    /// and the matcher says so rather than binding against an order that is not a contract.
+    /// </remarks>
+    internal readonly record struct PatternSubject(
+        string TypeName,
+        IReadOnlyList<string> Positional,
+        IReadOnlyList<string> Named,
+        string Kind);
+
+    /// <summary>Describes a value a pattern may destructure, or fails for anything else.</summary>
+    internal static bool TryDescribePatternSubject(object? value, out PatternSubject subject)
+    {
+        switch (value)
+        {
+            case ToshUnionVariantInstance variant:
+                {
+                    var fields = VariantFieldNames(variant);
+                    subject = new PatternSubject(variant.VariantName, fields, fields, "variant");
+                    return true;
+                }
+
+            case ToshRecordInstance record:
+                {
+                    var fields = record.Definition.Fields.Select(field => field.Name).ToArray();
+                    subject = new PatternSubject(record.Definition.Name, fields, fields, "record");
+                    return true;
+                }
+
+            case ToshStructInstance structure:
+                {
+                    var fields = structure.Definition.Fields.Select(field => field.Name).ToArray();
+                    var named = fields
+                        .Concat(structure.Definition.Properties.Select(property => property.Name))
+                        .Distinct(StringComparer.Ordinal)
+                        .ToArray();
+                    subject = new PatternSubject(structure.Definition.Name, fields, named, "struct");
+                    return true;
+                }
+
+            case ToshClassInstance instance:
+                {
+                    var named = new List<string>();
+                    for (var definition = instance.Definition; definition is not null; definition = definition.BaseClass)
+                    {
+                        foreach (var property in definition.Properties)
+                        {
+                            if (!named.Contains(property.Name, StringComparer.Ordinal))
+                            {
+                                named.Add(property.Name);
+                            }
+                        }
+                    }
+
+                    subject = new PatternSubject(
+                        instance.Definition.Name, Array.Empty<string>(), named, "class");
+                    return true;
+                }
+
+            default:
+                subject = default;
+                return false;
+        }
+    }
+
+    /// <summary>Reads one member from any value a pattern can destructure.</summary>
+    internal static bool TryReadPatternMember(object? value, string name, out object? member)
+    {
+        switch (value)
+        {
+            case ToshUnionVariantInstance variant: return variant.TryGetMember(name, out member);
+            case ToshRecordInstance record: return record.TryGetMember(name, out member);
+            case ToshStructInstance structure: return structure.TryGetMember(name, out member);
+            case ToshClassInstance instance: return instance.TryGetMember(name, out member);
+            default: member = null; return false;
+        }
     }
 
     /// <summary>The variant's declared fields, in declaration order — <c>TOAST-0053</c>.</summary>

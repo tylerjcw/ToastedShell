@@ -665,6 +665,131 @@ public sealed partial class ToshEngine
         }
     }
 
+    /// <summary>
+    /// Whether a value is this variant, with every sub-pattern satisfied — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Structural rather than a comparison. The variant must be *this* one; a positional
+    /// pattern must not ask for more fields than it has; and each sub-pattern must itself
+    /// match, which is where nesting happens — a sub-pattern may be another variant pattern.
+    /// </para>
+    /// <para>
+    /// A bareword sub-pattern is a *binding*, so it matches anything: `Ok(v)` accepts whatever
+    /// `value` holds. Only a written value — a literal, a string — is compared, which is what
+    /// makes `Node { kind: "if", body }` test one field and bind the other.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> MatchesVariantPatternAsync(
+        object? value,
+        string sourceName,
+        string sourceText,
+        VariantPatternSyntax pattern,
+        CancellationToken cancellationToken)
+    {
+        if (!TryDescribePatternSubject(value, out var subject) ||
+            !string.Equals(subject.TypeName, pattern.VariantName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var label = subject.Named.Count == 0
+            ? $"'{subject.TypeName}' has no fields"
+            : $"'{subject.TypeName}' declares: {string.Join(", ", subject.Named)}";
+
+        // `TOAST-0053`. Past this point the value *is* what the pattern names, so a pattern
+        // that does not fit it is a mistake in the pattern rather than a value that failed to
+        // match. Saying so beats falling through to `default`, which is what a silent `false`
+        // would do — the arm would simply never run and nothing would say why.
+        if (pattern.Positional.Count > 0 && subject.Positional.Count == 0 && subject.Named.Count > 0)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.pattern_arity",
+                Title: $"A {subject.Kind} cannot be destructured positionally.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: pattern.Span,
+                Label: label,
+                Help: $"name the fields — `{pattern.VariantName} {{ {subject.Named[0]} }}`. "
+                    + $"A {subject.Kind}'s members may be inherited, reordered or added, so "
+                    + "there is no position to bind against."));
+        }
+
+        if (pattern.Positional.Count > subject.Positional.Count)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.pattern_arity",
+                Title: $"Pattern for '{pattern.VariantName}' binds {pattern.Positional.Count} "
+                     + $"field(s), but '{pattern.VariantName}' declares {subject.Positional.Count}.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: pattern.Span,
+                Label: label,
+                Help: "bind fewer fields, or name them with `{ field }` to pick the ones you want."));
+        }
+
+        foreach (var named in pattern.Named)
+        {
+            if (subject.Named.Contains(named.Field, StringComparer.Ordinal)) { continue; }
+
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.pattern_unknown_field",
+                Title: $"'{pattern.VariantName}' has no field '{named.Field}'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: named.Span,
+                Label: label,
+                Help: NearestFieldHelp(named.Field, subject.Named)));
+        }
+
+        for (var index = 0; index < pattern.Positional.Count; index++)
+        {
+            TryReadPatternMember(value, subject.Positional[index], out var fieldValue);
+            if (!await SubPatternMatchesAsync(
+                    fieldValue, sourceName, sourceText, pattern.Positional[index], cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        foreach (var named in pattern.Named)
+        {
+            TryReadPatternMember(value, named.Field, out var fieldValue);
+            if (!await SubPatternMatchesAsync(
+                    fieldValue, sourceName, sourceText, named.Pattern, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Suggests the closest declared field, when one is close enough to mean it.</summary>
+    private static string NearestFieldHelp(string written, IReadOnlyList<string> fields)
+    {
+        foreach (var field in fields)
+        {
+            if (field.StartsWith(written, StringComparison.OrdinalIgnoreCase) ||
+                written.StartsWith(field, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"did you mean '{field}'?";
+            }
+        }
+
+        return "name a field the variant declares, or bind positionally with `(…)`.";
+    }
+
+    /// <summary>A sub-pattern: a name binds and matches anything, anything else compares.</summary>
+    private async Task<bool> SubPatternMatchesAsync(
+        object? value,
+        string sourceName,
+        string sourceText,
+        ArgumentSyntax pattern,
+        CancellationToken cancellationToken)
+        => pattern is BarewordArgumentSyntax
+            || await MatchesPatternAsync(value, sourceName, sourceText, pattern, cancellationToken);
+
     private async Task<bool> MatchesPatternAsync(
         object? switchValue,
         string sourceName,
@@ -714,13 +839,8 @@ public sealed partial class ToshEngine
                 }
 
             case VariantPatternSyntax variant:
-                // `TOAST-0053`. Structural, not a comparison: the variant must be *this* one,
-                // and it must have a field for every name the pattern binds. Arity is checked
-                // here rather than at binding time so a pattern naming three fields of a
-                // two-field variant does not match and then bind null.
-                return switchValue is ToshUnionVariantInstance instance
-                    && string.Equals(instance.VariantName, variant.VariantName, StringComparison.Ordinal)
-                    && variant.Bindings.Count <= VariantFieldNames(instance).Count;
+                return await MatchesVariantPatternAsync(
+                    switchValue, sourceName, sourceText, variant, cancellationToken);
 
             default:
                 {

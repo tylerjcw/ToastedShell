@@ -148,12 +148,39 @@ a detail of this item. The box stays partial for that reason.
 List patterns with a rest binding, or-patterns and `as`, the shadowing diagnosis, compiled
 emission with the differential corpus, and the spec table.
 
+## Third slice — 2026-08-28
+
+Records, structs and classes destructure with the same grammar. Nothing about the pattern
+form was variant-shaped: a pattern asks a value for its type name, its fields in order, and
+its fields by name. Four kinds of value answer those, so they answer through one
+`PatternSubject` rather than the matcher switching on the instance type in four places.
+
+`new Point(3, 4)` matches `Point(x, y)` and `Point { x: 3, y }`; a `struct` binds positionally
+from its declared fields; and the forms mix — `Some(Point(a, b))` reaches through a union
+variant into a record.
+
+**A class cannot be destructured positionally, on purpose.** Its properties may be inherited,
+reordered or added without changing what the class means, so there is no order a positional
+pattern could rely on — binding against one would run correctly until somebody added a
+property to a base class. `Circle(r)` is refused with the named spelling in the help:
+*name the fields — `Circle { Radius }`*. Named patterns do reach inherited properties, by
+walking `BaseClass`.
+
+The two diagnostics lost their `variant_` prefix — `tosh.runtime.pattern_arity` and
+`tosh.runtime.pattern_unknown_field` — since they now fire for four kinds of value. Nothing
+referenced the old codes; they were a day old.
+
+`VariantPatternSyntax` keeps its name for now, which is no longer quite what it means. Renaming
+it touches the parser, binder, matcher, binding walk and the exhaustiveness test, and is
+mechanical enough to be its own change rather than noise inside this one.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
 - [x] Variant patterns bind fields by name, with shorthand — `Lit { v }`, `Lit { v: got }`,
       and a literal or `$variable` on the right to test rather than bind — **interpreted**
-- [ ] Record and class patterns bind fields by name
+- [x] Record and class patterns bind fields by name — and structs, and records positionally.
+      A class is named-only by design; see the third slice
 - [ ] List patterns with a rest binding — `[first, ..rest]`
 - [x] Patterns nest to arbitrary depth — `Some(Add(Lit(a), Lit(b)))`, mixing both forms
 - [ ] Or-patterns, and `as` to bind the whole while destructuring the parts
