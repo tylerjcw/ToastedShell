@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Tosh.AllocationProbe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tosh.Language\Tosh.Language.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Runtime\Tosh.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Stdlib\Tosh.Stdlib.csproj" />
+  </ItemGroup>
+
+</Project>

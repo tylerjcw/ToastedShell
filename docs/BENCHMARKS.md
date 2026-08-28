@@ -105,3 +105,55 @@ every pipeline element. An IL backend that specializes pipeline
 stages on element type (`int`, `string`, `FileSystemEntry`) should
 yield roughly an order of magnitude improvement on numeric pipelines
 — independent of any binder/parser work.
+
+---
+
+# Allocation probe — 2026-08-28
+
+A second, much smaller harness lives in `bench/Tosh.AllocationProbe/`. It is **not**
+BenchmarkDotNet and does not replace it. It answers one question in seconds rather than
+minutes: *how many bytes does one more iteration of this loop cost?*
+
+    dotnet run -c Release --project bench/Tosh.AllocationProbe
+    dotnet run -c Release --project bench/Tosh.AllocationProbe -- --iterations 500000
+    dotnet run -c Release --project bench/Tosh.AllocationProbe -- --markdown
+
+It runs a loop of a known length, takes `GC.GetTotalAllocatedBytes` either side, and divides.
+An empty loop body is measured first and every other shape is reported against it, because
+most of the cost of a small expression is the iteration around it rather than the expression.
+
+It exists because `TS-P2-125` re-derived this measurement by hand three times, and its history
+records two occasions where a cross-run *timing* comparison nearly produced a wrong conclusion.
+**Read the byte column as the measurement and the nanosecond column as an indication**:
+allocation repeats exactly, time does not.
+
+Hardware: AMD Ryzen 9 9950X · 32 GB · Arch Linux · .NET 10
+Code: master @ `36f4a4d`, 200,000 iterations, best of 3
+
+| shape | bytes/iter | ns/iter | over empty |
+|---|---:|---:|---:|
+| `empty` | 1,369 | 285 | — |
+| `$s = $t` | 1,529 | 389 | 160 |
+| `$s = ($t)` | 1,657 | 406 | 288 |
+| `$s = ($t + 1)` | 1,825 | 492 | 456 |
+| `$s = ($t+1+2+3)` | 2,161 | 625 | 792 |
+| `$x += 1` | 1,825 | 487 | 456 |
+| `$s = ($t == 1)` | 1,745 | 715 | 376 |
+| `$s = ($t < 5)` | 1,889 | 693 | 520 |
+| `$s = $r.Length` | 2,041 | 811 | 672 |
+| `$s = $a[0]` | 1,745 | 563 | 376 |
+| `$s = (-$t)` | 1,769 | 605 | 400 |
+| `$s = ($t * 2.5)` | 1,825 | 497 | 456 |
+
+**What this says.** Expression evaluation is no longer where the cost is. Every shape adds
+between 160 and 792 bytes on top of an iteration that costs 1,369 before the body runs at all,
+so **67% to 90% of each row is the loop, not the expression in it**. For scale, `$s = ($t)` was
+8,034 bytes when `TS-P2-125` was filed and 2,825 after its first fast paths.
+
+The residual per iteration is the block's async iterator, the scope, and two dictionaries — one
+for the loop bindings and one inside the scope. Reducing those means pooling scopes, which is
+unsafe while a closure in the body can capture one, or not building an iterator per block at
+all. That is `TOAST-0009`'s bound-tree evaluator, and it is where the next real gain is.
+
+Note that the "For-loop overhead is ~2.4 µs/iteration" reading in the stale section above is
+from April and no longer holds; the empty loop measures 285 ns here.

@@ -29,6 +29,7 @@
     <Project Path="tools/Tosh.DevCompanion/Tosh.DevCompanion.csproj" />
   </Folder>
   <Folder Name="/bench/">
+    <Project Path="bench/Tosh.AllocationProbe/Tosh.AllocationProbe.csproj" />
     <Project Path="bench/Tosh.Benchmarks/Tosh.Benchmarks.csproj" />
   </Folder>
 </Solution>
