@@ -145,8 +145,10 @@ a detail of this item. The box stays partial for that reason.
 
 ## What is left
 
-Compiled emission with the differential corpus, and the binding-time field diagnostic, which
-needs union declarations visible to the binder (`TOAST-0052`).
+Compiled emission with the differential corpus — the last box. `--compile` refuses every
+pattern node by name, which is the right failure but means the corpus cannot carry a case.
+Emission needs a bound node, lowering, and somewhere for the bound names to live as locals the
+arm body can read.
 
 ## Third slice — 2026-08-28
 
@@ -288,6 +290,28 @@ statement executes, and a `hush` that runs before a `source` does not suppress i
 help text here does not promise it. The footer is the renderer's own, on every binder
 diagnostic, and predates this item.
 
+## Eighth slice — 2026-08-28
+
+The field diagnostic moved to binding time. The seventh slice recorded this as blocked on
+`TOAST-0052` — a `union` is an ordinary statement evaluated at runtime, so there was no
+declaration for the binder to check against. That was the wrong read: the binder already
+collects same-source *function* declarations from the syntax, and union variants and record
+fields can be collected the same way.
+
+So they are. A pattern naming a variant or record declared in this source now has its fields
+checked where it is written: `Lit { valu }` and `Lit(a, b)` are reported even when the arm never
+runs, which is exactly the case the runtime check cannot reach. Nested patterns are checked too.
+
+**Same-source only, deliberately.** A type from a `require`d file is not collected, and a pattern
+naming one is left alone rather than guessed at — a missed check costs a runtime diagnostic that
+still names the field, while a false one costs a program that will not run. Seeing another
+file's declarations is `TOAST-0052`'s work. The runtime checks stay for that reason, and for
+classes and structs, which are not collected either.
+
+The tests for this had to ask for `BinderStrictness.Strict`, the way the CLI runs a script. The
+default is `Warn`, under which a binder diagnostic is written to the error stream rather than
+thrown — so the first version of these tests passed whether or not the check existed.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
@@ -302,9 +326,9 @@ diagnostic, and predates this item.
       separator against `or` / `||`, decided in the fifth slice
 - [x] Bound names are scoped to their arm, and shadowing an enclosing variable is warned
       where it is written — a warning, since shadowing is legal; see the seventh slice
-- [~] A pattern naming a field the variant does not have names the field and suggests the
-      nearest one, rather than missing silently — but at **runtime**, when the arm is reached,
-      not at binding time. See the second slice: the binder cannot see a `union` yet
+- [x] A pattern naming a field the variant does not have is a **binding-time** diagnostic
+      naming the field — for types declared in the same source; the runtime check stays as the
+      backstop for `require`d types, classes and structs. See the eighth slice
 - [x] Guards compose with bindings — the guard sees the bound names, **interpreted**
 - [ ] Interpreted and compiled agree, in the differential corpus
 - [x] `§Match Expressions` documents the full pattern grammar in one table, with a

@@ -1,4 +1,5 @@
 using Tosh.Language;
+using Tosh.Language.Binding;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -234,6 +235,21 @@ public sealed class VariantPatternTests
         return await engine.ExecuteToListAsync(Trees + "\n" + body);
     }
 
+    /// <summary>
+    /// Runs with the binder strict, the way the CLI runs a script.
+    /// </summary>
+    /// <remarks>
+    /// The default is <c>Warn</c>, under which a binder diagnostic is written to the error
+    /// stream rather than thrown — so a test that expects a bind-time report has to ask for the
+    /// strictness the CLI uses, or it would pass whether or not the check existed.
+    /// </remarks>
+    private static async Task<IReadOnlyList<object?>> RunTreesStrictAsync(string body)
+    {
+        var engine = ShellEngine.CreateFullShell();
+        using var strict = engine.PushBinderStrictness(BinderStrictness.Strict);
+        return await engine.ExecuteToListAsync(Trees + "\n" + body);
+    }
+
     [Fact]
     public async Task A_field_pattern_binds_by_name()
     {
@@ -445,6 +461,81 @@ public sealed class VariantPatternTests
         var results = await RunTreesAsync("""
             echo (match (Expr.Add(Expr.Lit(1), Expr.Lit(2))) {
                 Lit(v) => $v
+                default => -1
+            })
+            """);
+
+        Assert.Equal("-1", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// A bad field is caught where it is written, not when the arm is reached.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The runtime check fires only if the arm runs, so a mistake in an arm the test data never
+    /// reaches stays hidden. The binder collects union and record declarations from the same
+    /// source — the way it already collects function declarations — and checks the pattern
+    /// against them, so the arm below is reported even though the value is an <c>Add</c>.
+    /// </para>
+    /// <para>
+    /// Same-source only, deliberately. A type from a <c>require</c>d file is not collected and
+    /// a pattern naming one is left alone: a missed check costs a runtime diagnostic that still
+    /// names the field, while a false one costs a program that will not run.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_unknown_field_is_reported_even_in_an_arm_that_never_runs()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunTreesStrictAsync("""
+            echo (match (Expr.Add(Expr.Lit(1), Expr.Lit(2))) {
+                Lit { valu } => 1
+                default => -1
+            })
+            """));
+
+        Assert.Contains("valu", error.Message);
+    }
+
+    [Fact]
+    public async Task A_wrong_arity_pattern_is_reported_even_in_an_arm_that_never_runs()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunTreesStrictAsync("""
+            echo (match (Expr.Add(Expr.Lit(1), Expr.Lit(2))) {
+                Lit(a, b) => 1
+                default => -1
+            })
+            """));
+
+        Assert.Contains("Lit", error.Message);
+    }
+
+    /// <summary>
+    /// A nested pattern is checked too, not only the outermost one.
+    /// </summary>
+    [Fact]
+    public async Task A_nested_unknown_field_is_reported()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunTreesStrictAsync("""
+            echo (match (Expr.Lit(1)) {
+                Add(Lit { nope }, r) => 1
+                default => -1
+            })
+            """));
+
+        Assert.Contains("nope", error.Message);
+    }
+
+    /// <summary>
+    /// A pattern naming a type this source cannot see is left alone, so a `require`d type still
+    /// works — the runtime check remains the backstop.
+    /// </summary>
+    [Fact]
+    public async Task A_pattern_for_an_undeclared_type_is_not_reported()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Expr.Lit(1)) {
+                Imported { whatever } => 1
                 default => -1
             })
             """);

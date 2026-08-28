@@ -67,7 +67,8 @@ public static class VariableBinder
             parseResult.SourceName,
             parseResult.SourceText,
             new List<HashSet<string>> { new(StringComparer.Ordinal) },
-            new List<ToshDiagnostic>());
+            new List<ToshDiagnostic>(),
+            CollectPatternShapes(parseResult.Statement));
 
         VisitStatement(parseResult.Statement, ctx);
         return ctx.Diagnostics;
@@ -549,7 +550,11 @@ public static class VariableBinder
                     // arm after the first that reused a name.
                     using var armScope = Push(ctx);
 
-                    if (arm.Pattern is not null) DeclarePatternBindings(arm.Pattern, ctx);
+                    if (arm.Pattern is not null)
+                    {
+                        CheckPatternShape(arm.Pattern, ctx);
+                        DeclarePatternBindings(arm.Pattern, ctx);
+                    }
                     if (arm.Guard is not null) VisitArgument(arm.Guard, ctx);
                     switch (arm.Body)
                     {
@@ -587,6 +592,148 @@ public static class VariableBinder
     // ──────────────────────────────────────────────────────────────────
     // Identifier check
     // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every union variant and record declared in this source, with its fields in order —
+    /// <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what lets a pattern's fields be checked where the pattern is *written* rather
+    /// than when its arm is reached. A `union` is an ordinary statement evaluated at runtime,
+    /// so the shapes are read from the syntax, the same way the binder already collects
+    /// same-source function declarations.
+    /// </para>
+    /// <para>
+    /// Only same-source declarations, deliberately. A type from a <c>require</c>d file is not
+    /// here, and a pattern naming one is left alone rather than guessed at — a missed check
+    /// costs a runtime diagnostic that still names the field, while a false one costs a
+    /// program that will not run. Seeing another file's declarations is <c>TOAST-0052</c>.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> CollectPatternShapes(
+        StatementSyntax statement)
+    {
+        var shapes = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        CollectPatternShapes(statement, shapes);
+        return shapes;
+    }
+
+    private static void CollectPatternShapes(
+        StatementSyntax statement,
+        Dictionary<string, IReadOnlyList<string>> shapes)
+    {
+        switch (statement)
+        {
+            case ScriptStatementSyntax script:
+                foreach (var child in script.Statements) CollectPatternShapes(child, shapes);
+                break;
+
+            case UnionDefinitionStatementSyntax union:
+                foreach (var variant in union.Variants)
+                {
+                    // A variant name declared twice in one source is the parser's problem, not
+                    // this pass's — the first wins here rather than throwing.
+                    shapes.TryAdd(
+                        variant.Name,
+                        variant.Fields.Select(field => field.Name).ToArray());
+                }
+
+                break;
+
+            case RecordDefinitionStatementSyntax record:
+                shapes.TryAdd(record.Name, record.Fields.Select(field => field.Name).ToArray());
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Checks a pattern's fields against the declaration it names — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same two mistakes the runtime reports, caught where they are written: a positional
+    /// pattern asking for more fields than exist, and a named one naming a field that does
+    /// not. The runtime keeps its checks, because a pattern may name a type this source cannot
+    /// see; this only speaks when the declaration is right here.
+    /// </remarks>
+    private static void CheckPatternShape(ArgumentSyntax pattern, Context ctx)
+    {
+        switch (pattern)
+        {
+            case VariantPatternSyntax variant:
+                if (ctx.PatternShapes.TryGetValue(variant.VariantName, out var fields))
+                {
+                    if (variant.Positional.Count > fields.Count)
+                    {
+                        ctx.Diagnostics.Add(new ToshDiagnostic(
+                            Code: "tosh.bind.pattern_arity",
+                            Title: $"Pattern for '{variant.VariantName}' binds "
+                                 + $"{variant.Positional.Count} field(s), but "
+                                 + $"'{variant.VariantName}' declares {fields.Count}.",
+                            SourceName: ctx.SourceName,
+                            SourceText: ctx.SourceText,
+                            Span: variant.Span,
+                            Label: fields.Count == 0
+                                ? $"'{variant.VariantName}' has no fields"
+                                : $"'{variant.VariantName}' declares: {string.Join(", ", fields)}",
+                            Help: "bind fewer fields, or name them with `{ field }` to pick the "
+                                + "ones you want."));
+                    }
+
+                    foreach (var named in variant.Named)
+                    {
+                        if (fields.Contains(named.Field, StringComparer.Ordinal)) { continue; }
+
+                        ctx.Diagnostics.Add(new ToshDiagnostic(
+                            Code: "tosh.bind.pattern_unknown_field",
+                            Title: $"'{variant.VariantName}' has no field '{named.Field}'.",
+                            SourceName: ctx.SourceName,
+                            SourceText: ctx.SourceText,
+                            Span: named.Span,
+                            Label: fields.Count == 0
+                                ? $"'{variant.VariantName}' has no fields"
+                                : $"'{variant.VariantName}' declares: {string.Join(", ", fields)}",
+                            Help: NearestFieldHelp(named.Field, fields)));
+                    }
+                }
+
+                foreach (var element in variant.Positional) CheckPatternShape(element, ctx);
+                foreach (var field in variant.Named) CheckPatternShape(field.Pattern, ctx);
+                break;
+
+            case ListPatternSyntax list:
+                foreach (var element in list.Before) CheckPatternShape(element, ctx);
+                foreach (var element in list.After) CheckPatternShape(element, ctx);
+                break;
+
+            case OrPatternSyntax alternatives:
+                foreach (var alternative in alternatives.Alternatives)
+                {
+                    CheckPatternShape(alternative, ctx);
+                }
+
+                break;
+
+            case BoundPatternSyntax bound:
+                CheckPatternShape(bound.Pattern, ctx);
+                break;
+        }
+    }
+
+    /// <summary>Suggests the closest declared field, when one is close enough to mean it.</summary>
+    private static string NearestFieldHelp(string written, IReadOnlyList<string> fields)
+    {
+        foreach (var field in fields)
+        {
+            if (field.StartsWith(written, StringComparison.OrdinalIgnoreCase) ||
+                written.StartsWith(field, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"did you mean '{field}'?";
+            }
+        }
+
+        return "name a field the declaration has, or bind positionally with `(…)`.";
+    }
 
     /// <summary>
     /// Declares what a pattern binds into the arm's scope, reporting shadowing — <c>TOAST-0053</c>.
@@ -792,5 +939,6 @@ public static class VariableBinder
         string SourceName,
         string SourceText,
         List<HashSet<string>> Scopes,
-        List<ToshDiagnostic> Diagnostics);
+        List<ToshDiagnostic> Diagnostics,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> PatternShapes);
 }
