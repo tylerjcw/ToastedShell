@@ -447,6 +447,24 @@ public static class VariableBinder
                 VisitArgument(oper.Right, ctx);
                 break;
 
+            case VariantPatternSyntax variantPattern:
+                // `TOAST-0053`. A variant pattern's sub-patterns are ordinary arguments, so
+                // one can hold a variable reference — `Item { kind: $expected }` compares a
+                // field against a captured value. Not walking them would leave that reference
+                // out of capture analysis, which is what `SyntaxTraversalExhaustivenessTests`
+                // caught the moment the node was added.
+                foreach (var element in variantPattern.Positional)
+                {
+                    VisitArgument(element, ctx);
+                }
+
+                foreach (var named in variantPattern.Named)
+                {
+                    VisitArgument(named.Pattern, ctx);
+                }
+
+                break;
+
             case ComparisonPatternSyntax comparisonPattern:
                 // A match arm's pattern operand can hold variable
                 // references (`_ > $limit`), so it must be walked like any

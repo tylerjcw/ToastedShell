@@ -84,62 +84,136 @@ public static partial class ToshParser
         }
 
         /// <summary>
-        /// Recognises <c>Ok(v)</c>, <c>Add(l, r)</c> — a variant pattern — <c>TOAST-0053</c>.
+        /// Recognises a variant pattern — <c>TOAST-0053</c>.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Only in pattern position, and only for the exact shape "bareword, open paren,
-        /// plain names separated by commas, close paren". Anything else — a call with an
-        /// expression argument, a literal, a nested pattern — is left to `ParseArgument`, so
-        /// this recognises the new form without taking anything away from the old ones.
+        /// Positional — <c>Ok(v)</c>, <c>Add(l, r)</c> — or by field name —
+        /// <c>Lit { value }</c>, <c>Node { kind: "if", body }</c>. Sub-patterns are ordinary
+        /// <see cref="ArgumentSyntax"/>, which is what makes nesting free: a nested variant
+        /// pattern is one of them, and so is a literal to compare against.
         /// </para>
         /// <para>
-        /// The paren must follow the name with no gap. `Ok (v)` is a command and its argument,
-        /// which is what it has always been, and stays that way.
+        /// The bracket must abut the name. <c>Ok (v)</c> is a command and its argument, which
+        /// is what it has always been, and stays that way.
         /// </para>
         /// </remarks>
         private VariantPatternSyntax? TryParseVariantPattern()
         {
-            if (Current.Kind != SyntaxTokenKind.Bareword) { return null; }
+            if (Current.Kind != SyntaxTokenKind.Bareword || IsVariableToken(Current)) { return null; }
 
             var open = Peek(1);
-            if (open.Kind != SyntaxTokenKind.OpenParen || open.Span.Start != Current.Span.End)
+
+            // The paren must abut: `Ok (v)` is a command and its argument and stays that way.
+            // A brace need not, because `Node { kind: "if", body }` is the spelling this form
+            // is for, and a bareword followed by a block is not a thing a pattern can be.
+            if (open.Kind == SyntaxTokenKind.OpenParen)
+            {
+                if (open.Span.Start != Current.Span.End) { return null; }
+            }
+            else if (open.Kind != SyntaxTokenKind.OpenBrace)
             {
                 return null;
             }
 
-            var bindings = new List<string>();
-            var offset = 2;
+            var byName = open.Kind == SyntaxTokenKind.OpenBrace;
+            var closeKind = byName ? SyntaxTokenKind.CloseBrace : SyntaxTokenKind.CloseParen;
 
-            while (true)
+            var start = Current.Span.Start;
+            var nameText = Current.Text;
+            var save = _position;
+            NextToken();
+            NextToken();
+
+            var positional = new List<ArgumentSyntax>();
+            var named = new List<VariantFieldPatternSyntax>();
+
+            while (Current.Kind != closeKind)
             {
-                var token = Peek(offset);
+                if (Current.Kind == SyntaxTokenKind.EndOfFile) { _position = save; return null; }
 
-                if (token.Kind == SyntaxTokenKind.CloseParen)
+                if (byName)
                 {
-                    // `Ok()` is a variant with no fields, which is a legitimate pattern.
-                    break;
+                    if (Current.Kind != SyntaxTokenKind.Bareword || IsVariableToken(Current))
+                    {
+                        _position = save;
+                        return null;
+                    }
+
+                    var fieldToken = NextToken();
+                    var fieldName = fieldToken.Text;
+
+                    // The lexer may hand back `kind:` as one bareword or `kind` then `:`,
+                    // depending on spacing, so both spellings are accepted here.
+                    var attachedColon = fieldName.EndsWith(":", StringComparison.Ordinal);
+                    if (attachedColon) { fieldName = fieldName[..^1]; }
+
+                    if (attachedColon || IsColonToken(Current))
+                    {
+                        if (!attachedColon) { NextToken(); }
+                        var inner = ParseSubPattern();
+                        if (inner is null) { _position = save; return null; }
+                        named.Add(new VariantFieldPatternSyntax(
+                            fieldName,
+                            inner,
+                            TextSpan.FromBounds(fieldToken.Span.Start, inner.Span.End)));
+                    }
+                    else
+                    {
+                        // Shorthand: `{ value }` binds `value` to the field of that name.
+                        named.Add(new VariantFieldPatternSyntax(
+                            fieldName,
+                            new BarewordArgumentSyntax(fieldName, fieldToken.Span),
+                            fieldToken.Span));
+                    }
+                }
+                else
+                {
+                    var element = ParseSubPattern();
+                    if (element is null) { _position = save; return null; }
+                    positional.Add(element);
                 }
 
-                if (token.Kind != SyntaxTokenKind.Bareword) { return null; }
-
-                bindings.Add(token.Text);
-                offset++;
-
-                var next = Peek(offset);
-                if (next.Kind == SyntaxTokenKind.Comma) { offset++; continue; }
-                if (next.Kind == SyntaxTokenKind.CloseParen) { break; }
+                if (Current.Kind == SyntaxTokenKind.Comma) { NextToken(); continue; }
+                if (Current.Kind == closeKind) { break; }
+                _position = save;
                 return null;
             }
 
-            var nameToken = NextToken();
-            for (var i = 1; i < offset; i++) { NextToken(); }
             var closeToken = NextToken();
-
             return new VariantPatternSyntax(
-                nameToken.Text,
-                bindings,
-                TextSpan.FromBounds(nameToken.Span.Start, closeToken.Span.End));
+                nameText,
+                positional,
+                named,
+                TextSpan.FromBounds(start, closeToken.Span.End));
+        }
+
+        /// <summary>
+        /// A variable reference. The lexer hands one back as a <see cref="SyntaxTokenKind.Bareword"/>
+        /// whose text carries the sigil, so every place that means "a plain name" has to say so.
+        /// </summary>
+        /// <remarks>
+        /// Missing this made `Lit($x)` bind rather than compare, so it matched anything — and
+        /// silently, because binding a name that already exists is legal. `Lit(5)` and
+        /// `Lit((2 + 3))` compared correctly the whole time, which is what hid it.
+        /// </remarks>
+        private static bool IsVariableToken(SyntaxToken token)
+            => token.Kind == SyntaxTokenKind.Bareword && token.Text.StartsWith('$');
+
+        /// <summary>One element inside a variant pattern — a nested pattern, name, or value.</summary>
+        private ArgumentSyntax? ParseSubPattern()
+        {
+            if (TryParseVariantPattern() is { } nested) { return nested; }
+
+            // A plain name binds; `$name` is a reference, and has to be evaluated and compared
+            // like any other value, so it falls through to `ParseArgument`.
+            if (Current.Kind == SyntaxTokenKind.Bareword && !IsVariableToken(Current))
+            {
+                var token = NextToken();
+                return new BarewordArgumentSyntax(token.Text, token.Span);
+            }
+
+            return ParseArgument(implicitCurrentItem: false);
         }
 
         private MatchArmSyntax ParseMatchArm(bool implicitCurrentItem)

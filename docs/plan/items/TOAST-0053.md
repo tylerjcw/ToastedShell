@@ -94,17 +94,73 @@ Emission needs its own bound node, lowering, and somewhere for the bound names t
 locals the arm body can read — the same scope-pushing shape rune expansion needed. That is a
 slice of its own rather than a detail of this one.
 
+## Second slice — 2026-08-28
+
+Patterns became *recursive*: a sub-pattern is an `ArgumentSyntax`, the same type the outer
+pattern is built from, so nesting fell out rather than being added. `Some(Add(Lit(a), Lit(b)))`
+binds two levels down, and named and positional forms mix freely — `Some(Lit { v })`.
+
+Field patterns by name arrived with the same change. `Lit { v }` is shorthand for `Lit { v: v }`;
+`Lit { v: got }` renames; and because the right of the colon is a *pattern* rather than a name,
+`Node { kind: "if", body }` tests one field and binds another in one arm.
+
+**The paren must abut but the brace need not.** `Ok (v)` stays a command and its argument, which
+is what kept the first slice from taking anything away. `Node { … }` has no such collision — a
+bareword followed by a block is not something a pattern could already have been — so requiring
+the brace to abut only rejected the spelling everyone writes.
+
+### A `$variable` sub-pattern matched anything
+
+The lexer hands a variable reference back as a `Bareword` token whose *text* carries the `$`.
+`ParseSubPattern` asked only for the token kind, so `$x` took the "a plain name binds" path:
+`Lit($x)` bound a fresh `x` and matched every `Lit`, and `Node { kind: $expected }` matched every
+node. Silently — rebinding a name that already exists is legal, so nothing failed.
+
+`Lit(5)` and `Lit((2 + 3))` compared correctly the whole time, which is exactly what hid it. Only
+the *miss* case can catch this, and the first test written for the form asserted a hit. Both
+directions are now asserted, and the negative control which drops the guard fails those two tests
+and nothing else.
+
+Three sites needed the same guard — the pattern's own name, a field name, and a sub-pattern — so
+the predicate is named `IsVariableToken` rather than repeated.
+
+### Capture analysis had to learn the node
+
+`SyntaxTraversalExhaustivenessTests` failed the moment `VariantPatternSyntax` existed:
+`VariableBinder` did not walk it, so a reference inside a pattern was invisible to capture
+analysis. Walking the sub-patterns was the fix rather than recording a gap, because
+`Node { kind: $expected }` inside a closure is the case that needs the captured value — it is
+pinned by a test that builds a matcher from a captured string.
+
+### The unknown-field diagnostic is raised at runtime, not at binding time
+
+Naming a field the variant does not have is now an error that names the field and suggests the
+nearest declared one, instead of a silent miss. But it fires when the arm is *reached*, not when
+the pattern is bound, so a bad pattern in an arm that never runs is still not reported.
+
+Binding time is where it belongs, and it is not reachable yet: a `union` is an ordinary statement
+evaluated at runtime, so at lowering there is no variant declaration to check the field against.
+That wants union definitions visible to the binder, which is `TOAST-0052`'s territory rather than
+a detail of this item. The box stays partial for that reason.
+
+## What is left
+
+List patterns with a rest binding, or-patterns and `as`, the shadowing diagnosis, compiled
+emission with the differential corpus, and the spec table.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
-- [ ] Variant patterns bind fields by name, with shorthand — `Lit { value }`
+- [x] Variant patterns bind fields by name, with shorthand — `Lit { v }`, `Lit { v: got }`,
+      and a literal or `$variable` on the right to test rather than bind — **interpreted**
 - [ ] Record and class patterns bind fields by name
 - [ ] List patterns with a rest binding — `[first, ..rest]`
-- [ ] Patterns nest to arbitrary depth
+- [x] Patterns nest to arbitrary depth — `Some(Add(Lit(a), Lit(b)))`, mixing both forms
 - [ ] Or-patterns, and `as` to bind the whole while destructuring the parts
 - [~] Bound names are scoped to their arm — done, and pinned by three tests. Shadowing is *silent* rather than diagnosed, which is still open
-- [ ] A pattern naming a field the variant does not have is a *binding-time* diagnostic
-      naming the field, not a runtime miss
+- [~] A pattern naming a field the variant does not have names the field and suggests the
+      nearest one, rather than missing silently — but at **runtime**, when the arm is reached,
+      not at binding time. See the second slice: the binder cannot see a `union` yet
 - [x] Guards compose with bindings — the guard sees the bound names, **interpreted**
 - [ ] Interpreted and compiled agree, in the differential corpus
 - [ ] `§Match Expressions` documents the full pattern grammar in one table

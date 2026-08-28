@@ -14,8 +14,10 @@ namespace Tosh.Tests;
 /// runtime error, neither reported where it was written.
 /// </para>
 /// <para>
-/// This is the first slice — positional binding only. Field patterns by name, list patterns
-/// with a rest binding, nesting, or-patterns and <c>as</c> remain.
+/// Patterns bind positionally (<c>Add(l, r)</c>) or by name (<c>Lit { v }</c>), and nest to
+/// any depth, because a sub-pattern is an <c>ArgumentSyntax</c> like any other — the same
+/// type the outer pattern is made of. List patterns with a rest binding, or-patterns and
+/// <c>as</c> remain.
 /// </para>
 /// </remarks>
 public sealed class VariantPatternTests
@@ -207,5 +209,246 @@ public sealed class VariantPatternTests
             """);
 
         Assert.Equal("none", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// A recursive union, so a pattern has something to nest into.
+    /// </summary>
+    private const string Trees = """
+        union Expr {
+            Lit(v: int)
+            Add(l: Expr, r: Expr)
+        }
+        union Opt {
+            Some(value: Expr)
+            None()
+        }
+        union Item {
+            Node(kind: string, body: int)
+        }
+        """;
+
+    private static async Task<IReadOnlyList<object?>> RunTreesAsync(string body)
+    {
+        var engine = ShellEngine.CreateFullShell();
+        return await engine.ExecuteToListAsync(Trees + "\n" + body);
+    }
+
+    [Fact]
+    public async Task A_field_pattern_binds_by_name()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Expr.Lit(9)) {
+                Lit { v } => $v
+                default => -1
+            })
+            """);
+
+        Assert.Equal("9", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// `field: name` binds the field under a different name.
+    /// </summary>
+    [Fact]
+    public async Task A_field_pattern_may_rename_what_it_binds()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Expr.Lit(9)) {
+                Lit { v: got } => $got
+                default => -1
+            })
+            """);
+
+        Assert.Equal("9", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// Naming a field is not the same as binding it: the right of the colon is a pattern, so
+    /// it may be a literal that has to match, alongside a shorthand that binds.
+    /// </summary>
+    [Fact]
+    public async Task A_field_pattern_may_test_one_field_and_bind_another()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Item.Node("if", 5)) {
+                Node { kind: "if", body } => $body
+                default => -1
+            })
+            echo (match (Item.Node("fn", 5)) {
+                Node { kind: "if", body } => $body
+                default => -1
+            })
+            """);
+
+        Assert.Equal("5", results[^2]?.ToString());
+        Assert.Equal("-1", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// A sub-pattern may be a variable reference, which compares — it does not bind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The lexer hands a variable back as a bareword whose text carries the <c>$</c>, and the
+    /// first implementation asked only for the token kind. So <c>$x</c> took the "a plain name
+    /// binds" path and matched anything, silently, because rebinding an existing name is legal.
+    /// Literals and parenthesised expressions compared correctly throughout, which is what hid
+    /// it: only the *miss* case can catch this, so both directions are asserted here.
+    /// </para>
+    /// <para>
+    /// This is also why <c>VariableBinder</c> walks sub-patterns —
+    /// <c>SyntaxTraversalExhaustivenessTests</c> caught the missing traversal the moment the
+    /// node was added, and without it the reference would be invisible to capture analysis.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_variable_sub_pattern_compares_rather_than_binds()
+    {
+        var results = await RunTreesAsync("""
+            var expected = "if"
+            echo (match (Item.Node("if", 5)) {
+                Node { kind: $expected, body } => $body
+                default => -1
+            })
+            echo (match (Item.Node("fn", 5)) {
+                Node { kind: $expected, body } => $body
+                default => -1
+            })
+            var wanted = 5
+            echo (match (Expr.Lit(9)) {
+                Lit($wanted) => 1
+                default => -1
+            })
+            """);
+
+        Assert.Equal("5", results[^3]?.ToString());
+        Assert.Equal("-1", results[^2]?.ToString());
+        Assert.Equal("-1", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// A variable sub-pattern reads the closure's captured value, not a fresh binding.
+    /// </summary>
+    [Fact]
+    public async Task A_variable_sub_pattern_sees_a_captured_value()
+    {
+        var results = await RunTreesAsync("""
+            func makeMatcher(expected) {
+                return func(n) {
+                    return match ($n) {
+                        Node { kind: $expected, body } => $body
+                        default => -1
+                    }
+                }
+            }
+            var m = makeMatcher("if")
+            echo ($m(Item.Node("if", 5)))
+            echo ($m(Item.Node("fn", 5)))
+            """);
+
+        Assert.Equal("5", results[^2]?.ToString());
+        Assert.Equal("-1", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// Patterns nest to arbitrary depth, mixing positional and named forms.
+    /// </summary>
+    [Fact]
+    public async Task Patterns_nest()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Opt.Some(Expr.Add(Expr.Lit(3), Expr.Lit(4)))) {
+                Some(Add(Lit(a), Lit(b))) => $a + $b
+                default => -1
+            })
+            """);
+
+        Assert.Equal("7", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// A nested pattern that does not match falls through rather than binding null.
+    /// </summary>
+    [Fact]
+    public async Task A_nested_pattern_that_misses_falls_through()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Opt.Some(Expr.Lit(3))) {
+                Some(Add(l, r)) => 1
+                default => -1
+            })
+            """);
+
+        Assert.Equal("-1", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task A_nested_field_pattern_binds()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Opt.Some(Expr.Lit(3))) {
+                Some(Lit { v }) => $v
+                default => -1
+            })
+            """);
+
+        Assert.Equal("3", results[^1]?.ToString());
+    }
+
+    /// <summary>
+    /// Naming a field the variant does not have is reported, not silently missed.
+    /// </summary>
+    /// <remarks>
+    /// The failure mode this replaces is the one the item opens with: a typo in the field of
+    /// a <c>switch</c>-on-string dispatch was a runtime error somewhere else, or nothing.
+    /// </remarks>
+    [Fact]
+    public async Task An_unknown_field_is_diagnosed()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunTreesAsync("""
+            echo (match (Expr.Lit(9)) {
+                Lit { valu } => 1
+                default => -1
+            })
+            """));
+
+        Assert.Contains("valu", error.Message);
+        Assert.Contains("Lit", error.Message);
+    }
+
+    /// <summary>
+    /// A positional pattern naming more fields than the variant declares is reported too.
+    /// </summary>
+    [Fact]
+    public async Task A_wrong_arity_pattern_is_diagnosed()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunTreesAsync("""
+            echo (match (Expr.Lit(9)) {
+                Lit(a, b) => 1
+                default => -1
+            })
+            """));
+
+        Assert.Contains("Lit", error.Message);
+        Assert.Contains("2", error.Message);
+    }
+
+    /// <summary>
+    /// The diagnostics above fire on the variant the pattern names. A pattern for a
+    /// *different* variant is an ordinary miss, not an error — otherwise no match over a
+    /// union with more than one variant could ever run.
+    /// </summary>
+    [Fact]
+    public async Task A_pattern_for_another_variant_is_a_miss_and_not_an_error()
+    {
+        var results = await RunTreesAsync("""
+            echo (match (Expr.Add(Expr.Lit(1), Expr.Lit(2))) {
+                Lit(v) => $v
+                default => -1
+            })
+            """);
+
+        Assert.Equal("-1", results[^1]?.ToString());
     }
 }
