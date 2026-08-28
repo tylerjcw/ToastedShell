@@ -1,9 +1,18 @@
 #!/usr/bin/env tosh
 ## @summary Drag a lit OpenGL cube with the left mouse button; Escape closes it.
+## @remarks
+##   The whole cube reaches the GPU in two uploads — vertices and indices — and is drawn
+##   with a shader program. Nothing is sent per frame except four uniforms, which is the
+##   point: a callback is a control plane, and bulk data crosses once.
+##
+##   Rotation is a virtual trackball. `Window.Drag` reports a sample and `Arcball.Delta`
+##   turns two screen points into a quaternion, so the cube follows the cursor rather than
+##   accumulating independent pitch and yaw.
 ## @example examples/gl_mouse_cube.tosh
 require ToastLib.Gl from "/home/komrad/.config/tosh/lib/Gl.tosh" as Gl
 
 using System.Drawing
+using System.Numerics
 
 # RGB followed by four XYZ vertices, wound counter-clockwise seen from outside.
 var faces = [
@@ -33,65 +42,75 @@ func face_normal(f) {
     return [$nx / $len, $ny / $len, $nz / $len]
 }
 
-## Interleaved position, normal and colour per vertex, so one buffer feeds all three pointers.
+## Interleaved position, normal and colour per vertex; two triangles per face.
 var vertices = []
-for f in $faces {
-    var n = (face_normal $f)
+var indices = []
+
+for f in 0..(($faces | count) - 1) {
+    var face = $faces[$f]
+    var n = (face_normal $face)
+
     for i in 0..3 {
         var p = 3 + ($i * 3)
         $vertices = ($vertices + [
-            $f[$p], $f[$p + 1], $f[$p + 2],
+            $face[$p], $face[$p + 1], $face[$p + 2],
             $n[0], $n[1], $n[2],
-            $f[0], $f[1], $f[2]
+            $face[0], $face[1], $face[2]
         ])
     }
+
+    var base = $f * 4
+    $indices = ($indices + [$base, $base + 1, $base + 2, $base, $base + 2, $base + 3])
 }
 
-var floatSize    = (size-of float)
-var stride       = 9 * $floatSize
-var normalOffset = 3 * $floatSize
-var colourOffset = 6 * $floatSize
-var vertexCount  = ($vertices | count) // 9
+var vertexSource = """
+#version 120
+uniform mat4 uMvp;
+uniform mat4 uModel;
+attribute vec3 aPos;
+attribute vec3 aNormal;
+attribute vec3 aColor;
+varying vec3 vNormal;
+varying vec3 vColor;
+void main() {
+    vNormal = mat3(uModel) * aNormal;
+    vColor = aColor;
+    gl_Position = uMvp * vec4(aPos, 1.0);
+}
+"""
 
-var pitch = 20.0
-var yaw = -30.0
-var dragging = false
-var last_x = 0.0
-var last_y = 0.0
+var fragmentSource = """
+#version 120
+uniform vec3 uLightDir;
+uniform vec3 uAmbient;
+varying vec3 vNormal;
+varying vec3 vColor;
+void main() {
+    float lambert = max(dot(normalize(vNormal), normalize(uLightDir)), 0.0);
+    gl_FragColor = vec4(min(vColor * (uAmbient + vec3(lambert)), vec3(1.0)), 1.0);
+}
+"""
+
+var orientation = Quaternion.Identity
 
 Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
     Gl.Glfw.glfwSwapInterval(1)
     Gl.State.ClearColor(Color.FromArgb(18, 20, 30))
     Gl.State.Enable(Gl.Capability.DepthTest)
 
-    ## The whole cube reaches the GPU in one upload. Drawing it a vertex at a time is what a
-    ## display list used to be for.
-    var mesh = Gl.Buffer.Floats($vertices)
+    var program = new Gl.Program($vertexSource, $fragmentSource)
+    defer { $program.Close() }
+
+    ## The shader decides where its attributes live, so the mesh is told rather than
+    ## assuming: a driver may drop one and renumber the rest.
+    var layout = [
+        {| Index = $program.Attribute("aPos"),    Size = 3, Offset = 0 |},
+        {| Index = $program.Attribute("aNormal"), Size = 3, Offset = 3 |},
+        {| Index = $program.Attribute("aColor"),  Size = 3, Offset = 6 |}
+    ]
+
+    var mesh = new Gl.MeshBuffer($vertices, 9, $layout, Gl.Primitive.Triangles, $indices)
     defer { $mesh.Close() }
-
-    ## One directional light (w = 0), fixed in eye space because the modelview is still
-    ## identity here — so the cube turns under the light rather than carrying it around.
-    ## `glLightfv` wants a four-float array, which is a single write.
-    var light = alloc (4 * $floatSize)
-    defer { native-free $light }
-
-    write-buffer $light [0.4, 0.8, 1.0, 0.0] --as float --at 0
-    Gl.Raw.glLightfv(Gl.Light.Light0, Gl.LightParameter.Position, $light)
-
-    write-buffer $light [1.0, 0.98, 0.94, 1.0] --as float --at 0
-    Gl.Raw.glLightfv(Gl.Light.Light0, Gl.LightParameter.Diffuse, $light)
-
-    write-buffer $light [0.22, 0.22, 0.28, 1.0] --as float --at 0
-    Gl.Raw.glLightfv(Gl.Light.Light0, Gl.LightParameter.Ambient, $light)
-
-    ## The per-vertex colours become the material, so each face keeps its own hue and the
-    ## light only decides how brightly it is lit.
-    Gl.Raw.glColorMaterial(Gl.MaterialFace.FrontAndBack, Gl.ColorMaterialMode.AmbientAndDiffuse)
-    Gl.Raw.glShadeModel(Gl.ShadeModel.Smooth)
-    Gl.State.Enable(Gl.Capability.Lighting)
-    Gl.State.Enable(Gl.Light.Light0)
-    Gl.State.Enable(Gl.Capability.ColorMaterial)
-    Gl.State.Enable(Gl.Capability.Normalize)   # the scale below would shorten the normals
 
     $win.OnKey(func (w, key, action, mods) {
         if (($key == Gl.Key.Escape) and ($action == Gl.KeyAction.Press)) {
@@ -100,31 +119,28 @@ Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
     })
 
     $win.Frames(func (w, frame) {
-        var cursor = Gl.Glfw.glfwGetCursorPos($w.Handle)
-        var held = Gl.Glfw.glfwGetMouseButton($w.Handle, Gl.MouseButton.Left) == 1
-
-        if ($held and $dragging) {
-            $yaw += ($cursor.x - $last_x) * 0.35
-            $pitch = Sys.Math.Clamp($pitch + (($cursor.y - $last_y) * 0.35), -89.0, 89.0)
+        ## `Started` is skipped: the first sample of a drag has From == To, and folding it
+        ## in would apply a zero rotation and, worse, jump if the button was pressed
+        ## somewhere the cursor had not been polled.
+        var drag = $w.Drag()
+        if ($drag.Active and not $drag.Started) {
+            var delta = Gl.Arcball.Delta($drag.From, $drag.To, $w.Size)
+            $orientation = Quaternion.Normalize(Quaternion.Concatenate($orientation, $delta))
         }
 
-        $dragging = $held
-        $last_x = $cursor.x
-        $last_y = $cursor.y
+        ## Row-vector convention throughout, so matrices compose left to right and
+        ## `SetMatrix4` can hand the struct straight to GL untransposed.
+        var model = Matrix4x4.CreateFromQuaternion($orientation)
+        var view  = Matrix4x4.CreateTranslation(new Vector3(0.0, 0.0, -5.0))
+        var proj  = Gl.Projection.Perspective($w.Size, 50.0, 0.1, 100.0)
 
         Gl.State.ClearBuffers([Gl.ClearBit.Color, Gl.ClearBit.Depth])
-        Gl.State.LoadIdentity()
-        Gl.State.Rotate($pitch, 1.0, 0.0, 0.0)
-        Gl.State.Rotate($yaw, 0.0, 1.0, 0.0)
-        Gl.State.Scale(0.55, 0.55, 0.55)
 
-        $mesh.Bind()
-        Gl.Raw.glEnableClientState(Gl.ClientState.VertexArray)
-        Gl.Raw.glEnableClientState(Gl.ClientState.NormalArray)
-        Gl.Raw.glEnableClientState(Gl.ClientState.ColorArray)
-        Gl.Raw.glVertexPointer(3, Gl.DataType.Float, $stride, 0)
-        Gl.Raw.glNormalPointer(Gl.DataType.Float, $stride, $normalOffset)
-        Gl.Raw.glColorPointer(3, Gl.DataType.Float, $stride, $colourOffset)
-        Gl.Raw.glDrawArrays(Gl.Primitive.Quads, 0, $vertexCount)
+        $program.Use()
+        $program.SetMatrix4("uMvp", $model * $view * $proj)
+        $program.SetMatrix4("uModel", $model)
+        $program.SetVector3("uLightDir", Vector3.Normalize(new Vector3(0.4, 0.8, 1.0)))
+        $program.SetVector3("uAmbient", new Vector3(0.22, 0.22, 0.28))
+        $mesh.Draw()
     })
 })
