@@ -314,6 +314,32 @@ public sealed record VariantPatternSyntax(
 /// same name, so the common case needs no repetition.
 /// </param>
 /// <summary>
+/// An or-pattern — <c>TOAST-0053</c>. <c>(Lit(0) | Lit(1))</c> takes one arm for either shape.
+/// </summary>
+/// <remarks>
+/// Always parenthesised, because <c>|</c> is the pipeline separator everywhere else: the parens
+/// are what say "this <c>|</c> is an alternative". Every alternative must bind the same names,
+/// checked where it is written — an arm reading a name only one side binds would otherwise read
+/// an unset variable whenever the other side matched.
+/// </remarks>
+public sealed record OrPatternSyntax(
+    IReadOnlyList<ArgumentSyntax> Alternatives,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+/// <summary>
+/// A pattern that also binds the whole value — <c>TOAST-0053</c>. <c>Add(l, r) as node</c>.
+/// </summary>
+/// <remarks>
+/// Only a destructuring pattern may carry <c>as</c>. After a literal it would be the cast
+/// operator — <c>"a" as string</c> already means something — and the destructuring forms are
+/// where wanting the parts *and* the whole actually comes up.
+/// </remarks>
+public sealed record BoundPatternSyntax(
+    ArgumentSyntax Pattern,
+    string Name,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+/// <summary>
 /// A list pattern — <c>TOAST-0053</c>. <c>[first, ...rest]</c>, <c>[a, b]</c>, <c>[]</c>.
 /// </summary>
 /// <param name="Before">Sub-patterns matched against the front of the sequence.</param>

@@ -465,6 +465,20 @@ public static class VariableBinder
 
                 break;
 
+            case OrPatternSyntax orPattern:
+                // `TOAST-0053`. Every alternative is a pattern in its own right and may hold a
+                // variable reference, so all of them are walked, not just the first.
+                foreach (var alternative in orPattern.Alternatives)
+                {
+                    VisitArgument(alternative, ctx);
+                }
+
+                break;
+
+            case BoundPatternSyntax boundPattern:
+                VisitArgument(boundPattern.Pattern, ctx);
+                break;
+
             case ListPatternSyntax listPattern:
                 // `TOAST-0053`. Same reason as the variant pattern above: an element may be a
                 // variable reference — `[$expected, second]` — so capture analysis has to see it.

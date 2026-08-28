@@ -145,8 +145,7 @@ a detail of this item. The box stays partial for that reason.
 
 ## What is left
 
-Or-patterns and `as`, the shadowing diagnosis, compiled emission with the differential corpus,
-and the spec table.
+The shadowing diagnosis, compiled emission with the differential corpus, and the spec table.
 
 ## Third slice — 2026-08-28
 
@@ -198,6 +197,44 @@ for a list.
 Two rests are refused at parse time rather than ignored: there is no unambiguous split between
 front and back, and picking one silently is the kind of choice that is wrong half the time.
 
+## Fifth slice — 2026-08-28
+
+Or-patterns and `as`. `(Lit(0) | Lit(1))` takes one arm for either shape, alternatives nest
+wherever a sub-pattern goes — `Add((1 | 2), r)`, `[(1 | 2), b]` — and `as` keeps the whole
+value alongside the parts: `Add(l, r) as whole`, and the item's own example,
+`(Lit(0) | Lit(1)) as lit`.
+
+### The separator stays `|`, decided rather than inherited
+
+`|` is the pipeline everywhere else in this language, and the list-pattern slice had just
+argued that consistency with the language beats borrowing from other ones — so the choice was
+put explicitly, against `or` and `||`, which are what tosh already spells logical-or.
+
+`|` won on collision. A `|` in pattern position is a parse error today, so adopting it changes
+no existing arm. `or` and `||` would reinterpret `($a or $b)` — an arm that runs today,
+evaluating a boolean and comparing it to the subject — as two alternatives, which gives a
+different answer whenever the subject is false and either side is true. `|` is also what Rust,
+C# and F# spell it, so a reader arriving from any of them already knows it.
+
+### Every alternative must bind the same names
+
+Checked where it is written. `(Lit(v) | Add(l, r))` would leave `$v` unset whenever the `Add`
+side matched, and an unset variable is not an error anywhere else in the language, so the arm
+would simply do something wrong. This is the only place it can be caught.
+
+### Binding asks the matcher which alternative won
+
+Matching and binding were two passes, and nothing recorded which alternative had matched. The
+obvious shortcut — bind from the first alternative whose *shape* fits — is wrong:
+`(Point(a, 0) | Point(0, a))` has one shape and two meanings, so it would bind zero half the
+time. So the binding walk became async and asks the matcher, which is right in both directions.
+The negative control that binds from the first alternative fails exactly that test.
+
+**Alternatives are a destructuring pattern or a single token.** Handing a general expression to
+`ParseArgument` would let it read `0 | Lit(1)` as a pipeline and swallow the separator. A test
+that needs more than one token goes in a guard, where the whole expression grammar is available
+and `|` means what it means everywhere else.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
@@ -208,7 +245,8 @@ front and back, and picking one silently is the kind of choice that is wrong hal
 - [x] List patterns with a rest binding — spelled `[first, ...rest]`, since `..` is the
       range operator; the rest may also sit in the middle, and binds an array
 - [x] Patterns nest to arbitrary depth — `Some(Add(Lit(a), Lit(b)))`, mixing both forms
-- [ ] Or-patterns, and `as` to bind the whole while destructuring the parts
+- [x] Or-patterns, and `as` to bind the whole while destructuring the parts — `|` kept as the
+      separator against `or` / `||`, decided in the fifth slice
 - [~] Bound names are scoped to their arm — done, and pinned by three tests. Shadowing is *silent* rather than diagnosed, which is still open
 - [~] A pattern naming a field the variant does not have names the field and suggests the
       nearest one, rather than missing silently — but at **runtime**, when the arm is reached,

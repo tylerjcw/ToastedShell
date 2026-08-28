@@ -899,6 +899,23 @@ public sealed partial class ToshEngine
                 return await MatchesListPatternAsync(
                     switchValue, sourceName, sourceText, list, cancellationToken);
 
+            case OrPatternSyntax alternatives:
+                foreach (var alternative in alternatives.Alternatives)
+                {
+                    if (await MatchesPatternAsync(
+                            switchValue, sourceName, sourceText, alternative, cancellationToken))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+            case BoundPatternSyntax bound:
+                // `as` binds; it never changes whether the pattern matched.
+                return await MatchesPatternAsync(
+                    switchValue, sourceName, sourceText, bound.Pattern, cancellationToken);
+
             default:
                 {
                     var patternValue = await EvaluateArgumentAsync(sourceName, sourceText, pattern, cancellationToken);

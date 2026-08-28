@@ -201,6 +201,193 @@ public static partial class ToshParser
             => token.Kind == SyntaxTokenKind.Bareword && token.Text.StartsWith('$');
 
         /// <summary>
+        /// An or-pattern — <c>TOAST-0053</c>. <c>(Lit(0) | Lit(1))</c>.
+        /// </summary>
+        /// <remarks>
+        /// The parens are what make the <c>|</c> an alternative rather than a pipeline, so an
+        /// unparenthesised one is left alone entirely. Anything that does not fit backtracks to
+        /// where it started, which means a parenthesised expression arm keeps its old meaning.
+        /// </remarks>
+        private OrPatternSyntax? TryParseOrPattern()
+        {
+            if (Current.Kind != SyntaxTokenKind.OpenParen) { return null; }
+
+            var save = _position;
+            var start = Current.Span.Start;
+            NextToken();
+
+            var alternatives = new List<ArgumentSyntax>();
+
+            while (true)
+            {
+                var alternative = ParseOrAlternative();
+                if (alternative is null) { _position = save; return null; }
+                alternatives.Add(alternative);
+
+                if (Current.Kind == SyntaxTokenKind.Pipe) { NextToken(); continue; }
+                if (Current.Kind == SyntaxTokenKind.CloseParen) { break; }
+                _position = save;
+                return null;
+            }
+
+            // One alternative is just a parenthesised pattern, and the caller already had a
+            // meaning for that. Only a written `|` makes this form.
+            if (alternatives.Count < 2) { _position = save; return null; }
+
+            var closeToken = NextToken();
+            var pattern = new OrPatternSyntax(
+                alternatives, TextSpan.FromBounds(start, closeToken.Span.End));
+
+            ReportInconsistentAlternativeBindings(pattern);
+            return pattern;
+        }
+
+        /// <summary>
+        /// One alternative. A destructuring pattern, or a single token that tests.
+        /// </summary>
+        /// <remarks>
+        /// The single-token limit is what keeps `|` an alternative: handing a general expression
+        /// to <c>ParseArgument</c> would let it read `0 | Lit(1)` as a pipeline and swallow the
+        /// separator. A test that needs more than one token can go in a guard, where the whole
+        /// expression grammar is available and `|` means what it means everywhere else.
+        /// </remarks>
+        private ArgumentSyntax? ParseOrAlternative()
+        {
+            if (TryParseVariantPattern() is { } variant) { return variant; }
+            if (TryParseListPattern() is { } list) { return list; }
+
+            var next = Peek(1);
+            if (next.Kind is not (SyntaxTokenKind.Pipe or SyntaxTokenKind.CloseParen)) { return null; }
+
+            var save = _position;
+            var single = ParseArgument(implicitCurrentItem: false);
+
+            if (single is null || Current.Kind is not (SyntaxTokenKind.Pipe or SyntaxTokenKind.CloseParen))
+            {
+                _position = save;
+                return null;
+            }
+
+            return single;
+        }
+
+        /// <summary>
+        /// Reports alternatives that do not bind the same names — <c>TOAST-0053</c>.
+        /// </summary>
+        /// <remarks>
+        /// `(Lit(v) | Add(l, r))` would leave `$v` unset whenever the `Add` side matched, and
+        /// an unset variable is not an error anywhere else in the language, so the arm would
+        /// simply do something wrong. Saying so here is the only place it can be said.
+        /// </remarks>
+        private void ReportInconsistentAlternativeBindings(OrPatternSyntax pattern)
+        {
+            var first = PatternBindingNames(pattern.Alternatives[0]);
+
+            for (var index = 1; index < pattern.Alternatives.Count; index++)
+            {
+                var names = PatternBindingNames(pattern.Alternatives[index]);
+                if (names.SetEquals(first)) { continue; }
+
+                var missing = new SortedSet<string>(first, StringComparer.Ordinal);
+                missing.SymmetricExceptWith(names);
+
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.or_pattern_binding_mismatch",
+                    Title: "Every alternative of an or-pattern must bind the same names.",
+                    Span: pattern.Alternatives[index].Span,
+                    Label: $"bound by only one side: {string.Join(", ", missing)}",
+                    Help: "bind the same names on both sides, or write one arm for each shape."));
+                return;
+            }
+        }
+
+        /// <summary>Every name a pattern binds, to any depth.</summary>
+        private static SortedSet<string> PatternBindingNames(ArgumentSyntax pattern)
+        {
+            var names = new SortedSet<string>(StringComparer.Ordinal);
+            CollectPatternBindingNames(pattern, names);
+            return names;
+        }
+
+        private static void CollectPatternBindingNames(ArgumentSyntax pattern, SortedSet<string> names)
+        {
+            switch (pattern)
+            {
+                case BarewordArgumentSyntax { Value: var name }
+                    when name.Length > 0 && name != "_" && !name.StartsWith('$'):
+                    names.Add(name);
+                    break;
+
+                case VariantPatternSyntax variant:
+                    foreach (var element in variant.Positional)
+                    {
+                        CollectPatternBindingNames(element, names);
+                    }
+
+                    foreach (var field in variant.Named)
+                    {
+                        CollectPatternBindingNames(field.Pattern, names);
+                    }
+
+                    break;
+
+                case ListPatternSyntax list:
+                    foreach (var element in list.Before)
+                    {
+                        CollectPatternBindingNames(element, names);
+                    }
+
+                    foreach (var element in list.After)
+                    {
+                        CollectPatternBindingNames(element, names);
+                    }
+
+                    if (list.HasRest && list.RestName.Length > 0) { names.Add(list.RestName); }
+                    break;
+
+                case OrPatternSyntax alternatives when alternatives.Alternatives.Count > 0:
+                    // Checked to agree already, so one alternative speaks for all of them.
+                    CollectPatternBindingNames(alternatives.Alternatives[0], names);
+                    break;
+
+                case BoundPatternSyntax bound:
+                    names.Add(bound.Name);
+                    CollectPatternBindingNames(bound.Pattern, names);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// A destructuring pattern, optionally binding the whole with <c>as</c> — <c>TOAST-0053</c>.
+        /// </summary>
+        private ArgumentSyntax? TryParseDestructuringPattern()
+        {
+            ArgumentSyntax? pattern =
+                TryParseVariantPattern()
+                ?? (ArgumentSyntax?)TryParseListPattern()
+                ?? TryParseOrPattern();
+
+            if (pattern is null) { return null; }
+
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                !string.Equals(Current.Text, "as", StringComparison.Ordinal))
+            {
+                return pattern;
+            }
+
+            var nameToken = Peek(1);
+            if (nameToken.Kind != SyntaxTokenKind.Bareword || IsVariableToken(nameToken))
+            {
+                return pattern;
+            }
+
+            NextToken();
+            NextToken();
+            return new BoundPatternSyntax(
+                pattern, nameToken.Text, TextSpan.FromBounds(pattern.Span.Start, nameToken.Span.End));
+        }
+
+        /// <summary>
         /// A list pattern in pattern position — <c>TOAST-0053</c>.
         /// </summary>
         /// <remarks>
@@ -265,8 +452,7 @@ public static partial class ToshParser
         /// <summary>One element inside a variant pattern — a nested pattern, name, or value.</summary>
         private ArgumentSyntax? ParseSubPattern()
         {
-            if (TryParseVariantPattern() is { } nested) { return nested; }
-            if (TryParseListPattern() is { } list) { return list; }
+            if (TryParseDestructuringPattern() is { } nested) { return nested; }
 
             // A plain name binds; `$name` is a reference, and has to be evaluated and compared
             // like any other value, so it falls through to `ParseArgument`.
@@ -333,8 +519,7 @@ public static partial class ToshParser
                 }
                 else
                 {
-                    pattern = TryParseVariantPattern()
-                              ?? (ArgumentSyntax?)TryParseListPattern()
+                    pattern = TryParseDestructuringPattern()
                               ?? ParseArgument(implicitCurrentItem: implicitCurrentItem)
                               ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
                 }

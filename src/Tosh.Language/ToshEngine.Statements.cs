@@ -1305,7 +1305,8 @@ public sealed partial class ToshEngine
             // shape the item was filed for, and a guard that cannot read what the pattern
             // bound would make it useless.
             var bindings = arm.Pattern is VariantPatternSyntax or ListPatternSyntax
-                ? BindPatternNames(arm.Pattern, value)
+                    or OrPatternSyntax or BoundPatternSyntax
+                ? await BindPatternNamesAsync(arm.Pattern, sourceName, sourceText, value, cancellationToken)
                 : null;
 
             if (arm.Guard is not null)
@@ -1361,12 +1362,15 @@ public sealed partial class ToshEngine
     /// its constructor takes. `_` discards a position rather than binding it, so a pattern can
     /// reach the third field without naming the first two.
     /// </remarks>
-    private static Dictionary<string, object?> BindPatternNames(
+    private async Task<Dictionary<string, object?>> BindPatternNamesAsync(
         ArgumentSyntax pattern,
-        object? value)
+        string sourceName,
+        string sourceText,
+        object? value,
+        CancellationToken cancellationToken)
     {
         var bindings = new Dictionary<string, object?>(StringComparer.Ordinal);
-        BindSubPattern(pattern, value, bindings);
+        await BindSubPatternAsync(pattern, sourceName, sourceText, value, bindings, cancellationToken);
         return bindings;
     }
 
@@ -1379,23 +1383,28 @@ public sealed partial class ToshEngine
     /// sees `Some(Point(x, y))`'s `x` and `y` as ordinary names, which is the point of writing
     /// it that way rather than reaching through two member accesses.
     /// </remarks>
-    private static void CollectVariantBindings(
+    private async Task CollectVariantBindingsAsync(
         VariantPatternSyntax pattern,
+        string sourceName,
+        string sourceText,
         object? instance,
-        Dictionary<string, object?> bindings)
+        Dictionary<string, object?> bindings,
+        CancellationToken cancellationToken)
     {
         if (!TryDescribePatternSubject(instance, out var subject)) { return; }
 
         for (var index = 0; index < pattern.Positional.Count && index < subject.Positional.Count; index++)
         {
             TryReadPatternMember(instance, subject.Positional[index], out var value);
-            BindSubPattern(pattern.Positional[index], value, bindings);
+            await BindSubPatternAsync(
+                pattern.Positional[index], sourceName, sourceText, value, bindings, cancellationToken);
         }
 
         foreach (var named in pattern.Named)
         {
             TryReadPatternMember(instance, named.Field, out var value);
-            BindSubPattern(named.Pattern, value, bindings);
+            await BindSubPatternAsync(
+                named.Pattern, sourceName, sourceText, value, bindings, cancellationToken);
         }
     }
 
@@ -1407,23 +1416,28 @@ public sealed partial class ToshEngine
     /// array even when it is empty, so an arm can pass it on without checking for null; an
     /// anonymous `...` skips the middle without naming it.
     /// </remarks>
-    private static void CollectListBindings(
+    private async Task CollectListBindingsAsync(
         ListPatternSyntax pattern,
+        string sourceName,
+        string sourceText,
         object? value,
-        Dictionary<string, object?> bindings)
+        Dictionary<string, object?> bindings,
+        CancellationToken cancellationToken)
     {
         if (!TryReadPatternSequence(value, out var items)) { return; }
 
         for (var index = 0; index < pattern.Before.Count && index < items.Count; index++)
         {
-            BindSubPattern(pattern.Before[index], items[index], bindings);
+            await BindSubPatternAsync(
+                pattern.Before[index], sourceName, sourceText, items[index], bindings, cancellationToken);
         }
 
         for (var index = 0; index < pattern.After.Count; index++)
         {
             var position = items.Count - pattern.After.Count + index;
             if (position < 0) { continue; }
-            BindSubPattern(pattern.After[index], items[position], bindings);
+            await BindSubPatternAsync(
+                pattern.After[index], sourceName, sourceText, items[position], bindings, cancellationToken);
         }
 
         if (!pattern.HasRest || pattern.RestName.Length == 0) { return; }
@@ -1445,10 +1459,13 @@ public sealed partial class ToshEngine
     }
 
     /// <summary>Binds one sub-pattern: a name takes the value, a nested pattern recurses.</summary>
-    private static void BindSubPattern(
+    private async Task BindSubPatternAsync(
         ArgumentSyntax pattern,
+        string sourceName,
+        string sourceText,
         object? value,
-        Dictionary<string, object?> bindings)
+        Dictionary<string, object?> bindings,
+        CancellationToken cancellationToken)
     {
         switch (pattern)
         {
@@ -1457,11 +1474,40 @@ public sealed partial class ToshEngine
                 break;
 
             case VariantPatternSyntax nested:
-                CollectVariantBindings(nested, value, bindings);
+                await CollectVariantBindingsAsync(
+                    nested, sourceName, sourceText, value, bindings, cancellationToken);
                 break;
 
             case ListPatternSyntax list:
-                CollectListBindings(list, value, bindings);
+                await CollectListBindingsAsync(
+                    list, sourceName, sourceText, value, bindings, cancellationToken);
+                break;
+
+            case BoundPatternSyntax bound:
+                bindings[bound.Name] = value;
+                await BindSubPatternAsync(
+                    bound.Pattern, sourceName, sourceText, value, bindings, cancellationToken);
+                break;
+
+            case OrPatternSyntax alternatives:
+                // `TOAST-0053`. Which alternative matched decides what the names hold, and
+                // nothing recorded that during matching, so the first one that fits is found
+                // again here. Two alternatives may share a shape and differ only in a literal
+                // — `(Point(a, 0) | Point(0, a))` — so guessing by shape would bind the wrong
+                // value; asking the matcher is the only answer that is right every time.
+                foreach (var alternative in alternatives.Alternatives)
+                {
+                    if (!await MatchesPatternAsync(
+                            value, sourceName, sourceText, alternative, cancellationToken))
+                    {
+                        continue;
+                    }
+
+                    await BindSubPatternAsync(
+                        alternative, sourceName, sourceText, value, bindings, cancellationToken);
+                    break;
+                }
+
                 break;
         }
     }
