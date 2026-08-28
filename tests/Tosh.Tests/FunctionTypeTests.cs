@@ -224,49 +224,43 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
             string.Join(", ", strictness.Select(d => d.Code)));
     }
 
-    // --- A return annotation is checked against everything produced (`TOSH-0010`) ---
+    // --- A return annotation describes the returned value (`TOSH-0010`) ---
 
     /// <summary>
-    /// A function that emits a value before returning fails its own return annotation.
+    /// A function that emits before returning is checked against what it *returns*.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This characterises current behaviour rather than endorsing it. A function's body
-    /// statement that produces a value contributes it to the function's output, and the
-    /// return annotation is then applied to *every* value produced — so a function that
-    /// emits anything before `return` is checked against the emission as well.
+    /// A body statement that produces a value contributes it to the function's output, and
+    /// the annotation used to be applied to every one of them — so a function that emitted
+    /// anything before `return` was checked against the emission too. `§Refinement Types`
+    /// describes `-> T where (_)` as a predicate over the **return value**, and this is that.
     /// </para>
     /// <para>
-    /// `§Refinement Types` describes `-> T where (_)` as a predicate over the **return
-    /// value**, which is not what happens here. The ambiguity is a function that both emits
-    /// and returns: the emitted values are output, the returned one is the return value, and
-    /// only one of them is what the annotation is about.
+    /// It was not academic: `scripts/build.tosh`'s publish command emits `dotnet` build output
+    /// through an annotated function, so every release ended by reporting a conversion failure
+    /// that had not happened — the work had all succeeded.
     /// </para>
     /// <para>
-    /// It is not academic. `scripts/build.tosh`'s publish command emits `dotnet` build output
-    /// through an annotated function, so every release ended by reporting a conversion
-    /// failure that had not happened — the work had all succeeded. `TOSH-0010` carries the
-    /// decision; this test exists so that changing it is deliberate and visible.
+    /// The emitted value is still *produced*. Only the annotation stops applying to it, so the
+    /// function below yields two values and the caller sees both.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task A_return_annotation_is_checked_against_emitted_values_too()
+    public async Task A_return_annotation_ignores_values_emitted_on_the_way()
     {
         var engine = ShellEngine.CreateFullShell();
 
-        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
-            await engine.ExecuteToListAsync("""
-                record R(A: string)
-                func Make() -> R {
-                    42
-                    return new R("v")
-                }
-                var v = Make()
-                """));
+        var results = await engine.ExecuteToListAsync("""
+            record R(A: string)
+            func Make() -> R {
+                42
+                return new R("v")
+            }
+            echo (Make() | count)
+            """);
 
-        Assert.Contains(
-            error.Diagnostics,
-            d => d.Code == "tosh.runtime.return_type_conversion_failed");
+        Assert.Equal("2", results[^1]?.ToString());
     }
 
     /// <summary>The same function without the emission returns cleanly.</summary>

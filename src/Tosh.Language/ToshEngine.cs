@@ -6557,7 +6557,16 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     break;
                 }
 
-                yield return ConvertFunctionReturnValue(definition, context, current, typeBindings);
+                // `TOSH-0010`. A return annotation describes the returned value. When the
+                // function has a `return` of its own, these are the values it *emitted* on the
+                // way there — output, not the result — and checking them against the
+                // annotation refuses perfectly good functions that happen to log.
+                //
+                // A generator is the exception: its yielded values *are* its result, so they
+                // are still checked.
+                yield return definition.ReturnsExplicitly && !definition.IsGenerator
+                    ? current
+                    : ConvertFunctionReturnValue(definition, context, current, typeBindings);
             }
         }
         finally

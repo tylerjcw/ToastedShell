@@ -5,6 +5,7 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOAST-0042`](items/TOAST-0042.md) | P2 | complete | 6/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
+| [`TOSH-0010`](items/TOSH-0010.md) | P2 | complete | 6/6 | `build.tosh publish` reports failure after succeeding, on every RID |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | complete | 8/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
