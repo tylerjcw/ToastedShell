@@ -1,7 +1,7 @@
 ---
 id: TOAST-0002
 title: "Statement dispatch is decided by scattered lookahead predicates that must agree by hand"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-16
@@ -49,9 +49,42 @@ Three defects of the same shape, each found by hand, each after the fact.
 - [x] It found a live defect immediately — `f($a ** $b, 1)` did not parse, exponentiation missing from the comma scan. Fixed, with the corpus as its regression test
 - [x] **Coverage measured properly, and "3 of 7" was measuring the wrong thing** — see below. `HasTopLevelOperatorBeforeCloseParen` is the most load-bearing site in the parser, not an uncovered one
 - [x] Determine which of the four are *redundant* rather than uncovered — two show no observable effect when their answer is forced, one is heavily exercised in both directions, and the fourth shares a method with the second
-- [ ] Adding a new operator requires editing one place, demonstrated by adding one — **not attempted**; the corpus makes an omission *visible*, it does not make it *impossible*
-- [ ] `TS-P2-116`'s shape (unary at statement start) covered — currently blocked behind `TS-P2-117`, which the corpus found and which exempts `not`
+- [x] Adding a new operator requires editing one place — the seven hand-written chains are one predicate now, demonstrated by removing a term from it and watching six positions fail
+- [x] `TS-P2-116`'s shape (unary at statement start) covered — unblocked when `TS-P2-117` was fixed; the exemption map has been empty since 2026-08-17 and 51 bare-statement assertions pass
 - [x] No accepted syntax changes; the full suite passes at 5,604
+
+## One place instead of seven — 2026-08-27
+
+The seven scan sites each answered "is there an operator here?" with **its own hand-written
+chain of the same predicates**. Extracted:
+
+| | Sites | Set |
+|---|---|---|
+| `IsInfixOperatorToken` | 3 | the ten operators that can only follow an operand |
+| `IsInfixOrPrefixOperatorToken` | 4 | those plus unary, for scans deciding whether a *whole* expression begins |
+
+Two rather than one, because the sites legitimately differ and the difference is worth naming:
+a scan looking back from a terminator wants operators that follow an operand, while one
+deciding whether an expression starts must also admit `not` and unary `-`. Leaving them as two
+similar lists is what "must agree by hand" looked like; naming the distinction is what makes
+the disagreement impossible rather than merely visible.
+
+Behaviour-neutral: 6,651 before and after.
+
+**Demonstrated by removing rather than adding.** Adding a real operator means tokenizer,
+parser and evaluator changes — a language change to prove a refactor. Deleting
+`IsCastOperatorToken` from the single shared predicate is the same experiment run backwards,
+and it fails **six corpus assertions across six positions**: `$a as int`, `($a as int)`,
+`echo ($a as int)`, `take2($a as int, 1)`, the comprehension source, and bare-statement
+position. Before this change the same deletion at one site was caught at three of seven.
+
+## `TS-P2-116` was already covered, and the guard said so
+
+The unary-at-statement-start box was blocked behind `TS-P2-117`. That item is complete, and
+`KnownFailures` — the map of probes asserted to *still* fail — has been empty since
+2026-08-17. The exemption did exactly what its comment promised: it broke the moment the
+defect went away, rather than quietly outliving it. 51 bare-statement assertions pass and
+`not true` evaluates at statement start.
 
 ## Re-measured 2026-08-27, and the earlier number was measuring the wrong thing
 

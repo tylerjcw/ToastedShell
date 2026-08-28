@@ -603,16 +603,7 @@ public static partial class ToshParser
                         }
 
                         if (depth == 0 &&
-                            (IsTernaryQuestionToken(token) ||
-                             IsNullCoalescingOperatorToken(token) ||
-                             IsLogicalOrOperatorToken(token) ||
-                             IsLogicalAndOperatorToken(token) ||
-                             IsComparisonOperatorToken(token) ||
-                             IsCastOperatorToken(token) ||
-                             IsBitwiseOperatorToken(token) ||
-                             IsAdditiveOperatorToken(token) ||
-                             IsMultiplicativeOperatorToken(token) ||
-                             IsExponentiationOperatorToken(token)))
+                            (IsInfixOperatorToken(token)))
                         {
                             return true;
                         }
@@ -659,16 +650,7 @@ public static partial class ToshParser
                     case SyntaxTokenKind.Bareword when depth == 0:
                         if (token.Text is "for" or "let" or "where")
                             return false;
-                        if (IsTernaryQuestionToken(token) ||
-                            IsNullCoalescingOperatorToken(token) ||
-                            IsLogicalOrOperatorToken(token) ||
-                            IsLogicalAndOperatorToken(token) ||
-                            IsComparisonOperatorToken(token) ||
-                            IsCastOperatorToken(token) ||
-                            IsBitwiseOperatorToken(token) ||
-                            IsAdditiveOperatorToken(token) ||
-                            IsMultiplicativeOperatorToken(token) ||
-                            IsExponentiationOperatorToken(token))
+                        if (IsInfixOperatorToken(token))
                         {
                             return true;
                         }
@@ -676,16 +658,7 @@ public static partial class ToshParser
 
                     default:
                         if (depth == 0 &&
-                            (IsTernaryQuestionToken(token) ||
-                             IsNullCoalescingOperatorToken(token) ||
-                             IsLogicalOrOperatorToken(token) ||
-                             IsLogicalAndOperatorToken(token) ||
-                             IsComparisonOperatorToken(token) ||
-                             IsCastOperatorToken(token) ||
-                             IsBitwiseOperatorToken(token) ||
-                             IsAdditiveOperatorToken(token) ||
-                             IsMultiplicativeOperatorToken(token) ||
-                             IsExponentiationOperatorToken(token)))
+                            (IsInfixOperatorToken(token)))
                         {
                             return true;
                         }
@@ -1334,17 +1307,7 @@ public static partial class ToshParser
 
                     default:
                         if (depth == 0 &&
-                            (IsTernaryQuestionToken(token) ||
-                             IsNullCoalescingOperatorToken(token) ||
-                             IsLogicalOrOperatorToken(token) ||
-                             IsLogicalAndOperatorToken(token) ||
-                             IsComparisonOperatorToken(token) ||
-                             IsCastOperatorToken(token) ||
-                             IsBitwiseOperatorToken(token) ||
-                             IsAdditiveOperatorToken(token) ||
-                             IsMultiplicativeOperatorToken(token) ||
-                             IsExponentiationOperatorToken(token) ||
-                             IsUnaryOperatorToken(token)))
+                            (IsInfixOrPrefixOperatorToken(token)))
                         {
                             return true;
                         }
@@ -1438,17 +1401,7 @@ public static partial class ToshParser
 
                     default:
                         if (depth == 0 &&
-                            (IsTernaryQuestionToken(token) ||
-                             IsNullCoalescingOperatorToken(token) ||
-                             IsLogicalOrOperatorToken(token) ||
-                             IsLogicalAndOperatorToken(token) ||
-                             IsComparisonOperatorToken(token) ||
-                             IsCastOperatorToken(token) ||
-                             IsBitwiseOperatorToken(token) ||
-                             IsAdditiveOperatorToken(token) ||
-                             IsMultiplicativeOperatorToken(token) ||
-                             IsExponentiationOperatorToken(token) ||
-                             IsUnaryOperatorToken(token)))
+                            (IsInfixOrPrefixOperatorToken(token)))
                         {
                             return true;
                         }
@@ -1516,17 +1469,7 @@ public static partial class ToshParser
 
                     default:
                         if (depth == 0 &&
-                            (IsTernaryQuestionToken(token) ||
-                             IsNullCoalescingOperatorToken(token) ||
-                             IsLogicalOrOperatorToken(token) ||
-                             IsLogicalAndOperatorToken(token) ||
-                             IsComparisonOperatorToken(token) ||
-                             IsCastOperatorToken(token) ||
-                             IsBitwiseOperatorToken(token) ||
-                             IsAdditiveOperatorToken(token) ||
-                             IsMultiplicativeOperatorToken(token) ||
-                             IsExponentiationOperatorToken(token) ||
-                             IsUnaryOperatorToken(token)))
+                            (IsInfixOrPrefixOperatorToken(token)))
                         {
                             return true;
                         }
@@ -1597,20 +1540,52 @@ public static partial class ToshParser
             return depth == 0;
         }
 
-        private bool IsAnyOperatorToken(SyntaxToken token)
-        {
-            return IsComparisonOperatorToken(token)
+        /// <summary>
+        /// Every operator that can only appear *after* an operand — <c>TOAST-0002</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Seven lookahead scans asked "is there an operator here?" and each answered with its
+        /// own hand-written chain of the same ten predicates. They had to agree, and three
+        /// recorded defects are what happened when they did not: `as` reaching the precedence
+        /// chain but not every scan (`TS-P2-105`), the six bitwise words needing seven separate
+        /// edits with one missed (`TS-P3-14`), and unary operators being unreachable at
+        /// statement start because every scan looked for an operator *after* the leading token
+        /// (`TS-P2-116`).
+        /// </para>
+        /// <para>
+        /// One chain now, so a new operator family is added in one place instead of seven.
+        /// `OperatorStatementCorpusTests` still checks that it reaches every syntactic
+        /// position; this makes the omission it was built to catch much harder to make.
+        /// </para>
+        /// </remarks>
+        private bool IsInfixOperatorToken(SyntaxToken token)
+            => IsTernaryQuestionToken(token)
+                || IsNullCoalescingOperatorToken(token)
+                || IsLogicalOrOperatorToken(token)
+                || IsLogicalAndOperatorToken(token)
+                || IsComparisonOperatorToken(token)
                 || IsCastOperatorToken(token)
                 || IsBitwiseOperatorToken(token)
                 || IsAdditiveOperatorToken(token)
                 || IsMultiplicativeOperatorToken(token)
-                || IsExponentiationOperatorToken(token)
-                || IsLogicalAndOperatorToken(token)
-                || IsLogicalOrOperatorToken(token)
-                || IsUnaryOperatorToken(token)
-                || IsTernaryQuestionToken(token)
-                || IsTernaryColonToken(token)
-                || IsNullCoalescingOperatorToken(token);
+                || IsExponentiationOperatorToken(token);
+
+        /// <summary>
+        /// Those, plus the operators that can *open* an expression — <c>TOAST-0002</c>.
+        /// </summary>
+        /// <remarks>
+        /// The scans legitimately differ here, and the difference is worth naming rather than
+        /// leaving as two similar lists: a scan looking backwards from a terminator wants only
+        /// operators that follow an operand, while one deciding whether a *whole* expression
+        /// begins must also admit `not` and unary `-`.
+        /// </remarks>
+        private bool IsInfixOrPrefixOperatorToken(SyntaxToken token)
+            => IsInfixOperatorToken(token) || IsUnaryOperatorToken(token);
+
+        private bool IsAnyOperatorToken(SyntaxToken token)
+        {
+            return IsInfixOrPrefixOperatorToken(token) || IsTernaryColonToken(token);
         }
 
         private static bool IsLogicalOrOperatorToken(SyntaxToken token)
