@@ -47,11 +47,57 @@ Three defects of the same shape, each found by hand, each after the fact.
 - [x] The invariant established and stated behaviourally: **every operator in `OperatorSurface` must parse in every syntactic position**, rather than "every site lists every predicate" — the sites legitimately differ, and comparing their lists would fail on correct code
 - [x] A tripwire exists: `OperatorStatementCorpusTests`, 276 assertions driven from the registry, failing in both directions if an operator gains or loses a probe
 - [x] It found a live defect immediately — `f($a ** $b, 1)` did not parse, exponentiation missing from the comma scan. Fixed, with the corpus as its regression test
-- [ ] **Coverage is 3 of 7 scan sites**, measured by deleting `IsCastOperatorToken` from each in turn. Raise it, or establish that the remaining four are redundant
-- [ ] Determine which of sites 667, 684, 1524 and 1543 are *redundant* rather than uncovered — deleting each changes no observable behaviour, which is itself worth knowing
+- [x] **Coverage measured properly, and "3 of 7" was measuring the wrong thing** — see below. `HasTopLevelOperatorBeforeCloseParen` is the most load-bearing site in the parser, not an uncovered one
+- [x] Determine which of the four are *redundant* rather than uncovered — two show no observable effect when their answer is forced, one is heavily exercised in both directions, and the fourth shares a method with the second
 - [ ] Adding a new operator requires editing one place, demonstrated by adding one — **not attempted**; the corpus makes an omission *visible*, it does not make it *impossible*
 - [ ] `TS-P2-116`'s shape (unary at statement start) covered — currently blocked behind `TS-P2-117`, which the corpus found and which exempts `not`
 - [x] No accepted syntax changes; the full suite passes at 5,604
+
+## Re-measured 2026-08-27, and the earlier number was measuring the wrong thing
+
+Deleting `IsCastOperatorToken` from a site asks "is *this operator's* contribution to this
+scan tested?". It does not ask whether the **site** is tested — a scan handling nine operator
+families keeps working when one is removed from it. So "3 of 7" understated the coverage and,
+worse, pointed at the wrong sites.
+
+Forcing each site to a constant asks the stronger question. Full suite, 6,651 tests:
+
+| Site | forced `false` | forced `true` |
+|---|---:|---:|
+| `HasTopLevelOperatorBeforeCloseParen` | **116 failures** | **415 failures** |
+| `HasTopLevelOperatorBeforeComprehensionKeywordOrClose` | 10 failures | **0** |
+| `IsAnyOperatorToken` | 10 failures | **0** |
+
+**`HasTopLevelOperatorBeforeCloseParen` is the most load-bearing scan in the parser**, not a
+redundant one. The earlier table recorded it as "not caught", which was true of the cast
+operator and false of the site.
+
+### The two that answer `true` for free
+
+Both remaining sites break when forced `false` and change nothing when forced `true`, so only
+their positive answers are constrained. Their negative branches were then probed by hand
+rather than left at "the suite does not cover it":
+
+- **Comprehension `where` / `let`** chooses `ParseOperatorExpression` over `ParseArgument`.
+  Thirteen shapes — bare variable, literal, string, parenthesised, negation, array literal,
+  record literal, string with spaces, nested comprehension, and the operator cases — parse
+  **identically** either way. `ParseOperatorExpression` appears to subsume `ParseArgument` at
+  that position.
+- **`IsAnyOperatorToken`**, whose only caller is `NextTokenStartsCommandArgument`'s bareword
+  case. Six shapes, including `Math.PI + 1` — the example its own doc comment cites — parse
+  identically.
+
+So the honest reading is **unexercised, and probably redundant**, on negative evidence: no
+constructed shape distinguishes them, and neither does the suite. That is worth acting on —
+a branch nothing depends on can drift forever — but removing one is a behaviour change
+resting on the absence of a counterexample, which is the user's call rather than a cleanup.
+
+### An accidental guard worth knowing about
+
+Forcing a scan site wrong failed the **build**, not just the tests: `Tosh.Cli.csproj` runs the
+freshly built binary over `scripts/sync_vscode_extension.tosh` after compiling, so a parser
+that cannot parse a real script stops the build. It cost a confusing "BUILD FAILED" here, and
+it is a real check on the parser that no test file contains.
 
 ## What the guard actually covers, measured
 
