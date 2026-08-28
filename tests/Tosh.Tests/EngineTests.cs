@@ -3847,7 +3847,11 @@ $output");
             native-free $buffer
             """);
 
-        Assert.Equal([8, 4L, 7, 11], results);
+        // `TOAST-0077`. The offset was `4L` here: `offset-of` returned `Int64` while declaring
+        // `int`, so `(size-of T) + (offset-of T.f)` widened — and a width taken from a value's
+        // type is how an unstated `write-buffer` corrupts the next slot. The value is
+        // unchanged; only its type is now what the command says it is.
+        Assert.Equal([8, 4, 7, 11], results);
     }
 
     [Fact]
@@ -3862,7 +3866,8 @@ $output");
             offset-of Tosh.Tests.NativePoint.Y
             """);
 
-        Assert.Equal([8, 4L], results);
+        // `TOAST-0077`. `4`, not `4L` — see the note above.
+        Assert.Equal([8, 4], results);
     }
 
     [Fact]

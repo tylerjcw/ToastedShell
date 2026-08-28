@@ -20,6 +20,7 @@
 | [`TS-P2-94`](items/TS-P2-94.md) | P2 | complete | 1/1 | `&` cannot reference a method or a module-qualified function |
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOAST-0072`](items/TOAST-0072.md) | P2 | complete | 5/5 | A rune's block argument ran in the current scope, so a macro calling a macro never worked |
+| [`TOAST-0077`](items/TOAST-0077.md) | P2 | complete | 7/7 | Native writes take their width from the value, so a buffer's layout depends on its data |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
 | [`TOAST-0034`](items/TOAST-0034.md) | P2 | complete | 8/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |

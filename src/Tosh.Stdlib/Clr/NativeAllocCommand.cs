@@ -6,7 +6,11 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("bytes|type-name", "Byte count to allocate, or a native interop type name whose unmanaged size should be allocated.")]
 [CommandExample("alloc 64", Title = "Allocate a 64-byte native buffer")]
 [CommandExample("alloc int32", Title = "Allocate enough native memory for one Int32")]
-[CommandOutput("A native pointer (IntPtr) to the freshly allocated buffer.", ClrType = typeof(IntPtr))]
+// `TOAST-0077`. This said `IntPtr`, and returns a `NativeBuffer` — which carries the
+// pointer, the length that makes the bounds checks possible, and disposal. The mismatch
+// was silent except as a false `member_not_found` on `$buffer.Pointer`, for code that
+// works.
+[CommandOutput("A NativeBuffer wrapping the freshly allocated memory: `.Pointer` is the address and `.ByteLength` its size.", ClrType = typeof(NativeBuffer))]
 public sealed class NativeAllocCommand : ShellCommand
 {
     public NativeAllocCommand(string name = "native-alloc")

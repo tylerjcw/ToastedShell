@@ -66,7 +66,12 @@ public sealed class NativeOffsetOfCommand : ShellCommand
                 label: "write a public field name here");
         }
 
-        yield return Marshal.OffsetOf(type, fieldName.Trim()).ToInt64();
+        // `TOAST-0077`. An `int`, matching this command's declared output and `size-of`'s.
+        // It was `ToInt64`, so `(size-of T) + (offset-of T.f)` widened to `Int64` — and a
+        // width that comes from a value's type is how `write-buffer` corrupts a slot. A
+        // struct whose field sits beyond `Int32` is not a thing; the conversion throws if
+        // one ever is, rather than silently narrowing.
+        yield return checked((int)Marshal.OffsetOf(type, fieldName.Trim()).ToInt64());
         await Task.CompletedTask;
     }
 

@@ -6660,6 +6660,7 @@ no name to report, such as a trailing dot, raises
 \begin{lstlisting}
 alloc buffer = 1024     # Allocate 1024 bytes of native memory
 alloc info = SysInfo    # Or size it from an interop type
+# Either yields a NativeBuffer: $buffer.Pointer is the address, $buffer.ByteLength its size
 \end{lstlisting}
 
 Byte offsets on the buffer helpers are the \code{--at} flag, not a positional
@@ -6671,6 +6672,35 @@ read-buffer long $buffer --at 8
 read-buffer bytes $buffer --count 16
 forget $buffer          # unsets the variable and frees the buffer
 \end{lstlisting}
+
+\subsection*{Stating the Width}
+
+\code{read-buffer} names the type it reads.  \code{write-buffer} takes its width from the
+\emph{value} unless told otherwise, and the difference matters: a tosh integer is an
+\code{int32} only while it fits, so a four-byte slot takes eight bytes the first time a
+value arrives as a \code{long} --- a file length, a tick count, anything a CLR property
+returns as \code{long}.  The write lands inside the buffer, so the bounds check cannot see
+it; it overwrites the next slot and reports nothing.
+
+\code{--as} states the width, so a buffer's layout is a decision rather than a consequence
+of its data:
+
+\begin{lstlisting}
+write-buffer $buffer $n --as int32 --at 8    # four bytes, whatever $n is
+write-buffer $buffer $n --at 8               # as many bytes as $n's own type
+\end{lstlisting}
+
+It takes the vocabulary \code{size-of}, \code{alloc} and \code{read-buffer} take, a
+\code{raw struct} name included, and a value that does not fit is refused rather than
+truncated --- narrowing here would only move the silent corruption from the next slot into
+this one.
+
+\begin{notebox}
+\code{size-of} and \code{offset-of} both return \code{int}, so offset arithmetic stays
+\code{int}.  They are used together in every layout calculation, and while \code{offset-of}
+returned \code{long} their sum widened --- putting a value of exactly the type that makes an
+unstated write eight bytes wide into the middle of the arithmetic that decides layout.
+\end{notebox}
 
 The \code{native-*} names are canonical; \code{alloc}, \code{read-buffer},
 \code{write-buffer}, \code{size-of} and \code{offset-of} are blessed aliases.

@@ -9,20 +9,24 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to write into.")]
 [CommandArgument("value", "String, byte sequence, enum, primitive, pointer-sized value, or struct-layout value to write.")]
 [CommandArgument("--at", "Byte offset from the buffer or pointer before writing.", Required = false, TypeName = "int")]
+[CommandArgument("--as", "Native interop type to write the value as, fixing the width. Without it the width comes from the value\u2019s own type, which is `Int32` for an integer only while it fits.", Required = false, TypeName = "string")]
 [CommandExample("native-write $buffer \"hello\"", Title = "Write a C string")]
 [CommandExample("native-write $buffer [72 105 0]", Title = "Write explicit bytes")]
 [CommandExample("native-write $buffer 42 --at 8", Title = "Write at an offset")]
+[CommandExample("native-write $buffer $n --as int32 --at 8", Title = "Write four bytes whatever $n is")]
 [CommandOutput("Emits nothing; writes the supplied value(s) into the native buffer as a side effect.")]
 public sealed class NativeWriteCommand : ShellCommand
 {
     public NativeWriteCommand(string name = "native-write")
-        : base(name, "Writes a C string, byte sequence, or struct-layout value into native memory.", $"{name} <buffer|pointer> <value> [--at <offset>]") { }
+        : base(name, "Writes a C string, byte sequence, or struct-layout value into native memory.", $"{name} <buffer|pointer> <value> [--as <type>] [--at <offset>]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         // `--at` matches native-read's spelling. The trailing positional offset
         // stays accepted so existing scripts keep working.
         var offset = 0;
+        object? writtenAs = null;
+        var writtenAsIndex = 0;
         var positional = new List<object?>();
 
         for (var index = 0; index < context.Arguments.Count; index++)
@@ -32,6 +36,24 @@ public sealed class NativeWriteCommand : ShellCommand
             if (text is "--at" or "--offset")
             {
                 offset = CommandArguments.RequireConverted<int>(context.Arguments, ++index, "offset");
+                continue;
+            }
+
+            // `TOAST-0077`. Without this the width is whatever the value's runtime type
+            // happens to be, so a slot's size depends on the data that lands in it.
+            if (text is "--as")
+            {
+                if (++index >= context.Arguments.Count)
+                {
+                    throw context.CreateDiagnostic(
+                        code: "tosh.runtime.native_write_requires_type_name",
+                        title: "--as needs a native interop type name.",
+                        argumentIndex: index - 1,
+                        label: "write something like '--as int32'");
+                }
+
+                writtenAs = context.Arguments[index];
+                writtenAsIndex = index;
                 continue;
             }
 
@@ -52,6 +74,11 @@ public sealed class NativeWriteCommand : ShellCommand
         if (positional.Count == 3)
         {
             offset = ReadOffset(context, 2);
+        }
+
+        if (writtenAs is not null)
+        {
+            value = ConvertToWrittenType(context, value, writtenAs, writtenAsIndex);
         }
 
         if (target is NativeBuffer buffer)
@@ -144,6 +171,49 @@ public sealed class NativeWriteCommand : ShellCommand
             title: $"native-write does not know how to write values of type '{runtimeType.Name}'.",
             argumentIndex: argumentIndex,
             label: "use a string, byte sequence, enum, primitive, or struct-layout value here");
+    }
+
+    /// <summary>
+    /// Converts a value to the type <c>--as</c> names, so the write is that many bytes wide —
+    /// <c>TOAST-0077</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The width of a write is <c>Marshal.SizeOf(value.GetType())</c>, which made a buffer's
+    /// layout a consequence of its data: an integer is <c>Int32</c> only while it fits, so a
+    /// four-byte slot took eight bytes the first time a value arrived as a <c>long</c> — and
+    /// the bounds check could not see it, because the write was inside the buffer. It
+    /// overwrote the next slot and said nothing.
+    /// </para>
+    /// <para>
+    /// A value that does not fit is refused rather than wrapped. Truncating here would replace
+    /// a silent corruption of the neighbouring slot with a silent corruption of this one.
+    /// </para>
+    /// </remarks>
+    private static object ConvertToWrittenType(
+        CommandContext context,
+        object? value,
+        object? typeArgument,
+        int argumentIndex)
+    {
+        var type = NativeCommandUtilities.ResolveInteropType(context, typeArgument, argumentIndex);
+
+        if (value is not null && value.GetType() == type)
+        {
+            return value;
+        }
+
+        if (TypeConversion.TryConvert(value, type, out var converted) && converted is not null)
+        {
+            return converted;
+        }
+
+        throw context.CreateDiagnostic(
+            code: "tosh.runtime.native_write_value_does_not_fit",
+            title: $"'{value}' cannot be written as '{type.Name}'.",
+            argumentIndex: argumentIndex,
+            label: $"the value does not fit {NativeInteropUtilities.SizeOf(type)} byte(s) of '{type.Name}'",
+            help: "widen the type this is written as, or narrow the value before writing it.");
     }
 
     private static bool TryGetByteSequence(object? value, out byte[] bytes)
