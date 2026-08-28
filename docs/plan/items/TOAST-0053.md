@@ -1,7 +1,7 @@
 ---
 id: TOAST-0053
 title: "`match` cannot bind a union's fields, so dispatch is a switch on a string"
-status: partial
+status: partial   # 10 of 11 accepted; the last waits on the compiler decision
 area: toast
 priority: 1
 opened: 2026-08-22
@@ -145,10 +145,16 @@ a detail of this item. The box stays partial for that reason.
 
 ## What is left
 
-Compiled emission with the differential corpus — the last box. `--compile` refuses every
-pattern node by name, which is the right failure but means the corpus cannot carry a case.
-Emission needs a bound node, lowering, and somewhere for the bound names to live as locals the
-arm body can read.
+Compiled emission with the differential corpus — the last box, and deliberately not next.
+
+`--compile` refuses every pattern node by name, verified for all four: the right failure, but
+it means the corpus cannot carry a case, since its harness requires a clean emit. Ordinary
+patterns still compile, so the compiler guards are unaffected by any of this work.
+
+Emission would need a bound node, lowering, and somewhere for the bound names to live as locals
+the arm body can read — the same scope-pushing shape rune expansion needed. That is a second
+implementation of everything above, and the standing decision is that compiled tosh stays an
+experiment until the interpreted language is solid. This box waits for that.
 
 ## Third slice — 2026-08-28
 
@@ -330,6 +336,11 @@ thrown — so the first version of these tests passed whether or not the check e
       naming the field — for types declared in the same source; the runtime check stays as the
       backstop for `require`d types, classes and structs. See the eighth slice
 - [x] Guards compose with bindings — the guard sees the bound names, **interpreted**
-- [ ] Interpreted and compiled agree, in the differential corpus
+- [ ] Interpreted and compiled agree, in the differential corpus — **not started, and not
+      next.** Compiled tosh is an experiment until the interpreted language is solid
+      (`docs/ROADMAP.md`, *Standing Priority Decision*), so no new surface is added there.
+      Every pattern node is refused by name — `ListPatternSyntax`, `OrPatternSyntax`,
+      `BoundPatternSyntax`, `VariantPatternSyntax` — which is the right failure, and ordinary
+      patterns still compile, so the compiler guards stay green
 - [x] `§Match Expressions` documents the full pattern grammar in one table, with a
       `Destructuring Patterns` subsection and both listings run before being written down
