@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("cstring|bytes|type-name", "Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type.")]
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to read from. May be supplied from the pipeline.", Required = false)]
 [CommandArgument("--at", "Byte offset from the buffer or pointer before reading.", Required = false, TypeName = "int")]
-[CommandArgument("--count", "Byte count. Required when the mode is `bytes`; ignored otherwise.", Required = false, TypeName = "int")]
+[CommandArgument("--count", "How many to read. Bytes when the mode is `bytes`, where it is required; otherwise elements of the named type, and a single value is read without it.", Required = false, TypeName = "int")]
 [CommandExample("$buffer | native-read cstring", Title = "Read a C string from a native buffer")]
 [CommandExample("native-read bytes $buffer --count 16", Title = "Read a byte range")]
 [CommandExample("native-read int32 $buffer --at 4", Title = "Read an Int32 at an offset")]
@@ -145,8 +145,40 @@ public sealed class NativeReadCommand : ShellCommand
                 label: "use a primitive, enum, pointer-sized, or struct-layout type here");
         }
 
+        var stride = NativeInteropUtilities.SizeOf(type);
+
+        // `TOAST-0079`. `--count` meant a byte count for `bytes` and was ignored for every
+        // other type, so reading an array back was a loop of one command per element — the
+        // mirror of the write side's problem. For a named type it is an *element* count, which
+        // is what the same word means in `read-buffer bytes`: how many of the thing you asked
+        // for.
+        if (options.Count is { } count)
+        {
+            if (count < 0)
+            {
+                throw context.CreateDiagnostic(
+                    code: "tosh.runtime.native_read_negative_count",
+                    title: $"native-read {mode} cannot read a negative number of elements.",
+                    argumentIndex: 0,
+                    label: "use zero or a positive count");
+            }
+
+            NativeCommandUtilities.ValidateBufferRange(
+                context, source, options.Offset, checked(count * stride), argumentIndex ?? 1,
+                $"native-read {mode}");
+
+            var values = new object?[count];
+
+            for (var index = 0; index < count; index++)
+            {
+                values[index] = NativeInteropUtilities.ReadValue(type, IntPtr.Add(pointer, index * stride));
+            }
+
+            return values;
+        }
+
         NativeCommandUtilities.ValidateBufferRange(
-            context, source, options.Offset, NativeInteropUtilities.SizeOf(type), argumentIndex ?? 1, $"native-read {mode}");
+            context, source, options.Offset, stride, argumentIndex ?? 1, $"native-read {mode}");
 
         return NativeInteropUtilities.ReadValue(type, pointer);
     }

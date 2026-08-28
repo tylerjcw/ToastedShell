@@ -6695,6 +6695,30 @@ It takes the vocabulary \code{size-of}, \code{alloc} and \code{read-buffer} take
 truncated --- narrowing here would only move the silent corruption from the next slot into
 this one.
 
+\subsection*{Arrays}
+
+A sequence with a stated element type moves in one command, at that type's stride:
+
+\begin{lstlisting}
+write-buffer $buffer $vertices --as float          # the whole array, four bytes each
+read-buffer float $buffer --count 12               # and back again
+\end{lstlisting}
+
+\code{--count} means \emph{elements} of the named type, which is what it already meant for
+\code{bytes} --- how many of the thing you asked for.  Without it a read is a single value,
+as before.
+
+The range is checked before anything is written, so a sequence too long for the buffer is
+refused whole: a half-copied array leaves memory in a state no reader can detect.  An
+element that does not fit the stated type is refused for the same reason.
+
+\begin{notebox}
+This is what makes the data plane reachable.  Building a vertex buffer one scalar at a time
+re-enters command dispatch for every number --- 20,000 doubles take 137\,ms that way and
+3\,ms in bulk --- which is why older graphics code compiles a display list rather than
+uploading geometry.  Callbacks remain a control plane; \emph{this} is how bulk data crosses.
+\end{notebox}
+
 \begin{notebox}
 \code{size-of} and \code{offset-of} both return \code{int}, so offset arithmetic stays
 \code{int}.  They are used together in every layout calculation, and while \code{offset-of}

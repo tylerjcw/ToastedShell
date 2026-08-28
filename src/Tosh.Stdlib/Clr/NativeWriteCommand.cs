@@ -78,7 +78,21 @@ public sealed class NativeWriteCommand : ShellCommand
 
         if (writtenAs is not null)
         {
-            value = ConvertToWrittenType(context, value, writtenAs, writtenAsIndex);
+            var elementType = NativeCommandUtilities.ResolveInteropType(context, writtenAs, writtenAsIndex);
+
+            // `TOAST-0079`. A sequence with a stated element type is a bulk write: one command
+            // for the whole array rather than one per element. Building a vertex buffer a
+            // scalar at a time meant re-entering command dispatch for every number, which is
+            // why `examples/gl_mouse_cube.tosh` compiles a display list instead of uploading
+            // one. A string is not a sequence here — it already has a meaning.
+            if (value is IEnumerable and not string)
+            {
+                WriteSequence(context, target, value, elementType, offset, writtenAsIndex);
+                await Task.CompletedTask;
+                yield break;
+            }
+
+            value = ConvertToWrittenType(context, value, elementType, writtenAsIndex);
         }
 
         if (target is NativeBuffer buffer)
@@ -193,11 +207,9 @@ public sealed class NativeWriteCommand : ShellCommand
     private static object ConvertToWrittenType(
         CommandContext context,
         object? value,
-        object? typeArgument,
+        Type type,
         int argumentIndex)
     {
-        var type = NativeCommandUtilities.ResolveInteropType(context, typeArgument, argumentIndex);
-
         if (value is not null && value.GetType() == type)
         {
             return value;
@@ -214,6 +226,52 @@ public sealed class NativeWriteCommand : ShellCommand
             argumentIndex: argumentIndex,
             label: $"the value does not fit {NativeInteropUtilities.SizeOf(type)} byte(s) of '{type.Name}'",
             help: "widen the type this is written as, or narrow the value before writing it.");
+    }
+
+    /// <summary>
+    /// Writes every element of a sequence at successive offsets — <c>TOAST-0079</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The stride is the stated element type's size, so the layout is decided once for the
+    /// whole array rather than per value — the same reason <c>--as</c> exists for a single
+    /// write (<c>TOAST-0077</c>), applied to the case that actually needs the throughput.
+    /// </para>
+    /// <para>
+    /// The range is checked before anything is written, so a sequence too long for the buffer
+    /// is refused whole rather than half-copied. That matters more here than for a scalar: a
+    /// partial array upload leaves the buffer in a state no reader can detect.
+    /// </para>
+    /// </remarks>
+    private static void WriteSequence(
+        CommandContext context,
+        object? target,
+        object? value,
+        Type elementType,
+        int offset,
+        int argumentIndex)
+    {
+        var elements = new List<object>();
+
+        foreach (var item in (IEnumerable)value!)
+        {
+            elements.Add(ConvertToWrittenType(context, item, elementType, argumentIndex));
+        }
+
+        var stride = NativeInteropUtilities.SizeOf(elementType);
+
+        NativeCommandUtilities.ValidateBufferRange(
+            context, target, offset, checked(elements.Count * stride), argumentIndex, "native-write");
+
+        var start = target is NativeBuffer buffer
+            ? buffer.Pointer
+            : NativeCommandUtilities.ResolvePointer(context, target, 0);
+
+        for (var index = 0; index < elements.Count; index++)
+        {
+            Marshal.StructureToPtr(
+                elements[index], IntPtr.Add(start, offset + (index * stride)), fDeleteOld: false);
+        }
     }
 
     private static bool TryGetByteSequence(object? value, out byte[] bytes)

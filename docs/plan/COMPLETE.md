@@ -58,6 +58,7 @@
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |
 | [`TOAST-0051`](items/TOAST-0051.md) | P1 | complete | 7/7 | Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3` |
+| [`TOAST-0079`](items/TOAST-0079.md) | P2 | complete | 6/6 | An array cannot reach native memory, so the FFI has no data plane |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
