@@ -83,6 +83,65 @@ public static partial class ToshParser
             return Current;
         }
 
+        /// <summary>
+        /// Recognises <c>Ok(v)</c>, <c>Add(l, r)</c> — a variant pattern — <c>TOAST-0053</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Only in pattern position, and only for the exact shape "bareword, open paren,
+        /// plain names separated by commas, close paren". Anything else — a call with an
+        /// expression argument, a literal, a nested pattern — is left to `ParseArgument`, so
+        /// this recognises the new form without taking anything away from the old ones.
+        /// </para>
+        /// <para>
+        /// The paren must follow the name with no gap. `Ok (v)` is a command and its argument,
+        /// which is what it has always been, and stays that way.
+        /// </para>
+        /// </remarks>
+        private VariantPatternSyntax? TryParseVariantPattern()
+        {
+            if (Current.Kind != SyntaxTokenKind.Bareword) { return null; }
+
+            var open = Peek(1);
+            if (open.Kind != SyntaxTokenKind.OpenParen || open.Span.Start != Current.Span.End)
+            {
+                return null;
+            }
+
+            var bindings = new List<string>();
+            var offset = 2;
+
+            while (true)
+            {
+                var token = Peek(offset);
+
+                if (token.Kind == SyntaxTokenKind.CloseParen)
+                {
+                    // `Ok()` is a variant with no fields, which is a legitimate pattern.
+                    break;
+                }
+
+                if (token.Kind != SyntaxTokenKind.Bareword) { return null; }
+
+                bindings.Add(token.Text);
+                offset++;
+
+                var next = Peek(offset);
+                if (next.Kind == SyntaxTokenKind.Comma) { offset++; continue; }
+                if (next.Kind == SyntaxTokenKind.CloseParen) { break; }
+                return null;
+            }
+
+            var nameToken = NextToken();
+            for (var i = 1; i < offset; i++) { NextToken(); }
+            var closeToken = NextToken();
+
+            return new VariantPatternSyntax(
+                nameToken.Text,
+                bindings,
+                TextSpan.FromBounds(nameToken.Span.Start, closeToken.Span.End));
+        }
+
         private MatchArmSyntax ParseMatchArm(bool implicitCurrentItem)
         {
             var armStart = Current.Span.Start;
@@ -137,7 +196,8 @@ public static partial class ToshParser
                 }
                 else
                 {
-                    pattern = ParseArgument(implicitCurrentItem: implicitCurrentItem)
+                    pattern = TryParseVariantPattern()
+                              ?? ParseArgument(implicitCurrentItem: implicitCurrentItem)
                               ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
                 }
             }

@@ -713,6 +713,15 @@ public sealed partial class ToshEngine
                             cancellationToken);
                 }
 
+            case VariantPatternSyntax variant:
+                // `TOAST-0053`. Structural, not a comparison: the variant must be *this* one,
+                // and it must have a field for every name the pattern binds. Arity is checked
+                // here rather than at binding time so a pattern naming three fields of a
+                // two-field variant does not match and then bind null.
+                return switchValue is ToshUnionVariantInstance instance
+                    && string.Equals(instance.VariantName, variant.VariantName, StringComparison.Ordinal)
+                    && variant.Bindings.Count <= VariantFieldNames(instance).Count;
+
             default:
                 {
                     var patternValue = await EvaluateArgumentAsync(sourceName, sourceText, pattern, cancellationToken);

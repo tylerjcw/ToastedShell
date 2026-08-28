@@ -1592,8 +1592,8 @@ public sealed partial class ToshEngine
 
                 case MatchArgumentSyntax match:
                     {
-                        var arm = await ResolveMatchArmAsync(sourceName, sourceText, match, cancellationToken);
-                        return await EvaluateMatchArmValueAsync(sourceName, sourceText, arm, cancellationToken);
+                        var selection = await ResolveMatchArmAsync(sourceName, sourceText, match, cancellationToken);
+                        return await EvaluateMatchArmValueAsync(sourceName, sourceText, selection, cancellationToken);
                     }
 
                 case IfExpressionArgumentSyntax ifExpression:

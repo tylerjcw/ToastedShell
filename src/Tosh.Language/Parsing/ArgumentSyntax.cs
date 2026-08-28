@@ -288,6 +288,24 @@ public sealed record TupleLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> It
 
 public sealed record SetLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);
 
+/// <summary>
+/// A union variant pattern that binds its fields — <c>TOAST-0053</c>.
+/// </summary>
+/// <param name="VariantName">The variant, as written: the <c>Ok</c> in <c>Ok(v)</c>.</param>
+/// <param name="Bindings">
+/// The names its fields bind to, positionally. <c>_</c> discards that position.
+/// </param>
+/// <remarks>
+/// Every pattern form before this one tested the matched value as a whole and bound nothing,
+/// so dispatching on a union meant a <c>switch</c> over <c>$r.Variant</c> followed by
+/// unchecked member access — a typo in the string a silent miss, a typo in the field a
+/// runtime error, and neither reported where it was written.
+/// </remarks>
+public sealed record VariantPatternSyntax(
+    string VariantName,
+    IReadOnlyList<string> Bindings,
+    TextSpan Span) : ArgumentSyntax(Span);
+
 public sealed record ComparisonPatternSyntax(
     string Operator,
     TextSpan OperatorSpan,

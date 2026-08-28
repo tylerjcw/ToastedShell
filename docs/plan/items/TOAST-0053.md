@@ -1,7 +1,7 @@
 ---
 id: TOAST-0053
 title: "`match` cannot bind a union's fields, so dispatch is a switch on a string"
-status: proposed
+status: partial
 area: toast
 priority: 1
 opened: 2026-08-22
@@ -64,17 +64,47 @@ The parser work in `TS-P2-11` and `TOAST-0002` is adjacent — patterns are a
 new expression-position grammar, and filing them into a parser that is being restructured
 by hand is the more expensive order.
 
+## First slice — 2026-08-28
+
+Positional variant patterns, interpreted. `Ok(v)`, `Add(l, r)`, `Add(_, r)` and `Lit()` all
+bind and dispatch; a guard sees what the pattern bound; a binding is scoped to its arm.
+
+**The parser recognises the form only when the paren abuts the name.** `Ok (v)` with a space
+is a command and its argument and stays that way, so adding this took nothing away from an
+existing arm. Anything other than "bareword, paren, plain names, paren" — a call with an
+expression argument, a literal, a nested pattern — is left to `ParseArgument`.
+
+**Binding reads the variant's declared field names, not `GetMembers()`.** The first
+implementation used the latter, which prepends a `Variant` entry, so `Ok(v)` bound `v` to the
+string `"Ok"` and every pattern sat one position out — while still *matching*, so nothing
+failed loudly. `Add(l, r)` on `Add(3, 4)` returned `"Add3"` rather than `7`. A test now names
+that specifically, and the negative control which restores the old lookup fails six of the ten.
+
+Arity is checked where the pattern is matched rather than where it binds, so a pattern naming
+three fields of a two-field variant does not match and then bind null.
+
+## The compiled backend does not have this yet
+
+`--compile` refuses the shape by name — *"dynamic argument expressions (VariantPatternSyntax)
+are not yet emitted"* — under every profile, so the differential corpus cannot carry a case:
+its harness requires a clean emit, and this is not one. Refusing by name is the right failure,
+but it means acceptance is **interpreted-only** for this slice and the corpus box stays open.
+
+Emission needs its own bound node, lowering, and somewhere for the bound names to live as
+locals the arm body can read — the same scope-pushing shape rune expansion needed. That is a
+slice of its own rather than a detail of this one.
+
 ## Acceptance
 
-- [ ] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)`
+- [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
 - [ ] Variant patterns bind fields by name, with shorthand — `Lit { value }`
 - [ ] Record and class patterns bind fields by name
 - [ ] List patterns with a rest binding — `[first, ..rest]`
 - [ ] Patterns nest to arbitrary depth
 - [ ] Or-patterns, and `as` to bind the whole while destructuring the parts
-- [ ] Bound names are scoped to their arm, and shadowing is diagnosed the way it is elsewhere
+- [~] Bound names are scoped to their arm — done, and pinned by three tests. Shadowing is *silent* rather than diagnosed, which is still open
 - [ ] A pattern naming a field the variant does not have is a *binding-time* diagnostic
       naming the field, not a runtime miss
-- [ ] Guards compose with bindings — the guard sees the bound names
+- [x] Guards compose with bindings — the guard sees the bound names, **interpreted**
 - [ ] Interpreted and compiled agree, in the differential corpus
 - [ ] `§Match Expressions` documents the full pattern grammar in one table

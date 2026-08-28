@@ -1274,7 +1274,12 @@ public sealed partial class ToshEngine
         }
     }
 
-    private async Task<MatchArmSyntax> ResolveMatchArmAsync(
+    /// <summary>An arm that matched, and the names its pattern bound — <c>TOAST-0053</c>.</summary>
+    private readonly record struct MatchArmSelection(
+        MatchArmSyntax Arm,
+        IReadOnlyDictionary<string, object?>? Bindings);
+
+    private async Task<MatchArmSelection> ResolveMatchArmAsync(
         string sourceName,
         string sourceText,
         MatchArgumentSyntax match,
@@ -1296,15 +1301,25 @@ public sealed partial class ToshEngine
                 continue;
             }
 
+            // `TOAST-0053`. The guard sees the bindings: `Add(l, r) if ($l is Lit)` is the
+            // shape the item was filed for, and a guard that cannot read what the pattern
+            // bound would make it useless.
+            var bindings = arm.Pattern is VariantPatternSyntax variantPattern
+                && value is ToshUnionVariantInstance matchedInstance
+                    ? BindVariantFields(variantPattern, matchedInstance)
+                    : null;
+
             if (arm.Guard is not null)
             {
+                using var guardScope = bindings is null ? null : PushScope(bindings);
+
                 if (!await EvaluateGuardWithCurrentItemAsync(sourceName, sourceText, arm.Guard, value, cancellationToken))
                 {
                     continue;
                 }
             }
 
-            return arm;
+            return new MatchArmSelection(arm, bindings);
         }
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
@@ -1320,11 +1335,15 @@ public sealed partial class ToshEngine
     private async Task<object?> EvaluateMatchArmValueAsync(
         string sourceName,
         string sourceText,
-        MatchArmSyntax arm,
+        MatchArmSelection selection,
         CancellationToken cancellationToken)
     {
+        // `TOAST-0053`. Scoped to the arm: a name a pattern bound is gone once the arm is
+        // done, which is what makes two arms free to bind the same name for different things.
+        using var armScope = selection.Bindings is null ? null : PushScope(selection.Bindings);
+
         var values = await AsyncEnumerableExtensions.ToListAsync(
-            ExecuteMatchArmAsync(sourceName, sourceText, arm, cancellationToken),
+            ExecuteMatchArmAsync(sourceName, sourceText, selection.Arm, cancellationToken),
             cancellationToken);
 
         return values.Count switch
@@ -1333,6 +1352,52 @@ public sealed partial class ToshEngine
             1 => values[0],
             _ => values.ToArray(),
         };
+    }
+
+    /// <summary>
+    /// Binds a variant's fields to the pattern's names, positionally — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// Declaration order, because that is the order the variant was written in and the order
+    /// its constructor takes. `_` discards a position rather than binding it, so a pattern can
+    /// reach the third field without naming the first two.
+    /// </remarks>
+    private static Dictionary<string, object?> BindVariantFields(
+        VariantPatternSyntax pattern,
+        ToshUnionVariantInstance instance)
+    {
+        var bindings = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var fields = VariantFieldNames(instance);
+
+        for (var index = 0; index < pattern.Bindings.Count && index < fields.Count; index++)
+        {
+            var name = pattern.Bindings[index];
+            if (string.Equals(name, "_", StringComparison.Ordinal)) { continue; }
+
+            instance.TryGetMember(fields[index], out var value);
+            bindings[name] = value;
+        }
+
+        return bindings;
+    }
+
+    /// <summary>The variant's declared fields, in declaration order — <c>TOAST-0053</c>.</summary>
+    /// <remarks>
+    /// Read from the declaration rather than from <c>GetMembers</c>, which prepends the
+    /// <c>Variant</c> tag: binding against that list made `Ok(v)` bind `v` to the string
+    /// "Ok", and every pattern was one place out without ever failing to match.
+    /// </remarks>
+    internal static IReadOnlyList<string> VariantFieldNames(ToshUnionVariantInstance instance)
+    {
+        foreach (var variant in instance.UnionDefinition.Variants)
+        {
+            if (string.Equals(variant.Name, instance.VariantName, StringComparison.Ordinal))
+            {
+                return variant.FieldNames;
+            }
+        }
+
+        return Array.Empty<string>();
     }
 
     private async IAsyncEnumerable<object?> ExecuteMatchArmAsync(
