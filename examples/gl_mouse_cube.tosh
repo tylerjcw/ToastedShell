@@ -1,25 +1,11 @@
 #!/usr/bin/env tosh
-## @summary Drag an OpenGL cube with the left mouse button; Escape closes it.
+## @summary Drag a lit OpenGL cube with the left mouse button; Escape closes it.
 ## @example examples/gl_mouse_cube.tosh
 require ToastLib.Gl from "/home/komrad/.config/tosh/lib/Gl.tosh" as Gl
 
 using System.Drawing
 
-# ToastLib.Gl does not expose mouse polling or display lists yet.
-bind native "libglfw.so.3" as Mouse {
-    func glfwGetCursorPos(window: ptr, out x: double, out y: double) -> void
-    func glfwGetMouseButton(window: ptr, button: int) -> int
-}
-
-bind native "libGL.so.1" as LegacyGl {
-    func glGenLists(count: int) -> uint
-    func glNewList(list: uint, mode: uint) -> void
-    func glEndList() -> void
-    func glCallList(list: uint) -> void
-    func glDeleteLists(list: uint, count: int) -> void
-}
-
-# RGB followed by four XYZ vertices. Geometry is compiled once below.
+# RGB followed by four XYZ vertices, wound counter-clockwise seen from outside.
 var faces = [
     [0.95, 0.25, 0.20,  -1.0, -1.0,  1.0,   1.0, -1.0,  1.0,   1.0,  1.0,  1.0,  -1.0,  1.0,  1.0],
     [0.20, 0.55, 0.95,   1.0, -1.0, -1.0,  -1.0, -1.0, -1.0,  -1.0,  1.0, -1.0,   1.0,  1.0, -1.0],
@@ -28,6 +14,44 @@ var faces = [
     [0.75, 0.30, 0.90,   1.0, -1.0,  1.0,   1.0, -1.0, -1.0,   1.0,  1.0, -1.0,   1.0,  1.0,  1.0],
     [0.20, 0.85, 0.85,  -1.0, -1.0, -1.0,  -1.0, -1.0,  1.0,  -1.0,  1.0,  1.0,  -1.0,  1.0, -1.0]
 ]
+
+## The outward normal follows from the winding: (v1 - v0) x (v2 - v0), normalised. Deriving
+## it beats writing six of them down, which is six chances to get a sign wrong.
+func face_normal(f) {
+    var ax = $f[6] - $f[3]
+    var ay = $f[7] - $f[4]
+    var az = $f[8] - $f[5]
+    var bx = $f[9] - $f[3]
+    var by = $f[10] - $f[4]
+    var bz = $f[11] - $f[5]
+
+    var nx = ($ay * $bz) - ($az * $by)
+    var ny = ($az * $bx) - ($ax * $bz)
+    var nz = ($ax * $by) - ($ay * $bx)
+
+    var len = Sys.Math.Sqrt(($nx * $nx) + ($ny * $ny) + ($nz * $nz))
+    return [$nx / $len, $ny / $len, $nz / $len]
+}
+
+## Interleaved position, normal and colour per vertex, so one buffer feeds all three pointers.
+var vertices = []
+for f in $faces {
+    var n = (face_normal $f)
+    for i in 0..3 {
+        var p = 3 + ($i * 3)
+        $vertices = ($vertices + [
+            $f[$p], $f[$p + 1], $f[$p + 2],
+            $n[0], $n[1], $n[2],
+            $f[0], $f[1], $f[2]
+        ])
+    }
+}
+
+var floatSize    = (size-of float)
+var stride       = 9 * $floatSize
+var normalOffset = 3 * $floatSize
+var colourOffset = 6 * $floatSize
+var vertexCount  = ($vertices | count) // 9
 
 var pitch = 20.0
 var yaw = -30.0
@@ -40,20 +64,34 @@ Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
     Gl.State.ClearColor(Color.FromArgb(18, 20, 30))
     Gl.State.Enable(Gl.Capability.DepthTest)
 
-    var display = LegacyGl.glGenLists(1)
-    defer { LegacyGl.glDeleteLists($display, 1) }
+    ## The whole cube reaches the GPU in one upload. Drawing it a vertex at a time is what a
+    ## display list used to be for.
+    var mesh = Gl.Buffer.Floats($vertices)
+    defer { $mesh.Close() }
 
-    LegacyGl.glNewList($display, 0x1300)         # GL_COMPILE
-    Gl.Raw.glBegin(0x0007)                       # GL_QUADS
-    for f in ($faces) {
-        Gl.Raw.glColor3f($f[0], $f[1], $f[2])
-        for i in (0..3) {
-            var n = 3 + ($i * 3)
-            Gl.Raw.glVertex3f($f[$n], $f[$n + 1], $f[$n + 2])
-        }
-    }
-    Gl.Raw.glEnd()
-    LegacyGl.glEndList()
+    ## One directional light (w = 0), fixed in eye space because the modelview is still
+    ## identity here — so the cube turns under the light rather than carrying it around.
+    ## `glLightfv` wants a four-float array, which is a single write.
+    var light = alloc (4 * $floatSize)
+    defer { native-free $light }
+
+    write-buffer $light [0.4, 0.8, 1.0, 0.0] --as float --at 0
+    Gl.Raw.glLightfv(Gl.Light.Light0, Gl.LightParameter.Position, $light)
+
+    write-buffer $light [1.0, 0.98, 0.94, 1.0] --as float --at 0
+    Gl.Raw.glLightfv(Gl.Light.Light0, Gl.LightParameter.Diffuse, $light)
+
+    write-buffer $light [0.22, 0.22, 0.28, 1.0] --as float --at 0
+    Gl.Raw.glLightfv(Gl.Light.Light0, Gl.LightParameter.Ambient, $light)
+
+    ## The per-vertex colours become the material, so each face keeps its own hue and the
+    ## light only decides how brightly it is lit.
+    Gl.Raw.glColorMaterial(Gl.MaterialFace.FrontAndBack, Gl.ColorMaterialMode.AmbientAndDiffuse)
+    Gl.Raw.glShadeModel(Gl.ShadeModel.Smooth)
+    Gl.State.Enable(Gl.Capability.Lighting)
+    Gl.State.Enable(Gl.Light.Light0)
+    Gl.State.Enable(Gl.Capability.ColorMaterial)
+    Gl.State.Enable(Gl.Capability.Normalize)   # the scale below would shorten the normals
 
     $win.OnKey(func (w, key, action, mods) {
         if (($key == Gl.Key.Escape) and ($action == Gl.KeyAction.Press)) {
@@ -61,9 +99,9 @@ Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
         }
     })
 
-    $win.Frames(10000000, func (w, frame) {
-        var cursor = Mouse.glfwGetCursorPos($w.Handle)
-        var held = Mouse.glfwGetMouseButton($w.Handle, 0) == 1
+    $win.Frames(func (w, frame) {
+        var cursor = Gl.Glfw.glfwGetCursorPos($w.Handle)
+        var held = Gl.Glfw.glfwGetMouseButton($w.Handle, Gl.MouseButton.Left) == 1
 
         if ($held and $dragging) {
             $yaw += ($cursor.x - $last_x) * 0.35
@@ -76,9 +114,17 @@ Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
 
         Gl.State.ClearBuffers([Gl.ClearBit.Color, Gl.ClearBit.Depth])
         Gl.State.LoadIdentity()
-        Gl.Raw.glRotatef($pitch, 1.0, 0.0, 0.0)
-        Gl.Raw.glRotatef($yaw, 0.0, 1.0, 0.0)
-        Gl.Raw.glScalef(0.55, 0.55, 0.55)
-        LegacyGl.glCallList($display)
+        Gl.State.Rotate($pitch, 1.0, 0.0, 0.0)
+        Gl.State.Rotate($yaw, 0.0, 1.0, 0.0)
+        Gl.State.Scale(0.55, 0.55, 0.55)
+
+        $mesh.Bind()
+        Gl.Raw.glEnableClientState(Gl.ClientState.VertexArray)
+        Gl.Raw.glEnableClientState(Gl.ClientState.NormalArray)
+        Gl.Raw.glEnableClientState(Gl.ClientState.ColorArray)
+        Gl.Raw.glVertexPointer(3, Gl.DataType.Float, $stride, 0)
+        Gl.Raw.glNormalPointer(Gl.DataType.Float, $stride, $normalOffset)
+        Gl.Raw.glColorPointer(3, Gl.DataType.Float, $stride, $colourOffset)
+        Gl.Raw.glDrawArrays(Gl.Primitive.Quads, 0, $vertexCount)
     })
 })
