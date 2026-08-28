@@ -1304,8 +1304,8 @@ public sealed partial class ToshEngine
             // `TOAST-0053`. The guard sees the bindings: `Add(l, r) if ($l is Lit)` is the
             // shape the item was filed for, and a guard that cannot read what the pattern
             // bound would make it useless.
-            var bindings = arm.Pattern is VariantPatternSyntax variantPattern
-                ? BindVariantFields(variantPattern, value)
+            var bindings = arm.Pattern is VariantPatternSyntax or ListPatternSyntax
+                ? BindPatternNames(arm.Pattern, value)
                 : null;
 
             if (arm.Guard is not null)
@@ -1361,12 +1361,12 @@ public sealed partial class ToshEngine
     /// its constructor takes. `_` discards a position rather than binding it, so a pattern can
     /// reach the third field without naming the first two.
     /// </remarks>
-    private static Dictionary<string, object?> BindVariantFields(
-        VariantPatternSyntax pattern,
-        object? instance)
+    private static Dictionary<string, object?> BindPatternNames(
+        ArgumentSyntax pattern,
+        object? value)
     {
         var bindings = new Dictionary<string, object?>(StringComparer.Ordinal);
-        CollectVariantBindings(pattern, instance, bindings);
+        BindSubPattern(pattern, value, bindings);
         return bindings;
     }
 
@@ -1399,6 +1399,51 @@ public sealed partial class ToshEngine
         }
     }
 
+    /// <summary>
+    /// Gathers what a list pattern binds — its elements, and the rest — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// Runs after the pattern matched, so the lengths are known to fit. The rest is bound as an
+    /// array even when it is empty, so an arm can pass it on without checking for null; an
+    /// anonymous `...` skips the middle without naming it.
+    /// </remarks>
+    private static void CollectListBindings(
+        ListPatternSyntax pattern,
+        object? value,
+        Dictionary<string, object?> bindings)
+    {
+        if (!TryReadPatternSequence(value, out var items)) { return; }
+
+        for (var index = 0; index < pattern.Before.Count && index < items.Count; index++)
+        {
+            BindSubPattern(pattern.Before[index], items[index], bindings);
+        }
+
+        for (var index = 0; index < pattern.After.Count; index++)
+        {
+            var position = items.Count - pattern.After.Count + index;
+            if (position < 0) { continue; }
+            BindSubPattern(pattern.After[index], items[position], bindings);
+        }
+
+        if (!pattern.HasRest || pattern.RestName.Length == 0) { return; }
+
+        var restStart = pattern.Before.Count;
+        var restLength = Math.Max(0, items.Count - pattern.After.Count - restStart);
+
+        // An array rather than a list, because `[1, 2, 3]` is an array: binding the rest as a
+        // `List` would answer `.Count` where the literal it came from answers `.Length`, so
+        // the same value would need a different spelling depending on where it came from.
+        var rest = new object?[restLength];
+
+        for (var index = 0; index < restLength; index++)
+        {
+            rest[index] = items[restStart + index];
+        }
+
+        bindings[pattern.RestName] = rest;
+    }
+
     /// <summary>Binds one sub-pattern: a name takes the value, a nested pattern recurses.</summary>
     private static void BindSubPattern(
         ArgumentSyntax pattern,
@@ -1413,6 +1458,10 @@ public sealed partial class ToshEngine
 
             case VariantPatternSyntax nested:
                 CollectVariantBindings(nested, value, bindings);
+                break;
+
+            case ListPatternSyntax list:
+                CollectListBindings(list, value, bindings);
                 break;
         }
     }
@@ -1489,6 +1538,37 @@ public sealed partial class ToshEngine
 
             default:
                 subject = default;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Reads a value as a sequence a list pattern can walk, or refuses — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// A string is deliberately not one. .NET makes it an <c>IEnumerable&lt;char&gt;</c>, so
+    /// without this check `[a, b]` would match "hi" and bind two characters.
+    /// </remarks>
+    internal static bool TryReadPatternSequence(object? value, out IReadOnlyList<object?> items)
+    {
+        switch (value)
+        {
+            case null or string:
+                items = Array.Empty<object?>();
+                return false;
+
+            case IReadOnlyList<object?> list:
+                items = list;
+                return true;
+
+            case System.Collections.IEnumerable sequence:
+                var collected = new List<object?>();
+                foreach (var item in sequence) { collected.Add(item); }
+                items = collected;
+                return true;
+
+            default:
+                items = Array.Empty<object?>();
                 return false;
         }
     }

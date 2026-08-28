@@ -780,6 +780,59 @@ public sealed partial class ToshEngine
         return "name a field the variant declares, or bind positionally with `(…)`.";
     }
 
+    /// <summary>
+    /// Whether a sequence has the shape a list pattern describes — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Length first, then elements. Without a rest the length must be exact, so <c>[a, b]</c>
+    /// does not match a three-element list; with one, the fixed sub-patterns on either side
+    /// have to fit and the middle absorbs whatever is left, which may be nothing.
+    /// </para>
+    /// <para>
+    /// A string is a sequence of characters to .NET and is not one here. Matching
+    /// <c>[a, b]</c> against "hi" would bind two characters, which is not what anybody writing
+    /// a list pattern means, and would make a string silently match a pattern meant for a list.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> MatchesListPatternAsync(
+        object? value,
+        string sourceName,
+        string sourceText,
+        ListPatternSyntax pattern,
+        CancellationToken cancellationToken)
+    {
+        if (!TryReadPatternSequence(value, out var items)) { return false; }
+
+        var fixedCount = pattern.Before.Count + pattern.After.Count;
+
+        if (pattern.HasRest ? items.Count < fixedCount : items.Count != fixedCount)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < pattern.Before.Count; index++)
+        {
+            if (!await SubPatternMatchesAsync(
+                    items[index], sourceName, sourceText, pattern.Before[index], cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        for (var index = 0; index < pattern.After.Count; index++)
+        {
+            var item = items[items.Count - pattern.After.Count + index];
+            if (!await SubPatternMatchesAsync(
+                    item, sourceName, sourceText, pattern.After[index], cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>A sub-pattern: a name binds and matches anything, anything else compares.</summary>
     private async Task<bool> SubPatternMatchesAsync(
         object? value,
@@ -841,6 +894,10 @@ public sealed partial class ToshEngine
             case VariantPatternSyntax variant:
                 return await MatchesVariantPatternAsync(
                     switchValue, sourceName, sourceText, variant, cancellationToken);
+
+            case ListPatternSyntax list:
+                return await MatchesListPatternAsync(
+                    switchValue, sourceName, sourceText, list, cancellationToken);
 
             default:
                 {

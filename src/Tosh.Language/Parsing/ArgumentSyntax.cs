@@ -303,8 +303,40 @@ public sealed record SetLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Item
 /// </remarks>
 public sealed record VariantPatternSyntax(
     string VariantName,
-    IReadOnlyList<string> Bindings,
+    IReadOnlyList<ArgumentSyntax> Positional,
+    IReadOnlyList<VariantFieldPatternSyntax> Named,
     TextSpan Span) : ArgumentSyntax(Span);
+
+/// <summary>One <c>field: pattern</c> inside a variant pattern — <c>TOAST-0053</c>.</summary>
+/// <param name="Field">The declared field this addresses.</param>
+/// <param name="Pattern">
+/// What that field must match. Shorthand — <c>Lit { value }</c> — makes this a binding of the
+/// same name, so the common case needs no repetition.
+/// </param>
+/// <summary>
+/// A list pattern — <c>TOAST-0053</c>. <c>[first, ...rest]</c>, <c>[a, b]</c>, <c>[]</c>.
+/// </summary>
+/// <param name="Before">Sub-patterns matched against the front of the sequence.</param>
+/// <param name="After">Sub-patterns matched against the back, when a rest splits them.</param>
+/// <param name="RestName">The name the middle binds to; empty for an anonymous <c>...</c>.</param>
+/// <param name="HasRest">Whether a rest was written at all — an empty name is not the same.</param>
+/// <remarks>
+/// The rest is spelled <c>...</c>, the language's existing spread, rather than the <c>..</c>
+/// the item first sketched: <c>..</c> is the range operator, so <c>[a, ..b]</c> would have had
+/// to be told apart from a range by lookahead, and would read as one to anybody who knows the
+/// rest of the language.
+/// </remarks>
+public sealed record ListPatternSyntax(
+    IReadOnlyList<ArgumentSyntax> Before,
+    IReadOnlyList<ArgumentSyntax> After,
+    string RestName,
+    bool HasRest,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record VariantFieldPatternSyntax(
+    string Field,
+    ArgumentSyntax Pattern,
+    TextSpan Span);
 
 public sealed record ComparisonPatternSyntax(
     string Operator,

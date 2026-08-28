@@ -465,6 +465,21 @@ public static class VariableBinder
 
                 break;
 
+            case ListPatternSyntax listPattern:
+                // `TOAST-0053`. Same reason as the variant pattern above: an element may be a
+                // variable reference — `[$expected, second]` — so capture analysis has to see it.
+                foreach (var element in listPattern.Before)
+                {
+                    VisitArgument(element, ctx);
+                }
+
+                foreach (var element in listPattern.After)
+                {
+                    VisitArgument(element, ctx);
+                }
+
+                break;
+
             case ComparisonPatternSyntax comparisonPattern:
                 // A match arm's pattern operand can hold variable
                 // references (`_ > $limit`), so it must be walked like any

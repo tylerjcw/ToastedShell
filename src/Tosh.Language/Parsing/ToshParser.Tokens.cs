@@ -200,10 +200,73 @@ public static partial class ToshParser
         private static bool IsVariableToken(SyntaxToken token)
             => token.Kind == SyntaxTokenKind.Bareword && token.Text.StartsWith('$');
 
+        /// <summary>
+        /// A list pattern in pattern position — <c>TOAST-0053</c>.
+        /// </summary>
+        /// <remarks>
+        /// The lexer hands `...rest` back as one bareword carrying the sigil, the same way it
+        /// does `$x`, so the rest is found by looking at the token's text rather than its kind.
+        /// At most one rest is allowed: two would make the split between front and back
+        /// ambiguous, and the second is reported rather than quietly ignored.
+        /// </remarks>
+        private ListPatternSyntax? TryParseListPattern()
+        {
+            if (Current.Kind != SyntaxTokenKind.OpenBracket) { return null; }
+
+            var save = _position;
+            var start = Current.Span.Start;
+            NextToken();
+
+            var before = new List<ArgumentSyntax>();
+            var after = new List<ArgumentSyntax>();
+            var restName = string.Empty;
+            var hasRest = false;
+
+            while (Current.Kind != SyntaxTokenKind.CloseBracket)
+            {
+                if (Current.Kind == SyntaxTokenKind.EndOfFile) { _position = save; return null; }
+
+                if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text.StartsWith("...", StringComparison.Ordinal))
+                {
+                    var restToken = NextToken();
+                    if (hasRest)
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.list_pattern_second_rest",
+                            Title: "A list pattern may hold only one '...'.",
+                            Span: restToken.Span,
+                            Label: "a second rest has no unambiguous split",
+                            Help: "bind the middle once, then name the elements around it."));
+                        _position = save;
+                        return null;
+                    }
+
+                    hasRest = true;
+                    restName = restToken.Text[3..];
+                }
+                else
+                {
+                    var element = ParseSubPattern();
+                    if (element is null) { _position = save; return null; }
+                    (hasRest ? after : before).Add(element);
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma) { NextToken(); continue; }
+                if (Current.Kind == SyntaxTokenKind.CloseBracket) { break; }
+                _position = save;
+                return null;
+            }
+
+            var closeToken = NextToken();
+            return new ListPatternSyntax(
+                before, after, restName, hasRest, TextSpan.FromBounds(start, closeToken.Span.End));
+        }
+
         /// <summary>One element inside a variant pattern — a nested pattern, name, or value.</summary>
         private ArgumentSyntax? ParseSubPattern()
         {
             if (TryParseVariantPattern() is { } nested) { return nested; }
+            if (TryParseListPattern() is { } list) { return list; }
 
             // A plain name binds; `$name` is a reference, and has to be evaluated and compared
             // like any other value, so it falls through to `ParseArgument`.
@@ -271,6 +334,7 @@ public static partial class ToshParser
                 else
                 {
                     pattern = TryParseVariantPattern()
+                              ?? (ArgumentSyntax?)TryParseListPattern()
                               ?? ParseArgument(implicitCurrentItem: implicitCurrentItem)
                               ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
                 }

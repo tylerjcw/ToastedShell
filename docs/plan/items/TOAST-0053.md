@@ -145,8 +145,8 @@ a detail of this item. The box stays partial for that reason.
 
 ## What is left
 
-List patterns with a rest binding, or-patterns and `as`, the shadowing diagnosis, compiled
-emission with the differential corpus, and the spec table.
+Or-patterns and `as`, the shadowing diagnosis, compiled emission with the differential corpus,
+and the spec table.
 
 ## Third slice — 2026-08-28
 
@@ -174,6 +174,30 @@ referenced the old codes; they were a day old.
 it touches the parser, binder, matcher, binding walk and the exhaustiveness test, and is
 mechanical enough to be its own change rather than noise inside this one.
 
+## Fourth slice — 2026-08-28
+
+List patterns. `[a, b]` matches a sequence of exactly that length, `[first, ...rest]` binds a
+head and whatever follows, and the rest may sit in the middle — `[a, ...mid, d]` names both
+ends. Elements are ordinary sub-patterns, so they test as well as bind, and list and variant
+patterns nest into each other in both directions: `[Lit(a), Lit(b)]` and `Many([f, ...r])`.
+
+**The rest is `...`, not the `..` this item sketched.** `..` is the range operator, so `[a, ..b]`
+would have needed lookahead to tell from a range, and would read as one to anybody who knows
+the rest of the language. `...` is the spread the language already has, in the one place where
+"and the remainder" is what it means.
+
+**A rest binds an array, not a list.** `[1, 2, 3]` is an `Int32[]`, so binding a `List` would
+answer `.Count` where the literal it came from answers `.Length` — the same value needing a
+different spelling depending on where it came from. A rest can therefore be matched again,
+which is what makes walking a sequence possible.
+
+**A string is not a list.** .NET makes it an `IEnumerable<char>`, so without an explicit refusal
+`[a, b]` would match `"hi"` and bind two characters — a string quietly taking an arm written
+for a list.
+
+Two rests are refused at parse time rather than ignored: there is no unambiguous split between
+front and back, and picking one silently is the kind of choice that is wrong half the time.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
@@ -181,7 +205,8 @@ mechanical enough to be its own change rather than noise inside this one.
       and a literal or `$variable` on the right to test rather than bind — **interpreted**
 - [x] Record and class patterns bind fields by name — and structs, and records positionally.
       A class is named-only by design; see the third slice
-- [ ] List patterns with a rest binding — `[first, ..rest]`
+- [x] List patterns with a rest binding — spelled `[first, ...rest]`, since `..` is the
+      range operator; the rest may also sit in the middle, and binds an array
 - [x] Patterns nest to arbitrary depth — `Some(Add(Lit(a), Lit(b)))`, mixing both forms
 - [ ] Or-patterns, and `as` to bind the whole while destructuring the parts
 - [~] Bound names are scoped to their arm — done, and pinned by three tests. Shadowing is *silent* rather than diagnosed, which is still open
