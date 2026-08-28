@@ -258,6 +258,18 @@ subcommand index {
         var n = ($rows | count)
         echo $"{$board}.md: {$n} items"
     }
+
+    ## An item whose status is not one of `$STATES` belongs to no board, so it was written
+    ## to no file and simply disappeared from the plan — no error, no row, nothing to notice.
+    ## `check` catches it, but nobody runs `check` before reading a board, and the board is
+    ## what the plan is read from. `TS-P2-125` closed after a stray trailing comment on a
+    ## `status:` field dropped `TOAST-0053` out of every index this way.
+    var lost = (...$items | where { $_["board"] == "UNKNOWN" } | collect)
+    if (($lost | count) > 0) {
+        for it in $lost {
+            echo $"WARNING: {$it["id"]} has status '{$it["status"]}', which is not one of {($STATES | join ", ")} — it appears on no board."
+        }
+    }
 }
 
 ## @summary Scan for orphaned IDs (cited in code but absent from the plan).

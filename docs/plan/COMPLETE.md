@@ -5,10 +5,8 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOAST-0042`](items/TOAST-0042.md) | P2 | complete | 6/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
-| [`TOSH-0010`](items/TOSH-0010.md) | P2 | complete | 6/6 | `build.tosh publish` reports failure after succeeding, on every RID |
-| [`TOAST-0002`](items/TOAST-0002.md) | P2 | complete | 8/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
-| [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
+| [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | complete | 9/9 | Suite reliability on a clean checkout: four flakes named and resolved |
 | [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
@@ -30,6 +28,7 @@
 | [`TOSH-0007`](items/TOSH-0007.md) | P1 | complete | 4/4 | The marshalled struct statvfs was 24 bytes short, corrupting memory on every call |
 | [`TOAST-0073`](items/TOAST-0073.md) | P2 | complete | 5/5 | A compiled subexpression argument is not held to the one-value rule the interpreter enforces |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 7/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
+| [`TOAST-0038`](items/TOAST-0038.md) | P2 | complete | 6/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
@@ -48,6 +47,7 @@
 | [`TOAST-0068`](items/TOAST-0068.md) | P2 | complete | 5/5 | A refinement's coercer can put the wrong CLR type in a refined slot |
 | [`TOAST-0076`](items/TOAST-0076.md) | P2 | complete | 6/6 | A module-qualified type annotation is not resolved, and the diagnostic says the annotation is missing |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
+| [`TOSH-0010`](items/TOSH-0010.md) | P2 | complete | 6/6 | `build.tosh publish` reports failure after succeeding, on every RID |
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | complete | 6/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | complete | 6/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
@@ -62,6 +62,7 @@
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
 | [`TOAST-0044`](items/TOAST-0044.md) | P1 | complete | 5/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
 | [`TOAST-0050`](items/TOAST-0050.md) | P2 | complete | 8/8 | A tuple type resolves but cannot be written in an annotation |
+| [`TOAST-0002`](items/TOAST-0002.md) | P2 | complete | 8/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TOAST-0065`](items/TOAST-0065.md) | P2 | complete | 5/5 | An emitted class inherited object.ToString, so it converted to its CLR name and a match value arm missed |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
@@ -69,6 +70,7 @@
 | [`TOAST-0070`](items/TOAST-0070.md) | P3 | complete | 4/4 | Whether a rune is called is decided by a textual scan, so a name in a string disables compilation |
 | [`TOAST-0024`](items/TOAST-0024.md) | P3 | complete | 5/5 | A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails |
 | [`TS-P1-47`](items/TS-P1-47.md) | P1 | complete | — | A variable annotated with a base class rejects a subclass value when compiled |
+| [`TS-P2-125`](items/TS-P2-125.md) | P2 | complete | — | A lexical scope allocated ten collections it almost never used |
 | [`TOAST-0045`](items/TOAST-0045.md) | P2 | complete | 4/4 | A compiled function returning `record` cannot return a record literal |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).

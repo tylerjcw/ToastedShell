@@ -1,7 +1,7 @@
 ---
 id: TOAST-0053
 title: "`match` cannot bind a union's fields, so dispatch is a switch on a string"
-status: partial   # 10 of 11 accepted; the last waits on the compiler decision
+status: partial
 area: toast
 priority: 1
 opened: 2026-08-22

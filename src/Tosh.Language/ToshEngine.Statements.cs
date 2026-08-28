@@ -929,11 +929,39 @@ public sealed partial class ToshEngine
 
         await foreach (var item in source.WithCancellation(cancellationToken))
         {
-            await foreach (var current in (alreadyExpanded
-                               ? SingleItemAsync(item)
-                               : ShellIterationUtilities.ExpandIterationItemsAsync(item, cancellationToken))
-                               .WithCancellation(cancellationToken))
+            // `TS-P2-125`. Most iterated values are atoms — an `int` from a range, a line of
+            // text — and for those `ExpandIterationItemsAsync` is an async iterator built to
+            // hand back the value it was given. `IsExpandableForIteration` is the predicate
+            // written to mirror the expansion's own rule, so asking it here skips the
+            // enumerable and its enumerator for the common case rather than reimplementing
+            // what expansion does. `alreadyExpanded` takes the same route: `SingleItemAsync`
+            // was one more iterator for one value.
+            var singleItem = alreadyExpanded || !ShellIterationUtilities.IsExpandableForIteration(item);
+            var expansion = singleItem
+                ? null
+                : ShellIterationUtilities.ExpandIterationItemsAsync(item, cancellationToken)
+                    .GetAsyncEnumerator(cancellationToken);
+
+            try
             {
+                var singleItemPending = singleItem;
+
+                while (true)
+                {
+                    object? current;
+
+                    if (singleItem)
+                    {
+                        if (!singleItemPending) { break; }
+                        singleItemPending = false;
+                        current = item;
+                    }
+                    else
+                    {
+                        if (!await expansion!.MoveNextAsync()) { break; }
+                        current = expansion.Current;
+                    }
+
                 cancellationToken.ThrowIfCancellationRequested();
 
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingControlFlow = null;
@@ -987,6 +1015,11 @@ public sealed partial class ToshEngine
                 }
 
                 pendingControlFlow?.Throw();
+                }
+            }
+            finally
+            {
+                if (expansion is not null) { await expansion.DisposeAsync(); }
             }
         }
     }
