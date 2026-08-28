@@ -320,9 +320,22 @@ public static class VariableBinder
     {
         foreach (var stage in pipeline.Stages)
         {
-            if (stage is CommandSyntax command)
+            switch (stage)
             {
-                foreach (var arg in command.Arguments) VisitArgument(arg, ctx);
+                case CommandSyntax command:
+                    foreach (var arg in command.Arguments) VisitArgument(arg, ctx);
+                    break;
+
+                // A stage that is an expression rather than a command was skipped entirely,
+                // so nothing inside a bare `$x + 1`, a `| where { … }`, or any `match` was
+                // ever bound-checked — the runtime reported those instead, from further away.
+                case ExpressionPipelineStageSyntax expression:
+                    VisitArgument(expression.Expression, ctx);
+                    break;
+
+                case PipeForwardStageSyntax forward:
+                    foreach (var arg in forward.Command.Arguments) VisitArgument(arg, ctx);
+                    break;
             }
         }
     }
@@ -529,6 +542,14 @@ public static class VariableBinder
                 foreach (var arm in match.Arms)
                 {
                     if (arm.Pattern is not null) VisitArgument(arm.Pattern, ctx);
+
+                    // `TOAST-0053`. A pattern's bindings are scoped to their arm, so the binder
+                    // gets a scope per arm too — otherwise a name bound by one arm would look
+                    // declared to the next, and the shadowing check below would fire on every
+                    // arm after the first that reused a name.
+                    using var armScope = Push(ctx);
+
+                    if (arm.Pattern is not null) DeclarePatternBindings(arm.Pattern, ctx);
                     if (arm.Guard is not null) VisitArgument(arm.Guard, ctx);
                     switch (arm.Body)
                     {
@@ -566,6 +587,101 @@ public static class VariableBinder
     // ──────────────────────────────────────────────────────────────────
     // Identifier check
     // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Declares what a pattern binds into the arm's scope, reporting shadowing — <c>TOAST-0053</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Shadowing an outer variable is legal and sometimes what the author meant, so this is a
+    /// warning rather than an error. What it prevents is the silent version: an arm that binds
+    /// <c>count</c> over an outer <c>$count</c> reads the field everywhere in the arm, including
+    /// the places that meant the outer one, and nothing says the name changed meaning.
+    /// </para>
+    /// <para>
+    /// The names are also declared, which they were not before. Nothing depended on that — the
+    /// unknown-variable check only speaks when it has a near match to suggest — but it left the
+    /// binder able to flag a correct reference as a typo whenever an outer name sat one edit
+    /// away from a bound one.
+    /// </para>
+    /// </remarks>
+    private static void DeclarePatternBindings(ArgumentSyntax pattern, Context ctx)
+    {
+        switch (pattern)
+        {
+            case BarewordArgumentSyntax { Value: var name } bareword
+                when name.Length > 0 && name != "_" && !name.StartsWith('$'):
+                ReportShadowedBinding(name, bareword.Span, ctx);
+                Declare(ctx, name);
+                break;
+
+            case VariantPatternSyntax variant:
+                foreach (var element in variant.Positional)
+                {
+                    DeclarePatternBindings(element, ctx);
+                }
+
+                foreach (var field in variant.Named)
+                {
+                    DeclarePatternBindings(field.Pattern, ctx);
+                }
+
+                break;
+
+            case ListPatternSyntax list:
+                foreach (var element in list.Before)
+                {
+                    DeclarePatternBindings(element, ctx);
+                }
+
+                foreach (var element in list.After)
+                {
+                    DeclarePatternBindings(element, ctx);
+                }
+
+                if (list.HasRest && list.RestName.Length > 0)
+                {
+                    ReportShadowedBinding(list.RestName, list.Span, ctx);
+                    Declare(ctx, list.RestName);
+                }
+
+                break;
+
+            case OrPatternSyntax alternatives:
+                // Every alternative binds the same names — the parser refuses otherwise — so
+                // walking one of them declares the set without reporting the same name twice.
+                if (alternatives.Alternatives.Count > 0)
+                {
+                    DeclarePatternBindings(alternatives.Alternatives[0], ctx);
+                }
+
+                break;
+
+            case BoundPatternSyntax bound:
+                ReportShadowedBinding(bound.Name, bound.Span, ctx);
+                Declare(ctx, bound.Name);
+                DeclarePatternBindings(bound.Pattern, ctx);
+                break;
+        }
+    }
+
+    private static void ReportShadowedBinding(string name, TextSpan span, Context ctx)
+    {
+        if (!IsKnown(ctx, name)) { return; }
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.bind.pattern_shadows_variable",
+            Title: $"Pattern binding '{name}' shadows '${name}' from an enclosing scope.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: span,
+            Label: $"'${name}' means the bound field for the rest of this arm",
+            Help: $"rename the binding — `{{ field: inner{name} }}` names it something else — "
+                + $"or write `_` if the arm does not use it. Shadowing is legal; this only says "
+                + $"that '${name}' stops meaning what it meant outside.",
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Naming));
+    }
 
     private static void CheckIdentifier(string name, TextSpan span, Context ctx)
     {

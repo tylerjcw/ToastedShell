@@ -145,7 +145,8 @@ a detail of this item. The box stays partial for that reason.
 
 ## What is left
 
-The shadowing diagnosis, and compiled emission with the differential corpus.
+Compiled emission with the differential corpus, and the binding-time field diagnostic, which
+needs union declarations visible to the binder (`TOAST-0052`).
 
 ## Third slice — 2026-08-28
 
@@ -254,6 +255,39 @@ Both listings were run before being written down. The evaluator folds
 
 Spec rebuilds clean at 330 pages with no undefined references.
 
+## Seventh slice — 2026-08-28
+
+Shadowing is diagnosed. A pattern binding that covers an enclosing variable now warns where it
+is written, naming what changed: *`$v` means the bound field for the rest of this arm*. It is a
+**warning**, because shadowing is legal and sometimes meant — what it prevents is the silent
+version, where an arm reads the bound field in the places that meant the outer variable and
+nothing says the name changed meaning.
+
+The binder gets a scope per arm, which it did not have. Without one, the second arm to reuse a
+name would look like it shadowed the first, and every `Ok(a) / Err(a)` pair would warn.
+
+### Two binder defects had to be fixed to get here
+
+**The binder only walked `CommandSyntax` stages.** `ExpressionPipelineStageSyntax` and
+`PipeForwardStageSyntax` were skipped outright, so nothing inside a bare `$x + 1`, a
+`| where { … }`, or *any* `match` was ever bound-checked — not the arms, not even the subject.
+Those came back as `tosh.runtime.unknown_variable` when the arm happened to run, rather than
+`tosh.bind.unknown_variable` where they were written. The `MatchArgumentSyntax` case in
+`VariableBinder` had been unreachable the whole time. Widening the walk left the suite green.
+
+**`Strict` threw the whole diagnostic batch regardless of severity.** So the first warning-only
+run rendered a warning, exited 0, and never executed the program — strictly worse than not
+warning at all, and it would have made every future binder warning unusable. Severity is now
+honoured: warnings are reported, errors still throw.
+
+### The `hush` footer is advertising something that does not work
+
+The renderer appends *hush: <code>* to every coded diagnostic, but binder diagnostics do not go
+through the hush check — an in-source `hush` cannot help, since the binder runs before any
+statement executes, and a `hush` that runs before a `source` does not suppress it either. The
+help text here does not promise it. The footer is the renderer's own, on every binder
+diagnostic, and predates this item.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
@@ -266,7 +300,8 @@ Spec rebuilds clean at 330 pages with no undefined references.
 - [x] Patterns nest to arbitrary depth — `Some(Add(Lit(a), Lit(b)))`, mixing both forms
 - [x] Or-patterns, and `as` to bind the whole while destructuring the parts — `|` kept as the
       separator against `or` / `||`, decided in the fifth slice
-- [~] Bound names are scoped to their arm — done, and pinned by three tests. Shadowing is *silent* rather than diagnosed, which is still open
+- [x] Bound names are scoped to their arm, and shadowing an enclosing variable is warned
+      where it is written — a warning, since shadowing is legal; see the seventh slice
 - [~] A pattern naming a field the variant does not have names the field and suggests the
       nearest one, rather than missing silently — but at **runtime**, when the arm is reached,
       not at binding time. See the second slice: the binder cannot see a `union` yet

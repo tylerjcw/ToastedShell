@@ -510,7 +510,29 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 }
                 return;
             case BinderStrictness.Strict:
-                throw new ToshDiagnosticException(diagnostics.ToArray());
+                // `TOAST-0053`. Severity is honoured here, not just in the renderer. Throwing
+                // the whole batch meant a warning-only run rendered as a warning, exited 0, and
+                // never executed the program — the one outcome worse than not warning at all.
+                var errors = new List<ToshDiagnostic>();
+
+                foreach (var diagnostic in diagnostics)
+                {
+                    if (diagnostic.Severity == ToshDiagnosticSeverity.Error)
+                    {
+                        errors.Add(diagnostic);
+                    }
+                    else
+                    {
+                        Diagnostics.ReportWarning(diagnostic);
+                    }
+                }
+
+                if (errors.Count > 0)
+                {
+                    throw new ToshDiagnosticException(errors.ToArray());
+                }
+
+                return;
         }
     }
 
