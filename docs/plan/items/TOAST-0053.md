@@ -145,7 +145,7 @@ a detail of this item. The box stays partial for that reason.
 
 ## What is left
 
-The shadowing diagnosis, compiled emission with the differential corpus, and the spec table.
+The shadowing diagnosis, and compiled emission with the differential corpus.
 
 ## Third slice — 2026-08-28
 
@@ -235,6 +235,25 @@ The negative control that binds from the first alternative fails exactly that te
 that needs more than one token goes in a guard, where the whole expression grammar is available
 and `|` means what it means everywhere else.
 
+## Sixth slice — 2026-08-28
+
+`§Match Expressions` documents the whole grammar. The Pattern Forms table gained a
+destructuring group — the six new forms with the rules that are easy to get wrong beside them:
+the paren must abut but the brace need not, a string is not a sequence, a rest may sit in the
+middle and there may be only one, `as` follows a destructuring form only.
+
+A `Destructuring Patterns` subsection follows it with the union-evaluator example the item
+opens with, written the way it could not be written before, and a second listing showing the
+forms composing in one `match`. The two rules checked where a pattern is *written* rather than
+where it runs — one rest, and alternatives binding the same names — are called out in a note,
+since they are the only two places the language reports a pattern rather than failing to match.
+
+Both listings were run before being written down. The evaluator folds
+`Add(Add(Lit(1), Lit(2)), Lit(4))` to 7; it is spelled `evaluate` rather than `eval` because
+`eval` shadows a builtin and warns, which a reader copying the example would have hit.
+
+Spec rebuilds clean at 330 pages with no undefined references.
+
 ## Acceptance
 
 - [x] Variant patterns bind fields positionally — `Ok(v)`, `Add(l, r)` — **interpreted**
@@ -253,4 +272,5 @@ and `|` means what it means everywhere else.
       not at binding time. See the second slice: the binder cannot see a `union` yet
 - [x] Guards compose with bindings — the guard sees the bound names, **interpreted**
 - [ ] Interpreted and compiled agree, in the differential corpus
-- [ ] `§Match Expressions` documents the full pattern grammar in one table
+- [x] `§Match Expressions` documents the full pattern grammar in one table, with a
+      `Destructuring Patterns` subsection and both listings run before being written down

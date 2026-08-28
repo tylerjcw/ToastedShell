@@ -3483,8 +3483,73 @@ No \code{break} is needed.
 \code{\_ is <type>} & Runtime type check (\code{\_ is string}, \code{\_ is int}). \\
 \code{\_} (bare) & Always matches; wildcard catch-all. \\
 \code{default} & Always matches; conventional alternative to bare \code{\_}. \\
+\midrule
+\multicolumn{2}{l}{\textit{Destructuring forms --- these bind names the arm and its guard can read}} \\
+\midrule
+\code{Name(a, b)} & Value is a \code{Name} --- a union variant, record or struct --- and binds its declared fields in order.  The paren must abut the name: \code{Ok (v)} with a space is still a command and its argument. \\
+\code{Name \{ f \}} & Binds field \code{f} by name.  \code{Name \{ f: <pattern> \}} renames (\code{f: got}) or tests (\code{f: "if"}, \code{f: \$want}).  The brace need not abut. \\
+\code{[a, b]} & Sequence of exactly that length, each element matched by its own sub-pattern.  A string is not a sequence here. \\
+\code{[a, ...rest]} & Sequence of at least that length; \code{rest} binds the remainder as an array, possibly empty.  The rest may sit in the middle: \code{[a, ...mid, z]}.  At most one per pattern. \\
+\code{(<p> | <p>)} & Either alternative matches.  Always parenthesised, since \code{|} is the pipeline separator everywhere else.  Every alternative must bind the same names. \\
+\code{<p> as name} & Binds the whole value alongside the parts.  Only after a destructuring form --- after a literal, \code{as} is the cast operator. \\
 \bottomrule
 \end{tabular}
+
+\subsection*{Destructuring Patterns}
+
+Every form above nests: a sub-pattern is a pattern, so patterns compose to any
+depth and the forms mix freely.
+
+\begin{lstlisting}[title={Binding a union's fields}]
+union Expr {
+    Lit(v: int)
+    Add(l: Expr, r: Expr)
+}
+
+func evaluate(e) => match ($e) {
+    Lit(v)    => $v
+    Add(l, r) => (evaluate $l) + (evaluate $r)
+}
+\end{lstlisting}
+
+\noindent This is the shape the \code{switch}-on-\code{\$x.Variant} form in
+\emph{Union Definitions} exists to work around.  A typo in a variant name is a
+missed arm there and a reported one here; a typo in a field is a runtime member
+error there and a diagnostic naming the field here.
+
+\begin{lstlisting}[title={The forms composing}]
+match ($node) {
+    Item { kind: "if", body }          => (compile $body)   # test one field, bind another
+    Item { kind: $expected, body }     => (compile $body)   # test against a variable
+    Some(Add(Lit(a), Lit(b)))          => $a + $b           # nested two deep
+    (Lit(0) | Lit(1)) as bit           => $bit.v            # either shape, keep the whole
+    [first, ...rest]                   => (walk $rest)      # head and remainder
+    Add(l, r) if (($l is Lit))         => (fold $l $r)      # a guard sees the bindings
+    default                            => 0
+}
+\end{lstlisting}
+
+\noindent Inside a pattern, a \textbf{plain name binds} and \textbf{\code{\$name}
+compares}: \code{Lit(v)} binds whatever the field holds, while \code{Lit(\$want)}
+matches only when the field equals \code{\$want}.  \code{\_} discards a position
+without binding it.  Bound names are scoped to their arm and are visible to that
+arm's guard.
+
+A \textbf{class} destructures by name only.  Its properties may be inherited,
+reordered or added without changing what the class means, so there is no order a
+positional pattern could rely on --- \code{Circle(r)} is refused, and the
+diagnostic offers \code{Circle \{ Radius \}} instead.  Named patterns do reach
+inherited properties.
+
+\begin{notebox}
+Two rules are checked where the pattern is written rather than where it runs.  A
+list pattern may hold only one \code{...}, because a second leaves no
+unambiguous split between front and back.  And every alternative of an
+or-pattern must bind the same names: \code{(Lit(v) | Add(l, r))} would leave
+\code{\$v} unset whenever the \code{Add} side matched, and an unset variable is
+not an error anywhere else in the language, so the arm would quietly do
+something wrong.
+\end{notebox}
 
 Arm bodies may be a single pipeline expression (\code{pattern => expr}) or a
 block (\code{pattern => \{ ... \}}).  An optional guard clause
