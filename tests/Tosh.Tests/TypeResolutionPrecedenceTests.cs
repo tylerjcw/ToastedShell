@@ -36,14 +36,38 @@ public sealed class TypeResolutionPrecedenceTests
     // each fails against the unfixed resolver. `BigInteger` is deliberately not here: the direct
     // scan disagreed with the imports for it, but `Resolve` already answered correctly by
     // another route, so a case for it would pass either way and prove nothing.
+    //
+    // `FileStatus` was a case here and is not any more. It expected `System.IO.FileStatus`,
+    // which is *internal* — the reorder moved it from one implementation detail to another,
+    // which was an improvement but not the answer. `TOAST-0078` stopped the resolver returning
+    // types a script cannot legally name, so `FileStatus` now resolves to nothing at all, and
+    // the test below says so.
     [InlineData("SpinLock", "System.Threading.SpinLock")]
-    [InlineData("FileStatus", "System.IO.FileStatus")]
     public void An_unqualified_name_prefers_the_type_an_import_names(string name, string expected)
     {
         var resolved = new DotNetTypeResolver().Resolve(name);
 
         Assert.NotNull(resolved);
         Assert.Equal(expected, resolved!.FullName);
+    }
+
+    /// <summary>
+    /// A name that only matches a non-public type resolves to nothing — <c>TOAST-0078</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both of these exist in <c>System.Private.CoreLib</c> and both used to resolve.
+    /// <c>Sys</c> is the one that cost something: it is <c>Interop+Sys</c>, so every
+    /// <c>Sys.Math.Clamp</c> in a script failed with *"Static member 'Math' was not found on
+    /// type 'Interop+Sys'"* — a type the author had never heard of, named in an error about
+    /// code that looked right.
+    /// </remarks>
+    [Theory]
+    [InlineData("Sys")]
+    [InlineData("Interop")]
+    [InlineData("FileStatus")]
+    public void A_name_that_only_matches_a_non_public_type_does_not_resolve(string name)
+    {
+        Assert.Null(new DotNetTypeResolver().Resolve(name));
     }
 
     [Fact]

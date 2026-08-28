@@ -415,11 +415,22 @@ public sealed partial class ToshEngine
     /// satisfy the element type; one that does not means the annotation does not hold, and
     /// saying so is the point.
     /// </remarks>
-    private bool TryConvertUserElementCollection(string typeName, object? value, out object? converted)
+    /// <summary>
+    /// Whether a name is a collection annotation over a type this program declared —
+    /// <c>TOAST-0078</c>.
+    /// </summary>
+    /// <remarks>
+    /// The shape test, shared by the conversion below and by <c>IsKnownAnnotatedType</c>.
+    /// Only the conversion had it, so the "is this type known?" check fell through to the CLR
+    /// resolver and asked it for <c>list&lt;Token&gt;</c> — which answered only because
+    /// <c>Token</c> matched an internal runtime type, making <c>List&lt;T&gt;</c> constructible.
+    /// Once the resolver stopped returning types a script cannot name, a *conversion* failure
+    /// started reporting itself as an unknown type: the annotation the success path handles
+    /// perfectly well was said not to exist.
+    /// </remarks>
+    private bool TryGetUserElementCollection(string typeName, out string element)
     {
-        converted = null;
-
-        if (value is null || value is string) { return false; }
+        element = string.Empty;
 
         var lt = typeName.IndexOf('<');
         if (lt <= 0 || !typeName.EndsWith(">", StringComparison.Ordinal)) { return false; }
@@ -431,12 +442,24 @@ public sealed partial class ToshEngine
             return false;
         }
 
-        var element = typeName[(lt + 1)..^1].Trim();
-        if (element.Length == 0 || element.Contains(',')) { return false; }
+        var candidate = typeName[(lt + 1)..^1].Trim();
+        if (candidate.Length == 0 || candidate.Contains(',')) { return false; }
 
         // Only when the element type is one this program declared. A CLR element type
         // already has a working conversion and must keep it.
-        if (!TryGetNamedType(element, out _)) { return false; }
+        if (!TryGetNamedType(candidate, out _)) { return false; }
+
+        element = candidate;
+        return true;
+    }
+
+    private bool TryConvertUserElementCollection(string typeName, object? value, out object? converted)
+    {
+        converted = null;
+
+        if (value is null || value is string) { return false; }
+
+        if (!TryGetUserElementCollection(typeName, out var element)) { return false; }
 
         if (value is not System.Collections.IEnumerable sequence) { return false; }
 
@@ -1582,6 +1605,14 @@ public sealed partial class ToshEngine
                     return false;
                 }
             }
+            return true;
+        }
+
+        // A collection over a program-declared element — the shape the conversion above
+        // handles. Without this the CLR resolver is asked for `list<Token>`, which it cannot
+        // build, and a conversion failure is reported as a type that does not exist.
+        if (TryGetUserElementCollection(normalizedTypeName, out _))
+        {
             return true;
         }
 

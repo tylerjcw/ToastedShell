@@ -227,6 +227,28 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         "Tosh.Runtime.Units",
     ];
 
+    /// <summary>
+    /// Namespace prefixes a script may write in place of a longer one — <c>TOAST-0078</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>Sys</c> for <c>System</c>. It reads as one already — enough that it was written
+    /// fourteen times across the author's own library before anyone noticed it did not exist —
+    /// and what it did instead was resolve to <c>Interop+Sys</c>, a private runtime class, so
+    /// the failure named a type nobody had written.
+    /// </para>
+    /// <para>
+    /// A prefix alias rather than an import: it rewrites <c>Sys.Math</c> to <c>System.Math</c>
+    /// rather than adding a namespace to search, so it cannot make an unqualified name
+    /// ambiguous. And a type declared in the script still wins, so a class of one's own called
+    /// <c>Sys</c> — there is one in the author's SDL bindings — keeps its name.
+    /// </para>
+    /// </remarks>
+    private static readonly (string Alias, string Path)[] DefaultNamespaceAliases =
+    [
+        ("Sys", "System"),
+    ];
+
     private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _imports = new(StringComparer.OrdinalIgnoreCase);
 
@@ -290,6 +312,11 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             {
                 _imports.Add(ns);
             }
+
+            foreach (var (alias, path) in DefaultNamespaceAliases)
+            {
+                _aliases[alias] = path;
+            }
         }
     }
 
@@ -339,7 +366,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
                 return false;
             }
 
-            type = Type.GetType(entry, throwOnError: false, ignoreCase: true);
+            type = VisibleOrNull(Type.GetType(entry, throwOnError: false, ignoreCase: true));
             if (type is not null)
             {
                 return true;
@@ -372,7 +399,11 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     /// </remarks>
     private static readonly Lazy<PlatformTypeCacheFile?> PlatformTypeCache = new(LoadPlatformTypeCache);
 
-    private const string PlatformCacheVersion = "2";
+    // `TOAST-0078` bumped this to 3. The index now holds only publicly visible types, and a
+    // cache written by an earlier build still carries the runtime's internals under their
+    // simple names — so without the bump the fix would do nothing on any machine that had run
+    // tosh before, which is every machine that matters.
+    private const string PlatformCacheVersion = "3";
 
     internal sealed class PlatformTypeCacheFile(byte[] body, string[] assemblies)
     {
@@ -647,7 +678,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
             try
             {
-                found = assembly.GetType(name, throwOnError: false, ignoreCase: true);
+                found = VisibleOrNull(assembly.GetType(name, throwOnError: false, ignoreCase: true));
             }
             catch (Exception exception) when (exception is FileLoadException or BadImageFormatException or TypeLoadException)
             {
@@ -1077,7 +1108,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             return false;
         }
 
-        type = Type.GetType(name, throwOnError: false, ignoreCase: true);
+        type = VisibleOrNull(Type.GetType(name, throwOnError: false, ignoreCase: true));
         if (type is not null) return true;
 
         // `TOAST-0064`. The cache first, and a miss in it is a miss in the index — it was
@@ -1094,7 +1125,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         {
             if (cachedIndex.TryGet(name, out var cachedEntry) && cachedEntry is not null)
             {
-                type = Type.GetType(cachedEntry, throwOnError: false, ignoreCase: true);
+                type = VisibleOrNull(Type.GetType(cachedEntry, throwOnError: false, ignoreCase: true));
                 if (type is not null) return true;
             }
         }
@@ -1155,7 +1186,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             return false;
         }
 
-        type = Type.GetType(cacheKey, throwOnError: false, ignoreCase: true);
+        type = VisibleOrNull(Type.GetType(cacheKey, throwOnError: false, ignoreCase: true));
         if (type is not null) return true;
 
         if (PlatformTypes.Value.TryGetGenericDefinition(name, arity, out type)) return true;
@@ -1304,15 +1335,45 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         return arguments;
     }
 
+    /// <summary>
+    /// The types in an assembly a script may name — <c>TOAST-0078</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Publicly visible ones only. This read <c>GetTypes()</c>, which returns internals too, so
+    /// the platform index carried the runtime's own implementation details under their simple
+    /// names — and <c>Sys</c> resolved to <c>Interop+Sys</c>, a private class in
+    /// <c>System.Private.CoreLib</c> with no namespace. Every <c>Sys.Math.Clamp</c> then failed
+    /// with *"Static member 'Math' was not found on type 'Interop+Sys'"*: a type the author had
+    /// never heard of, named in an error about code that looked right.
+    /// </para>
+    /// <para>
+    /// <see cref="Type.IsVisible"/> rather than <see cref="Type.IsPublic"/>, because a public
+    /// type nested in an internal one is not reachable either, and <c>IsPublic</c> is false for
+    /// every nested type however public it is.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// A type a script may name, or null — <c>TOAST-0078</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Type.GetType(string, bool, bool)"/> and
+    /// <see cref="Assembly.GetType(string, bool, bool)"/> both return internals, and
+    /// <c>Type.GetType</c> searches <c>System.Private.CoreLib</c> for an unqualified name — so
+    /// <c>Interop</c>, which lives there with no namespace at all, resolved for anyone who
+    /// typed it. Filtering only the index left that door open; every lookup has to agree.
+    /// </remarks>
+    private static Type? VisibleOrNull(Type? type) => type is { IsVisible: true } ? type : null;
+
     private static IEnumerable<Type> SafeGetTypes(Assembly assembly)
     {
         try
         {
-            return assembly.GetTypes();
+            return assembly.GetTypes().Where(type => type.IsVisible);
         }
         catch (ReflectionTypeLoadException exception)
         {
-            return exception.Types.Where(type => type is not null)!;
+            return exception.Types.Where(type => type is not null && type.IsVisible)!;
         }
     }
 

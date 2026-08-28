@@ -1,0 +1,84 @@
+#!/usr/bin/env tosh
+## @summary Drag an OpenGL cube with the left mouse button; Escape closes it.
+## @example examples/gl_mouse_cube.tosh
+require ToastLib.Gl from "/home/komrad/.config/tosh/lib/Gl.tosh" as Gl
+
+using System.Drawing
+
+# ToastLib.Gl does not expose mouse polling or display lists yet.
+bind native "libglfw.so.3" as Mouse {
+    func glfwGetCursorPos(window: ptr, out x: double, out y: double) -> void
+    func glfwGetMouseButton(window: ptr, button: int) -> int
+}
+
+bind native "libGL.so.1" as LegacyGl {
+    func glGenLists(count: int) -> uint
+    func glNewList(list: uint, mode: uint) -> void
+    func glEndList() -> void
+    func glCallList(list: uint) -> void
+    func glDeleteLists(list: uint, count: int) -> void
+}
+
+# RGB followed by four XYZ vertices. Geometry is compiled once below.
+var faces = [
+    [0.95, 0.25, 0.20,  -1.0, -1.0,  1.0,   1.0, -1.0,  1.0,   1.0,  1.0,  1.0,  -1.0,  1.0,  1.0],
+    [0.20, 0.55, 0.95,   1.0, -1.0, -1.0,  -1.0, -1.0, -1.0,  -1.0,  1.0, -1.0,   1.0,  1.0, -1.0],
+    [0.25, 0.85, 0.45,  -1.0,  1.0,  1.0,   1.0,  1.0,  1.0,   1.0,  1.0, -1.0,  -1.0,  1.0, -1.0],
+    [0.95, 0.75, 0.20,  -1.0, -1.0, -1.0,   1.0, -1.0, -1.0,   1.0, -1.0,  1.0,  -1.0, -1.0,  1.0],
+    [0.75, 0.30, 0.90,   1.0, -1.0,  1.0,   1.0, -1.0, -1.0,   1.0,  1.0, -1.0,   1.0,  1.0,  1.0],
+    [0.20, 0.85, 0.85,  -1.0, -1.0, -1.0,  -1.0, -1.0,  1.0,  -1.0,  1.0,  1.0,  -1.0,  1.0, -1.0]
+]
+
+var pitch = 20.0
+var yaw = -30.0
+var dragging = false
+var last_x = 0.0
+var last_y = 0.0
+
+Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
+    Gl.Glfw.glfwSwapInterval(1)
+    Gl.State.ClearColor(Color.FromArgb(18, 20, 30))
+    Gl.State.Enable(Gl.Capability.DepthTest)
+
+    var display = LegacyGl.glGenLists(1)
+    defer { LegacyGl.glDeleteLists($display, 1) }
+
+    LegacyGl.glNewList($display, 0x1300)         # GL_COMPILE
+    Gl.Raw.glBegin(0x0007)                       # GL_QUADS
+    for f in ($faces) {
+        Gl.Raw.glColor3f($f[0], $f[1], $f[2])
+        for i in (0..3) {
+            var n = 3 + ($i * 3)
+            Gl.Raw.glVertex3f($f[$n], $f[$n + 1], $f[$n + 2])
+        }
+    }
+    Gl.Raw.glEnd()
+    LegacyGl.glEndList()
+
+    $win.OnKey(func (w, key, action, mods) {
+        if (($key == Gl.Key.Escape) and ($action == Gl.KeyAction.Press)) {
+            $w.RequestClose()
+        }
+    })
+
+    $win.Frames(10000000, func (w, frame) {
+        var cursor = Mouse.glfwGetCursorPos($w.Handle)
+        var held = Mouse.glfwGetMouseButton($w.Handle, 0) == 1
+
+        if ($held and $dragging) {
+            $yaw += ($cursor.x - $last_x) * 0.35
+            $pitch = Sys.Math.Clamp($pitch + (($cursor.y - $last_y) * 0.35), -89.0, 89.0)
+        }
+
+        $dragging = $held
+        $last_x = $cursor.x
+        $last_y = $cursor.y
+
+        Gl.State.ClearBuffers([Gl.ClearBit.Color, Gl.ClearBit.Depth])
+        Gl.State.LoadIdentity()
+        Gl.Raw.glRotatef($pitch, 1.0, 0.0, 0.0)
+        Gl.Raw.glRotatef($yaw, 0.0, 1.0, 0.0)
+        Gl.Raw.glScalef(0.55, 0.55, 0.55)
+        LegacyGl.glCallList($display)
+    })
+})

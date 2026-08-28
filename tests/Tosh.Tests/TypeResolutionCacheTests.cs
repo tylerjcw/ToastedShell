@@ -82,13 +82,19 @@ public sealed class TypeResolutionCacheTests
 
     // ── Invalidation: the half a cache gets wrong ──────────────────────────────
 
-    // `SpinLock` rather than `Complex` for these. TS-P2-66 measured that *no* simple name
-    // resolves through the imports alone — the direct scan finds something for all 16,727
-    // of them — so "the import is what makes it resolve" is not a case that exists. What
-    // an import changes is *which* of two types wins: without `System.Threading`,
-    // `SpinLock` is a private nested field type inside `ReaderWriterLockSlim`. My first
-    // draft of these three used `Complex`, which resolves to `System.Numerics.Complex`
-    // with or without the import, and all three failed on the premise rather than the code.
+    // These need a name where an import changes *which* type wins, because TS-P2-66 measured
+    // that no simple name resolves through the imports alone — the direct scan finds something
+    // for all 16,727. A first draft used `Complex`, which resolves to `System.Numerics.Complex`
+    // with or without the import, and failed on the premise rather than the code.
+    //
+    // `SpinLock` worked for exactly one reason: without `System.Threading` it resolved to a
+    // private nested field type inside `ReaderWriterLockSlim`. `TOAST-0078` stopped the
+    // resolver returning types a script cannot legally name, so that premise is gone and
+    // `SpinLock` now resolves to the public `System.Threading.SpinLock` either way.
+    //
+    // `Timer` replaces it, and needs no accident: `System.Threading.Timer` and
+    // `System.Timers.Timer` are both public, so which one wins is genuinely what the import
+    // decides.
 
     [Fact]
     public void Adding_a_using_invalidates_what_was_cached_without_it()
@@ -98,11 +104,11 @@ public sealed class TypeResolutionCacheTests
         // premise of TS-P2-66. Caching before the import must not freeze the old answer.
         var resolver = new DotNetTypeResolver(includeDefaultUsings: false);
 
-        var before = resolver.Resolve("SpinLock");
-        resolver.AddUsing("System.Threading");
-        var after = resolver.Resolve("SpinLock");
+        var before = resolver.Resolve("Timer");
+        resolver.AddUsing("System.Timers");
+        var after = resolver.Resolve("Timer");
 
-        Assert.Equal("System.Threading.SpinLock", after?.FullName);
+        Assert.Equal("System.Timers.Timer", after?.FullName);
         Assert.NotEqual(before, after);
     }
 
@@ -110,12 +116,12 @@ public sealed class TypeResolutionCacheTests
     public void Removing_a_using_invalidates_too()
     {
         var resolver = new DotNetTypeResolver(includeDefaultUsings: false);
-        resolver.AddUsing("System.Threading");
+        resolver.AddUsing("System.Timers");
 
-        Assert.Equal("System.Threading.SpinLock", resolver.Resolve("SpinLock")?.FullName);
+        Assert.Equal("System.Timers.Timer", resolver.Resolve("Timer")?.FullName);
 
-        Assert.True(resolver.RemoveUsing("System.Threading"));
-        Assert.NotEqual("System.Threading.SpinLock", resolver.Resolve("SpinLock")?.FullName);
+        Assert.True(resolver.RemoveUsing("System.Timers"));
+        Assert.NotEqual("System.Timers.Timer", resolver.Resolve("Timer")?.FullName);
     }
 
     [Fact]
@@ -133,13 +139,13 @@ public sealed class TypeResolutionCacheTests
     public void Two_resolvers_do_not_share_a_cache()
     {
         // Per-instance, so one script's `using` cannot leak into another's resolution.
-        var withThreading = new DotNetTypeResolver(includeDefaultUsings: false);
-        withThreading.AddUsing("System.Threading");
+        var withTimers = new DotNetTypeResolver(includeDefaultUsings: false);
+        withTimers.AddUsing("System.Timers");
 
         var without = new DotNetTypeResolver(includeDefaultUsings: false);
 
-        Assert.Equal("System.Threading.SpinLock", withThreading.Resolve("SpinLock")?.FullName);
-        Assert.NotEqual("System.Threading.SpinLock", without.Resolve("SpinLock")?.FullName);
+        Assert.Equal("System.Timers.Timer", withTimers.Resolve("Timer")?.FullName);
+        Assert.NotEqual("System.Timers.Timer", without.Resolve("Timer")?.FullName);
     }
 
     [Fact]
