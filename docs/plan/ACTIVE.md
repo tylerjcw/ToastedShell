@@ -15,6 +15,7 @@
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |
+| [`TOAST-0054`](items/TOAST-0054.md) | P1 | partial | 7/8 | A `match` over a closed union is not checked for exhaustiveness |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0035`](items/TOAST-0035.md) | P2 | partial | 1/5 | Source replay and implicit dynamic are how the compiler handles what it cannot emit |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |

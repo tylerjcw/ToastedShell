@@ -68,7 +68,8 @@ public static class VariableBinder
             parseResult.SourceText,
             new List<HashSet<string>> { new(StringComparer.Ordinal) },
             new List<ToshDiagnostic>(),
-            CollectPatternShapes(parseResult.Statement));
+            CollectPatternShapes(parseResult.Statement),
+            CollectVariantUnions(parseResult.Statement));
 
         VisitStatement(parseResult.Statement, ctx);
         return ctx.Diagnostics;
@@ -129,6 +130,21 @@ public static class VariableBinder
             case VariableDeclarationStatementSyntax v:
                 if (v.Value is not null) VisitPipeline(v.Value, ctx);
                 Declare(ctx, v.Name);
+                break;
+
+            // `arg name : T = default` and `flag name` declare script inputs, which are
+            // ordinary variables everywhere below. The binder never declared them, which cost
+            // nothing while it walked only command arguments: `$frames` in
+            // `examples/mandelbrot.tosh` sat in `var tF = $frames`, an expression stage the
+            // walk skipped. Widening that walk for `TOAST-0053` made the reference visible and
+            // it was reported as undeclared — for a variable the script does declare.
+            case ScriptInputStatementSyntax scriptInput:
+                foreach (var parameter in scriptInput.Parameters)
+                {
+                    if (parameter.DefaultValue is not null) { VisitPipeline(parameter.DefaultValue, ctx); }
+                    Declare(ctx, parameter.Name);
+                }
+
                 break;
 
             case DestructuringDeclarationStatementSyntax d:
@@ -540,6 +556,7 @@ public static class VariableBinder
 
             case MatchArgumentSyntax match:
                 VisitArgument(match.Value, ctx);
+                CheckMatchExhaustiveness(match, ctx);
                 foreach (var arm in match.Arms)
                 {
                     if (arm.Pattern is not null) VisitArgument(arm.Pattern, ctx);
@@ -643,6 +660,160 @@ public static class VariableBinder
 
             case RecordDefinitionStatementSyntax record:
                 shapes.TryAdd(record.Name, record.Fields.Select(field => field.Name).ToArray());
+                break;
+        }
+    }
+
+    /// <summary>A closed union: its name, and every variant it declares, in order.</summary>
+    internal sealed record UnionShape(string Name, IReadOnlyList<string> Variants);
+
+    /// <summary>
+    /// Every variant declared in this source, mapped to the union that declares it —
+    /// <c>TOAST-0054</c>.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by *variant* rather than by union, because that is the direction the check reads
+    /// it: an arm names a variant, and the union it belongs to is what says which other
+    /// variants must also be covered. A variant name is enough to identify the union, which is
+    /// why exhaustiveness needs no type for the matched value.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, UnionShape> CollectVariantUnions(StatementSyntax statement)
+    {
+        var unions = new Dictionary<string, UnionShape>(StringComparer.Ordinal);
+        CollectVariantUnions(statement, unions);
+        return unions;
+    }
+
+    private static void CollectVariantUnions(
+        StatementSyntax statement,
+        Dictionary<string, UnionShape> unions)
+    {
+        switch (statement)
+        {
+            case ScriptStatementSyntax script:
+                foreach (var child in script.Statements) CollectVariantUnions(child, unions);
+                break;
+
+            case UnionDefinitionStatementSyntax union:
+                var shape = new UnionShape(
+                    union.Name,
+                    union.Variants.Select(variant => variant.Name).ToArray());
+
+                foreach (var variant in union.Variants)
+                {
+                    unions.TryAdd(variant.Name, shape);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Reports a <c>match</c> over a closed union that does not cover every variant —
+    /// <c>TOAST-0054</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The value is not in catching the first mistake. It is in what happens when a variant is
+    /// added to a union: either every <c>match</c> that must be updated is named now, or they
+    /// are found later, on someone else's input.
+    /// </para>
+    /// <para>
+    /// The union is identified from the *arms*, not from the matched value's type — a variant
+    /// name belongs to exactly one union, so one arm is enough. That is what lets this run in
+    /// the binder rather than waiting for the type checker to learn about unions.
+    /// </para>
+    /// <para>
+    /// Three things make a match exempt, each deliberately. A <c>default</c> arm is the
+    /// documented opt-out. An arm that is not a variant pattern — a literal, a comparison —
+    /// means this is not a match over a union shape and is left alone, which is what keeps
+    /// shell code free of new diagnostics. And a union declared in another source is invisible
+    /// here, so nothing is claimed about it.
+    /// </para>
+    /// <para>
+    /// A guarded arm does not cover its variant: it may not fire, so it cannot complete the
+    /// match. `Add(l, r) if (…)` leaves `Add` uncovered, which is correct and occasionally
+    /// surprising — the message says so rather than leaving the author to work it out.
+    /// </para>
+    /// </remarks>
+    private static void CheckMatchExhaustiveness(MatchArgumentSyntax match, Context ctx)
+    {
+        UnionShape? union = null;
+        var covered = new HashSet<string>(StringComparer.Ordinal);
+        var guardedOnly = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var arm in match.Arms)
+        {
+            // `default` is the opt-out, and it ends the question.
+            if (arm.IsWildcard) { return; }
+            if (arm.Pattern is null) { return; }
+
+            foreach (var alternative in PatternAlternatives(arm.Pattern))
+            {
+                if (alternative is not VariantPatternSyntax variant)
+                {
+                    // Not a union-shaped match. Says nothing rather than guessing.
+                    return;
+                }
+
+                if (!ctx.VariantUnions.TryGetValue(variant.VariantName, out var owner))
+                {
+                    // A variant this source cannot see; nothing can be claimed about the set.
+                    return;
+                }
+
+                if (union is null) { union = owner; }
+                else if (!ReferenceEquals(union, owner)) { return; }
+
+                if (arm.Guard is null) { covered.Add(variant.VariantName); }
+                else { guardedOnly.Add(variant.VariantName); }
+            }
+        }
+
+        if (union is null) { return; }
+
+        var missing = union.Variants.Where(name => !covered.Contains(name)).ToArray();
+        if (missing.Length == 0) { return; }
+
+        var guarded = missing.Where(guardedOnly.Contains).ToArray();
+        var help = guarded.Length == 0
+            ? missing.Length == 1
+                ? "add an arm for it, or `default` if it shares an answer with the others."
+                : "add an arm for each, or `default` if the rest genuinely share one."
+            : $"an arm with a guard may not fire, so it does not complete the match — "
+                + $"{string.Join(", ", guarded)} {(guarded.Length == 1 ? "is" : "are")} covered "
+                + "only by a guarded arm. Add an unguarded arm, or `default`.";
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.bind.match_not_exhaustive",
+            Title: $"This match over '{union.Name}' does not cover "
+                 + $"{string.Join(", ", missing)}.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: match.Span,
+            Label: $"'{union.Name}' declares: {string.Join(", ", union.Variants)}",
+            Help: help));
+    }
+
+    /// <summary>The patterns an arm can match on — one, or an or-pattern's alternatives.</summary>
+    private static IEnumerable<ArgumentSyntax> PatternAlternatives(ArgumentSyntax pattern)
+    {
+        switch (pattern)
+        {
+            case OrPatternSyntax alternatives:
+                foreach (var alternative in alternatives.Alternatives)
+                {
+                    foreach (var inner in PatternAlternatives(alternative)) { yield return inner; }
+                }
+
+                break;
+
+            case BoundPatternSyntax bound:
+                foreach (var inner in PatternAlternatives(bound.Pattern)) { yield return inner; }
+                break;
+
+            default:
+                yield return pattern;
                 break;
         }
     }
@@ -940,5 +1111,6 @@ public static class VariableBinder
         string SourceText,
         List<HashSet<string>> Scopes,
         List<ToshDiagnostic> Diagnostics,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> PatternShapes);
+        IReadOnlyDictionary<string, IReadOnlyList<string>> PatternShapes,
+        IReadOnlyDictionary<string, UnionShape> VariantUnions);
 }

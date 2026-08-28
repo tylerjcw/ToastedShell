@@ -3541,6 +3541,55 @@ positional pattern could rely on --- \code{Circle(r)} is refused, and the
 diagnostic offers \code{Circle \{ Radius \}} instead.  Named patterns do reach
 inherited properties.
 
+\subsection*{Exhaustiveness}
+
+A \code{match} whose arms are variant patterns of a \textbf{closed union} must cover every
+variant of that union.  Leaving one out is an \emph{error}, reported where the \code{match}
+is written and naming the variants that are missing:
+
+\begin{lstlisting}
+union Expr { Lit(v: int)  Add(l: Expr, r: Expr)  Neg(v: Expr) }
+
+match ($e) {                    # error: this match over 'Expr' does not cover Neg
+    Lit(v)    => $v
+    Add(l, r) => (evaluate $l) + (evaluate $r)
+}
+\end{lstlisting}
+
+\noindent The point is not the first mistake.  It is that adding a variant to a union names
+every \code{match} that must be updated, instead of leaving them to be found later on
+somebody else's input --- which is the largest correctness benefit the union/match pair
+offers, and the reason to write a closed union at all.
+
+\code{default} is the opt-out, and the only one:
+
+\begin{lstlisting}
+match ($e) {
+    Lit(v)  => $v
+    default => 0            # accepted -- the rest genuinely share an answer
+}
+\end{lstlisting}
+
+\noindent Three things exempt a \code{match}, each deliberately.  A \code{default} arm, as
+above.  An arm that is \emph{not} a variant pattern --- a literal, a comparison --- which
+means this is not a match over a union shape, and is what keeps ordinary shell code free of
+the check.  And a union declared in another file, which the check cannot see and therefore
+says nothing about.
+
+\begin{notebox}
+\textbf{A guard does not cover its variant.}  \code{Add(l, r) if ((\$l is Lit))} may not
+fire, so it cannot complete the match, and \code{Add} is still reported as uncovered.  This
+is the one refusal that reads like a mistake until it is explained, so the diagnostic
+explains it rather than leaving the reader to work it out.
+\end{notebox}
+
+\noindent The union is identified from the \emph{arms} rather than from the matched value's
+type: a variant name belongs to exactly one union, so a single arm names the set.  A
+consequence is that coverage is checked at the top level only --- an arm that destructures
+deeper, \code{Add(Lit(a), r)}, still counts as covering \code{Add}, so a \code{match} may be
+accepted that a nested value can still fall through.  That is a missing report, never a
+wrong one.
+
 \begin{notebox}
 Two rules are checked where the pattern is written rather than where it runs.  A
 list pattern may hold only one \code{...}, because a second leaves no
