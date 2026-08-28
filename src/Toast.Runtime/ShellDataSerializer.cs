@@ -124,6 +124,22 @@ internal static class ShellDataSerializer
                 StringComparer.OrdinalIgnoreCase));
         }
 
+        // `TOAST-0088`. A shell-declared enum is a `ToshEnumValue` object, so `IsEnum` below is
+        // false for it and it fell through to the reflection tail — which emitted `Definition`,
+        // `Name`, `UnderlyingValue`, `ShellTypeDescriptor` and `EnumTypeName`, with the type
+        // descriptor twice. A CLR enum serialised to one scalar; a shell enum to twenty-three
+        // lines of JSON, five CSV columns, and the same again in TOML and XML, because every
+        // format reaches this one method.
+        //
+        // The member name rather than the number: it is what `ToString` already gives, it is
+        // what survives a round trip legibly, and a config file that says "Librarian" beats one
+        // that says 8. CLR enums still serialise as numbers — that is .NET's default and is a
+        // separate decision from this one.
+        if (value is IShellEnumValue shellEnum)
+        {
+            return shellEnum.Name;
+        }
+
         var typeInfo = value.GetType();
         var effectiveType = Nullable.GetUnderlyingType(typeInfo) ?? typeInfo;
 

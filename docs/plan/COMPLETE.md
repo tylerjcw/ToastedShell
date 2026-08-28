@@ -6,11 +6,13 @@
 |---|---|---|---|---|
 | [`TOAST-0042`](items/TOAST-0042.md) | P2 | complete | 6/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
+| [`TOAST-0088`](items/TOAST-0088.md) | P2 | complete | 4/4 | A declared enum serialises its own internals, in every format |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | complete | 9/9 | Suite reliability on a clean checkout: four flakes named and resolved |
 | [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
+| [`TOAST-0089`](items/TOAST-0089.md) | P2 | complete | 4/4 | A declared record's collection fields vanish from a table, but an anonymous record's do not |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | complete | 5/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TOAST-0027`](items/TOAST-0027.md) | P2 | complete | 5/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |

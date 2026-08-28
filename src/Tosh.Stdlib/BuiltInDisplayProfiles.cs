@@ -148,6 +148,10 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateTextStatisticsProfile());
         registry.Register(CreateDictionaryRecordProfile());
         registry.Register(CreateReadOnlyDictionaryRecordProfile());
+        registry.Register(CreateShellRecordProfile());
+        registry.Register(CreateShellStructProfile());
+        registry.Register(CreateShellClassProfile());
+        registry.Register(CreateShellUnionVariantProfile());
         registry.Register(CreateObjectKeyedDictionaryProfile());
         registry.Register(CreateFileSystemEntryTypeProfile());
         registry.Register(CreateFileSystemEntryProfile(preferences));
@@ -1552,6 +1556,52 @@ public static class BuiltInDisplayProfiles
             .For<IReadOnlyDictionary<string, object?>>()
             .AddTableCase(context => BuildRecordColumns(context.Rows));
     }
+
+    /// <summary>
+    /// Declared records, structs, classes and union variants render like anonymous records.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An anonymous record is an <c>ExpandoObject</c>, which is an
+    /// <c>IDictionary&lt;string, object?&gt;</c> and so already matched the profile above. A
+    /// declared record is a <c>ToshRecordInstance</c>, which is not — so it matched no profile
+    /// at all and fell through to the display engine's generic record-like builder.
+    /// </para>
+    /// <para>
+    /// The target is <c>ToshRecordInstance</c> rather than <c>IShellRecordObject</c>. The
+    /// interface is broader than it looks: a <c>Quantity</c> implements it so that
+    /// introspection can see its <c>base-value</c>, while display must keep rendering it as the
+    /// scalar <c>483.06 MW</c>. Targeting the interface turned quantities into tables, which
+    /// <c>ObjectFormatterTests</c> caught.
+    /// </para>
+    /// <para>
+    /// That fallback drops any column whose values are not a renderable cell type, which
+    /// silently removed every array- and collection-valued field. `record Trade(Give: array&lt;…&gt;,
+    /// Receive: array&lt;…&gt;)` lost both of its columns and rendered as a bare type name, while the
+    /// structurally identical anonymous record rendered in full. One row was unaffected, because
+    /// the single-row path asks for structured values explicitly — so the same value rendered
+    /// correctly alone and wrongly in a list of two.
+    /// </para>
+    /// </remarks>
+    private static DisplayProfile CreateShellRecordProfile()
+        => DisplayProfile
+            .For<Tosh.Language.ToshRecordInstance>()
+            .AddTableCase(context => BuildRecordColumns(context.Rows));
+
+    private static DisplayProfile CreateShellStructProfile()
+        => DisplayProfile
+            .For<Tosh.Language.ToshStructInstance>()
+            .AddTableCase(context => BuildRecordColumns(context.Rows));
+
+    private static DisplayProfile CreateShellClassProfile()
+        => DisplayProfile
+            .For<Tosh.Language.ToshClassInstance>()
+            .AddTableCase(context => BuildRecordColumns(context.Rows));
+
+    private static DisplayProfile CreateShellUnionVariantProfile()
+        => DisplayProfile
+            .For<Tosh.Language.ToshUnionVariantInstance>()
+            .AddTableCase(context => BuildRecordColumns(context.Rows));
 
     private static DisplayProfile CreateObjectKeyedDictionaryProfile()
     {

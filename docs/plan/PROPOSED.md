@@ -6,7 +6,9 @@
 |---|---|---|---|---|
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
+| [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
 | [`TOAST-0056`](items/TOAST-0056.md) | P2 | proposed | 0/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
+| [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
 | [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
 | [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/7 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
 | [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
@@ -16,11 +18,14 @@
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
+| [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 0/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
+| [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
+| [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 0/12 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
@@ -28,6 +33,7 @@
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
 | [`TS-P3-21`](items/TS-P3-21.md) | P3 | proposed | — | Native runtime: GC, object layout, and startup budget |
 | [`TOSH-0002`](items/TOSH-0002.md) | P2 | proposed | 0/4 | Tosh.DevCompanion floats its Microsoft.Data.Sqlite reference, so its dependency set is whatever restore last chose |
+| [`TOAST-0080`](items/TOAST-0080.md) | P2 | proposed | 0/10 | Resource safety is a runtime convention, so an owned handle can be copied and used after release |
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
@@ -35,4 +41,6 @@
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
+| [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |
 | [`TS-P3-19`](items/TS-P3-19.md) | P3 | proposed | — | Annotated, fixed and refinement variable writes at Tier 1 |
+| [`TOAST-0083`](items/TOAST-0083.md) | P2 | proposed | 0/10 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |
