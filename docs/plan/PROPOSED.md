@@ -7,11 +7,13 @@
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
+| [`TOAST-0090`](items/TOAST-0090.md) | P2 | proposed | 0/7 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
 | [`TOAST-0056`](items/TOAST-0056.md) | P2 | proposed | 0/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
 | [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
 | [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
 | [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/7 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
 | [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
+| [`TOAST-0091`](items/TOAST-0091.md) | P2 | proposed | 0/7 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 0/6 | Replace the switch-based evaluator with a bound-tree evaluator |
 | [`TOAST-0064`](items/TOAST-0064.md) | P2 | proposed | 5/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
@@ -21,6 +23,7 @@
 | [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 0/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
+| [`TOAST-0092`](items/TOAST-0092.md) | P2 | proposed | 0/10 | A value cannot be written to a file and read back as itself, in any format |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
