@@ -1,5 +1,4 @@
 using Tosh.Runtime;
-using Tosh.Stdlib.Net;
 
 namespace Tosh.Stdlib.Filesystem;
 
@@ -34,11 +33,15 @@ public sealed class CloseCommand : ShellCommand
                 case ManagedFileHandle fileHandle:
                     fileHandle.Close();
                     break;
-                case HttpFileServerHandle serverHandle:
-                    serverHandle.Close();
+                // `TOAST-0007`. This named `HttpFileServerHandle`, so a language-level command
+                // reached into the shell's network feature for a handle it only ever disposed.
+                // Anything closeable is closeable; the specific case above still wins for a
+                // file handle, which has its own `Close`.
+                case IDisposable disposable:
+                    disposable.Dispose();
                     break;
                 default:
-                    throw new InvalidOperationException("Expected a file handle or HTTP server handle value.");
+                    throw new InvalidOperationException("Expected a file handle or another closeable value.");
             }
         }
 

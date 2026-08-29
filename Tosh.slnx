@@ -9,6 +9,7 @@
     <Project Path="src/Tosh.Dap/Tosh.Dap.csproj" />
     <Project Path="src/Tosh.Lsp/Tosh.Lsp.csproj" />
     <Project Path="src/Tosh.Mcp/Tosh.Mcp.csproj" />
+    <Project Path="src/Toast.Stdlib/Toast.Stdlib.csproj" />
     <Project Path="src/Tosh.Stdlib/Tosh.Stdlib.csproj" />
     <Project Path="src/Tosh.Tui/Tosh.Tui.csproj" />
     <Project Path="src/Tosh.Tome/Tosh.Tome.csproj" />

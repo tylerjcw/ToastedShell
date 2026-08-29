@@ -348,6 +348,23 @@ internal static class ReflectionMetadataUtilities
     {
         if (typeTarget is Type type)
         {
+            if (type.IsEnum)
+            {
+                foreach (var methodName in EnumStaticSurface.Names)
+                {
+                    var method = EnumStaticSurface.Describe(type, methodName);
+                    yield return ShellRecordUtilities.CreateExpando(
+                    [
+                        new KeyValuePair<string, object?>("Type", GetDisplayName(type)),
+                        new KeyValuePair<string, object?>("Name", method.Name),
+                        new KeyValuePair<string, object?>("ReturnType", method.ReturnTypeName),
+                        new KeyValuePair<string, object?>("Static", method.IsStatic),
+                        new KeyValuePair<string, object?>("ParameterCount", method.ParameterCount),
+                        new KeyValuePair<string, object?>("Signature", method.Signature),
+                    ]);
+                }
+            }
+
             foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                          .Where(method => !method.IsSpecialName)
                          .OrderBy(method => method.Name, StringComparer.OrdinalIgnoreCase))

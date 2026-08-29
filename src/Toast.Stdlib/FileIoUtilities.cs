@@ -25,9 +25,11 @@ internal static class FileIoUtilities
     /// </summary>
     /// <remarks>
     /// <para>
-    /// TōSh keeps its own working directory per session, which is what <c>cd</c> moves and what
-    /// a relative path in a script must resolve against. A host with no shell has no session,
-    /// and the process's directory is the only answer there is.
+    /// The language runtime owns the working directory; <c>ToshRuntime.CurrentDirectory</c> is
+    /// <c>get =&gt; Language.CurrentDirectory</c>, so the shell's <c>cd</c> and this read the same
+    /// state. `TOAST-0077` first asked the *shell* for it, which worked and was the wrong door:
+    /// it coupled a language-level command to the shell assembly for a value the language
+    /// already had, and `TOAST-0007` could not move the file until that was undone.
     /// </para>
     /// <para>
     /// This was the single thing keeping <c>read-file</c> and <c>write-file</c> shell-level, and
@@ -39,7 +41,7 @@ internal static class FileIoUtilities
     /// </para>
     /// </remarks>
     private static string CurrentDirectory(CommandContext context)
-        => (context.CommandHost as ToshRuntime)?.CurrentDirectory ?? Environment.CurrentDirectory;
+        => context.LanguageRuntime.CurrentDirectory;
 
     public static void EnsureReadableFile(string path, string commandName)
     {

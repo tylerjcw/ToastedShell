@@ -1,7 +1,7 @@
 ---
 id: TOAST-0007
 title: "Split Tosh.Stdlib into language-level and shell-level commands"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-16
@@ -95,6 +95,51 @@ restores the old resolver fails both the scan and the behavioural test.
 The two sets are separately addressable but still one assembly. Moving them is now mechanical —
 a relocation rather than a behavioural change, which is what this slice was for.
 
+## The physical move — 2026-08-28
+
+`Toast.Stdlib` holds the language half — **169 files** — and references `Tosh.Language` and
+nothing else. `Tosh.Stdlib` keeps the shell half (106 files) and references it. Namespaces are
+unchanged and still say `Tosh.Stdlib.*`, following `TOAST-0006`: namespaces span assemblies, so
+moving a command between the halves is a project change rather than an edit to every consumer.
+
+The registrar moved with it. `Toast.Stdlib.LanguageCommands.RegisterDefaults` is where the
+registrations now live, so a host that wants Tōast without TōSh registers those and never loads
+the shell assembly — which is the whole point. `BuiltInCommands.RegisterLanguageDefaults` stays
+as a facade so existing callers and tests do not move.
+
+### The compiler found three couplings the source scan had not
+
+Each reached the shell through something other than the command's own file, which is exactly
+the blind spot the earlier scan admitted to having.
+
+**`close` named `HttpFileServerHandle`** — a shell type — for a handle it only ever disposed.
+It now closes any `IDisposable`, with the file-handle case still taking precedence. That widens
+what `close` accepts, which reads as an improvement rather than a risk: closing a closeable
+thing is what the command is for.
+
+**`FileIoUtilities` asked the shell for the working directory.** `TOAST-0077` had written
+`(context.CommandHost as ToshRuntime)?.CurrentDirectory`, which worked and was the wrong door:
+`ToshRuntime.CurrentDirectory` is `get => Language.CurrentDirectory`, so the value was already
+on the language runtime. It reads `context.LanguageRuntime.CurrentDirectory` now — simpler, the
+same state, and no longer a reason the file could not move.
+
+**The language registrar carried five `using` directives** for `Display`, `Net`, `Processes`,
+`Shell` and `Sys` — namespaces it never used, inherited from when both halves were one file.
+
+### Three assembly lists enumerate the runtime by name
+
+A new assembly is invisible to them, and the failure is `Could not load` at run time rather
+than anything at build time. `ToshPublisher`'s compiled-program set and two places in
+`Sdk.targets` needed the name added; twelve tests failed until they had it.
+
+### An internals grant, recorded rather than widened
+
+`Toast.Runtime` already grants internals to `Tosh.Stdlib` through a hand-written
+`Properties/AssemblyInfo.cs` — not the `csproj`, which is why it took a while to find. The
+language half has the same claim: its CLR commands are the surface those reflection helpers
+exist to serve. The grant is added beside the others rather than making the helpers public to
+suit two consumers.
+
 ## Acceptance
 
 - [x] Categories divided as above, with every reclassification argued above — and each one
@@ -104,8 +149,8 @@ a relocation rather than a behavioural change, which is what this slice was for.
 - [x] Command help, metadata and completion still resolve across both halves — the composed
       registrar builds one table, and the nine help/metadata/completion test files pass
 - [x] The suite passes unchanged — 6,751, no test altered
-- [ ] The two sets live in separate projects, with the language half free of any shell
-      reference — the physical move this item's title names, now a relocation
+- [x] The two sets live in separate projects, with the language half free of any shell
+      reference — enforced by `AssemblyBoundaryTests`, not by inspection
 
 ## Correction 2026-08-17: `Filesystem` splits *within itself*
 

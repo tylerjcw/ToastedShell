@@ -1075,14 +1075,35 @@ public static class OperatorEvaluator
             : (int)result;
     }
 
-    private static object? CastAs(object? value, object? typeSpecifier)
+    /// <summary>
+    /// Converts a value using the language's <c>as</c> semantics.
+    /// </summary>
+    /// <param name="typeResolver">
+    /// An optional session-aware resolver. The language engine supplies this so imports,
+    /// namespace aliases, and ToastScript declarations use the same lookup as annotations and
+    /// the <c>cast</c> command. Portable callers may omit it and use the built-in/platform type
+    /// index.
+    /// </param>
+    public static object? CastAs(
+        object? value,
+        object? typeSpecifier,
+        Func<string, object?>? typeResolver = null)
     {
         if (value is null)
         {
             return null;
         }
 
-        var typeName = ToOperatorString(typeSpecifier);
+        var resolvedTarget = typeSpecifier is Type or IShellTypeDescriptor
+            ? typeSpecifier
+            : null;
+        var typeName = resolvedTarget switch
+        {
+            Type type => type.FullName ?? type.Name,
+            IShellTypeDescriptor descriptor => descriptor.ShellTypeName,
+            _ => ToOperatorString(typeSpecifier),
+        };
+
         if (string.IsNullOrEmpty(typeName))
         {
             throw new InvalidOperationException("The 'as' operator requires a type name on the right-hand side.");
@@ -1114,15 +1135,11 @@ public static class OperatorEvaluator
             return value;
         }
 
-        // Resolve via built-in alias table first
-        Type? targetType = null;
-        if (DotNetTypeResolver.BuiltInAliases.TryGetValue(typeName, out var aliased))
+        resolvedTarget ??= typeResolver?.Invoke(typeName);
+
+        if (resolvedTarget is null)
         {
-            targetType = aliased;
-        }
-        else
-        {
-            targetType = typeName.ToLowerInvariant() switch
+            var compatibilityAlias = typeName.ToLowerInvariant() switch
             {
                 "str" => typeof(string),
                 "boolean" => typeof(bool),
@@ -1136,11 +1153,35 @@ public static class OperatorEvaluator
                 "uint32" => typeof(uint),
                 "int64" => typeof(long),
                 "uint64" => typeof(ulong),
-                _ => Type.GetType(typeName, throwOnError: false),
+                _ => null,
             };
+
+            if (compatibilityAlias is not null)
+            {
+                resolvedTarget = compatibilityAlias;
+            }
+            else if (DotNetTypeResolver.TryResolveToastTypeName(typeName, out var portableType))
+            {
+                resolvedTarget = portableType;
+            }
         }
 
-        if (targetType is null)
+        if (resolvedTarget is IShellTypeDescriptor shellTarget)
+        {
+            if (ShellTypeConversion.TryConvert(
+                    value,
+                    shellTarget,
+                    out var shellConverted,
+                    out var reason))
+            {
+                return shellConverted;
+            }
+
+            throw new InvalidOperationException(
+                $"Cannot convert '{value.GetType().Name}' to '{typeName}': {reason}.");
+        }
+
+        if (resolvedTarget is not Type targetType)
         {
             throw new InvalidOperationException($"Unknown type '{typeName}' in 'as' expression.");
         }

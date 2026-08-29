@@ -26,6 +26,7 @@
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TOAST-0078`](items/TOAST-0078.md) | P1 | complete | 6/6 | A bare name resolves to the runtime's internal types, so `Sys` means `Interop+Sys` |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
+| [`TOAST-0007`](items/TOAST-0007.md) | P2 | complete | 5/5 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`TOAST-0034`](items/TOAST-0034.md) | P2 | complete | 8/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
 | [`TOAST-0049`](items/TOAST-0049.md) | P2 | complete | 5/5 | Recursion is capped at 128 frames, and the cap is a stack size nobody can change |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | complete | 9/9 | The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways |

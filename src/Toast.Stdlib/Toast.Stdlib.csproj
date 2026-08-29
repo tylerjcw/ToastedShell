@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    `TOAST-0007`. The language half of the standard library. It may reach the language
+    (`Tosh.Language`, and `Toast.Runtime` beneath it) and nothing else: no `Tosh.Runtime`,
+    no `Tosh.Tui`. `AssemblyBoundaryTests` enforces that rather than this comment.
+
+    Namespaces are unchanged and still say `Tosh.Stdlib.*`. That is deliberate, and follows
+    `TOAST-0006`, where the `Tosh.Runtime` namespace already spans two assemblies: moving a
+    file between the halves is then a project change rather than an edit to every consumer.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
+  </ItemGroup>
+
+</Project>

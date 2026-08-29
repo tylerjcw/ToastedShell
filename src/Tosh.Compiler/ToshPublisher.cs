@@ -19,6 +19,9 @@ public static class ToshPublisher
         // services it still reaches through the host.
         "Toast.Runtime.dll",
         "Tosh.Runtime.dll",
+        // `TOAST-0007`. Both halves of the standard library, for the same reason as the
+        // runtime pair above: the language commands are in `Toast.Stdlib` now.
+        "Toast.Stdlib.dll",
         "Tosh.Stdlib.dll",
         "Tosh.Tui.dll",
     ];

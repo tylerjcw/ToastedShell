@@ -122,6 +122,36 @@ public sealed class AssemblyBoundaryTests
     }
 
     /// <summary>
+    /// And the language half of the standard library — <c>TOAST-0007</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the assertion the physical split exists to make. The registrar division proved
+    /// the two sets were separable; only a separate assembly proves they are separate, because
+    /// only a compiler can tell you that a language command reached the shell.
+    /// </para>
+    /// <para>
+    /// It found three couplings the source scan had missed, each reached through something
+    /// other than the command's own file: `close` named the shell's `HttpFileServerHandle` for
+    /// a handle it only disposed, `FileIoUtilities` asked the shell for a working directory the
+    /// language runtime already owned, and the language registrar carried five `using`
+    /// directives for namespaces it never used.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void The_language_standard_library_does_not_reach_the_shell()
+    {
+        var reachable = TransitiveToshReferences(typeof(Tosh.Stdlib.LanguageCommands).Assembly);
+        var violations = ShellAssemblies.Where(reachable.Contains).ToList();
+
+        Assert.True(
+            violations.Count == 0,
+            "Toast.Stdlib transitively references shell assemblies: " +
+            string.Join(", ", violations) +
+            "\nReached through: " + string.Join(", ", reachable.OrderBy(n => n, StringComparer.Ordinal)));
+    }
+
+    /// <summary>
     /// The non-vacuity check. Both assertions above are satisfied by an empty set, so a
     /// walk that silently returned nothing would report a clean boundary — and this test
     /// would be worse than absent, because it would look like evidence.

@@ -328,6 +328,11 @@ public sealed class ReflectionInvoker : IObjectInvoker
         ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
         ArgumentNullException.ThrowIfNull(arguments);
 
+        if (EnumStaticSurface.TryInvoke(type, methodName, arguments, out var enumResult))
+        {
+            return enumResult;
+        }
+
         return Invoke(
             MethodsNamed(type, isStatic: true, methodName),
             target: null,
