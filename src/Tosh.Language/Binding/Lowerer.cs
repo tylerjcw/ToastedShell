@@ -532,10 +532,59 @@ public static class Lowerer
         }
     }
 
+    /// <summary>
+    /// The variable an `if` condition narrows — <c>TOAST-0084</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same rule <c>TryGetNarrowedName</c> applies to a match arm, over the other shape
+    /// the condition arrives in: a match arm's `_ is T` is a `ComparisonPatternSyntax`, while
+    /// `if ($x is T)` is an ordinary binary operator. Only the then-branch narrows; subtracting
+    /// the type from the else-branch is `TOAST-0084`'s closed-alternative rule and needs a
+    /// type the model cannot yet spell.
+    /// </remarks>
+    private static string? TryGetConditionNarrowedName(
+        ArgumentSyntax condition,
+        LowerContext ctx,
+        out BoundType? narrowedType)
+    {
+        narrowedType = null;
+
+        if (condition is not OperatorArgumentSyntax { Operator: var op } binary) return null;
+        if (!string.Equals(op, "is", StringComparison.OrdinalIgnoreCase)) return null;
+        if (binary.Left is not VariableReferenceArgumentSyntax variable) return null;
+
+        var typeName = binary.Right switch
+        {
+            BarewordArgumentSyntax bareword => bareword.Value,
+            _ => null,
+        };
+
+        if (string.IsNullOrWhiteSpace(typeName)) return null;
+
+        var resolved = ctx.ResolveType(typeName);
+        if (resolved is null || resolved.IsDynamic) return null;
+
+        narrowedType = resolved;
+        return variable.Name;
+    }
+
     private static BoundIfStatement LowerIfStatement(IfStatementSyntax ifStmt, LowerContext ctx)
     {
         var condition = LowerExpression(ifStmt.Condition, ctx);
+
+        var narrowedName = TryGetConditionNarrowedName(ifStmt.Condition, ctx, out var narrowedType);
+        if (narrowedName is not null && narrowedType is not null)
+        {
+            ctx.PushNarrowing(narrowedName, narrowedType);
+        }
+
         var thenBlock = LowerBlock(ifStmt.ThenBlock, ctx);
+
+        if (narrowedName is not null && narrowedType is not null)
+        {
+            ctx.PopNarrowing();
+        }
+
         var elseBlock = ifStmt.ElseBlock is null ? null : LowerBlock(ifStmt.ElseBlock, ctx);
         return new BoundIfStatement(condition, thenBlock, elseBlock, ifStmt.Span);
     }

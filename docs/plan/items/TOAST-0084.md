@@ -76,6 +76,36 @@ for the branch, rather than inventing a type where none was tracked.
 
 Attempting stage 2 first would produce a feature whose tests pass before it is written.
 
+## First slice — 2026-08-28
+
+Two changes, and the first is why the second is worth anything.
+
+**A returned expression is now walked.** It was checked for its *type* against the declaration
+and never descended into, so nothing inside it was examined: `writeline $s.Nonexistent`
+reported a missing member and `return $s.Nonexistent` reported nothing. The checker stopped at
+the statement a function is most likely to end with — which is why the probes above read as
+"parameters are not typed" when parameters were typed all along.
+
+That mattered more than a missed diagnostic. Narrowing built on top would have been
+*unobservable*: `if ($n is Leaf) { return $n.Value }` and a bare `return $n.Value` were both
+silent, so a test for narrowing would have passed before the feature existed.
+
+**`if ($x is T)` narrows its then-branch.** A match arm already did — the machinery
+(`PushNarrowing` / `LookupNarrowed`) was there, applied to `ComparisonPatternSyntax`, and an
+`if` condition is an ordinary binary operator instead. The specification's `§Type Narrowing`
+claims *"Both `if` and a `match` arm narrow, and they narrow identically"* and its own verbatim
+example failed; it passes now.
+
+Only the then-branch. Subtracting the type in the else-branch is this item's closed-alternative
+rule and needs a type the model cannot yet spell.
+
+### Blast radius: none
+
+The concern was that walking returns would light up every typed function. Measured across the
+repository's `examples/`, `scripts/` and `tests/` and the author's own `~/.config/tosh` —
+**57 files, zero diagnostics** — with the harness demonstrably non-vacuous, since it reports the
+probe case it was built for.
+
 ## Soundness boundary
 
 The checker needs a control-flow graph, not textual substitution. Reassignment invalidates facts;
@@ -86,7 +116,8 @@ and exhaustive matches contribute reachability facts.
 ## Acceptance
 
 - [ ] `x is null` / `x is-not null` narrows `T?` in the true and false paths
-- [ ] `x is T` narrows in the true path and subtracts `T` from a closed alternative in the false path
+- [~] `x is T` narrows in the true path, for `if` and for a match arm. Subtracting `T` in the
+      false path still needs a type the model cannot spell
 - [ ] A union variant pattern gives every payload binding its declared substituted type
 - [ ] Refinement tests preserve the refinement type rather than only its base type
 - [ ] Early exit, short-circuit logic and exhaustive match arms contribute correct reachability facts

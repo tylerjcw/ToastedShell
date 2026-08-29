@@ -538,6 +538,13 @@ public static class TypeChecker
                 if (ret.Value is not null)
                 {
                     ReportVoidProduces(ctx, "return a value", ret.Span);
+
+                    // `TOAST-0084`. The returned expression was checked for its *type* against
+                    // the declaration and never walked, so nothing inside it was examined:
+                    // `writeline $s.Nonexistent` reported a missing member and
+                    // `return $s.Nonexistent` reported nothing. Everything the checker knows
+                    // stopped at the one statement a function is most likely to end with.
+                    CheckPipeline(ret.Value, ctx);
                 }
 
                 CheckReturn(ret, ctx);
