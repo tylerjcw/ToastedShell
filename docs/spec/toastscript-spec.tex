@@ -1136,7 +1136,7 @@ Array.IndexOf([1, 2, 3], 2)         # System.Array
 \end{lstlisting}
 
 Everywhere a type is \emph{named} rather than used---annotations, \code{cast},
-and \code{new}---the alias wins regardless of case, so \code{var f: file} and
+\code{as}, and \code{new}---the alias wins regardless of case, so \code{var f: file} and
 \code{var f: File} both bind \code{FileInfo}:
 
 \begin{lstlisting}
@@ -1582,7 +1582,8 @@ conversion then has nothing to discard.
 \subsection*{Casting to a declared type}
 \label{sec:cast-declared}
 
-\code{cast} also targets a type declared in ToastScript, including one nested
+\code{cast} and the \code{as} operator also target a type declared in
+ToastScript, including one nested
 inside a class.  The target name is resolved against the CLR first and the
 declarations second, so an existing script that casts to a CLR type keeps
 doing so even if a declaration later takes the same name.
@@ -1594,6 +1595,7 @@ is the reverse of the conversion that turns a member into its number:
 enum Fuel : int { Mox = 3, Uranium = 8 }
 
 cast Fuel 8                 # Uranium
+8 as Fuel                    # Uranium - the operator uses the same conversion
 cast Fuel "Mox"             # Mox   (member names are matched case-insensitively)
 cast int Fuel.Uranium       # 8     (the round trip closes)
 cast Fuel (cast int Fuel.Uranium)   # Uranium
@@ -2973,6 +2975,10 @@ echo ("hi" is not int)      # true
 # Type casting with 'as'
 var n = "42" as int          # 42
 var x = "hello" as int       # error: Cannot convert 'String' to 'int'
+var color = 12 as System.ConsoleColor  # Red
+
+enum Fuel : int { Mox = 3, Uranium = 8 }
+var fuel = 8 as Fuel          # Uranium
 
 # Pipeline cast (equivalent)
 echo "42" | cast int         # 42
@@ -2984,6 +2990,12 @@ is a statement that the value is of that type; a silent \code{null} would turn a
 wrong assumption into a wrong value carried onwards, and the failure would then be
 reported somewhere else entirely.  Use \code{is} to ask whether a conversion would
 succeed.
+
+The right operand is resolved by the same scoped, CLR-first type lookup as
+annotations and the \code{cast} command.  Fully-qualified platform types,
+imports and namespace aliases, and local, nested, module-qualified, or imported
+ToastScript declarations therefore have the same meaning on every casting
+surface.
 
 \section{Null Coalescing}
 \iop{??}\iop{?.}
@@ -6152,7 +6164,32 @@ var state = StockState.Healthy
 if ($state == StockState.Low) {
     echo "Reorder needed"
 }
+
+var states = (StockState.values())
+var stateNames = (StockState.names())
+echo $states[1]                    # 1 (the backing value of Healthy)
+echo $stateNames[1]                # Healthy
+
+for value in (System.ConsoleColor.values()) {
+    echo $value                    # an integer backing value
+}
 \end{lstlisting}
+
+Every enum type exposes the same two zero-argument static helpers, whether the
+type was declared in ToastScript or comes from the CLR:
+
+\begin{itemize}
+  \item \code{Enum.values()} returns an array of the members' underlying backing values.
+  \item \code{Enum.names()} returns the corresponding array of member-name strings.
+\end{itemize}
+
+The arrays correspond element-for-element.  ToastScript enums retain declaration
+order; CLR enums retain the ordering supplied by \code{System.Enum}.  The array
+is one value, so it may be retained, indexed, passed to a function, or explicitly
+iterated as in the example above.  Thus \code{enum Fuel : int \{ Mox = 3,
+Uranium = 8 \}} gives \code{Fuel.values()} as \code{[3, 8]} and
+\code{Fuel.names()} as \code{["Mox", "Uranium"]}; call \code{parse} or use
+\code{as Fuel} when a backing value needs to become a typed member again.
 
 \subsection{Flag Enums}
 \ikw{flags}

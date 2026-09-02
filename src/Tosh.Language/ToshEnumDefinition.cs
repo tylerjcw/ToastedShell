@@ -185,6 +185,22 @@ public sealed class ToshEnumDefinition : IShellNamedType, IShellFlagsEnum
             return new InvocationResult(CreateInstance(arguments), ReturnedVoid: false);
         }
 
+        if (string.Equals(methodName, "values", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(methodName, "names", StringComparison.OrdinalIgnoreCase))
+        {
+            if (arguments.Count != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Enum method '{Name}.{methodName}' expects no arguments.");
+            }
+
+            var value = string.Equals(methodName, "values", StringComparison.OrdinalIgnoreCase)
+                ? GetUnderlyingValues()
+                : Members.Select(member => member.Name).ToArray();
+
+            return new InvocationResult(value, ReturnedVoid: false);
+        }
+
         throw new InvalidOperationException($"Static method '{methodName}' was not found on enum '{Name}'.");
     }
 
@@ -256,13 +272,39 @@ public sealed class ToshEnumDefinition : IShellNamedType, IShellFlagsEnum
         return
         [
             new ShellMethodDescriptor(
+                "names",
+                ReturnTypeName: "string[]",
+                IsStatic: true,
+                ParameterCount: 0,
+                Signature: "string[] names()",
+                IsHidden: false),
+            new ShellMethodDescriptor(
                 "parse",
                 ReturnTypeName: Name,
                 IsStatic: true,
                 ParameterCount: 1,
                 Signature: $"{Name} parse(object value)",
                 IsHidden: false),
+            new ShellMethodDescriptor(
+                "values",
+                ReturnTypeName: $"{UnderlyingTypeName}[]",
+                IsStatic: true,
+                ParameterCount: 0,
+                Signature: $"{UnderlyingTypeName}[] values()",
+                IsHidden: false),
         ];
+    }
+
+    private Array GetUnderlyingValues()
+    {
+        var values = Array.CreateInstance(UnderlyingType, Members.Count);
+
+        for (var index = 0; index < Members.Count; index++)
+        {
+            values.SetValue(Members[index].UnderlyingValue, index);
+        }
+
+        return values;
     }
 
     public IReadOnlyList<ShellConstructorDescriptor> GetShellConstructors()

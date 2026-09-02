@@ -2104,6 +2104,40 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Compiled_as_uses_the_exact_declared_enum_type()
+    {
+        const string source =
+            "enum CompiledAsFuelProbe: int { Mox = 3, Uranium = 8 }\n" +
+            "echo (8 as CompiledAsFuelProbe)";
+
+        var pure = EmitWithProfile(source, CompileProfile.Pure);
+        Assert.True(pure.IsClean,
+            $"expected clean pure emit, got: {string.Join(", ", pure.UnsupportedShapes)}");
+
+        Assert.Equal("Uranium", CompileAndRun(source).Trim());
+    }
+
+    [Fact]
+    public void Compiled_clr_and_declared_enums_share_values_and_names()
+    {
+        var output = CompileAndRun(
+            """
+            var clrValues = (System.ConsoleColor.values())
+            var clrNames = (System.ConsoleColor.names())
+            echo $clrValues[12]
+            echo $clrNames[12]
+
+            enum Fuel: int { Mox = 3, Uranium = 8 }
+            var declaredValues = (Fuel.values())
+            var declaredNames = (Fuel.names())
+            echo $declaredValues[1]
+            echo $declaredNames[1]
+            """);
+
+        Assert.Equal("12\nRed\n8\nUranium", output.Trim().Replace("\r", ""));
+    }
+
+    [Fact]
     public void Profile_dedups_repeated_violations()
     {
         // Three calls to the same builtin should produce one diagnostic, not three.
