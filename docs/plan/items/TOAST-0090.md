@@ -1,7 +1,7 @@
 ---
 id: TOAST-0090
 title: "Static member access and instance member access are the same operator, so a path cannot be told from a lookup"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -64,10 +64,10 @@ validator can admit it.
 - [~] A stated migration and a `prefer-path` analysis — **deferred by decision, 2026-08-28.**
       Neither spelling is preferred; `.` on a type is not being deprecated. Revisit only when
       `TOAST-0092`'s notation needs the distinction enforced.
-- [ ] Formatter, LSP, hover, completion and syntax highlighting treat the two distinctly
+- [x] Formatter, LSP, hover, completion and syntax highlighting treat the two distinctly
 - [x] Diagnostics say which operator was expected when a member access is written as a path
-- [ ] …and when a path is written as a member access
-- [ ] `§Type System` and the operator table document the distinction
+- [x] …and when a path is written as a member access
+- [x] `§Type System` and the operator table document the distinction
 - [x] Interpreter and compiler agree; the differential corpus covers both spellings
 
 ## Progress (2026-08-28)
@@ -127,3 +127,55 @@ are not interchangeable in command position.
 `TOAST-0095` — `is` against a nested type is always false, and a qualified variant pattern
 (`Result.Ok(v)`) never matches. Both reproduce in the dotted spelling and predate this item.
 Once the pattern case matches, this item's corpus should gain it.
+
+## Progress (2026-09-02) — the editor surface, and a rule the notation was not keeping
+
+**Completion measured before the change: `Level::` and `Level.` returned byte-identical lists of
+373 generic entries, with `Novice` in neither.** Two separate causes, and each alone would have
+been enough. The qualified-context scan split on `.` only, so a path found no context at all;
+and even where a context *was* found, nothing answered for a declared enum, so the caller fell
+through to the global list. A plausible-looking 373-item list with the one right name missing is
+the shape of bug that survives a demo.
+
+`::` is deliberately **not** added to the completion scan's path characters. A bare `:` also ends
+a type annotation and a ternary, so `var a:Level.` would scan back through it and complete
+against `a:Level`. The pair is matched explicitly instead, and there is a test for the
+annotation.
+
+**A path returns its own answer even when that answer is empty.** Falling through would offer
+every command and keyword after `Unknown::`, which is the same failure the item started with.
+
+Unions were not in the declaration index at all — no kind, no variants — so `Option::` could not
+have completed even once the scan was fixed. They are indexed now the way enums are, which also
+gives them document symbols, hover, and go-to-definition.
+
+**Hover** answered for `Level` and returned null for `Novice`, because a member's scope is its
+declaring type's span and the cursor is somewhere else entirely. The qualifier standing to the
+left of the cursor is what says which type to ask.
+
+**The formatter needed nothing.** It preserves `::` and `new T {| … |}` already — and it leaves
+*every* expression interior alone (`{%"a"=>1%}`, `[1,2,3]`, `(1+2)` all pass through as written)
+while still reflowing statements. Claiming it "does not understand the path operator" would have
+been over-reading its existing scope. Verified by control, not assumed.
+
+**Both grammars.** The VS Code grammar is generated, and its generator's own docstring records
+that hand-edits to the JSON are silently reverted (`TS-P3-12`) — so the rule went into
+`scripts/generate-vscode-grammar.tosh`. The GtkSourceView `.lang` is hand-maintained and got the
+counterpart. In both, the path rule precedes the command rules: `Level::Novice` at the head of a
+line is a path, not a command named `Level`.
+
+### The reverse diagnostic was a real hole in TON
+
+The remaining box — "when a path is written as a member access" — turned out not to be a message
+to write but a rule that was not being enforced. `docs/spec/ton.md` publishes
+`path := typename "::" IDENT` and rests the notation's safety argument on the sentence *"Member
+access is not in the grammar at all."* It was: the parser canonicalises both spellings to dots
+before the validator sees the name, and `StaticMethodCallArgumentSyntax` did not carry which
+operator was written. Measured: `from ton "Profession.Librarian"` and
+`from ton "Shape.Circle(2)"` both **read**, producing exactly what the path spelling produces.
+
+So this implementation accepted documents that an implementation written from the published
+grammar refuses — the one divergence a portable notation cannot have. The call node now carries
+the operator, as the member-access node already did, and both spellings are refused with the
+path form named. Two cases added to `docs/spec/ton-conformance/refuse/`, where a third party
+can run them.

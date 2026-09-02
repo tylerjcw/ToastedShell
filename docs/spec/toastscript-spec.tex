@@ -1530,6 +1530,42 @@ echo $d.BaseValue     # 5000
 echo $d.CategoryName  # Length
 \end{lstlisting}
 
+\section{Naming a Type's Members}
+\label{sec:path-operator}
+\ikw{::}
+
+A name that lives \emph{inside} a type is reached with the path operator
+\code{::}; a member of a \emph{value} is reached with \code{.}.
+
+\begin{lstlisting}
+enum Profession { Librarian, Farmer }
+union Shape { Circle(radius: int) Square(side: int) }
+
+var job   = Profession::Librarian   # enum member
+var shape = Shape::Circle(2)        # union variant
+var inner = Outer::Inner            # nested type
+var pi    = System.Math::PI         # static member
+
+var villager = new Villager {| Job = $job |}
+echo $villager.Job                  # member of a value
+\end{lstlisting}
+
+The head of a path is a type, so it is written in the type's own spelling ---
+\code{System.Math::PI} qualifies the type with dots and then reaches into it
+with \code{::}.
+
+\code{Type.Member} still resolves, and is not deprecated: existing source keeps
+working and neither spelling is preferred. The difference the two operators make
+is that the intent is now recoverable from the syntax. Under one operator a
+consumer had to decide what \code{Profession.Librarian} meant by looking the
+name up in a type table --- a semantic rule, and one a bug can get wrong. Under
+two, a grammar can simply decline to include member access, which is how
+Tōast Object Notation (specified separately, in \code{docs/spec/ton.md}) keeps
+a document from evaluating a lookup.
+
+Writing one where the other belongs is a diagnostic that names the operator
+expected.
+
 \section{Type Conversion}
 \label{sec:conversion}
 
@@ -3065,6 +3101,19 @@ The bitwise operators are spelled as words because the symbols are taken:
 unlike C, so \code{flags band Mask == 0} groups as \code{(flags band Mask) == 0}
 --- the way the line reads. Their order relative to one another follows C, which
 is not the part that surprises people.
+
+The two access operators are not in the table because they are not part of the
+binary grouping it describes: \code{::} and \code{.} are postfix, bind tighter
+than every level below, and never compete with one another for an operand. They
+are, however, not interchangeable: \code{::} reaches a name \emph{inside a type} --- an enum
+member, a union variant, a static member, a nested type --- while \code{.}
+reaches a member \emph{of a value}. \code{Profession::Librarian} is a path;
+\code{\$villager.Job} is a lookup. \code{Type.Member} continues to work and is
+not deprecated, so the older spelling of a path still parses; what the two
+operators buy is that a consumer which needs the distinction can now see it
+in the syntax rather than infer it from a type table. Tōast Object Notation is
+that consumer: its grammar admits \code{::} and not \code{.}, so a document
+cannot smuggle a member lookup past a reader.
 
 Comparison, type testing and membership share one level and associate to the
 left, so \code{true == 1 is int} groups as \code{(true == 1) is int} rather than
