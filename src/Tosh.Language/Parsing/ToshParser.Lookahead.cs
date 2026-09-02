@@ -1043,9 +1043,22 @@ public static partial class ToshParser
         /// </remarks>
         private bool LooksLikeQualifiedDotNetAccess(string text)
         {
-            if (string.IsNullOrWhiteSpace(text) ||
-                !text.Contains('.', StringComparison.Ordinal) ||
-                text[0] == '.')
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            // `TOAST-0090`. `::` says "reach into a type" outright, so none of the guessing
+            // below applies to it: no casing rule, no type table, and no TS-P2-16 carve-out for
+            // `Geo.area 2`, because `Geo::area 2` cannot be a command invocation in the first
+            // place. This is the whole point of having the operator — the `.` path underneath
+            // has to guess, and a guess is what `prefer-path` exists to retire.
+            if (StaticPathSyntax.UsesPathOperator(text))
+            {
+                return true;
+            }
+
+            if (!text.Contains('.', StringComparison.Ordinal) || text[0] == '.')
             {
                 return false;
             }

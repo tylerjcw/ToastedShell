@@ -5320,6 +5320,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
     public bool TryGetNamedType(string name, out IShellNamedType definition)
     {
+        // `TOAST-0090`. The shell's own named types — classes, enums, unions, nested types — are
+        // looked up here by every path that is not the CLR resolver, so `Outer::Inner` is retired
+        // to its dotted spelling before any of the tables below are consulted.
+        name = Parsing.StaticPathSyntax.Canonicalize(name);
+
         if (AnnotationResolutionExports is { } declaringExports &&
             declaringExports.Types.TryGetValue(name, out var declaredSibling))
         {
@@ -5512,7 +5517,10 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         try
         {
-            return CreateScopedTypeResolver().Resolve(name);
+            // `TOAST-0090`. Every spelling of a type name reaches the resolver through here —
+            // annotations, casts, `is`, constructor targets — so the path operator is retired to
+            // its dotted form once, at the boundary, and no resolver below needs to know it exists.
+            return CreateScopedTypeResolver().Resolve(Parsing.StaticPathSyntax.Canonicalize(name));
         }
         catch (Exception exception) when (
             exception is FileLoadException or FileNotFoundException or TypeLoadException or

@@ -962,7 +962,10 @@ public static partial class ToshParser
                 // `tosh.runtime.variable_reference_requires_dollar` — so this makes a write
                 // diagnose where its read does, rather than one phase earlier.
                 var token = NextToken();
-                expression = new StaticMemberAccessArgumentSyntax(token.Text, token.Span);
+                expression = new StaticMemberAccessArgumentSyntax(
+                    StaticPathSyntax.Canonicalize(token.Text),
+                    token.Span,
+                    StaticPathSyntax.UsesPathOperator(token.Text));
             }
             else
             {
@@ -1725,7 +1728,10 @@ public static partial class ToshParser
                 return false;
             }
 
-            var rootName = token.Text.Split('.', 2, StringSplitOptions.None)[0];
+            // `TOAST-0090`. Canonicalised first: the raw `B::S` has no `.` to split on, so the
+            // whole text became the root name and `IsValidIdentifier` rejected it on the colons.
+            var rootName = StaticPathSyntax.Canonicalize(token.Text)
+                .Split('.', 2, StringSplitOptions.None)[0];
             return IsValidIdentifier(rootName);
         }
 
@@ -1747,8 +1753,13 @@ public static partial class ToshParser
                 return !string.IsNullOrWhiteSpace(memberPath);
             }
 
-            var separatorIndex = token.Text.IndexOf('.');
-            return separatorIndex > 0 && IsValidIdentifier(token.Text[..separatorIndex]);
+            // `TOAST-0090`. `B::S = 5` is a static assignment for the same reason `B.S = 5` is,
+            // so the path operator has to be a separator here too. Without it the target was
+            // not recognised as a member path at all and the statement fell through to the
+            // predicate form, reporting `assignment_in_predicate` at the `=`.
+            var text = StaticPathSyntax.Canonicalize(token.Text);
+            var separatorIndex = text.IndexOf('.');
+            return separatorIndex > 0 && IsValidIdentifier(text[..separatorIndex]);
         }
 
         private static void ParseTypedIdentifierToken(

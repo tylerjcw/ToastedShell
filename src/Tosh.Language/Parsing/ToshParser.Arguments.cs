@@ -1460,6 +1460,22 @@ public static partial class ToshParser
         private ArgumentSyntax ParseVariableReferenceArgument()
         {
             var variableToken = NextToken();
+
+            // `TOAST-0090`. `::` reaches into a type and a variable holds a value, so `$p::X` is
+            // the operator confusion this item exists to make visible. Diagnosed rather than
+            // resolved as `$p.X`: without this the whole token missed every member-access route
+            // and came out the far side as the literal string "$p.X", which is worse than an
+            // error because it looks like it worked.
+            if (StaticPathSyntax.UsesPathOperator(variableToken.Text))
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.path_operator_on_value",
+                    Title: "'::' reaches into a type, not into a value.",
+                    Span: variableToken.Span,
+                    Label: "use '.' to read a member of a value",
+                    Help: $"try '{variableToken.Text.Replace(StaticPathSyntax.PathOperator, ".", StringComparison.Ordinal)}'."));
+            }
+
             ParseVariableReferenceToken(variableToken, out var name, out var memberPath);
 
             ArgumentSyntax expression = new VariableReferenceArgumentSyntax(name, GetVariableReferenceSpan(variableToken, name));
@@ -1554,7 +1570,7 @@ public static partial class ToshParser
             var arguments = ParseInvocationArguments(implicitCurrentItem);
             var end = arguments.closeParenEnd ?? methodToken.Span.End;
             return new StaticMethodCallArgumentSyntax(
-                methodToken.Text,
+                StaticPathSyntax.Canonicalize(methodToken.Text),
                 arguments.arguments,
                 TextSpan.FromBounds(methodToken.Span.Start, end),
                 explicitTypeArguments);
@@ -1609,7 +1625,10 @@ public static partial class ToshParser
         private ArgumentSyntax ParseStaticMemberAccessArgument()
         {
             var token = NextToken();
-            return new StaticMemberAccessArgumentSyntax(token.Text, token.Span);
+            return new StaticMemberAccessArgumentSyntax(
+                StaticPathSyntax.Canonicalize(token.Text),
+                token.Span,
+                StaticPathSyntax.UsesPathOperator(token.Text));
         }
 
         private ArgumentSyntax ParseImplicitCurrentItemArgument()
@@ -2217,7 +2236,10 @@ public static partial class ToshParser
             }
 
             var typeToken = NextToken();
-            var bareTypeName = typeToken.Text;
+            // `TOAST-0090`. `new Outer::Inner()` names a nested type by the path operator, and a
+            // type name is exactly the place it belongs. Canonicalised here so the resolver sees
+            // the dotted form it already understands.
+            var bareTypeName = StaticPathSyntax.Canonicalize(typeToken.Text);
             string typeName = bareTypeName;
             IReadOnlyList<string>? typeArguments = null;
 

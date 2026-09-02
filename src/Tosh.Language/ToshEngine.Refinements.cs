@@ -1524,6 +1524,11 @@ public sealed partial class ToshEngine
 
     private bool IsKnownAnnotatedType(string typeName, HashSet<string> activeRefinements)
     {
+        // `TOAST-0090`. A type annotation is a type name, so it takes the path operator like any
+        // other: `var i: Outer::Inner`. Canonicalised here, where every annotation already passes
+        // through, rather than at each of the places one can be written.
+        typeName = Parsing.StaticPathSyntax.Canonicalize(typeName);
+
         var allowsNull = typeName.EndsWith("?", StringComparison.Ordinal);
         var normalizedTypeName = allowsNull ? typeName[..^1] : typeName;
 

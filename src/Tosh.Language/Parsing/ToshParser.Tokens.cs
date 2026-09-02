@@ -182,7 +182,10 @@ public static partial class ToshParser
 
             var closeToken = NextToken();
             return new VariantPatternSyntax(
-                nameText,
+                // `TOAST-0090`. A pattern may name its variant by the path operator
+                // (`Result::Ok(v)`), which is the spelling a core `Result` invites. Canonicalised
+                // like every other type-qualified name, so the matcher compares one form.
+                StaticPathSyntax.Canonicalize(nameText),
                 positional,
                 named,
                 TextSpan.FromBounds(start, closeToken.Span.End));
@@ -1250,7 +1253,12 @@ public static partial class ToshParser
                 return;
             }
 
-            var raw = token.Text[1..];
+            // `TOAST-0090`. Canonicalised so `$p::X` is *recognised* as a variable's member
+            // access and can be diagnosed as the wrong operator for one. Left raw, the name came
+            // out as `p::X`, failed the identifier check, and the token stopped being
+            // variable-like at all — so it missed every member route and surfaced as the literal
+            // string "$p.X", which reads as success.
+            var raw = StaticPathSyntax.Canonicalize(token.Text)[1..];
             var separatorIndex = raw.IndexOf('.');
 
             if (separatorIndex < 0)

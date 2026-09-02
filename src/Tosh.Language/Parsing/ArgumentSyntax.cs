@@ -44,7 +44,24 @@ public sealed record StaticMethodCallArgumentSyntax(
     /// </summary>
     IReadOnlyList<string>? ExplicitTypeArguments = null) : ArgumentSyntax(Span);
 
-public sealed record StaticMemberAccessArgumentSyntax(string Path, TextSpan Span) : ArgumentSyntax(Span);
+/// <summary>
+/// A name reached inside a *type* — an enum member, a union variant, a static member, a nested
+/// type — as opposed to a member of a value, which is <see cref="MemberAccessArgumentSyntax"/>.
+/// </summary>
+/// <param name="Path">
+/// The path in its canonical dotted spelling, whichever operator wrote it, so every consumer
+/// resolves one form.
+/// </param>
+/// <param name="UsedPathOperator">
+/// Whether the source wrote <c>::</c> rather than <c>.</c> — <c>TOAST-0090</c>. Kept because the
+/// two spellings are not equivalent to a reader or a tool even though they resolve alike: `.` on
+/// a type is the discouraged form, and telling them apart is what lets the formatter, hover and
+/// the `prefer-path` analysis say so.
+/// </param>
+public sealed record StaticMemberAccessArgumentSyntax(
+    string Path,
+    TextSpan Span,
+    bool UsedPathOperator = false) : ArgumentSyntax(Span);
 
 public sealed record ArrayLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);
 
