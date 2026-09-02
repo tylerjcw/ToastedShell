@@ -1,0 +1,15 @@
+# Types the conformance corpus refers to.
+#
+# A TON document resolves names against the *reading* program's declared types, so a corpus has
+# to say what those are. An implementation in another language may resolve nothing and produce a
+# faithful unresolved tree instead; what it must not do is accept a document `refuse/` rejects.
+
+record Exchange(Item: string, Amount: int)
+enum Profession { Librarian, Farmer }
+union Shape { Circle(radius: int) Square(side: int) }
+
+class Villager {
+    prop Name = ""
+    prop Job = Profession::Farmer
+    prop Trades = []
+}

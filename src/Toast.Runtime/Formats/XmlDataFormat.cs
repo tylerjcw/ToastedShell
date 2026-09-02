@@ -54,9 +54,12 @@ public sealed class XmlDataFormat : IDataFormat
             : "root";
         var indent = !args.HasFlag("c", "compact");
 
+        // `TOAST-0092`. The tag rides as an ordinary `$type` member, which XML renders like any
+        // other, so the placement rule is the same one json and toml follow.
+        var typed = args.HasFlag("typed");
         var normalized = values.Count == 1
-            ? ShellDataSerializer.Normalize(values[0])
-            : values.Select(ShellDataSerializer.Normalize).ToArray();
+            ? ShellDataSerializer.Normalize(values[0], typed)
+            : values.Select(value => ShellDataSerializer.Normalize(value, typed)).ToArray();
 
         var root = ToXElement(rootName, normalized);
         var document = new XDocument(root);
@@ -149,6 +152,19 @@ public sealed class XmlDataFormat : IDataFormat
                         if (key.StartsWith('@'))
                         {
                             element.Add(new XAttribute(key[1..], ExternalTextSerializer.Serialize(val)));
+                        }
+                        else if (key == ShellDataSerializer.TypeKey)
+                        {
+                            // `TOAST-0092`. `$` is not legal in an XML name, so the tag rides as
+                            // an attribute rather than being sanitised into a `__type` element
+                            // that no XML reader would recognise as a type.
+                            element.Add(new XAttribute("type", ExternalTextSerializer.Serialize(val)));
+                        }
+                        else if (key == ShellDataSerializer.ValueKey)
+                        {
+                            // A tagged scalar — an enum member — has no fields to sit beside, so
+                            // its value is the element's text: `<Job type="Profession">Librarian</Job>`.
+                            element.Add(new XText(ExternalTextSerializer.Serialize(val)));
                         }
                         else if (key == "#text")
                         {

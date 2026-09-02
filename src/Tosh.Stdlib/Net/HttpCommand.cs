@@ -1126,7 +1126,9 @@ public sealed class HttpCommand : ShellCommand
         return Path.GetExtension(path).ToLowerInvariant() switch
         {
             ".json" => "application/json; charset=utf-8",
-            ".txt" or ".log" or ".md" => "text/plain; charset=utf-8",
+            // `TOAST-0092`. A TON document is text a reader is meant to *read*, so it is served
+            // as plain text rather than downloaded as an unknown binary.
+            ".txt" or ".log" or ".md" or ".ton" or ".tosh" => "text/plain; charset=utf-8",
             ".html" or ".htm" => "text/html; charset=utf-8",
             ".xml" => "application/xml; charset=utf-8",
             ".csv" => "text/csv; charset=utf-8",

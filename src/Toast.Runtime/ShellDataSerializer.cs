@@ -13,14 +13,41 @@ internal static class ShellDataSerializer
         return JsonSerializer.Serialize(Normalize(value), JsonOptions);
     }
 
-    public static object? Normalize(object? value)
+    /// <summary>The key carrying a declared type's name in a typed document.</summary>
+    public const string TypeKey = "$type";
+
+    /// <summary>The key carrying a tagged scalar's value, where there are no fields to sit beside.</summary>
+    public const string ValueKey = "$value";
+
+    private static string? DeclaredTypeName(object value) => value switch
     {
-        return Normalize(value, new HashSet<object>(ReferenceEqualityComparer.Instance), 0);
+        IShellTypedObject typed => typed.ShellTypeDescriptor.ShellTypeName,
+        IShellRecordObject record => record.ShellTypeName,
+        _ => null,
+    };
+
+    public static object? Normalize(object? value) => Normalize(value, typed: false);
+
+    /// <summary>
+    /// Normalizes a value for serialization, optionally tagging declared types so the result can
+    /// be read back as what it was — <c>TOAST-0092</c>.
+    /// </summary>
+    /// <remarks>
+    /// Every format reaches this one method, so the tag is placed once and json, toml and xml
+    /// inherit it rather than each inventing a convention. A `$type` sibling key is the shape
+    /// JSON readers already understand from `$type`/`$schema`, and it nests without an envelope.
+    /// </remarks>
+    public static object? Normalize(object? value, bool typed)
+    {
+        return Normalize(value, new HashSet<object>(ReferenceEqualityComparer.Instance), 0, typed);
     }
 
-    public static IReadOnlyDictionary<string, object?> NormalizeRow(object? value)
+    public static IReadOnlyDictionary<string, object?> NormalizeRow(object? value) =>
+        NormalizeRow(value, typed: false);
+
+    public static IReadOnlyDictionary<string, object?> NormalizeRow(object? value, bool typed)
     {
-        var normalized = Normalize(value);
+        var normalized = Normalize(value, typed);
 
         return normalized switch
         {
@@ -51,7 +78,7 @@ internal static class ShellDataSerializer
     /// </remarks>
     private const int MaxDepth = 64;
 
-    private static object? Normalize(object? value, ISet<object> visited, int depth)
+    private static object? Normalize(object? value, ISet<object> visited, int depth, bool typed = false)
     {
         if (value is null)
         {
@@ -118,10 +145,24 @@ internal static class ShellDataSerializer
             // and the result was a `"<max-depth>"` placeholder that looked like ordinary
             // truncation. Cycle and "too deep" are different conditions and now report
             // differently: `"<cycle>"` here, a diagnostic above.
-            return WithCycleGuard(value, visited, () => recordFields.ToDictionary(
-                field => field.Key,
-                field => Normalize(field.Value, visited, depth + 1),
-                StringComparer.OrdinalIgnoreCase));
+            return WithCycleGuard(value, visited, () =>
+            {
+                var normalized = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+                // First, so a reader meets the tag before the fields it governs — and so the
+                // shape stays legible to a human scanning the document.
+                if (typed && DeclaredTypeName(value) is { } declaredName)
+                {
+                    normalized[TypeKey] = declaredName;
+                }
+
+                foreach (var field in recordFields)
+                {
+                    normalized[field.Key] = Normalize(field.Value, visited, depth + 1, typed);
+                }
+
+                return normalized;
+            });
         }
 
         // `TOAST-0088`. A shell-declared enum is a `ToshEnumValue` object, so `IsEnum` below is
@@ -137,7 +178,16 @@ internal static class ShellDataSerializer
         // separate decision from this one.
         if (value is IShellEnumValue shellEnum)
         {
-            return shellEnum.Name;
+            // Untagged, an enum member is a bare string and the enum it belongs to is lost — the
+            // gap `TOAST-0088` made legible but could not close. Tagged, it becomes an object so
+            // there is somewhere to say which enum, which is a shape change the flag opts into.
+            return typed
+                ? new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [TypeKey] = shellEnum.EnumTypeName,
+                    [ValueKey] = shellEnum.Name,
+                }
+                : (object?)shellEnum.Name;
         }
 
         var typeInfo = value.GetType();
@@ -166,18 +216,18 @@ internal static class ShellDataSerializer
 
         if (value is IDictionary<string, object?> dictionary)
         {
-            return WithCycleGuard(value, visited, () => dictionary.ToDictionary(entry => entry.Key, entry => Normalize(entry.Value, visited, depth + 1), StringComparer.OrdinalIgnoreCase));
+            return WithCycleGuard(value, visited, () => dictionary.ToDictionary(entry => entry.Key, entry => Normalize(entry.Value, visited, depth + 1, typed), StringComparer.OrdinalIgnoreCase));
         }
 
         if (value is IDictionary nonGenericDictionary)
         {
             return WithCycleGuard(value, visited, () => nonGenericDictionary.Cast<DictionaryEntry>()
-                .ToDictionary(entry => entry.Key?.ToString() ?? string.Empty, entry => Normalize(entry.Value, visited, depth + 1), StringComparer.OrdinalIgnoreCase));
+                .ToDictionary(entry => entry.Key?.ToString() ?? string.Empty, entry => Normalize(entry.Value, visited, depth + 1, typed), StringComparer.OrdinalIgnoreCase));
         }
 
         if (value is IEnumerable enumerable && value is not string)
         {
-            return WithCycleGuard(value, visited, () => enumerable.Cast<object?>().Select(item => Normalize(item, visited, depth + 1)).ToArray());
+            return WithCycleGuard(value, visited, () => enumerable.Cast<object?>().Select(item => Normalize(item, visited, depth + 1, typed)).ToArray());
         }
 
         if (!typeInfo.IsValueType)
@@ -212,7 +262,7 @@ internal static class ShellDataSerializer
                 continue;
             }
 
-            result[property.Name] = Normalize(propertyValue, visited, depth + 1);
+            result[property.Name] = Normalize(propertyValue, visited, depth + 1, typed);
         }
 
         return result;

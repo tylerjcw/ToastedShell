@@ -21,6 +21,20 @@ public sealed class FromCommand : ShellCommand
         _formats = formats;
     }
 
+    /// <summary>
+    /// Flags that stand alone rather than taking the next argument as their value.
+    /// </summary>
+    /// <remarks>
+    /// Named explicitly because the separation above has no per-flag arity to consult. A flag
+    /// missing from this set merely eats an argument it should not, which is exactly the failure
+    /// `--typed` arrived with, so the list is worth keeping current.
+    /// </remarks>
+    private static bool IsValuelessFlag(string argument) => argument.TrimStart('-').ToLowerInvariant() switch
+    {
+        "typed" or "raw" or "r" or "compact" or "c" or "headers" or "no-headers" => true,
+        _ => false,
+    };
+
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         if (context.Arguments.Count == 0)
@@ -36,7 +50,12 @@ public sealed class FromCommand : ShellCommand
         var remainingArgs = context.Arguments.Skip(1).ToArray();
 
         // Separate flag arguments from explicit text positionals.
-        // Anything starting with - is a flag (or flag value if preceded by a flag).
+        //
+        // `TOAST-0092`. A flag consumed the following argument *unconditionally*, which was
+        // invisible while every flag `from` accepted took a value — `-d ,` and friends. The
+        // first boolean one broke it: `from json --typed $document` read `$document` as the
+        // value of `--typed` and then reported that no text had been supplied, naming the
+        // argument that was right there.
         var explicitText = new List<object?>();
         for (var i = 0; i < remainingArgs.Length; i++)
         {
@@ -44,8 +63,14 @@ public sealed class FromCommand : ShellCommand
 
             if (arg.StartsWith('-') && arg.Length > 1)
             {
-                // Skip the flag and its value argument
-                i++;
+                if (!IsValuelessFlag(arg) &&
+                    i + 1 < remainingArgs.Length &&
+                    (remainingArgs[i + 1]?.ToString() ?? string.Empty) is var next &&
+                    !next.StartsWith('-'))
+                {
+                    i++;
+                }
+
                 continue;
             }
 
@@ -57,7 +82,13 @@ public sealed class FromCommand : ShellCommand
             explicitText.Count > 0 ? explicitText : null,
             $"'from {formatName}' expects text from the pipeline or an explicit argument.");
 
-        await foreach (var value in format.DeserializeAsync(text, remainingArgs))
+        // `TOAST-0092`. A format that resolves names against the program's own types needs the
+        // context; one that only transforms text does not, and is not made to accept one.
+        var values = format is IContextualDataFormat contextual
+            ? contextual.DeserializeAsync(text, remainingArgs, context)
+            : format.DeserializeAsync(text, remainingArgs);
+
+        await foreach (var value in values)
         {
             yield return value;
         }

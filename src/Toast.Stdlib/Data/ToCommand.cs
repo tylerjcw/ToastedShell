@@ -61,7 +61,11 @@ public sealed class ToCommand : ShellCommand
             }
         }
 
-        await foreach (var value in format.SerializeAsync(values, remainingArgs))
+        var serialized = format is IContextualDataFormat contextual
+            ? contextual.SerializeAsync(values, remainingArgs, context)
+            : format.SerializeAsync(values, remainingArgs);
+
+        await foreach (var value in serialized)
         {
             yield return value;
         }

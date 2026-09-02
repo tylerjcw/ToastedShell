@@ -31,7 +31,13 @@ public sealed class TomlDataFormat : IDataFormat
         var args = ParsedCommandArguments.Parse(arguments);
         var compact = args.HasFlag("c", "compact");
 
-        var value = values.Count == 1 ? values[0] : values;
+        // `TOAST-0092`. TOML serialises the value directly rather than through `Normalize`, so
+        // `--typed` has to normalise first — otherwise the flag was accepted and silently did
+        // nothing, which is the failure mode the whole "round-trips or refuses" rule exists to
+        // prevent.
+        var typed = args.HasFlag("typed");
+        var single = values.Count == 1 ? values[0] : values;
+        var value = typed ? ShellDataSerializer.Normalize(single, typed: true) : single;
 
         string toml;
 

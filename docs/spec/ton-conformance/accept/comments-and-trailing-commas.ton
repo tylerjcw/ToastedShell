@@ -1,0 +1,8 @@
+# a leading comment
+new Villager {|
+    # comments are part of the notation
+    Name = "Steve"
+    Trades = [
+        new Exchange(Item = "Emerald", Amount = 1),
+    ]
+|}

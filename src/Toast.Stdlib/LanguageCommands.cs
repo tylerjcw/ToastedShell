@@ -43,12 +43,13 @@ public static class LanguageCommands
     public static DataFormatRegistry CreateDefaultFormats()
     {
         var formats = new DataFormatRegistry();
-        formats.Register(new JsonDataFormat());
+        formats.Register(new Data.TypedJsonDataFormat());
         formats.Register(new DelimitedDataFormat("csv", ','));
         formats.Register(new DelimitedDataFormat("tsv", '\t'));
         formats.Register(new DelimitedDataFormat("delimited", ',', ["delim"]));
         formats.Register(new XmlDataFormat());
         formats.Register(new TomlDataFormat());
+        formats.Register(new Data.TonDataFormat());
         return formats;
     }
 

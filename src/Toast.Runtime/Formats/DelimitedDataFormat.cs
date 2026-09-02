@@ -92,7 +92,29 @@ public sealed class DelimitedDataFormat : IDataFormat
             yield break;
         }
 
-        var rows = unwrapped.Select(ShellDataSerializer.NormalizeRow).ToArray();
+        // `TOAST-0092`. A typed write round-trips or refuses; it never degrades quietly while
+        // claiming to be typed. CSV has no nesting, so a value with a nested shape has nowhere
+        // to put it and is refused rather than flattened into columns nobody can read back.
+        var typed = ParsedCommandArguments.Parse(arguments).HasFlag("typed");
+        var rows = unwrapped.Select(value => ShellDataSerializer.NormalizeRow(value, typed)).ToArray();
+
+        if (typed)
+        {
+            foreach (var row in rows)
+            {
+                foreach (var cell in row)
+                {
+                    if (cell.Value is IDictionary<string, object?> or object?[] or IReadOnlyList<object?>)
+                    {
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.typed_csv_nesting",
+                            Title: $"'{cell.Key}' holds a nested value, which CSV cannot represent.",
+                            Help: "write this value as json, toml, xml or ton, which nest; or project "
+                                + "the flat fields you want before converting."));
+                    }
+                }
+            }
+        }
         var headers = rows
             .SelectMany(row => row.Keys)
             .Distinct(StringComparer.OrdinalIgnoreCase)

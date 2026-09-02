@@ -34,9 +34,13 @@ public sealed class JsonDataFormat : IDataFormat
         await Task.CompletedTask;
 
         var args = ParsedCommandArguments.Parse(arguments);
+
+        // `TOAST-0092`. `--typed` tags declared types with a `$type` sibling key so the document
+        // says what it holds. Without it a `Villager` reads back as a bag of fields.
+        var typed = args.HasFlag("typed");
         var normalized = values.Count == 1
-            ? ShellDataSerializer.Normalize(values[0])
-            : values.Select(ShellDataSerializer.Normalize).ToArray();
+            ? ShellDataSerializer.Normalize(values[0], typed)
+            : values.Select(value => ShellDataSerializer.Normalize(value, typed)).ToArray();
 
         string json;
 
