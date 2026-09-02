@@ -1143,8 +1143,10 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         for (var i = indexedCount; i < allAssemblies.Length; i++)
         {
             if (allAssemblies[i].IsDynamic) continue;
+            var bareNamesAllowed = MayAnswerUnqualifiedName(allAssemblies[i]);
             var newMatch = SafeGetTypes(allAssemblies[i]).FirstOrDefault(t =>
-                TypeNameMatches(t.FullName, name) || TypeNameMatches(t.Name, name));
+                TypeNameMatches(t.FullName, name) ||
+                (bareNamesAllowed && TypeNameMatches(t.Name, name)));
             if (newMatch is not null) { type = newMatch; return true; }
         }
 
@@ -1196,10 +1198,12 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         for (var i = indexedCount; i < allAssemblies.Length; i++)
         {
             if (allAssemblies[i].IsDynamic) continue;
+            var bareNamesAllowed = MayAnswerUnqualifiedName(allAssemblies[i]);
             var newMatch = SafeGetTypes(allAssemblies[i]).FirstOrDefault(candidate =>
                 candidate.IsGenericTypeDefinition &&
                 candidate.GetGenericArguments().Length == arity &&
-                (TypeNameMatches(candidate.FullName, name) || TypeNameMatches(candidate.Name, name)));
+                (TypeNameMatches(candidate.FullName, name) ||
+                 (bareNamesAllowed && TypeNameMatches(candidate.Name, name))));
             if (newMatch is not null) { type = newMatch; return true; }
         }
 
@@ -1382,6 +1386,35 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         var separatorIndex = path.LastIndexOf('.');
         return separatorIndex >= 0 ? path[(separatorIndex + 1)..] : path;
     }
+
+    /// <summary>
+    /// Whether <paramref name="assembly"/> may answer an <i>unqualified</i> type name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>TS-P2-39</c>, the suite's longest-running flake, and the general form of it. Compiling
+    /// a script produces an assembly loaded from a byte array whose types carry the script's own
+    /// names. Matching those on the bare name let a compiled unit claim that name for the rest of
+    /// the process: once the emitter tests had loaded a unit declaring <c>enum Fuel</c>, an
+    /// unrelated interpreted script's bare <c>Fuel</c> resolved to it — so a name that should not
+    /// have resolved <i>at all</i> did, and tests asserting a failure stopped failing.
+    /// </para>
+    /// <para>
+    /// It looked non-deterministic because the rescan only covers assemblies past the index
+    /// watermark, and where a compiled unit falls relative to that watermark depends on when the
+    /// platform index happened to be built. The earlier fix guarded a single caller
+    /// (<c>ResolveTypeArgument</c>, which checks the script's own types first); the name is
+    /// refused at the source here instead, so every caller is covered.
+    /// </para>
+    /// <para>
+    /// An assembly with no <see cref="Assembly.Location"/> was never loaded from disk, which is
+    /// exactly the compiled-unit case — <c>load-assembly</c> loads from a path and is unaffected.
+    /// Such an assembly stays reachable by its fully-qualified name; only the bare name is
+    /// refused.
+    /// </para>
+    /// </remarks>
+    private static bool MayAnswerUnqualifiedName(Assembly assembly) =>
+        !string.IsNullOrEmpty(assembly.Location);
 
     private static bool TypeNameMatches(string? candidate, string requested)
     {

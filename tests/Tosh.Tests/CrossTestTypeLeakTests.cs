@@ -117,4 +117,40 @@ public sealed class CrossTestTypeLeakTests : IClassFixture<ToshRuntimeFixture>
 
         Assert.Equal("scripted", results[0]);
     }
+
+    [Fact]
+    public async Task An_emitted_name_the_script_never_declares_stays_unresolvable()
+    {
+        // Both tests above have the script declare the colliding name itself, so "the script's
+        // own type wins" is enough to pass them. The harder case is the one where the script
+        // declares *nothing* of the sort and the name must resolve to nothing at all: an emitted
+        // unit was still free to supply it. That is what made
+        // `NestedTypeTests.A_nested_name_does_not_leak_into_the_surrounding_scope` and two
+        // `CastToDeclaredTypeTests` fail only in full-suite runs — `Fuel` is nested inside
+        // `Reactor`, so the bare name must not resolve, but a compiled unit had already claimed
+        // it process-wide.
+        EmitAndLoad("enum CrossTestLeakFuel : int { Mox = 3 }");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        await Assert.ThrowsAnyAsync<Exception>(async () => await engine.ExecuteToListAsync(
+            "var x: CrossTestLeakFuel = 1"));
+    }
+
+    [Fact]
+    public async Task A_nested_type_is_not_supplied_by_an_emitted_assembly()
+    {
+        // The reported shape, with the emission forced rather than waited for.
+        EmitAndLoad("enum CrossTestLeakCoolant : int { Mox = 3 }");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        await Assert.ThrowsAnyAsync<Exception>(async () => await engine.ExecuteToListAsync(
+            """
+            class Reactor {
+                enum CrossTestLeakCoolant : int { Mox = 3 }
+            }
+            var x: CrossTestLeakCoolant = CrossTestLeakCoolant.Mox
+            """));
+    }
 }
