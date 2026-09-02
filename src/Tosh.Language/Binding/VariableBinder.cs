@@ -59,7 +59,16 @@ public static class VariableBinder
         @"(?<!\\)\$([a-zA-Z_][a-zA-Z_0-9]*)",
         RegexOptions.Compiled);
 
-    public static IReadOnlyList<ToshDiagnostic> Bind(ParseResult parseResult)
+    /// <param name="ambientUnions">
+    /// Unions the engine already knows that this source did not declare — the core prelude's
+    /// <c>Option</c> and <c>Result</c>, and anything an import brought in. <c>TOAST-0083</c>:
+    /// exhaustiveness was built from the source alone, so a `match` over `Result` was neither
+    /// judged exhaustive nor reported incomplete, which left the two types whose entire purpose
+    /// is exhaustive dispatch as the two without it.
+    /// </param>
+    public static IReadOnlyList<ToshDiagnostic> Bind(
+        ParseResult parseResult,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
 
@@ -69,7 +78,8 @@ public static class VariableBinder
             new List<HashSet<string>> { new(StringComparer.Ordinal) },
             new List<ToshDiagnostic>(),
             CollectPatternShapes(parseResult.Statement),
-            CollectVariantUnions(parseResult.Statement));
+            CollectVariantUnions(parseResult.Statement, ambientUnions),
+            CollectUnionsByName(parseResult.Statement, ambientUnions));
 
         VisitStatement(parseResult.Statement, ctx);
         return ctx.Diagnostics;
@@ -668,6 +678,26 @@ public static class VariableBinder
     internal sealed record UnionShape(string Name, IReadOnlyList<string> Variants);
 
     /// <summary>
+    /// Splits a variant pattern's name into the union that qualifies it, if any, and the variant
+    /// itself — <c>TOAST-0095</c>. `Maybe.Some` is ("Maybe", "Some"); a bare `Some` is
+    /// (null, "Some"). The path operator is already canonicalised to dots by the parser.
+    /// </summary>
+    private static void SplitVariantName(string name, out string? qualifier, out string member)
+    {
+        var separator = name.LastIndexOf('.');
+
+        if (separator < 0)
+        {
+            qualifier = null;
+            member = name;
+            return;
+        }
+
+        qualifier = name[..separator];
+        member = name[(separator + 1)..];
+    }
+
+    /// <summary>
     /// Every variant declared in this source, mapped to the union that declares it —
     /// <c>TOAST-0054</c>.
     /// </summary>
@@ -677,11 +707,64 @@ public static class VariableBinder
     /// variants must also be covered. A variant name is enough to identify the union, which is
     /// why exhaustiveness needs no type for the matched value.
     /// </remarks>
-    private static IReadOnlyDictionary<string, UnionShape> CollectVariantUnions(StatementSyntax statement)
+    private static IReadOnlyDictionary<string, UnionShape> CollectVariantUnions(
+        StatementSyntax statement,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions)
     {
         var unions = new Dictionary<string, UnionShape>(StringComparer.Ordinal);
+
+        // Ambient first, so a declaration in this source overwrites it. That is the shadowing
+        // rule the rest of the language already follows — a bare name is where a declaration
+        // wins — and it is why the seeding cannot simply be merged afterwards.
+        if (ambientUnions is not null)
+        {
+            foreach (var (unionName, variants) in ambientUnions)
+            {
+                var shape = new UnionShape(unionName, variants);
+                foreach (var variant in variants)
+                {
+                    unions[variant] = shape;
+                }
+            }
+        }
+
         CollectVariantUnions(statement, unions);
         return unions;
+    }
+
+    /// <summary>
+    /// The same unions, keyed by their own name — <c>TOAST-0095</c>.
+    /// </summary>
+    /// <remarks>
+    /// The variant-keyed index cannot answer for a name two unions share: `Some` belongs to
+    /// `Option` and to anything else that declares one, and the last collected wins. A
+    /// *qualified* pattern names the union outright, so it is looked up here instead — which is
+    /// what qualifying it is for, and the case the variant index was never able to serve.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, UnionShape> CollectUnionsByName(
+        StatementSyntax statement,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions)
+    {
+        var byVariant = new Dictionary<string, UnionShape>(StringComparer.Ordinal);
+
+        if (ambientUnions is not null)
+        {
+            foreach (var (unionName, variants) in ambientUnions)
+            {
+                byVariant[unionName] = new UnionShape(unionName, variants);
+            }
+        }
+
+        var declared = new Dictionary<string, UnionShape>(StringComparer.Ordinal);
+        CollectVariantUnions(statement, declared);
+
+        // Source declarations override an ambient union of the same name.
+        foreach (var shape in declared.Values)
+        {
+            byVariant[shape.Name] = shape;
+        }
+
+        return byVariant;
     }
 
     private static void CollectVariantUnions(
@@ -756,7 +839,28 @@ public static class VariableBinder
                     return;
                 }
 
-                if (!ctx.VariantUnions.TryGetValue(variant.VariantName, out var owner))
+                // `TOAST-0095`. An arm may name its variant qualified by the declaring union
+                // (`Maybe.Some(v)`). Keyed bare, so the lookup missed and the whole check bailed
+                // — a qualified match was neither judged exhaustive nor reported incomplete, and
+                // said nothing at all.
+                SplitVariantName(variant.VariantName, out var qualifier, out var member);
+
+                UnionShape? owner;
+
+                if (qualifier is not null)
+                {
+                    // `TOAST-0095`. Resolved by union rather than by variant: `Some` may belong
+                    // to several unions, and the variant index keeps only the last, so a
+                    // qualified arm looked up that way disagreed with its own qualifier and the
+                    // whole check bailed. The qualifier is the answer, not an extra condition
+                    // on it.
+                    if (!ctx.UnionsByName.TryGetValue(qualifier, out owner) ||
+                        !owner.Variants.Contains(member, StringComparer.Ordinal))
+                    {
+                        return;
+                    }
+                }
+                else if (!ctx.VariantUnions.TryGetValue(member, out owner))
                 {
                     // A variant this source cannot see; nothing can be claimed about the set.
                     return;
@@ -765,8 +869,8 @@ public static class VariableBinder
                 if (union is null) { union = owner; }
                 else if (!ReferenceEquals(union, owner)) { return; }
 
-                if (arm.Guard is null) { covered.Add(variant.VariantName); }
-                else { guardedOnly.Add(variant.VariantName); }
+                if (arm.Guard is null) { covered.Add(member); }
+                else { guardedOnly.Add(member); }
             }
         }
 
@@ -832,7 +936,9 @@ public static class VariableBinder
         switch (pattern)
         {
             case VariantPatternSyntax variant:
-                if (ctx.PatternShapes.TryGetValue(variant.VariantName, out var fields))
+                SplitVariantName(variant.VariantName, out _, out var shapeMember);
+
+                if (ctx.PatternShapes.TryGetValue(shapeMember, out var fields))
                 {
                     if (variant.Positional.Count > fields.Count)
                     {
@@ -1112,5 +1218,6 @@ public static class VariableBinder
         List<HashSet<string>> Scopes,
         List<ToshDiagnostic> Diagnostics,
         IReadOnlyDictionary<string, IReadOnlyList<string>> PatternShapes,
-        IReadOnlyDictionary<string, UnionShape> VariantUnions);
+        IReadOnlyDictionary<string, UnionShape> VariantUnions,
+        IReadOnlyDictionary<string, UnionShape> UnionsByName);
 }

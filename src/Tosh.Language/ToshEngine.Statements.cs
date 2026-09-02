@@ -1560,11 +1560,18 @@ public sealed partial class ToshEngine
     /// order a positional pattern could rely on. Naming the fields is the only safe spelling,
     /// and the matcher says so rather than binding against an order that is not a contract.
     /// </remarks>
+    /// <param name="OwnerName">
+    /// The type that declares <paramref name="TypeName"/>, when it is declared inside one — the
+    /// union a variant belongs to. Null for a subject that stands alone. <c>TOAST-0095</c>: a
+    /// qualified pattern (`Result.Ok(v)`) is checked against this rather than being compared
+    /// whole against the variant name, which never matched.
+    /// </param>
     internal readonly record struct PatternSubject(
         string TypeName,
         IReadOnlyList<string> Positional,
         IReadOnlyList<string> Named,
-        string Kind);
+        string Kind,
+        string? OwnerName = null);
 
     /// <summary>Describes a value a pattern may destructure, or fails for anything else.</summary>
     internal static bool TryDescribePatternSubject(object? value, out PatternSubject subject)
@@ -1574,7 +1581,8 @@ public sealed partial class ToshEngine
             case ToshUnionVariantInstance variant:
                 {
                     var fields = VariantFieldNames(variant);
-                    subject = new PatternSubject(variant.VariantName, fields, fields, "variant");
+                    subject = new PatternSubject(
+                        variant.VariantName, fields, fields, "variant", variant.UnionDefinition.Name);
                     return true;
                 }
 
@@ -1953,6 +1961,12 @@ public sealed partial class ToshEngine
             if (statement is ReturnStatementSyntax returnStatement)
             {
                 IReadOnlyList<object?> returnValues;
+
+                // `TOAST-0096`. The signature says where this value is going, so a generic
+                // construction in return position can seed its type arguments from it —
+                // `func f() -> Option<int> { return Option::None() }`. A unit variant has no
+                // argument to infer from, so without this there is nothing to read.
+                using var returnTarget = PushTargetTypeAnnotation(CurrentReturnAnnotation);
 
                 if (returnStatement.Value is null)
                 {

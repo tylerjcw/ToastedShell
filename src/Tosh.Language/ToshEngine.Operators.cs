@@ -680,6 +680,69 @@ public sealed partial class ToshEngine
     /// makes `Node { kind: "if", body }` test one field and bind the other.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Whether a variant pattern's name refers to this subject — <c>TOAST-0095</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A pattern may name a variant bare (<c>Ok(v)</c>) or qualified by the union that declares
+    /// it (<c>Result.Ok(v)</c>, or <c>Result::Ok(v)</c>, which canonicalises to the same text).
+    /// The comparison used to be whole-string equality against the variant name, so every
+    /// qualified pattern failed it and the arm fell through to <c>default</c> — no diagnostic,
+    /// no match, and an arm that reads as live. That is worse in <c>match</c> than anywhere
+    /// else, because the construct exists to be exhaustive, and <c>TOAST-0054</c> would judge
+    /// exhaustiveness on arms that can never fire.
+    /// </para>
+    /// <para>
+    /// A qualifier naming the <i>wrong</i> union is a mistake in the pattern rather than a value
+    /// that failed to match, so it is reported for the same reason the arity checks below are:
+    /// silence would spell it as a dead arm.
+    /// </para>
+    /// </remarks>
+    private bool PatternNamesSubject(
+        VariantPatternSyntax pattern,
+        PatternSubject subject,
+        string sourceName,
+        string sourceText)
+    {
+        var name = pattern.VariantName;
+
+        var separator = name.LastIndexOf('.');
+        if (separator < 0)
+        {
+            return string.Equals(subject.TypeName, name, StringComparison.Ordinal);
+        }
+
+        var qualifier = name[..separator];
+        var member = name[(separator + 1)..];
+
+        if (!string.Equals(subject.TypeName, member, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // The variant matches; only the qualifier is left to agree. A subject that declares no
+        // owner cannot confirm one, so the qualified spelling is simply not for it.
+        if (subject.OwnerName is not { } owner)
+        {
+            return false;
+        }
+
+        if (string.Equals(owner, qualifier, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.pattern_wrong_qualifier",
+            Title: $"'{member}' is declared by '{owner}', not by '{qualifier}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: pattern.Span,
+            Label: $"'{qualifier}' does not declare '{member}'",
+            Help: $"write `{owner}.{member}` or the bare `{member}`."));
+    }
+
     private async Task<bool> MatchesVariantPatternAsync(
         object? value,
         string sourceName,
@@ -687,8 +750,12 @@ public sealed partial class ToshEngine
         VariantPatternSyntax pattern,
         CancellationToken cancellationToken)
     {
-        if (!TryDescribePatternSubject(value, out var subject) ||
-            !string.Equals(subject.TypeName, pattern.VariantName, StringComparison.Ordinal))
+        if (!TryDescribePatternSubject(value, out var subject))
+        {
+            return false;
+        }
+
+        if (!PatternNamesSubject(pattern, subject, sourceName, sourceText))
         {
             return false;
         }

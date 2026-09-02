@@ -179,7 +179,19 @@ public sealed class ToshUnionDefinition : IShellNamedType
             bindings[declared] = inferred;
         }
 
+        // `TOAST-0096`. Nothing in the arguments names the parameters of a unit variant —
+        // `Option::None()` above all — so where the value is going supplies them.
+        //
+        // `TOAST-0083`. It also *overrides* what the arguments inferred, because an annotation
+        // is a declaration and a value is a guess. Inferring from the value can only report the
+        // CLR type it happens to have, and every declared record is one `ToshRecordInstance`, so
+        // a `list<Diag>` payload inferred as `list<Tosh.Language.ToshRecordInstance>` and the
+        // instance could not match the very annotation it was built for. A genuine disagreement
+        // is still caught: a variant field with a declared type checks its argument.
+        _owner.TryBindUnionTypeArgumentsFromTarget(Name, TypeParameterNames, bindings);
+
         var missing = TypeParameterNames.Where(name => !bindings.ContainsKey(name)).ToArray();
+
         if (missing.Length > 0)
         {
             throw new InvalidOperationException(
@@ -216,25 +228,91 @@ public sealed class ToshUnionDefinition : IShellNamedType
             return typed.ShellTypeDescriptor.ShellTypeName;
         }
 
-        return value switch
+        return value is null ? "any?" : DescribeClrType(value.GetType());
+    }
+
+    private static readonly IReadOnlyDictionary<Type, string> PrimitiveShellNames =
+        new Dictionary<Type, string>
         {
-            null => "any?",
-            bool => "bool",
-            byte => "byte",
-            sbyte => "sbyte",
-            short => "short",
-            ushort => "ushort",
-            int => "int",
-            uint => "uint",
-            long => "long",
-            ulong => "ulong",
-            float => "float",
-            double => "double",
-            decimal => "decimal",
-            string => "string",
-            char => "char",
-            _ => value.GetType().FullName ?? value.GetType().Name,
+            [typeof(bool)] = "bool",
+            [typeof(byte)] = "byte",
+            [typeof(sbyte)] = "sbyte",
+            [typeof(short)] = "short",
+            [typeof(ushort)] = "ushort",
+            [typeof(int)] = "int",
+            [typeof(uint)] = "uint",
+            [typeof(long)] = "long",
+            [typeof(ulong)] = "ulong",
+            [typeof(float)] = "float",
+            [typeof(double)] = "double",
+            [typeof(decimal)] = "decimal",
+            [typeof(string)] = "string",
+            [typeof(char)] = "char",
+            [typeof(object)] = "dynamic",
         };
+
+    private static readonly IReadOnlyDictionary<Type, string> GenericShellNames =
+        new Dictionary<Type, string>
+        {
+            [typeof(List<>)] = "list",
+            [typeof(Dictionary<,>)] = "dict",
+            [typeof(HashSet<>)] = "set",
+            [typeof(Queue<>)] = "queue",
+            [typeof(Stack<>)] = "stack",
+            [typeof(LinkedList<>)] = "linkedlist",
+            [typeof(SortedSet<>)] = "sortedset",
+            [typeof(SortedDictionary<,>)] = "sorteddict",
+        };
+
+    /// <summary>
+    /// A CLR type in the spelling an annotation would use — <c>TOAST-0083</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Inferring a type argument from a value used to answer with the shell alias for a
+    /// primitive and the raw CLR name for everything else, so a `list&lt;int&gt;` payload
+    /// inferred as
+    /// <c>System.Collections.Generic.List`1[[System.Int32, System.Private.CoreLib, …]]</c>.
+    /// The instance then reported that as its type argument, and
+    /// <see cref="ToshUnionVariantInstance.IsInstanceOf"/> compares the annotation against that
+    /// text — so `Result&lt;string, list&lt;int&gt;&gt;` could never match a value it had just
+    /// built, and the function returning it failed its own return-type conversion.
+    /// </para>
+    /// <para>
+    /// It only ever worked for arguments whose two spellings coincide — `int`, `string` — which
+    /// is why a generic payload was the shape that broke, and why accumulating diagnostics in a
+    /// `Result&lt;T, list&lt;Diag&gt;&gt;` was the fixture that found it.
+    /// </para>
+    /// </remarks>
+    private static string DescribeClrType(Type type)
+    {
+        if (PrimitiveShellNames.TryGetValue(type, out var primitive))
+        {
+            return primitive;
+        }
+
+        if (type.IsArray && type.GetElementType() is { } element)
+        {
+            return $"array<{DescribeClrType(element)}>";
+        }
+
+        if (type.IsGenericType)
+        {
+            var definition = type.GetGenericTypeDefinition();
+            var name = GenericShellNames.TryGetValue(definition, out var alias)
+                ? alias
+                : StripGenericArity(definition.Name);
+            var arguments = type.GetGenericArguments().Select(DescribeClrType);
+            return $"{name}<{string.Join(", ", arguments)}>";
+        }
+
+        return type.FullName ?? type.Name;
+    }
+
+    private static string StripGenericArity(string name)
+    {
+        var tick = name.IndexOf('`');
+        return tick >= 0 ? name[..tick] : name;
     }
 
     private static bool TypeNamesEqual(string left, string right) =>

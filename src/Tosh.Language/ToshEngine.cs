@@ -74,6 +74,84 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     private readonly System.Threading.AsyncLocal<string?> _targetTypeAnnotation = new();
 
     /// <summary>
+    /// The type annotation the value under evaluation is destined for, when one is known —
+    /// <c>TOAST-0096</c>.
+    /// </summary>
+    /// <remarks>
+    /// Pushed around an annotated initialiser and a typed return, so a generic construction can
+    /// seed its type arguments from where the value is going rather than only from what it was
+    /// handed. That is the whole of what makes `Option::None()` writable: a unit variant has no
+    /// argument to infer from, so without a target there is nothing to read.
+    /// </remarks>
+    internal string? TargetTypeAnnotation => _targetTypeAnnotation.Value;
+
+    /// <summary>
+    /// The declared return type of the function currently executing, when it has one —
+    /// <c>TOAST-0096</c>. A `return` reads it as its target, so
+    /// `func f() -> Option&lt;int&gt; { return Option::None() }` infers what the signature
+    /// already said.
+    /// </summary>
+    /// <remarks>
+    /// A plain field rather than an <c>AsyncLocal</c>, saved and restored around the body the
+    /// way <c>_functionCallStack</c> already is. As an `AsyncLocal` the value was invisible to
+    /// the body the moment any statement in it ran a command — `echo "x"` before a `return` was
+    /// enough — because the write did not reach the execution context the body's continuations
+    /// resumed on. The symptom was that a `return` at the top of a function inferred and the
+    /// same `return` after one unrelated line did not.
+    /// </remarks>
+    private string? _currentReturnAnnotation;
+
+    internal string? CurrentReturnAnnotation => _currentReturnAnnotation;
+
+    internal IDisposable PushTargetTypeAnnotation(string? annotation)
+    {
+        var previous = _targetTypeAnnotation.Value;
+        _targetTypeAnnotation.Value = annotation;
+        return new TargetTypeAnnotationScope(this, previous);
+    }
+
+    private sealed class TargetTypeAnnotationScope(ToshEngine engine, string? previous) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) { return; }
+            _disposed = true;
+            engine._targetTypeAnnotation.Value = previous;
+        }
+    }
+
+    /// <summary>
+    /// Reads type arguments for <paramref name="unionName"/> out of the current target
+    /// annotation, when it names that union — <c>TOAST-0096</c>.
+    /// </summary>
+    internal bool TryBindUnionTypeArgumentsFromTarget(
+        string unionName,
+        IReadOnlyList<string> typeParameterNames,
+        Dictionary<string, string> bindings)
+    {
+        if (_targetTypeAnnotation.Value is not { } annotation ||
+            !TrySplitGenericTypeName(annotation, out var bareName, out var arguments) ||
+            !string.Equals(bareName, unionName, StringComparison.Ordinal) ||
+            arguments.Count != typeParameterNames.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < typeParameterNames.Count; index++)
+        {
+            // The target wins over what the arguments inferred. An annotation is a declaration;
+            // inference from a value can only report the CLR type it happens to have, which for
+            // any declared record is `ToshRecordInstance` and never the name the annotation
+            // uses. A real mismatch is still refused by the variant field's own type check.
+            bindings[typeParameterNames[index]] = arguments[index];
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Active binder strictness for evaluation calls that don't pass an explicit override.
     /// Defaults to <see cref="BinderStrictness.Warn"/>; the CLI raises this to
     /// <see cref="BinderStrictness.Strict"/> for <c>-c</c>, script files, and the
@@ -177,9 +255,53 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     private static readonly ParseResult _builtinRunesParseResult =
         ToshParser.Parse(BuiltinRunes.Source, "<builtin-runes>");
 
+    /// <summary><c>TOAST-0083</c>. Core types, loaded the way the built-in runes are.</summary>
+    private static readonly ParseResult _corePreludeParseResult =
+        ToshParser.Parse(CorePrelude.Source, "<core-prelude>");
+
+    /// <summary>
+    /// True while the prelude itself is being evaluated, so its own declarations are not
+    /// reported as shadowing themselves — <c>TOAST-0083</c>.
+    /// </summary>
+    private bool _loadingCorePrelude;
+
     private async Task LoadBuiltinRunesAsync()
     {
+        _loadingCorePrelude = true;
+        try
+        {
+            await foreach (var _ in EvaluateAsync(_corePreludeParseResult, CancellationToken.None)) { }
+        }
+        finally
+        {
+            _loadingCorePrelude = false;
+        }
+
         await foreach (var _ in EvaluateAsync(_builtinRunesParseResult, CancellationToken.None)) { }
+    }
+
+    /// <summary>
+    /// Reports a declaration that takes a core type's name — <c>TOAST-0083</c>.
+    /// </summary>
+    /// <remarks>
+    /// The declaration wins: resolution follows the rule the parser already documents, that a
+    /// bare name is where a declaration should win, and the same precedence by which a user
+    /// `func double` beats the `double` alias. It is warned about rather than accepted silently
+    /// because `Option` and `Result` are names a user may take without meaning to displace
+    /// anything, and the displacement is otherwise invisible.
+    /// </remarks>
+    private void WarnIfShadowingCoreType(string typeName)
+    {
+        if (_loadingCorePrelude || !CorePrelude.TypeNames.Contains(typeName))
+        {
+            return;
+        }
+
+        WriteWarning(
+            code: "tosh.naming.shadowed_core_type",
+            title: $"'{typeName}' shadows the core type '{typeName}'.",
+            help: "Rename it, or hush this code: hush tosh.naming.shadowed_core_type",
+            category: ToshDiagnosticCategory.Naming);
     }
 
     /// <summary>
@@ -496,7 +618,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             return;
         }
 
-        var diagnostics = Tosh.Language.Binding.Binder.Bind(parseResult, LanguageRuntime.Commands, IsInteractiveSession);
+        var diagnostics = Tosh.Language.Binding.Binder.Bind(
+            parseResult,
+            LanguageRuntime.Commands,
+            IsInteractiveSession,
+            isExecutableOnPath: null,
+            ambientUnions: CollectAmbientUnionShapes());
         if (diagnostics.Count == 0) return;
 
         switch (BinderStrictness)
@@ -1907,12 +2034,64 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The names an <c>extend</c> declaration may have used for this value.</summary>
+    /// <summary>
+    /// Union names this engine already knows, mapped to their variants, for the binder's
+    /// exhaustiveness check — <c>TOAST-0083</c>.
+    /// </summary>
+    /// <remarks>
+    /// The check was built from the source being bound, which is right for a union declared
+    /// there and wrong for every other one: a `match` over the prelude's `Result` was neither
+    /// judged exhaustive nor reported incomplete. Anything the engine holds — the core types,
+    /// and whatever an import brought in — is offered here, and a declaration in the source
+    /// still overrides it.
+    /// </remarks>
+    private IReadOnlyDictionary<string, IReadOnlyList<string>>? CollectAmbientUnionShapes()
+    {
+        Dictionary<string, IReadOnlyList<string>>? shapes = null;
+
+        void Add(object? candidate)
+        {
+            if (candidate is not ToshUnionDefinition union || union.Variants.Count == 0)
+            {
+                return;
+            }
+
+            shapes ??= new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            shapes[union.Name] = union.Variants.Select(variant => variant.Name).ToArray();
+        }
+
+        foreach (var value in LanguageRuntime.Classes.Values)
+        {
+            Add(value);
+        }
+
+        foreach (var scope in _scopes)
+        {
+            foreach (var value in scope.Classes.Values)
+            {
+                Add(value);
+            }
+        }
+
+        return shapes;
+    }
+
     private static IEnumerable<string> EnumerateReceiverTypeNames(object receiver)
     {
         if (receiver is IShellTypedObject typed)
         {
             yield return typed.ShellTypeDescriptor.ShellTypeName;
             yield return typed.ShellTypeDescriptor.ShellFullName;
+        }
+
+        // `TOAST-0083`. A *bound* generic union names itself with its arguments — `Option<int>`
+        // — while `extend Option { … }` registers under the bare name, so an extension on a
+        // generic union could never be found. The declaration has no arguments to write and
+        // `extend Option<T>` does not parse, so the bare name is the only thing an author can
+        // key on and the receiver has to answer to it.
+        if (receiver is ToshUnionVariantInstance unionVariant)
+        {
+            yield return unionVariant.UnionDefinition.Name;
         }
 
         var clr = receiver.GetType();
@@ -2011,6 +2190,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, union.Name, union.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(union.Name);
 
         var variants = union.Variants
             .Select(v => new UnionVariantDefinition(
@@ -6533,6 +6713,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // while `seq 1 20000000 | first` and `yes | first` both returned in 0.25s. A
         // user-defined function was the only thing in a pipeline that could not be
         // short-circuited.
+        // `TOAST-0096`. Set for the duration of the body, so a `return` inside it can seed a
+        // generic construction from the signature.
+        //
+        // **Before the iterator is built, not after.** An async iterator captures the ambient
+        // `ExecutionContext`, and an `AsyncLocal` assigned after that capture is invisible to
+        // the body the moment anything inside it awaits — so the annotation survived a `return`
+        // at the top of a function and vanished after a statement like `$list.Add(x)`, which was
+        // as arbitrary as it sounds to debug.
+        var previousReturnAnnotation = _currentReturnAnnotation;
+        _currentReturnAnnotation = definition.RawReturnTypeName;
+
         // Generator functions stream values as they are produced.
         // C# does not allow yield inside try-with-catch, so we use a manual enumerator.
         var enumerator = ExecuteBlockAsync(
@@ -6605,6 +6796,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             _functionInputStack.Pop();
             _functionArgumentsStack.Pop();
             _functionCallStack.Pop();
+            _currentReturnAnnotation = previousReturnAnnotation;
         }
 
         if (pendingException is not null)
