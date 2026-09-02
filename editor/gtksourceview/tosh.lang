@@ -476,6 +476,26 @@
       <match>=&gt;|\.\.|\.\.\.|\|{1,2}|!~|=~|not-in|!=|&gt;=|&lt;=|==|&gt;&gt;|&lt;&lt;&lt;|\+=|-=|\*=|/=|%=|[%&gt;&lt;]=?|=(?!=)|\?</match>
     </context>
 
+    <!-- The `::` path operator (TOAST-0090): a name reached inside a type — enum
+         member, union variant, static member, nested type. The counterpart of
+         dotted member access, which reaches a member of a value. -->
+    <context id="static-path">
+      <match>\b(\%{identifier})(::)(\%{identifier})?</match>
+      <include>
+        <context sub-pattern="1" style-ref="type"/>
+        <context sub-pattern="2" style-ref="operator"/>
+        <context sub-pattern="3" style-ref="constant"/>
+      </include>
+    </context>
+
+    <context id="static-path-segment">
+      <match>(::)(\%{identifier})?</match>
+      <include>
+        <context sub-pattern="1" style-ref="operator"/>
+        <context sub-pattern="2" style-ref="constant"/>
+      </include>
+    </context>
+
     <context id="collection-delimiters" style-ref="punctuation">
       <match>\{[|:%]|[|:%]\}</match>
     </context>
@@ -512,6 +532,8 @@
         <context ref="pipeline-variable"/>
         <context ref="constants"/>
         <context ref="unit-conversion-target"/>
+        <context ref="static-path"/>
+        <context ref="static-path-segment"/>
         <context ref="modifiers"/>
         <context ref="keywords"/>
         <context ref="builtins"/>

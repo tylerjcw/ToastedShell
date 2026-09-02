@@ -112,10 +112,50 @@ public sealed class DeclarationIndex
     {
         return GetVisibleDeclarations(
                 offset,
-                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum)
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Union)
             .Select(declaration => declaration.Name)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// The names reached <i>inside</i> a declared type — an enum's members, a union's variants —
+    /// for a type named at <paramref name="offset"/>. This is what the <c>::</c> path operator
+    /// completes to; <c>TOAST-0090</c>.
+    /// </summary>
+    /// <remarks>
+    /// Members are looked up by their scope rather than through
+    /// <see cref="GetVisibleDeclarations"/>: a member's scope is its declaring type's span, which
+    /// almost never contains the cursor. The type itself must be visible from the cursor, so the
+    /// visibility rule still applies — it applies to the type, which is what was written.
+    /// </remarks>
+    public IReadOnlyList<IndexedTypeMember> GetTypeMembers(int offset, string typeName)
+    {
+        var declaringType = GetVisibleDeclarations(
+                offset,
+                declaration => declaration.Kind is DeclarationKind.Enum or DeclarationKind.Union)
+            .FirstOrDefault(declaration => string.Equals(declaration.Name, typeName, StringComparison.Ordinal));
+
+        if (declaringType is null)
+        {
+            return Array.Empty<IndexedTypeMember>();
+        }
+
+        var memberKind = declaringType.Kind == DeclarationKind.Enum
+            ? DeclarationKind.EnumMember
+            : DeclarationKind.Variant;
+
+        return _declarations
+            .Where(declaration =>
+                declaration.Kind == memberKind &&
+                declaration.ScopeStart == declaringType.DeclStart &&
+                declaration.ScopeEnd == declaringType.DeclEnd)
+            .Select(declaration => new IndexedTypeMember(
+                declaration.Name,
+                declaringType.Name,
+                declaringType.Kind == DeclarationKind.Enum ? "Enum member" : "Variant",
+                declaration.DocComment))
             .ToArray();
     }
 
@@ -132,7 +172,7 @@ public sealed class DeclarationIndex
     {
         return GetVisibleDeclarations(
                 offset,
-                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module or DeclarationKind.Subcommand or DeclarationKind.Flag or DeclarationKind.Argument or DeclarationKind.TypeAlias or DeclarationKind.Property or DeclarationKind.ClassMethod or DeclarationKind.EnumMember or DeclarationKind.RecordField
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module or DeclarationKind.Subcommand or DeclarationKind.Flag or DeclarationKind.Argument or DeclarationKind.TypeAlias or DeclarationKind.Property or DeclarationKind.ClassMethod or DeclarationKind.EnumMember or DeclarationKind.Variant or DeclarationKind.RecordField
                     && string.Equals(declaration.Name, name, StringComparison.Ordinal))
             .Select(declaration => declaration.DocComment)
             .FirstOrDefault(doc => doc is not null);
@@ -142,13 +182,14 @@ public sealed class DeclarationIndex
     {
         return GetVisibleDeclarations(
                 offset,
-                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module or DeclarationKind.Subcommand or DeclarationKind.Flag or DeclarationKind.Argument or DeclarationKind.TypeAlias or DeclarationKind.Property or DeclarationKind.ClassMethod or DeclarationKind.EnumMember or DeclarationKind.RecordField
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module or DeclarationKind.Subcommand or DeclarationKind.Flag or DeclarationKind.Argument or DeclarationKind.TypeAlias or DeclarationKind.Property or DeclarationKind.ClassMethod or DeclarationKind.EnumMember or DeclarationKind.Variant or DeclarationKind.RecordField
                     && string.Equals(declaration.Name, name, StringComparison.Ordinal))
             .Select(declaration => declaration.Kind switch
             {
                 DeclarationKind.Class => "Class",
                 DeclarationKind.Record => "Record",
                 DeclarationKind.Enum => "Enum",
+                DeclarationKind.Union => "Union",
                 DeclarationKind.Module => "Module",
                 DeclarationKind.Subcommand => "Subcommand",
                 DeclarationKind.Flag => "Flag",
@@ -157,6 +198,7 @@ public sealed class DeclarationIndex
                 DeclarationKind.Property => "Property",
                 DeclarationKind.ClassMethod => "Method",
                 DeclarationKind.EnumMember => "Enum member",
+                DeclarationKind.Variant => "Variant",
                 DeclarationKind.RecordField => "Field",
                 _ => null,
             })
@@ -183,7 +225,7 @@ public sealed class DeclarationIndex
         IndexedDeclaration? FindClosestContainer(int pos, IndexedDeclaration? ignore = null)
         {
             return outlineDecls
-                .Where(d => d != ignore && d.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand)
+                .Where(d => d != ignore && d.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record or DeclarationKind.Subcommand)
                 .Where(d => pos >= d.DeclStart && pos <= d.DeclEnd)
                 .OrderByDescending(d => d.DeclStart)
                 .FirstOrDefault();
@@ -197,12 +239,14 @@ public sealed class DeclarationIndex
                 DeclarationKind.Interface => "interface",
                 DeclarationKind.Module => "module",
                 DeclarationKind.Enum => "enum",
+                DeclarationKind.Union => "union",
                 DeclarationKind.Record => "record",
                 DeclarationKind.Subcommand => "subcommand",
                 DeclarationKind.TypeAlias => "type alias",
                 DeclarationKind.Property => "property",
                 DeclarationKind.ClassMethod => "method",
                 DeclarationKind.EnumMember => "enum member",
+                DeclarationKind.Variant => "variant",
                 DeclarationKind.RecordField => "field",
                 DeclarationKind.Flag => "flag",
                 DeclarationKind.Argument => "argument",
@@ -215,12 +259,14 @@ public sealed class DeclarationIndex
                 DeclarationKind.Interface => 11,  // Interface
                 DeclarationKind.Module => 2,      // Module
                 DeclarationKind.Enum => 10,      // Enum
+                DeclarationKind.Union => 10,     // Enum — LSP has no union symbol
                 DeclarationKind.Record => 23,    // Struct
                 DeclarationKind.Subcommand => 12,// Function
                 DeclarationKind.TypeAlias => 5,  // Class
                 DeclarationKind.Property => 7,   // Property
                 DeclarationKind.ClassMethod => 6, // Method
                 DeclarationKind.EnumMember => 22,// EnumMember
+                DeclarationKind.Variant => 22,   // EnumMember
                 DeclarationKind.RecordField => 8,// Field
                 DeclarationKind.Flag => 7,       // Property
                 DeclarationKind.Argument => 13,  // Variable
@@ -243,9 +289,9 @@ public sealed class DeclarationIndex
 
             var childDecls = outlineDecls
                 .Where(child => child != container && FindClosestContainer(child.SelectionStart, ignore: child) == container)
-                .Where(child => container.Kind is not (DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Enum or DeclarationKind.Record) || child.Kind != DeclarationKind.Variable)
+                .Where(child => container.Kind is not (DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record) || child.Kind != DeclarationKind.Variable)
                 .OrderBy(child => child.SelectionStart)
-                .Select(child => child.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand
+                .Select(child => child.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record or DeclarationKind.Subcommand
                     ? BuildContainerSymbol(child)
                     : BuildSymbol(child))
                 .ToList();
@@ -309,7 +355,7 @@ public sealed class DeclarationIndex
         var topSymbols = new List<IndexedSymbol>();
 
         var mergedContainers = topLevelDecls
-            .Where(d => d.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand)
+            .Where(d => d.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record or DeclarationKind.Subcommand)
             .GroupBy(d => new { d.Name, d.Kind })
             .Select(group =>
             {
@@ -336,6 +382,7 @@ public sealed class DeclarationIndex
                     DeclarationKind.Interface => "interface",
                     DeclarationKind.Module => "module",
                     DeclarationKind.Enum => "enum",
+                    DeclarationKind.Union => "union",
                     DeclarationKind.Record => "record",
                     _ => "subcommand",
                 };
@@ -345,6 +392,7 @@ public sealed class DeclarationIndex
                     DeclarationKind.Interface => 11,
                     DeclarationKind.Module => 2,
                     DeclarationKind.Enum => 10,
+                    DeclarationKind.Union => 10,
                     DeclarationKind.Record => 23,
                     _ => 12,
                 };
@@ -361,7 +409,7 @@ public sealed class DeclarationIndex
         topSymbols.AddRange(mergedContainers);
 
         var topNonContainers = topLevelDecls
-            .Where(d => d.Kind is not (DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand))
+            .Where(d => d.Kind is not (DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record or DeclarationKind.Subcommand))
             .Select(d => BuildSymbol(d))
             .ToList();
 
@@ -418,7 +466,7 @@ public sealed class DeclarationIndex
         var declaration = ResolveVisibleDeclaration(
             offset,
             token.Word,
-            entry => entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record,
+            entry => entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record,
             requireDeclarationBeforeUse: false);
         return declaration is null
             ? Array.Empty<LspLocation>()
@@ -548,7 +596,7 @@ public sealed class DeclarationIndex
         var typeDecl = ResolveVisibleDeclaration(
             offset,
             token.Word,
-            entry => entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record,
+            entry => entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record,
             requireDeclarationBeforeUse: false);
         return typeDecl is null ? null : new TargetSymbol(typeDecl, IsVariable: false, typeDecl.SelectionRange);
     }
@@ -626,7 +674,7 @@ public sealed class DeclarationIndex
             else
             {
                 resolved = ResolveVisibleDeclaration(probeOffset, head, entry =>
-                    entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record,
+                    entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Union or DeclarationKind.Record,
                     requireDeclarationBeforeUse: false);
             }
             if (resolved is null) continue;
@@ -776,8 +824,17 @@ public sealed class DeclarationIndex
         Property,
         ClassMethod,
         EnumMember,
+        Union,
+        Variant,
         RecordField,
     }
+
+    /// <summary>A name declared inside a type: an enum member or a union variant.</summary>
+    public sealed record IndexedTypeMember(
+        string Name,
+        string DeclaringType,
+        string KindLabel,
+        DocComment? DocComment);
 
     public sealed record IndexedSymbol(
         string Name,
@@ -1019,6 +1076,17 @@ public sealed class DeclarationIndex
                         {
                             CollectPipeline(member.Value, scopeSpan, depth);
                         }
+                    }
+                    break;
+
+                case UnionDefinitionStatementSyntax union:
+                    var unionSpan = union.Variants.Count > 0
+                        ? TextSpan.FromBounds(union.Span.Start, Math.Max(union.Span.End, union.Variants.Max(v => v.Span.End)))
+                        : union.Span;
+                    AddDeclaration(union.Name, DeclarationKind.Union, unionSpan, scopeSpan, depth, union.DocComment);
+                    foreach (var variant in union.Variants)
+                    {
+                        AddDeclaration(variant.Name, DeclarationKind.Variant, variant.Span, unionSpan, depth + 1);
                     }
                     break;
 

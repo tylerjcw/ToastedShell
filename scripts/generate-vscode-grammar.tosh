@@ -260,6 +260,9 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     "generic-arguments", "type-annotations", "parameter-name", "member-declaration",
     "spread-operator", "caret-escape", "function-reference",
     "special-variable", "variable-reference", "pipeline-underscore",
+    # `static-path` before the command rules: `Level::Novice` at the head of a
+    # line is a path, not a command named `Level` (`TOAST-0090`).
+    "static-path",
     "builtin-commands", "command-position",
     # The literal regions come before the bare delimiter match, which is now only
     # a fallback for a stray delimiter that opened no region.
@@ -493,6 +496,27 @@ $repository["member-declaration"] = {%
     "comment" => "Field names in raw struct bodies and native bind signatures: `uptime: long`, `sysname: cstring[65]`.",
     "match" => ('^\s*(' + $NOT_KEYWORD + $IDENT + ')\s*(?=:(?![:=]))'),
     "captures" => {% "1" => {% "name" => "variable.other.member.declaration.tosh" %} %}
+%}
+$repository["static-path"] = {%
+    "comment" => "The `::` path operator (`TOAST-0090`): a name reached inside a type — enum member, union variant, static member, nested type. The counterpart of #member-access, which reaches a member of a value.",
+    "patterns" => [
+        {%
+            "match" => '\b([A-Za-z_][A-Za-z0-9_]*)(::)([A-Za-z_][A-Za-z0-9_]*)?',
+            "captures" => {%
+                "1" => {% "name" => "entity.name.type.tosh" %},
+                "2" => {% "name" => "keyword.operator.path.tosh" %},
+                "3" => {% "name" => "variable.other.enummember.tosh" %}
+            %}
+        %},
+        {%
+            "comment" => "A further segment of a chained path, whose left side the rule above already consumed.",
+            "match" => '(::)([A-Za-z_][A-Za-z0-9_]*)?',
+            "captures" => {%
+                "1" => {% "name" => "keyword.operator.path.tosh" %},
+                "2" => {% "name" => "variable.other.enummember.tosh" %}
+            %}
+        %}
+    ]
 %}
 $repository["member-access"] = {%
     "comment" => "Dotted member access on a bareword receiver: Info.raw_info.uptime. `$`-prefixed paths are already consumed whole by #variable-reference.",

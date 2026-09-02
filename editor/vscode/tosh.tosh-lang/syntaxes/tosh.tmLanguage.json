@@ -148,6 +148,9 @@
       "include": "#pipeline-underscore"
     },
     {
+      "include": "#static-path"
+    },
+    {
       "include": "#builtin-commands"
     },
     {
@@ -1102,6 +1105,37 @@
         }
       }
     },
+    "static-path": {
+      "comment": "The `::` path operator (`TOAST-0090`): a name reached inside a type — enum member, union variant, static member, nested type. The counterpart of #member-access, which reaches a member of a value.",
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(::)([A-Za-z_][A-Za-z0-9_]*)?",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.tosh"
+            },
+            "2": {
+              "name": "keyword.operator.path.tosh"
+            },
+            "3": {
+              "name": "variable.other.enummember.tosh"
+            }
+          }
+        },
+        {
+          "comment": "A further segment of a chained path, whose left side the rule above already consumed.",
+          "match": "(::)([A-Za-z_][A-Za-z0-9_]*)?",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.path.tosh"
+            },
+            "2": {
+              "name": "variable.other.enummember.tosh"
+            }
+          }
+        }
+      ]
+    },
     "member-access": {
       "comment": "Dotted member access on a bareword receiver: Info.raw_info.uptime. `$`-prefixed paths are already consumed whole by #variable-reference.",
       "patterns": [
@@ -1462,7 +1496,7 @@
     },
     "builtin-commands": {
       "comment": "Built-in commands, highlighted in command position. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
-      "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>))\\s*(?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)\\b(cartesian-product|native-offsetof|prompt-duration|prompt-userhost|channel-select|history-search|prompt-history|prompt-newline|read-line-from|channel-close|describe-type|load-assembly|native-sizeof|write-line-to|channel-recv|channel-send|combinations|constructors|native-alloc|native-write|permutations|write-buffer|append-file|call-method|frequencies|get-methods|group-while|hostnamectl|intersperse|native-free|native-read|prompt-exit|prompt-jobs|prompt-text|prompt-time|read-buffer|read-to-end|write-bytes|disk-usage|find-index|has-method|interleave|join-lines|journalctl|mkdir-temp|networkctl|percentile|prompt-dir|prompt-git|read-bytes|read-lines|repeatedly|skip-until|skip-while|take-until|take-while|with-retry|write-file|benchmark|enumerate|get-props|offset-of|open-file|partition|read-file|read-from|read-line|summarize|systemctl|transpose|writeline|basename|converge|del-prop|describe|distinct|flat-map|get-prop|group-by|has-prop|hostname|loginctl|parallel|position|readlink|realpath|set-prop|tempfile|template|timespan|variance|wait-for|write-to|apropos|as-file|average|channel|collect|complex|compose|copy-to|dirname|findmnt|flatten|foreach|forward|history|inspect|is-file|is-link|iterate|members|methods|partial|replace|reverse|size-of|sort-by|step-by|summary|timeout|type-of|assert|config|events|exists|export|filter|forget|format|ignore|invoke|is-dir|length|logout|median|mounts|prompt|reduce|rename|repeat|select|settle|signal|source|stddev|styled|ulimit|unfold|unless|uptime|whence|whoami|window|alloc|async|await|chain|chmod|chown|chunk|clear|clone|close|count|curry|cycle|debug|dedup|first|flush|funcs|lines|lsblk|lscpu|lsipc|match|mkdir|parse|props|raise|recur|round|scope|sleep|spawn|split|stdev|touch|types|umask|uname|undef|unset|usage|where|which|write|xargs|back|call|cast|date|dirs|each|echo|edit|eval|exec|exit|find|free|from|glob|grep|guid|hash|head|help|http|hush|jobs|join|kill|last|lsfd|none|pick|ping|race|scan|seek|skip|sort|stat|tail|time|tree|uniq|vars|view|all|any|avg|cat|cut|dbg|env|get|map|mat|max|min|new|pwd|raw|row|seq|sum|tee|tui|vec|zip|bg|cd|cp|df|du|fg|id|ip|ln|ls|mv|ps|rm|to|tr|wc)\\b",
+      "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>))\\s*(?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)\\b(cartesian-product|native-offsetof|prompt-duration|prompt-userhost|channel-select|history-search|prompt-history|prompt-newline|read-line-from|channel-close|describe-type|load-assembly|native-sizeof|write-line-to|channel-recv|channel-send|combinations|constructors|native-alloc|native-write|permutations|write-buffer|append-file|call-method|frequencies|get-methods|group-while|hostnamectl|intersperse|native-free|native-read|option-from|prompt-exit|prompt-jobs|prompt-text|prompt-time|read-buffer|read-to-end|write-bytes|disk-usage|find-index|has-method|interleave|join-lines|journalctl|mkdir-temp|networkctl|percentile|prompt-dir|prompt-git|read-bytes|read-lines|repeatedly|skip-until|skip-while|take-until|take-while|with-retry|write-file|benchmark|enumerate|get-props|offset-of|open-file|partition|read-file|read-from|read-line|summarize|systemctl|transpose|writeline|basename|converge|del-prop|describe|distinct|flat-map|get-prop|group-by|has-prop|hostname|loginctl|parallel|position|readlink|realpath|set-prop|tempfile|template|timespan|variance|wait-for|write-to|apropos|as-file|attempt|average|channel|collect|complex|compose|copy-to|dirname|findmnt|flatten|foreach|forward|history|inspect|is-file|is-link|iterate|members|methods|partial|replace|reverse|size-of|sort-by|step-by|summary|timeout|type-of|assert|config|events|exists|export|filter|forget|format|ignore|invoke|is-dir|length|logout|median|mounts|prompt|reduce|rename|repeat|select|settle|signal|source|stddev|styled|ulimit|unfold|unless|uptime|whence|whoami|window|alloc|async|await|chain|chmod|chown|chunk|clear|clone|close|count|curry|cycle|debug|dedup|first|flush|funcs|lines|lsblk|lscpu|lsipc|match|mkdir|parse|props|raise|recur|round|scope|sleep|spawn|split|stdev|touch|types|umask|uname|undef|unset|usage|where|which|write|xargs|back|call|cast|date|dirs|each|echo|edit|eval|exec|exit|find|free|from|glob|grep|guid|hash|head|help|http|hush|jobs|join|kill|last|lsfd|none|pick|ping|race|scan|seek|skip|sort|stat|tail|time|tree|uniq|vars|view|all|any|avg|cat|cut|dbg|env|get|map|mat|max|min|new|pwd|raw|row|seq|sum|tee|tui|vec|zip|bg|cd|cp|df|du|fg|id|ip|ln|ls|mv|ps|rm|to|tr|wc)\\b",
       "captures": {
         "1": {
           "name": "support.function.builtin.tosh"

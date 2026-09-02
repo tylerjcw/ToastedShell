@@ -266,9 +266,19 @@ public sealed class ToshLanguageFeatures
             return items.Values.OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
-        if (TryGetQualifiedCompletionContext(text, offset, out var qualifiedTarget, out var qualifiedPartial))
+        if (TryGetQualifiedCompletionContext(
+                text, offset, out var qualifiedTarget, out var qualifiedPartial, out var viaPathOperator))
         {
-            var shellTargetClass = semantics.ResolveShellTargetClass(offset, qualifiedTarget);
+            // `TOAST-0090`. Reached by either operator: `Type.Member` keeps working, so it keeps
+            // completing, and `Type::Member` is the spelling this is really for.
+            AddItems(items, GetDeclaredTypeMemberCompletions(index, offset, qualifiedTarget, qualifiedPartial));
+
+            // A path reaches *inside* a type. A value's instance members are not in there, and
+            // `$value::Member` is not a thing to write, so the value-shaped sources are skipped
+            // rather than offered and rejected later.
+            var shellTargetClass = viaPathOperator
+                ? null
+                : semantics.ResolveShellTargetClass(offset, qualifiedTarget);
 
             if (shellTargetClass is not null)
             {
@@ -286,7 +296,8 @@ public sealed class ToshLanguageFeatures
                 {
                     AddItems(items, clrCatalog.GetMemberCompletions(
                         targetType,
-                        staticOnly: !qualifiedTarget.StartsWith('$') && !string.Equals(qualifiedTarget, "_", StringComparison.Ordinal),
+                        staticOnly: viaPathOperator ||
+                            (!qualifiedTarget.StartsWith('$') && !string.Equals(qualifiedTarget, "_", StringComparison.Ordinal)),
                         partial: qualifiedPartial));
                 }
 
@@ -298,7 +309,11 @@ public sealed class ToshLanguageFeatures
                 }
             }
 
-            if (items.Count > 0)
+            // `::` says a path is being written, so this is the answer whether or not it is empty.
+            // Falling through would offer every command and keyword after `Unknown::`, which is
+            // the shape of the bug this item fixed: a plausible-looking list with the one name
+            // that belongs there missing from it.
+            if (items.Count > 0 || viaPathOperator)
             {
                 return items.Values.OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
             }
@@ -764,6 +779,10 @@ public sealed class ToshLanguageFeatures
         else if (Keywords.TryGetValue(normalizedWord, out var keyword))
         {
             description = keyword;
+        }
+        else if (GetDeclaredTypeMemberHoverDescription(index, text, token.Start, normalizedWord) is { } memberDescription)
+        {
+            description = memberDescription;
         }
         else if (GetTypeLikeDeclarationHoverDescription(index, offset, normalizedWord) is { } typeDescription)
         {
@@ -1634,10 +1653,16 @@ public sealed class ToshLanguageFeatures
         return text[span.Start..span.End];
     }
 
-    private static bool TryGetQualifiedCompletionContext(string text, int offset, out string target, out string partial)
+    private static bool TryGetQualifiedCompletionContext(
+        string text,
+        int offset,
+        out string target,
+        out string partial,
+        out bool viaPathOperator)
     {
         target = string.Empty;
         partial = string.Empty;
+        viaPathOperator = false;
 
         if (offset <= 0)
         {
@@ -1649,6 +1674,29 @@ public sealed class ToshLanguageFeatures
         while (start > 0 && IsCompletionPathChar(text[start - 1]))
         {
             start--;
+        }
+
+        // `TOAST-0090`. `::` separates too. It is not folded into `IsCompletionPathChar`: a bare
+        // ':' also ends a type annotation and a ternary, so `var a:Level.` would scan back through
+        // it and complete against `a:Level`. Matching the pair explicitly keeps the scan honest.
+        if (start >= 2 && text[start - 1] == ':' && text[start - 2] == ':')
+        {
+            var typeStart = start - 2;
+
+            while (typeStart > 0 && IsCompletionPathChar(text[typeStart - 1]))
+            {
+                typeStart--;
+            }
+
+            if (typeStart == start - 2)
+            {
+                return false;
+            }
+
+            target = text[typeStart..(start - 2)];
+            partial = text[start..offset];
+            viaPathOperator = true;
+            return true;
         }
 
         if (start == offset)
@@ -1667,6 +1715,44 @@ public sealed class ToshLanguageFeatures
         target = candidate[..separatorIndex];
         partial = candidate[(separatorIndex + 1)..];
         return true;
+    }
+
+    /// <summary>
+    /// An enum's members and a union's variants, which is what a path into a declared type
+    /// reaches — <c>TOAST-0090</c>. Neither the shell-class resolver nor the CLR catalog answers
+    /// for these, so before this they completed to nothing and the caller fell through to the
+    /// global list.
+    /// </summary>
+    private static IReadOnlyList<LspCompletionItem> GetDeclaredTypeMemberCompletions(
+        DeclarationIndex index,
+        int offset,
+        string target,
+        string partial)
+    {
+        var members = index.GetTypeMembers(offset, target);
+
+        if (members.Count == 0)
+        {
+            return Array.Empty<LspCompletionItem>();
+        }
+
+        var items = new List<LspCompletionItem>(members.Count);
+
+        foreach (var member in members)
+        {
+            if (!MatchesPrefix(member.Name, partial))
+            {
+                continue;
+            }
+
+            items.Add(new LspCompletionItem(
+                member.Name,
+                Kind: 20, // EnumMember
+                Detail: $"{member.KindLabel} of {member.DeclaringType}",
+                Documentation: member.DocComment?.Summary));
+        }
+
+        return items;
     }
 
     private static bool TryGetUsingCompletionContext(string text, int offset, out string pathPrefix)
@@ -1843,6 +1929,70 @@ public sealed class ToshLanguageFeatures
             var canonical = overloads[0];
             AppendDocCommentSections(parts, doc, canonical.Parameters, canonical.ReturnTypeName);
         }
+
+        return string.Join("\n\n", parts);
+    }
+
+    /// <summary>
+    /// The right-hand side of a path — <c>Level::Novice</c>, <c>Option::None</c>; <c>TOAST-0090</c>.
+    /// </summary>
+    /// <remarks>
+    /// Hover answered for the type and returned nothing for the member, because a member's scope
+    /// is its declaring type's span and the cursor is somewhere else entirely. The qualifier
+    /// standing to the left of the cursor is what says which type to ask, so it is read from the
+    /// source rather than looked up by the member's bare name.
+    /// </remarks>
+    private static string? GetDeclaredTypeMemberHoverDescription(
+        DeclarationIndex index,
+        string text,
+        int wordStart,
+        string word)
+    {
+        if (string.IsNullOrWhiteSpace(word) || word.StartsWith("$", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var cursor = wordStart;
+        int qualifierEnd;
+
+        if (cursor >= 2 && text[cursor - 1] == ':' && text[cursor - 2] == ':')
+        {
+            qualifierEnd = cursor - 2;
+        }
+        else if (cursor >= 1 && text[cursor - 1] == '.')
+        {
+            qualifierEnd = cursor - 1;
+        }
+        else
+        {
+            return null;
+        }
+
+        var qualifierStart = qualifierEnd;
+
+        while (qualifierStart > 0 && (char.IsLetterOrDigit(text[qualifierStart - 1]) || text[qualifierStart - 1] is '_'))
+        {
+            qualifierStart--;
+        }
+
+        if (qualifierStart == qualifierEnd)
+        {
+            return null;
+        }
+
+        var qualifier = text[qualifierStart..qualifierEnd];
+        var member = index.GetTypeMembers(qualifierStart, qualifier)
+            .FirstOrDefault(candidate => string.Equals(candidate.Name, word, StringComparison.Ordinal));
+
+        if (member is null)
+        {
+            return null;
+        }
+
+        var parts = new List<string> { $"{member.KindLabel} of `{member.DeclaringType}`" };
+        AppendDeprecatedBanner(parts, member.DocComment);
+        AppendSummary(parts, member.DocComment);
 
         return string.Join("\n\n", parts);
     }
