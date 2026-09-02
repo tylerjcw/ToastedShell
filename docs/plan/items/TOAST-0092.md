@@ -1,7 +1,7 @@
 ---
 id: TOAST-0092
 title: "A value cannot be written to a file and read back as itself, in any format"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28

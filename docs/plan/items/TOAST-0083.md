@@ -1,7 +1,7 @@
 ---
 id: TOAST-0083
 title: "Generic unions can spell `Option` and `Result`, but the core library does not provide their contract"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28

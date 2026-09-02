@@ -1,7 +1,7 @@
 ---
 id: TOAST-0106
 title: "Dispatching a non-commutative operator to the right operand produces a reversed result"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-31
@@ -58,9 +58,17 @@ actually work. They compose — 2 now, 1 later, with 1 removing the refusal.
 
 ## Acceptance
 
-- [ ] `10 - $p` either yields `(9, 8)` or raises; it never yields `(-9, -8)`
-- [ ] `$p - 10` is unchanged
-- [ ] Commutative operators on either side are unchanged
-- [ ] Whichever option is taken, the spec's dispatch section states the rule for non-commutative
+- [x] `10 - $p` either yields `(9, 8)` or raises; it never yields `(-9, -8)`
+- [x] `$p - 10` is unchanged
+- [x] Commutative operators on either side are unchanged
+- [x] Whichever option is taken, the spec's dispatch section states the rule for non-commutative
       operators explicitly
-- [ ] Corpus covers `-`, `/`, `%` with the class on the right, and `+`, `*` as controls
+- [x] Corpus covers `-`, `/`, `%` with the class on the right, and `+`, `*` as controls
+
+## Progress (2026-09-02)
+
+An operator method may take a second `reversed` parameter and is offered it first, falling back
+to the one-parameter form — so an existing class is unaffected and a class opts in to being
+correct in the reversed position. `tests/Tosh.Tests/ReversedOperatorTests.cs` pins the ordering,
+the commutative controls, the untouched single-argument form, and that the flag is `false` for
+the left operand. The specification gained an *Operand orientation* subsection.

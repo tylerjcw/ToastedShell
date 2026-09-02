@@ -1,7 +1,7 @@
 ---
 id: TOAST-0105
 title: "`is` silently returns false for a declared type when the type name is qualified"
-status: proposed
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-31
@@ -71,8 +71,26 @@ handle the qualified form correctly.
 
 ## Acceptance
 
-- [ ] `$t is IR.Thing` is true for an `IR.Thing`, from inside and outside the module
-- [ ] The same holds for a declared class and for a generic declared type
-- [ ] A qualified name that resolves to no type is a diagnostic, not a silent `false`
-- [ ] `is` and type annotations agree on every name either accepts
-- [ ] Corpus covers record, class, qualified, unqualified, inside and outside the module
+- [x] `$t is IR.Thing` is true for an `IR.Thing`, from inside and outside the module
+- [x] The same holds for a declared class and for a generic declared type
+- [ ] A qualified name that resolves to no type is a diagnostic, not a silent `false` —
+      **not done.** `$probe is QtModule.NotDeclared` still answers `False`, pinned by
+      `A_qualified_name_that_names_no_type_is_false`. See the note below: this is the same
+      failure mode the item opened with, and the half of it that is still open.
+- [x] `is` and type annotations agree on every name either accepts
+- [x] Corpus covers record, class, qualified, unqualified, inside and outside the module
+
+## Progress (2026-09-02)
+
+The resolution half shipped and is verified: a record and a class both answer `is` through their
+module, in the dotted and the `::` spelling, from inside and outside; a qualified name for a
+*different* declared type answers false; the string form agrees with the name form; CLR tests are
+unchanged. `tests/Tosh.Tests/QualifiedTypeTestTests.cs` holds the corpus.
+
+**The remaining box is the more interesting half and is deliberately left open rather than
+quietly dropped.** This item opened because `is` could not tell *no* from *I do not know* — it
+answered `false` for a real type it failed to resolve. Real types resolve now, but a **misspelt**
+one still answers `false` for exactly the same reason, so a typo in a type name is still a silent
+wrong answer rather than a diagnostic. Closing it needs a decision that is not obviously mine to
+make: `is` is a test, and tests conventionally do not raise, so refusing an unresolvable name is a
+departure worth stating explicitly before it is written.

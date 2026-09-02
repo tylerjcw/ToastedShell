@@ -1,7 +1,7 @@
 ---
 id: TOAST-0095
 title: "`is` answers false for a nested type, and a qualified variant pattern never matches"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -76,12 +76,13 @@ pattern case once it matches.
 
 ## Acceptance
 
-- [ ] `$value is Outer.Inner` answers true for an instance of the nested type
-- [ ] `Outer::Inner` behaves identically in `is`
+- [x] `$value is Outer.Inner` answers true for an instance of the nested type
+- [x] `Outer::Inner` behaves identically in `is`
 - [x] A qualified variant pattern matches exactly when its bare form does
 - [x] A pattern naming a variant of the wrong union is a diagnostic, not a silent non-match
 - [x] Exhaustiveness checking counts qualified arms as covering their variant
-- [ ] Interpreter and compiler agree
+- [~] Interpreter and compiler agree — **deferred.** Compiled tosh is an experiment until the
+      interpreted language is solid, so no new surface is added there.
 
 ## Qualified variant patterns — fixed 2026-08-29
 
@@ -112,3 +113,10 @@ or not the check existed.
 ## Still open
 
 The `is` defect and the compiled nested-type divergence above are untouched.
+
+## Progress (2026-09-02)
+
+The nested-type half was carried by `TOAST-0105`'s scoped resolver: both `Outer.Inner` and
+`Outer::Inner` answer `is` for an instance of the nested type, verified directly. The qualified
+variant pattern, the wrong-union diagnostic and the exhaustiveness counting shipped with the
+core-prelude work.
