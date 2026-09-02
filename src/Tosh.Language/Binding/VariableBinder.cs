@@ -707,29 +707,127 @@ public static class VariableBinder
     /// variants must also be covered. A variant name is enough to identify the union, which is
     /// why exhaustiveness needs no type for the matched value.
     /// </remarks>
-    private static IReadOnlyDictionary<string, UnionShape> CollectVariantUnions(
+    private static IReadOnlyDictionary<string, IReadOnlyList<UnionShape>> CollectVariantUnions(
         StatementSyntax statement,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions)
     {
-        var unions = new Dictionary<string, UnionShape>(StringComparer.Ordinal);
+        var index = new Dictionary<string, List<UnionShape>>(StringComparer.Ordinal);
 
-        // Ambient first, so a declaration in this source overwrites it. That is the shadowing
-        // rule the rest of the language already follows — a bare name is where a declaration
-        // wins — and it is why the seeding cannot simply be merged afterwards.
-        if (ambientUnions is not null)
+        void Add(UnionShape shape)
         {
-            foreach (var (unionName, variants) in ambientUnions)
+            foreach (var variant in shape.Variants)
             {
-                var shape = new UnionShape(unionName, variants);
-                foreach (var variant in variants)
+                if (!index.TryGetValue(variant, out var candidates))
                 {
-                    unions[variant] = shape;
+                    candidates = new List<UnionShape>();
+                    index[variant] = candidates;
+                }
+
+                if (!candidates.Any(existing => string.Equals(existing.Name, shape.Name, StringComparison.Ordinal)))
+                {
+                    candidates.Add(shape);
                 }
             }
         }
 
-        CollectVariantUnions(statement, unions);
-        return unions;
+        // Source declarations first, so they lead the candidate list and win the tie-break
+        // below. That is the shadowing rule the rest of the language follows — a bare name is
+        // where a declaration wins.
+        foreach (var shape in CollectUnionDeclarations(statement))
+        {
+            Add(shape);
+        }
+
+        if (ambientUnions is not null)
+        {
+            foreach (var (unionName, variants) in ambientUnions)
+            {
+                Add(new UnionShape(unionName, variants));
+            }
+        }
+
+        return index.ToDictionary(
+            entry => entry.Key,
+            entry => (IReadOnlyList<UnionShape>)entry.Value,
+            StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Which union an unqualified set of variant names refers to — <c>TOAST-0108</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A variant name identifies a union only while it is unique, and since <c>TOAST-0083</c>
+    /// put <c>Option</c> and <c>Result</c> in the core prelude it very often is not: every
+    /// <c>Some</c>, <c>None</c>, <c>Ok</c> and <c>Err</c> a user declares now collides with an
+    /// ambient one.
+    /// </para>
+    /// <para>
+    /// The arms disambiguate each other. Each names a variant, each variant has a candidate
+    /// set, and the union being matched is in all of them — so the intersection is the answer
+    /// whenever it is a single union. <c>Some</c> alone is ambiguous between <c>Option</c> and
+    /// a user's <c>Maybe</c>; <c>Some</c> with <c>Nothing</c> is not.
+    /// </para>
+    /// <para>
+    /// When the intersection still holds more than one, the source declaration wins — the same
+    /// shadowing rule that ordered the candidates. Only a name that is ambiguous *between two
+    /// source unions* gives up, because there the language itself has no answer and guessing
+    /// would produce a diagnostic naming a union the author did not mean.
+    /// </para>
+    /// </remarks>
+    private static UnionShape? ResolveUnionFromMembers(IReadOnlyList<string> members, Context ctx)
+    {
+        List<UnionShape>? candidates = null;
+
+        foreach (var member in members)
+        {
+            if (!ctx.VariantUnions.TryGetValue(member, out var forMember))
+            {
+                return null;
+            }
+
+            if (candidates is null)
+            {
+                candidates = forMember.ToList();
+                continue;
+            }
+
+            candidates.RemoveAll(shape =>
+                !forMember.Any(other => string.Equals(other.Name, shape.Name, StringComparison.Ordinal)));
+        }
+
+        if (candidates is null || candidates.Count == 0)
+        {
+            return null;
+        }
+
+        // The list is source-declared first, so the head is the shadowing winner. Two source
+        // declarations sharing a variant name are genuinely ambiguous and are left alone.
+        return candidates[0];
+    }
+
+    /// <summary>Every union declared in this source, in declaration order.</summary>
+    private static IReadOnlyList<UnionShape> CollectUnionDeclarations(StatementSyntax statement)
+    {
+        var shapes = new List<UnionShape>();
+        CollectUnionDeclarations(statement, shapes);
+        return shapes;
+    }
+
+    private static void CollectUnionDeclarations(StatementSyntax statement, List<UnionShape> shapes)
+    {
+        switch (statement)
+        {
+            case ScriptStatementSyntax script:
+                foreach (var child in script.Statements) CollectUnionDeclarations(child, shapes);
+                break;
+
+            case UnionDefinitionStatementSyntax union:
+                shapes.Add(new UnionShape(
+                    union.Name,
+                    union.Variants.Select(variant => variant.Name).ToArray()));
+                break;
+        }
     }
 
     /// <summary>
@@ -755,40 +853,13 @@ public static class VariableBinder
             }
         }
 
-        var declared = new Dictionary<string, UnionShape>(StringComparer.Ordinal);
-        CollectVariantUnions(statement, declared);
-
         // Source declarations override an ambient union of the same name.
-        foreach (var shape in declared.Values)
+        foreach (var shape in CollectUnionDeclarations(statement))
         {
             byVariant[shape.Name] = shape;
         }
 
         return byVariant;
-    }
-
-    private static void CollectVariantUnions(
-        StatementSyntax statement,
-        Dictionary<string, UnionShape> unions)
-    {
-        switch (statement)
-        {
-            case ScriptStatementSyntax script:
-                foreach (var child in script.Statements) CollectVariantUnions(child, unions);
-                break;
-
-            case UnionDefinitionStatementSyntax union:
-                var shape = new UnionShape(
-                    union.Name,
-                    union.Variants.Select(variant => variant.Name).ToArray());
-
-                foreach (var variant in union.Variants)
-                {
-                    unions.TryAdd(variant.Name, shape);
-                }
-
-                break;
-        }
     }
 
     /// <summary>
@@ -821,9 +892,13 @@ public static class VariableBinder
     /// </remarks>
     private static void CheckMatchExhaustiveness(MatchArgumentSyntax match, Context ctx)
     {
-        UnionShape? union = null;
-        var covered = new HashSet<string>(StringComparer.Ordinal);
-        var guardedOnly = new HashSet<string>(StringComparer.Ordinal);
+        // Read every arm first. The union is resolved from the whole set rather than one arm at
+        // a time — `TOAST-0108` — because a single variant name no longer identifies a union
+        // now that `Option` and `Result` are ambient.
+        var members = new List<string>();
+        var unguarded = new List<string>();
+        var guardedMembers = new List<string>();
+        UnionShape? qualified = null;
 
         foreach (var arm in match.Arms)
         {
@@ -845,36 +920,44 @@ public static class VariableBinder
                 // said nothing at all.
                 SplitVariantName(variant.VariantName, out var qualifier, out var member);
 
-                UnionShape? owner;
-
                 if (qualifier is not null)
                 {
-                    // `TOAST-0095`. Resolved by union rather than by variant: `Some` may belong
-                    // to several unions, and the variant index keeps only the last, so a
-                    // qualified arm looked up that way disagreed with its own qualifier and the
-                    // whole check bailed. The qualifier is the answer, not an extra condition
-                    // on it.
-                    if (!ctx.UnionsByName.TryGetValue(qualifier, out owner) ||
+                    // `TOAST-0095`. Resolved by union rather than by variant: the qualifier is
+                    // the answer, not an extra condition on it.
+                    if (!ctx.UnionsByName.TryGetValue(qualifier, out var owner) ||
                         !owner.Variants.Contains(member, StringComparer.Ordinal))
                     {
                         return;
                     }
-                }
-                else if (!ctx.VariantUnions.TryGetValue(member, out owner))
-                {
-                    // A variant this source cannot see; nothing can be claimed about the set.
-                    return;
+
+                    if (qualified is null) { qualified = owner; }
+                    else if (!string.Equals(qualified.Name, owner.Name, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
                 }
 
-                if (union is null) { union = owner; }
-                else if (!ReferenceEquals(union, owner)) { return; }
-
-                if (arm.Guard is null) { covered.Add(member); }
-                else { guardedOnly.Add(member); }
+                members.Add(member);
+                (arm.Guard is null ? unguarded : guardedMembers).Add(member);
             }
         }
 
+        if (members.Count == 0) { return; }
+
+        // A qualified arm names the union outright; otherwise the arms disambiguate each other.
+        var union = qualified ?? ResolveUnionFromMembers(members, ctx);
+
         if (union is null) { return; }
+
+        // Every arm must name a variant of the union that was resolved. Without this a match
+        // mixing two unions would be measured against whichever one won.
+        if (members.Any(member => !union.Variants.Contains(member, StringComparer.Ordinal)))
+        {
+            return;
+        }
+
+        var covered = new HashSet<string>(unguarded, StringComparer.Ordinal);
+        var guardedOnly = new HashSet<string>(guardedMembers, StringComparer.Ordinal);
 
         var missing = union.Variants.Where(name => !covered.Contains(name)).ToArray();
         if (missing.Length == 0) { return; }
@@ -1218,6 +1301,6 @@ public static class VariableBinder
         List<HashSet<string>> Scopes,
         List<ToshDiagnostic> Diagnostics,
         IReadOnlyDictionary<string, IReadOnlyList<string>> PatternShapes,
-        IReadOnlyDictionary<string, UnionShape> VariantUnions,
+        IReadOnlyDictionary<string, IReadOnlyList<UnionShape>> VariantUnions,
         IReadOnlyDictionary<string, UnionShape> UnionsByName);
 }

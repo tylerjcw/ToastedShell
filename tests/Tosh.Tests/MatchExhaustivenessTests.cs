@@ -257,4 +257,103 @@ public sealed class MatchExhaustivenessTests
         Assert.DoesNotContain(diagnostics, d => d.Code == "tosh.bind.unknown_variable");
         await Task.CompletedTask;
     }
+
+    // ── Variant names shared with an ambient union (`TOAST-0108`) ─────────────
+
+    /// <summary>
+    /// A source union whose variant names collide with the core prelude's is measured against
+    /// itself, not against the prelude — <c>TOAST-0108</c>.
+    /// </summary>
+    /// <remarks>
+    /// Before this, `union Maybe { Some(v) Nothing }` matched on `Some` alone reported *"This
+    /// match over 'Option' does not cover None"* — a union the author never wrote and a variant
+    /// that is not in theirs. The variant index seeded ambient unions first and then used
+    /// `TryAdd`, so a source declaration could never displace one, while the comment above it
+    /// said the opposite.
+    /// </remarks>
+    private static async Task<IReadOnlyList<object?>> RunRawAsync(string source)
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime.Language);
+        using var strict = engine.PushBinderStrictness(BinderStrictness.Strict);
+        return await engine.ExecuteToListAsync(source);
+    }
+
+    private const string Shadowing = """
+        union Maybe {
+            Some(v: int)
+            Nothing
+        }
+        """;
+
+    [Fact]
+    public async Task A_source_union_shadowing_an_ambient_one_is_named_in_the_diagnostic()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunRawAsync(
+            Shadowing + """
+
+            echo (match (Maybe.Some(1)) {
+                Some(v) => $v
+            })
+            """));
+
+        Assert.Contains("Maybe", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Nothing", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Option", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_shadowing_union_that_is_fully_covered_is_accepted()
+    {
+        // This one previously passed for the wrong reason: `Some` resolved to `Option` and
+        // `Nothing` to `Maybe`, the two disagreed, and the check gave up silently.
+        var results = await RunRawAsync(Shadowing + """
+
+            echo (match (Maybe.Some(1)) {
+                Some(v) => $v
+                Nothing => 0
+            })
+            """);
+
+        Assert.Equal("1", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task The_ambient_union_still_resolves_when_nothing_shadows_it()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await RunRawAsync("""
+            echo (match (Option::Some(1)) {
+                Some(v) => $v
+            })
+            """));
+
+        Assert.Contains("Option", error.Message, StringComparison.Ordinal);
+        Assert.Contains("None", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Arms_disambiguate_each_other_when_one_alone_could_not()
+    {
+        // `Some` belongs to both `Trio` and `Option`; `None` only to `Option`. The intersection
+        // is `Option`, which these two arms cover completely.
+        //
+        // Resolving from the first arm alone would pick `Trio` — a source declaration outranks
+        // an ambient one — and then demand `Middle` and `Last`, a false error on a match that is
+        // exhaustive over the union it is actually matching. That is what intersecting prevents,
+        // so this asserts the *absence* of a diagnostic.
+        var results = await RunRawAsync("""
+            union Trio {
+                Some(v: int)
+                Middle(v: int)
+                Last(v: int)
+            }
+
+            echo (match (Option::Some(1)) {
+                Some(v) => $v
+                None => 0
+            })
+            """);
+
+        Assert.Equal("1", results[^1]?.ToString());
+    }
 }
