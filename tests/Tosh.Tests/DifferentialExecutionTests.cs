@@ -850,6 +850,22 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "rune-condition-per-call-site",
             "rune unless-it(c, body) {\n    if (not $c) { $body }\n}\n"
             + "unless-it true { echo \"A\" }\nunless-it false { echo \"B\" }");
+
+        // `TOAST-0090`. Both spellings of a path, in both engines. A path canonicalises to dots
+        // in the parser, which both engines share, so agreement here is close to structural —
+        // which is the point of asserting it rather than reasoning it: if the two ever stop
+        // sharing that step, this is what says so.
+        yield return Case(
+            "path-operator-static-member",
+            "echo (System::Math::Max(3, 9))\necho (System.Math.Max(3, 9))");
+        yield return Case(
+            "path-operator-enum-member",
+            "enum DiffPathFuel : int { Mox = 3, Uranium = 8 }\n"
+            + "echo (DiffPathFuel::Uranium)\necho (DiffPathFuel.Uranium)");
+        yield return Case(
+            "path-operator-union-variant",
+            "union DiffPathResult { Ok(v), Err(m) }\n"
+            + "echo (DiffPathResult::Ok(42).v)\necho (DiffPathResult.Ok(42).v)");
     }
 
     /// <summary>
@@ -878,6 +894,88 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // A variable annotated with a base class rejects a subclass value when
         // compiled. Parameters and returns take a different path and accept it,
         // so this is specific to the variable annotation.
+
+        // `TOAST-0092`. TON and the typed formats are interpreter-only, for one reason with
+        // three faces: **a declared type is an emitted CLR class in compiled code**, so nothing
+        // keyed on `ToshRecordInstance` or the engine's declared-type view recognises it.
+        //
+        //   * `to ton` finds no shell shape and now *refuses* rather than emitting the CLR type
+        //     name in quotes, which is what it did before this was measured — a document that
+        //     looked like data and was a type name.
+        //   * `from ton` and `from json --typed` resolve names against the program's declared
+        //     types, which a compiled unit does not present through the same view.
+        //
+        // Recorded rather than implemented: compiled ToastScript is an experiment and the
+        // interpreter is authoritative.
+        yield return Divergence(
+            "TOAST-0092",
+            "ton-write-record",
+            "record DiffTonExchange(Item: string, Amount: int)\n"
+            + "echo (to ton (new DiffTonExchange(Item = \"Emerald\", Amount = 1)))");
+        yield return Divergence(
+            "TOAST-0092",
+            "ton-round-trip",
+            "record DiffTonPoint(X: int, Y: int)\n"
+            + "var doc = (to ton (new DiffTonPoint(X = 1, Y = 2)))\n"
+            + "echo ((from ton $doc).Y)");
+        yield return Divergence(
+            "TOAST-0092",
+            "typed-json-round-trip",
+            "record DiffTypedBox(N: int)\n"
+            + "var j = (new DiffTypedBox(N = 7) | to json --typed --compact)\n"
+            + "echo $j\necho ((from json --typed $j).N)");
+
+        // `TOAST-0083`. The core types themselves reach the compiled backend — they are prelude
+        // ToastScript, not a builtin — but nothing useful can be done with them there.
+        //
+        // Two separate compiled gaps, neither introduced by that item:
+        //   * `extend` blocks are not emitted, so every combinator is missing: "No overload
+        //     matched instance method 'unwrap-or'".
+        //   * variant patterns are not emitted at all — "dynamic argument expressions
+        //     (VariantPatternSyntax) are not yet emitted" — so `match` over *any* union is
+        //     interpreter-only, core types included.
+        //
+        // Recorded rather than implemented: compiled ToastScript is an experiment and the
+        // interpreter is authoritative.
+        yield return Divergence(
+            "TOAST-0083", "core-option-combinators",
+            "echo (Option::Some(5).unwrap-or(0))\n"
+            + "echo ((Option::Some(5).map(func (x) { return ($x * 2) })).Item1)");
+        yield return Divergence(
+            "TOAST-0083", "core-result-match",
+            "func DiffCoreParse() -> Result<int, string> { return Result::Ok(3) }\n"
+            + "echo (match ((DiffCoreParse())) {\n"
+            + "    Result::Ok(v) => $v\n"
+            + "    Result::Err(e) => 0\n"
+            + "})");
+        yield return Divergence(
+            "TOAST-0083", "core-option-null-bridge",
+            "echo ((option-from null).is-none())\necho ((option-from 5).unwrap-or(0))");
+
+        // `TOAST-0091`. The typed record literal is interpreted-only. It *was* dropped silently
+        // — 9 interpreted, 0 compiled, an object holding the constructor's state and none of the
+        // literal's — and the emitter now refuses it instead, so the divergence is a refusal
+        // rather than a wrong answer. Still recorded rather than implemented: compiled
+        // ToastScript is an experiment, and a guard is not an implementation.
+        yield return Divergence(
+            "TOAST-0091", "typed-record-literal-no-arguments",
+            "class DiffLitBox { prop X = 0 }\necho ((new DiffLitBox {| X = 9 |}).X)");
+        yield return Divergence(
+            "TOAST-0091", "typed-record-literal-after-constructor",
+            "class DiffLitVillager(p: string, l: int) {\n"
+            + "    prop Profession = $p\n    prop Level = $l\n    prop Name = \"\"\n}\n"
+            + "var v = new DiffLitVillager(\"lib\", 3) {| Name = \"Steve\" |}\n"
+            + "echo $v.Name\necho $v.Level");
+
+        // `TOAST-0090` found this one and does not cause it: a nested type reached through
+        // its declaring class diverges in the *dotted* spelling too, so the path operator
+        // only gave it a second way to be written. The interpreter is authoritative and
+        // answers 7; recorded rather than fixed, per the standing disposition on compiled
+        // ToastScript.
+        yield return Divergence(
+            "TOAST-0095", "nested-type-construction",
+            "class DiffPathOuter { class DiffPathInner { prop V = 7 } }\n"
+            + "echo ((new DiffPathOuter.DiffPathInner()).V)");
 
         // ── `TOAST-0018`'s specified semantics, not yet implemented compiled ──
         //
