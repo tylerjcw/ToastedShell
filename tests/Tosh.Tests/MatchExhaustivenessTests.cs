@@ -356,4 +356,167 @@ public sealed class MatchExhaustivenessTests
 
         Assert.Equal("1", results[^1]?.ToString());
     }
+
+    // ── Nested coverage (`TOAST-0054`, second slice) ──────────────────────────
+
+    /// <summary>
+    /// Arms may cover every variant and still not cover every value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Coverage was counted at the top level, so <c>Add(Lit(a), r)</c> counted as covering all of
+    /// <c>Add</c> and a nested value fell through at runtime. This is a usefulness computation
+    /// over the pattern matrix rather than the tempting shortcut — "a variant pattern with a
+    /// refutable sub-pattern does not cover its variant" — which is unsound in the direction that
+    /// matters: it refuses code that is exhaustive.
+    /// </para>
+    /// <para>
+    /// <c>Exhaustive_nesting_is_accepted</c> is the test that shortcut fails.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_nested_gap_is_reported_with_the_shape_that_reaches_it()
+    {
+        var error = await FailureAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add(Lit(a), x) => $a
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Contains("Add(Add(_, _), _)", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Exhaustive_nesting_is_accepted()
+    {
+        // Every shape of `Add`'s first field is named, so this *is* exhaustive. The shortcut the
+        // item warns about would refuse it — a false error on exactly the compiler-shaped code
+        // the check exists to serve.
+        var results = await RunAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add(Lit(a), x) => $a
+                Add(Add(p, q), x) => $p
+                Add(Neg(n), x) => $n
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Equal("1", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task A_binding_in_a_nested_position_covers_it()
+    {
+        var results = await RunAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add(l, r) => $l
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Equal("1", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task An_or_pattern_in_a_nested_position_is_expanded()
+    {
+        var results = await RunAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add((Lit(a) | Neg(a)), x) => $a
+                Add(Add(p, q), x) => $p
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Equal("1", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task A_guarded_nested_arm_does_not_close_the_gap()
+    {
+        // The rule the top-level check already applies: an arm that may not fire cannot complete
+        // a match, so it is left out of the matrix rather than counted weakly.
+        var error = await FailureAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add(Lit(a), x) => $a
+                Add(Add(p, q), x) if ($p > 0) => $p
+                Add(Neg(n), x) => $n
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Contains("Add(Add(_, _), _)", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_default_arm_still_ends_the_question()
+    {
+        var results = await RunAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add(Lit(a), x) => $a
+                Neg(v) => $v
+                default => 0
+            })
+            """);
+
+        Assert.Equal("1", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task A_literal_in_a_nested_position_is_treated_as_covering()
+    {
+        // The sound direction, and its price, in one test.
+        //
+        // An opaque sub-pattern — a literal, a comparison, a list pattern — is read as matching
+        // everything, so the check can only lose a report and never invent one. `Lit(0)` does not
+        // really cover every `Lit`, and the binder deliberately does not say so: the alternative
+        // is refusing exhaustive code, which this item rules out.
+        //
+        // So the gap is real and surfaces at runtime instead. What is pinned here is *which*
+        // failure happens: the runtime's, not the binder's.
+        var error = await FailureAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(0) => 0
+                Add(l, r) => $l
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Contains("did not match any arm", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("not every value", error.Message, StringComparison.Ordinal);
+
+        // And the same arms over a value the literal does cover run without complaint.
+        var results = await RunAsync("""
+            echo (match (Expr.Lit(0)) {
+                Lit(0) => 99
+                Add(l, r) => $l
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Equal("99", results[^1]?.ToString());
+    }
+
+    [Fact]
+    public async Task Depth_beyond_two_is_reported()
+    {
+        var error = await FailureAsync("""
+            echo (match (Expr.Lit(1)) {
+                Lit(v) => $v
+                Add(Add(Lit(a), y), x) => $a
+                Add(Lit(a), x) => $a
+                Add(Neg(n), x) => $n
+                Neg(v) => $v
+            })
+            """);
+
+        Assert.Contains("Add(Add(Add(_, _), _), _)", error.Message, StringComparison.Ordinal);
+    }
 }

@@ -960,7 +960,14 @@ public static class VariableBinder
         var guardedOnly = new HashSet<string>(guardedMembers, StringComparer.Ordinal);
 
         var missing = union.Variants.Where(name => !covered.Contains(name)).ToArray();
-        if (missing.Length == 0) { return; }
+
+        if (missing.Length == 0)
+        {
+            // Every variant has an unguarded arm, so the top level is covered. What an arm
+            // destructures *inside* a variant can still leave a gap — `TOAST-0054`.
+            CheckNestedCoverage(match, union, ctx);
+            return;
+        }
 
         var guarded = missing.Where(guardedOnly.Contains).ToArray();
         var help = guarded.Length == 0
@@ -983,6 +990,305 @@ public static class VariableBinder
     }
 
     /// <summary>The patterns an arm can match on — one, or an or-pattern's alternatives.</summary>
+    /// <summary>
+    /// Reports a <c>match</c> whose arms cover every variant but not every *value* — the second
+    /// slice of <c>TOAST-0054</c>.
+    /// </summary>
+    /// <remarks>
+    /// Coverage was counted at the top level only, so <c>Add(Lit(a), r)</c> counted as covering
+    /// all of <c>Add</c> and a nested value fell through at runtime. Guarded arms are left out of
+    /// the matrix entirely rather than counted weakly: an arm that may not fire cannot complete a
+    /// match, which is the rule the top-level check already applies.
+    /// </remarks>
+    private static void CheckNestedCoverage(MatchArgumentSyntax match, UnionShape union, Context ctx)
+    {
+        var rows = new List<List<MatchPattern>>();
+
+        foreach (var arm in match.Arms)
+        {
+            if (arm.Guard is not null || arm.Pattern is null) { continue; }
+
+            foreach (var lowered in LowerPattern(arm.Pattern, ctx))
+            {
+                rows.Add([lowered]);
+            }
+        }
+
+        if (rows.Count == 0) { return; }
+
+        var witness = FindWitness(rows, 1, ctx);
+
+        if (witness is null || witness.Count == 0) { return; }
+
+        var rendered = RenderWitness(witness[0]);
+
+        // A bare `_` says only "something reaches here", which the top-level check has already
+        // ruled out. Reporting it would be noise.
+        if (rendered == "_") { return; }
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.bind.match_not_exhaustive",
+            Title: $"This match over '{union.Name}' covers every variant but not every value: "
+                 + $"nothing matches {rendered}.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: match.Span,
+            Label: $"'{union.Name}' declares: {string.Join(", ", union.Variants)}",
+            Help: "an arm that destructures inside a variant covers only the shapes it names. "
+                + "Add an arm for the shape above, widen one of the existing arms to a binding, "
+                + "or `default`."));
+    }
+
+    // ── Nested coverage: usefulness over the pattern matrix (`TOAST-0054`) ────
+
+    /// <summary>A pattern reduced to what coverage depends on: a constructor, or anything else.</summary>
+    /// <remarks>
+    /// Everything that is not a variant pattern becomes <see cref="MatchWildcard"/> — a literal, a
+    /// comparison, a list pattern, a binding. That is the *sound* direction here. Treating an
+    /// opaque pattern as matching everything can only make the check conclude "covered" when it is
+    /// not, which is a missing report; treating it as a distinct constructor would make the check
+    /// conclude "uncovered" when it is not, which is a false error on correct code. This item
+    /// insists on never doing the second.
+    /// </remarks>
+    private abstract record MatchPattern;
+
+    private sealed record MatchWildcard : MatchPattern
+    {
+        internal static readonly MatchWildcard Instance = new();
+    }
+
+    private sealed record MatchConstructor(string Variant, IReadOnlyList<MatchPattern> Arguments) : MatchPattern;
+
+    /// <summary>
+    /// The counterexample the algorithm builds: a value shape no arm matches.
+    /// </summary>
+    private static string RenderWitness(MatchPattern pattern) => pattern switch
+    {
+        MatchConstructor constructor when constructor.Arguments.Count == 0 => constructor.Variant + "()",
+        MatchConstructor constructor =>
+            constructor.Variant + "(" + string.Join(", ", constructor.Arguments.Select(RenderWitness)) + ")",
+        _ => "_",
+    };
+
+    /// <summary>
+    /// Lowers one arm pattern into the alternatives it stands for, or-patterns expanded.
+    /// </summary>
+    private static IReadOnlyList<MatchPattern> LowerPattern(ArgumentSyntax pattern, Context ctx)
+    {
+        switch (pattern)
+        {
+            case BoundPatternSyntax bound:
+                return LowerPattern(bound.Pattern, ctx);
+
+            case OrPatternSyntax or:
+                var expanded = new List<MatchPattern>();
+                foreach (var alternative in or.Alternatives)
+                {
+                    expanded.AddRange(LowerPattern(alternative, ctx));
+                }
+
+                return expanded.Count == 0 ? [MatchWildcard.Instance] : expanded;
+
+            case VariantPatternSyntax variant:
+                SplitVariantName(variant.VariantName, out _, out var member);
+
+                // A named-field pattern needs the declared field order to be placed positionally.
+                // Rather than guess it, the whole pattern becomes constructor-with-wildcards —
+                // it still covers its constructor, just without the nested detail.
+                if (variant.Named.Count > 0)
+                {
+                    return [new MatchConstructor(member, WildcardArguments(ArityOf(member, ctx)))];
+                }
+
+                var argumentAlternatives = new List<IReadOnlyList<MatchPattern>>();
+                foreach (var positional in variant.Positional)
+                {
+                    argumentAlternatives.Add(LowerPattern(positional, ctx));
+                }
+
+                // Pad to the declared arity, so a pattern that names fewer fields than the variant
+                // has still lines up column-for-column with one that names them all.
+                var arity = Math.Max(ArityOf(member, ctx), variant.Positional.Count);
+                while (argumentAlternatives.Count < arity)
+                {
+                    argumentAlternatives.Add([MatchWildcard.Instance]);
+                }
+
+                return CrossProduct(member, argumentAlternatives);
+
+            default:
+                return [MatchWildcard.Instance];
+        }
+    }
+
+    private static IReadOnlyList<MatchPattern> WildcardArguments(int count) =>
+        Enumerable.Repeat<MatchPattern>(MatchWildcard.Instance, count).ToArray();
+
+    private static int ArityOf(string variant, Context ctx) =>
+        ctx.PatternShapes.TryGetValue(variant, out var fields) ? fields.Count : 0;
+
+    /// <summary>
+    /// One row per combination of the arguments' alternatives, so a nested or-pattern becomes
+    /// several rows the way a top-level one does.
+    /// </summary>
+    /// <remarks>
+    /// Capped, because the product is exponential in the number of or-patterns in one arm. Past
+    /// the cap the pattern collapses to constructor-with-wildcards, which over-states coverage
+    /// and so can only lose a report — never invent one.
+    /// </remarks>
+    private static IReadOnlyList<MatchPattern> CrossProduct(
+        string variant,
+        List<IReadOnlyList<MatchPattern>> argumentAlternatives)
+    {
+        const int Cap = 256;
+
+        var total = 1L;
+        foreach (var alternatives in argumentAlternatives)
+        {
+            total *= alternatives.Count;
+            if (total > Cap)
+            {
+                return [new MatchConstructor(variant, WildcardArguments(argumentAlternatives.Count))];
+            }
+        }
+
+        var rows = new List<MatchPattern[]> { Array.Empty<MatchPattern>() };
+
+        foreach (var alternatives in argumentAlternatives)
+        {
+            var next = new List<MatchPattern[]>(rows.Count * alternatives.Count);
+            foreach (var prefix in rows)
+            {
+                foreach (var alternative in alternatives)
+                {
+                    next.Add([.. prefix, alternative]);
+                }
+            }
+
+            rows = next;
+        }
+
+        return rows.Select(row => (MatchPattern)new MatchConstructor(variant, row)).ToArray();
+    }
+
+    /// <summary>
+    /// Maranget's usefulness algorithm: a witness the matrix does not match, or null when the
+    /// rows are exhaustive — <c>TOAST-0054</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The naive alternative — "a variant pattern with a refutable sub-pattern does not cover its
+    /// variant" — is unsound in the direction that matters. A match with arms for
+    /// <c>Add(Lit(a), r)</c>, <c>Add(Add(x, y), r)</c> and <c>Add(Neg(v), r)</c> *is* exhaustive,
+    /// and the shortcut refuses it: a false error on exactly the compiler-shaped code the check
+    /// exists to serve. This computes the answer instead.
+    /// </para>
+    /// <para>
+    /// A column's union is resolved from the constructors that appear in it, by the same
+    /// intersection <c>TOAST-0108</c> uses at the top level. Where no union can be resolved the
+    /// signature is treated as never complete, which routes through the default matrix and reports
+    /// only what the rows themselves fail to cover.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<MatchPattern>? FindWitness(
+        List<List<MatchPattern>> rows,
+        int columns,
+        Context ctx)
+    {
+        if (columns == 0)
+        {
+            // A witness exists exactly when nothing is left to match it.
+            return rows.Count == 0 ? Array.Empty<MatchPattern>() : null;
+        }
+
+        var constructors = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var row in rows)
+        {
+            if (row[0] is MatchConstructor constructor)
+            {
+                constructors[constructor.Variant] = Math.Max(
+                    constructors.TryGetValue(constructor.Variant, out var seen) ? seen : 0,
+                    constructor.Arguments.Count);
+            }
+        }
+
+        var union = constructors.Count == 0
+            ? null
+            : ResolveUnionFromMembers(constructors.Keys.ToArray(), ctx);
+
+        var complete = union is not null &&
+            union.Variants.All(variant => constructors.ContainsKey(variant));
+
+        if (complete)
+        {
+            foreach (var (variant, arity) in constructors)
+            {
+                var specialized = Specialize(rows, variant, arity);
+                var witness = FindWitness(specialized, arity + columns - 1, ctx);
+
+                if (witness is null) { continue; }
+
+                var arguments = witness.Take(arity).ToArray();
+                return [new MatchConstructor(variant, arguments), .. witness.Skip(arity)];
+            }
+
+            return null;
+        }
+
+        var defaulted = rows.Where(row => row[0] is not MatchConstructor)
+            .Select(row => row.Skip(1).ToList())
+            .ToList();
+
+        var rest = FindWitness(defaulted, columns - 1, ctx);
+        if (rest is null) { return null; }
+
+        // Name a variant the rows never reach, when one is known; otherwise say only that
+        // *something* reaches here.
+        var missing = union?.Variants.FirstOrDefault(variant => !constructors.ContainsKey(variant));
+
+        MatchPattern head = missing is null
+            ? MatchWildcard.Instance
+            : new MatchConstructor(missing, WildcardArguments(ArityOf(missing, ctx)));
+
+        return [head, .. rest];
+    }
+
+    private static List<List<MatchPattern>> Specialize(
+        List<List<MatchPattern>> rows,
+        string variant,
+        int arity)
+    {
+        var specialized = new List<List<MatchPattern>>();
+
+        foreach (var row in rows)
+        {
+            switch (row[0])
+            {
+                case MatchConstructor constructor
+                    when string.Equals(constructor.Variant, variant, StringComparison.Ordinal):
+                    var head = new List<MatchPattern>(constructor.Arguments);
+                    while (head.Count < arity) { head.Add(MatchWildcard.Instance); }
+                    head.RemoveRange(arity, head.Count - arity);
+                    head.AddRange(row.Skip(1));
+                    specialized.Add(head);
+                    break;
+
+                case MatchConstructor:
+                    // A different constructor: this row cannot match here.
+                    break;
+
+                default:
+                    var widened = new List<MatchPattern>(WildcardArguments(arity));
+                    widened.AddRange(row.Skip(1));
+                    specialized.Add(widened);
+                    break;
+            }
+        }
+
+        return specialized;
+    }
+
     private static IEnumerable<ArgumentSyntax> PatternAlternatives(ArgumentSyntax pattern)
     {
         switch (pattern)

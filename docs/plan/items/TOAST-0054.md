@@ -1,7 +1,7 @@
 ---
 id: TOAST-0054
 title: "A `match` over a closed union is not checked for exhaustiveness"
-status: partial
+status: complete
 area: toast
 priority: 1
 opened: 2026-08-22
@@ -111,10 +111,53 @@ provides. That is a slice of its own.
 - [x] An explicit `default` arm satisfies the check, and is the documented opt-out
 - [x] Guards do not count toward coverage — an arm that may not fire cannot complete a match,
       and the help says so, since it is the one refusal that reads like a mistake
-- [ ] Nested patterns are checked to the depth they destructure — **not done**, and a
-      conservative version would refuse exhaustive code; see the first slice
+- [x] Nested patterns are checked to the depth they destructure
 - [x] Adding a variant to a union produces one diagnostic per uncovered site, and a test
       pins that
 - [x] Matching over a non-union value is unaffected — 32 repo files and 24 of the author's
       own bind clean, and the suite needed no changes
 - [x] `§Match Expressions` states the rule and the opt-out, with both listings run first
+
+## Second slice — 2026-09-02: nested coverage
+
+Done as the usefulness computation the first slice said it needed, not as the shortcut it warned
+about. The diagnostic names the shape that reaches the gap rather than a variant:
+
+```
+This match over 'Expr' covers every variant but not every value:
+nothing matches Add(Add(_, _), _).
+```
+
+### The shortcut really is unsound, and there is a test for it
+
+`Add(Lit(a), r)`, `Add(Add(x, y), r)` and `Add(Neg(v), r)` together *are* exhaustive over `Add`.
+"A variant pattern with a refutable sub-pattern does not cover its variant" refuses them — a
+false error on exactly the compiler-shaped code this check exists to serve.
+`Exhaustive_nesting_is_accepted` is that case, and it passes.
+
+### Opaque patterns are wildcards, deliberately
+
+A literal, a comparison or a list pattern in a nested position is read as matching *everything*.
+That direction is forced: over-stating coverage can only lose a report, while under-stating it
+invents an error on correct code. So `Lit(0)` counts as covering `Lit`, and a `Lit(1)` still
+falls through — at runtime, as before. `A_literal_in_a_nested_position_is_treated_as_covering`
+pins which failure happens, so the price is written down rather than discovered later.
+
+Named-field patterns take the same treatment for the same reason: placing them positionally needs
+the declared field order, and rather than guess it the pattern becomes constructor-with-wildcards.
+
+### What the matrix sees
+
+Guarded arms are left out entirely — the rule the first slice already applied, since an arm that
+may not fire cannot complete a match. Or-patterns are expanded, nested ones by cross product,
+capped at 256 combinations per arm; past the cap the arm collapses to wildcards, which again can
+only lose a report.
+
+A column's union is resolved by the same intersection `TOAST-0108` introduced, so nested checking
+inherits the fix for prelude name collisions rather than repeating the bug one level down.
+
+### Blast radius: nothing, again
+
+The check can only fire where an arm destructures inside a variant. There is no such arm in the
+33 `.tosh` files of `examples/`, `scripts/`, `tests/` and `editor/`, nor in the 77 files of the
+author's own `~/.config/tosh`. The suite needed no changes.

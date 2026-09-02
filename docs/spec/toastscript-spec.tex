@@ -3645,11 +3645,36 @@ explains it rather than leaving the reader to work it out.
 \end{notebox}
 
 \noindent The union is identified from the \emph{arms} rather than from the matched value's
-type: a variant name belongs to exactly one union, so a single arm names the set.  A
-consequence is that coverage is checked at the top level only --- an arm that destructures
-deeper, \code{Add(Lit(a), r)}, still counts as covering \code{Add}, so a \code{match} may be
-accepted that a nested value can still fall through.  That is a missing report, never a
-wrong one.
+type.  A variant name alone does not always name one union --- \code{Some} belongs to the
+core prelude's \code{Option} and to anything else that declares it --- so the arms
+disambiguate each other: the union being matched appears in every arm's candidate set, and
+where more than one survives, a union declared in this source wins over an ambient one.
+
+\medskip
+\noindent Coverage is checked \emph{to the depth the arms destructure}, not at the top level
+only.  Arms may name every variant and still not describe every value:
+
+\begin{lstlisting}
+match ($e) {                    # error: covers every variant but not every value:
+    Lit(v)         => $v        #        nothing matches Add(Add(_, _), _)
+    Add(Lit(a), x) => $a
+    Neg(v)        => $v
+}
+\end{lstlisting}
+
+\noindent The diagnostic names the shape that reaches the gap rather than a variant, because
+at depth the variant is not the missing thing.  Naming every shape of the nested position ---
+\code{Add(Lit(a), x)}, \code{Add(Add(p, q), x)} and \code{Add(Neg(n), x)} --- is exhaustive
+and is accepted.
+
+\begin{notebox}
+\textbf{A sub-pattern the check cannot reason about counts as covering.}  A literal, a
+comparison or a list pattern inside a variant is read as matching everything, so
+\code{Lit(0)} covers \code{Lit} and a \code{Lit(1)} still falls through at run time.  The
+direction is deliberate: over-stating coverage can only lose a report, while under-stating it
+would refuse code that is exhaustive.  Named-field patterns are treated the same way, since
+placing them positionally would mean assuming a field order.
+\end{notebox}
 
 \begin{notebox}
 Two rules are checked where the pattern is written rather than where it runs.  A
