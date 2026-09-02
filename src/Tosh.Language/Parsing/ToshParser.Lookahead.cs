@@ -862,10 +862,15 @@ public static partial class ToshParser
 
         private bool LooksLikeNewObjectExpression()
         {
+            // `TOAST-0091`. `new T {| … |}` is a construction as much as `new T(…)` is, and
+            // without the second opener it stayed a *command* invocation of `new` — the record
+            // arrived as a constructor argument and reported "No constructor matched class 'Box'
+            // with 1 argument(s)", which describes the consequence rather than the cause.
             return Current.Kind == SyntaxTokenKind.Bareword &&
                    string.Equals(Current.Text, "new", StringComparison.Ordinal) &&
                    TryGetTypeNameEndOffset(1, out var typeNameEndOffset) &&
-                   Peek(typeNameEndOffset + 1).Kind == SyntaxTokenKind.OpenParen;
+                   Peek(typeNameEndOffset + 1).Kind is SyntaxTokenKind.OpenParen
+                                                     or SyntaxTokenKind.OpenBracePipe;
         }
 
         private bool LooksLikePotentialTypeName(string text)

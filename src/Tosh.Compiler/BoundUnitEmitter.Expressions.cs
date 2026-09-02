@@ -575,6 +575,19 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private Type? EmitNewObject(BoundNewObject newObj)
     {
+        // `TOAST-0091`. The typed record literal is interpreted-only. Refused rather than
+        // ignored: the initialiser's fields are not lowered, so emitting the construction alone
+        // produced an object holding the constructor's state and none of the literal's — a wrong
+        // value with no error. Refusing is a guard, not an implementation; the interpreter
+        // remains authoritative and `KnownDivergences` records the gap.
+        if (newObj.HasObjectInitializer)
+        {
+            throw new InvalidOperationException(
+                $"Compiled ToastScript does not support an object initialiser on "
+                + $"'new {newObj.BareTypeName ?? newObj.TypeName} {{| … |}}'. "
+                + "Run this source interpreted, or set the fields after construction.");
+        }
+
         // Direct lowering when a CLR shell exists for this type and
         // the call site arity matches the shell's primary ctor —
         // emits `newobj <ctor>` instead of routing through
@@ -1528,6 +1541,24 @@ internal sealed partial class EmitterImpl
         // vectors, matrices, and storage sizes.
         var leftType = EmitExpression(binOp.Left);
         if (leftType is null) return null;
+
+        // A source-declared integral enum is emitted as a real CLR enum whose runtime name is
+        // assembly-qualified and deliberately differs from its ToastScript spelling. Put that
+        // exact Type on the stack for `value as EnumName`; resolving the bare spelling later can
+        // otherwise select an unrelated enum left by another emitted assembly in the process.
+        if (binOp.Operator == "as" &&
+            binOp.Right is BoundLiteral { IsBareword: true, Value: string enumName } &&
+            _clrEnumTypes.TryGetValue(enumName, out var enumShell))
+        {
+            _il.Emit(OpCodes.Ldtoken, enumShell.Type);
+            _il.Emit(OpCodes.Call, s_runtimeTypeHandle_GetTypeFromHandle);
+            return EmitBinaryOperatorFallback(
+                leftType,
+                binOp.Operator,
+                typeof(Type),
+                binOp.Span);
+        }
+
         var rightType = EmitExpression(binOp.Right);
         if (rightType is null) return null;
         return EmitBinaryOperatorFallback(

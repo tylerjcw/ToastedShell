@@ -2250,6 +2250,23 @@ public static partial class ToshParser
                 if (hasAngles) typeArguments = args;
             }
 
+            // `TOAST-0091`. `new Villager {| Name = "Steve" |}` — a typed record literal with no
+            // constructor arguments. Spelled with `new` rather than the bare `Villager {| … |}`
+            // the item first proposed, because the bare form is grammatically identical to a
+            // command invocation passing a record (`f {| a = 7 |}` already works) and telling
+            // them apart would need a type table in the parser.
+            if (Current.Kind == SyntaxTokenKind.OpenBracePipe)
+            {
+                var bareInitializer = (RecordLiteralArgumentSyntax)ParseRecordLiteralArgument(implicitCurrentItem);
+                return new NewObjectArgumentSyntax(
+                    typeName,
+                    Array.Empty<ArgumentSyntax>(),
+                    TextSpan.FromBounds(newToken.Span.Start, bareInitializer.Span.End),
+                    bareTypeName,
+                    typeArguments,
+                    bareInitializer);
+            }
+
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
@@ -2339,12 +2356,26 @@ public static partial class ToshParser
             }
 
             var constructorCloseParen = NextToken();
+
+            // `TOAST-0091`. `new Villager("a", 1) {| Name = "Steve" |}` — the constructor runs
+            // with its arguments, then the literal's remaining fields are assigned to the value
+            // it produced.
+            RecordLiteralArgumentSyntax? initializer = null;
+            var constructionEnd = constructorCloseParen.Span.End;
+
+            if (Current.Kind == SyntaxTokenKind.OpenBracePipe)
+            {
+                initializer = (RecordLiteralArgumentSyntax)ParseRecordLiteralArgument(implicitCurrentItem);
+                constructionEnd = initializer.Span.End;
+            }
+
             return new NewObjectArgumentSyntax(
                 typeName,
                 arguments,
-                TextSpan.FromBounds(newToken.Span.Start, constructorCloseParen.Span.End),
+                TextSpan.FromBounds(newToken.Span.Start, constructionEnd),
                 bareTypeName,
-                typeArguments);
+                typeArguments,
+                initializer);
         }
 
         private (IReadOnlyList<ArgumentSyntax> arguments, int? closeParenEnd) ParseInvocationArguments(bool implicitCurrentItem = false)

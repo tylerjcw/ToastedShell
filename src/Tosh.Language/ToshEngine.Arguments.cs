@@ -656,6 +656,86 @@ public sealed partial class ToshEngine
     /// an <c>async</c> wrapper would allocate the very box it exists to avoid.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Assigns a typed record literal's fields to the value its constructor produced —
+    /// <c>TOAST-0091</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The constructor has already run, so invariants hold and this only fills in what the
+    /// constructor did not reach. That is the decided semantics rather than populate-only: a
+    /// struct is immutable unless declared <c>fluid</c>, so "allocate and assign" is not
+    /// available for the default struct at all and the two tiers could not agree under it.
+    /// </para>
+    /// <para>
+    /// Assignment goes through the same <c>ObjectAccessor</c> as <c>$value.Member = x</c>, so a
+    /// member that cannot be written reports what it reports there — including the immutable
+    /// struct's advice to declare it <c>fluid</c> — rather than a second explanation of the same
+    /// rule that could drift from the first.
+    /// </para>
+    /// </remarks>
+    private async Task<object?> ApplyObjectInitializerAsync(
+        object? instance,
+        NewObjectArgumentSyntax newObject,
+        string sourceName,
+        string sourceText,
+        CancellationToken cancellationToken)
+    {
+        if (newObject.Initializer is not { } initializer)
+        {
+            return instance;
+        }
+
+        if (instance is null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.object_initializer_on_null",
+                Title: $"'new {newObject.EffectiveBareName}' produced nothing to initialise.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: initializer.Span,
+                Label: "this initialiser has no object to fill"));
+        }
+
+        foreach (var entry in initializer.Fields)
+        {
+            if (entry is not RecordFieldSyntax field)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.object_initializer_entry_unsupported",
+                    Title: "An object initialiser takes named fields only.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: entry.Span,
+                    Label: "write 'Name = value' here"));
+            }
+
+            var value = await EvaluateArgumentAsync(sourceName, sourceText, field.Value, cancellationToken);
+
+            try
+            {
+                await LanguageRuntime.ObjectAccessor.SetValueAsync(
+                    instance,
+                    field.Name,
+                    value,
+                    cancellationToken);
+            }
+            catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.object_initializer_failed",
+                    Title: $"'{newObject.EffectiveBareName}' cannot take '{field.Name}': {exception.Message}",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: field.Span,
+                    Label: $"while setting '{field.Name}'",
+                    Help: "the constructor runs first; an initialiser can only set what remains writable."));
+            }
+        }
+
+        return instance;
+    }
+
     private ValueTask<object?> EvaluateArgumentAsync(
         string sourceName,
         string sourceText,
@@ -816,147 +896,172 @@ public sealed partial class ToshEngine
                     }
 
                 case NewObjectArgumentSyntax newObject:
+                {
+                    // `TOAST-0091`. The construction itself is unchanged and has nine exits, so
+                    // it stays a unit; the initializer is applied once to whatever it produced.
+                    async Task<object?> ConstructAsync()
                     {
-                        var constructorArguments = await EvaluateArgumentsAsync(sourceName, sourceText, newObject.Arguments, cancellationToken);
+                            var constructorArguments = await EvaluateArgumentsAsync(sourceName, sourceText, newObject.Arguments, cancellationToken);
 
-                        var bareName = newObject.EffectiveBareName;
-                        var typeArgList = newObject.EffectiveTypeArguments;
-                        var hasAngles = newObject.HasExplicitTypeArgumentList;
+                            var bareName = newObject.EffectiveBareName;
+                            var typeArgList = newObject.EffectiveTypeArguments;
+                            var hasAngles = newObject.HasExplicitTypeArgumentList;
 
-                        // Reject empty `<>` early — it's never useful and
-                        // is almost always a typo for an inferred-args
-                        // attempt that we don't yet support.
-                        if (hasAngles && typeArgList.Count == 0)
-                        {
-                            throw new InvalidOperationException(
-                                $"Empty type-argument list '<>' is not allowed on 'new {bareName}'. Either omit the angle brackets or supply concrete type arguments.");
-                        }
-
-                        if (TryResolveShellStaticType(bareName, out var shellType))
-                        {
-                            if (shellType is ToshClassDefinition classDef)
+                            // Reject empty `<>` early — it's never useful and
+                            // is almost always a typo for an inferred-args
+                            // attempt that we don't yet support.
+                            if (hasAngles && typeArgList.Count == 0)
                             {
-                                if (classDef.TypeParameterNames.Count == 0)
-                                {
-                                    if (hasAngles)
-                                    {
-                                        throw new InvalidOperationException(
-                                            $"Class '{bareName}' is not generic and does not accept type arguments.");
-                                    }
+                                throw new InvalidOperationException(
+                                    $"Empty type-argument list '<>' is not allowed on 'new {bareName}'. Either omit the angle brackets or supply concrete type arguments.");
+                            }
 
-                                    return await classDef.CreateInstanceAsync(
-                                        constructorArguments,
-                                        cancellationToken);
-                                }
-
-                                // Generic class — must have matching type-arg list
-                                if (!hasAngles)
+                            if (TryResolveShellStaticType(bareName, out var shellType))
+                            {
+                                if (shellType is ToshClassDefinition classDef)
                                 {
-                                    if (TryInferTypeArgumentsFromCtorArgs(
-                                            classDef.TypeParameterNames,
-                                            classDef.PrimaryConstructorParameters,
-                                            constructorArguments,
-                                            out var inferredResolved,
-                                            out var inferredDisplay))
+                                    if (classDef.TypeParameterNames.Count == 0)
                                     {
-                                        return await classDef.CreateGenericInstanceAsync(
-                                            inferredResolved,
-                                            inferredDisplay,
+                                        if (hasAngles)
+                                        {
+                                            throw new InvalidOperationException(
+                                                $"Class '{bareName}' is not generic and does not accept type arguments.");
+                                        }
+
+                                        return await classDef.CreateInstanceAsync(
                                             constructorArguments,
                                             cancellationToken);
                                     }
 
-                                    throw new InvalidOperationException(
-                                        $"Generic class '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", classDef.TypeParameterNames)}>(…)'.");
+                                    // Generic class — must have matching type-arg list
+                                    if (!hasAngles)
+                                    {
+                                        if (TryInferTypeArgumentsFromCtorArgs(
+                                                classDef.TypeParameterNames,
+                                                classDef.PrimaryConstructorParameters,
+                                                constructorArguments,
+                                                out var inferredResolved,
+                                                out var inferredDisplay))
+                                        {
+                                            return await classDef.CreateGenericInstanceAsync(
+                                                inferredResolved,
+                                                inferredDisplay,
+                                                constructorArguments,
+                                                cancellationToken);
+                                        }
+
+                                        throw new InvalidOperationException(
+                                            $"Generic class '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", classDef.TypeParameterNames)}>(…)'.");
+                                    }
+
+                                    if (typeArgList.Count != classDef.TypeParameterNames.Count)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Generic class '{bareName}' expects {classDef.TypeParameterNames.Count} type argument(s) " +
+                                            $"<{string.Join(", ", classDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                    }
+
+                                    var resolved = new Type?[typeArgList.Count];
+                                    for (int i = 0; i < typeArgList.Count; i++)
+                                    {
+                                        resolved[i] = ResolveTypeArgument(typeArgList[i]);
+                                    }
+                                    return await classDef.CreateGenericInstanceAsync(
+                                        resolved,
+                                        typeArgList,
+                                        constructorArguments,
+                                        cancellationToken);
                                 }
 
-                                if (typeArgList.Count != classDef.TypeParameterNames.Count)
+                                if (shellType is ToshRecordDefinition recordDef)
                                 {
-                                    throw new InvalidOperationException(
-                                        $"Generic class '{bareName}' expects {classDef.TypeParameterNames.Count} type argument(s) " +
-                                        $"<{string.Join(", ", classDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                    if (recordDef.TypeParameterNames.Count == 0)
+                                    {
+                                        if (hasAngles)
+                                        {
+                                            throw new InvalidOperationException(
+                                                $"Record '{bareName}' is not generic and does not accept type arguments.");
+                                        }
+
+                                        return recordDef.CreateInstance(constructorArguments);
+                                    }
+
+                                    if (!hasAngles)
+                                    {
+                                        if (TryInferTypeArgumentsFromRecordFields(
+                                                recordDef.TypeParameterNames,
+                                                recordDef.Fields,
+                                                constructorArguments,
+                                                out var inferredResolvedRec,
+                                                out var inferredDisplayRec))
+                                        {
+                                            return recordDef.CreateGenericInstance(inferredResolvedRec, inferredDisplayRec, constructorArguments);
+                                        }
+
+                                        throw new InvalidOperationException(
+                                            $"Generic record '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", recordDef.TypeParameterNames)}>(\u2026)'.");
+                                    }
+
+                                    if (typeArgList.Count != recordDef.TypeParameterNames.Count)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Generic record '{bareName}' expects {recordDef.TypeParameterNames.Count} type argument(s) " +
+                                            $"<{string.Join(", ", recordDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                    }
+
+                                    var resolvedRec = new Type?[typeArgList.Count];
+                                    for (int i = 0; i < typeArgList.Count; i++)
+                                    {
+                                        resolvedRec[i] = ResolveTypeName(typeArgList[i]);
+                                    }
+                                    return recordDef.CreateGenericInstance(resolvedRec, typeArgList, constructorArguments);
                                 }
 
-                                var resolved = new Type?[typeArgList.Count];
-                                for (int i = 0; i < typeArgList.Count; i++)
+                                // Non-Tosh-class shell static type
+                                // (built-in collection alias such as
+                                // 'list', 'array', 'dict', or a CLR-backed
+                                // descriptor). Resolve the full constructed
+                                // spelling before invoking its factory: the bare
+                                // descriptor for `list` is `List<object>`, while
+                                // `list<float>` must remain `List<float>` even when
+                                // it is empty and has no values to infer from.
+                                if (hasAngles &&
+                                    BuiltInShellTypes.TryResolveStaticType(
+                                        newObject.TypeName,
+                                        CreateScopedTypeResolver(),
+                                        out var constructedShellType))
                                 {
-                                    resolved[i] = ResolveTypeArgument(typeArgList[i]);
+                                    return await LanguageRuntime.Invoker.CreateInstanceAsync(
+                                        constructedShellType,
+                                        constructorArguments,
+                                        cancellationToken);
                                 }
-                                return await classDef.CreateGenericInstanceAsync(
-                                    resolved,
-                                    typeArgList,
+
+                                return await LanguageRuntime.Invoker.CreateInstanceAsync(
+                                    shellType,
                                     constructorArguments,
                                     cancellationToken);
                             }
 
-                            if (shellType is ToshRecordDefinition recordDef)
-                            {
-                                if (recordDef.TypeParameterNames.Count == 0)
-                                {
-                                    if (hasAngles)
-                                    {
-                                        throw new InvalidOperationException(
-                                            $"Record '{bareName}' is not generic and does not accept type arguments.");
-                                    }
-
-                                    return recordDef.CreateInstance(constructorArguments);
-                                }
-
-                                if (!hasAngles)
-                                {
-                                    if (TryInferTypeArgumentsFromRecordFields(
-                                            recordDef.TypeParameterNames,
-                                            recordDef.Fields,
-                                            constructorArguments,
-                                            out var inferredResolvedRec,
-                                            out var inferredDisplayRec))
-                                    {
-                                        return recordDef.CreateGenericInstance(inferredResolvedRec, inferredDisplayRec, constructorArguments);
-                                    }
-
-                                    throw new InvalidOperationException(
-                                        $"Generic record '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", recordDef.TypeParameterNames)}>(\u2026)'.");
-                                }
-
-                                if (typeArgList.Count != recordDef.TypeParameterNames.Count)
-                                {
-                                    throw new InvalidOperationException(
-                                        $"Generic record '{bareName}' expects {recordDef.TypeParameterNames.Count} type argument(s) " +
-                                        $"<{string.Join(", ", recordDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
-                                }
-
-                                var resolvedRec = new Type?[typeArgList.Count];
-                                for (int i = 0; i < typeArgList.Count; i++)
-                                {
-                                    resolvedRec[i] = ResolveTypeName(typeArgList[i]);
-                                }
-                                return recordDef.CreateGenericInstance(resolvedRec, typeArgList, constructorArguments);
-                            }
-
-                            // Non-Tosh-class shell static type
-                            // (built-in collection alias such as
-                            // 'list', 'array', 'dict', or a CLR-backed
-                            // descriptor) — these accept type
-                            // arguments cosmetically and infer
-                            // element types from the constructor
-                            // arguments. Forward as-is.
+                            // Fall back to CLR resolution — pass the original
+                            // (concatenated) type name including any generic
+                            // suffix so reflection can find e.g. 'List`1'.
+                            var lookupName = newObject.TypeName;
+                            var type = ResolveTypeName(lookupName)
+                                       ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
                             return await LanguageRuntime.Invoker.CreateInstanceAsync(
-                                shellType,
+                                type,
                                 constructorArguments,
                                 cancellationToken);
-                        }
-
-                        // Fall back to CLR resolution — pass the original
-                        // (concatenated) type name including any generic
-                        // suffix so reflection can find e.g. 'List`1'.
-                        var lookupName = newObject.TypeName;
-                        var type = ResolveTypeName(lookupName)
-                                   ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
-                        return await LanguageRuntime.Invoker.CreateInstanceAsync(
-                            type,
-                            constructorArguments,
-                            cancellationToken);
                     }
+
+                    var constructed = await ConstructAsync();
+
+                    return newObject.Initializer is null
+                        ? constructed
+                        : await ApplyObjectInitializerAsync(
+                            constructed, newObject, sourceName, sourceText, cancellationToken);
+                }
 
                 case StaticMethodCallArgumentSyntax staticMethodCall:
                     {

@@ -1232,7 +1232,8 @@ public static class Lowerer
                 Span: newObj.Span,
                 Type: ctx.ResolveType(newObj.TypeName),
                 BareTypeName: newObj.BareTypeName,
-                TypeArguments: newObj.TypeArguments),
+                TypeArguments: newObj.TypeArguments,
+                HasObjectInitializer: newObj.Initializer is not null),
 
         MethodCallArgumentSyntax method =>
             BuildMethodCall(method, ctx),

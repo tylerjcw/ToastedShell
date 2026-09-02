@@ -491,13 +491,21 @@ public sealed record BoundSwitchStatement(
 /// evaluation time today; the IL emitter will eventually look up a
 /// constructor by signature using the captured argument types.
 /// </summary>
+/// <param name="HasObjectInitializer">
+/// Whether the source wrote a <c>{| … |}</c> after the constructor — <c>TOAST-0091</c>. The
+/// fields themselves are not lowered, because the compiled backend does not implement them; the
+/// flag exists so it can *refuse* the form rather than drop it. Without it the emitter produced
+/// an object carrying the constructor's state and none of the literal's, which is a wrong value
+/// with no error.
+/// </param>
 public sealed record BoundNewObject(
     string TypeName,
     IReadOnlyList<BoundArgument> Arguments,
     TextSpan Span,
     BoundType Type,
     string? BareTypeName = null,
-    IReadOnlyList<string>? TypeArguments = null)
+    IReadOnlyList<string>? TypeArguments = null,
+    bool HasObjectInitializer = false)
     : BoundExpression(Span, Type);
 
 /// <summary>

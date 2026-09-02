@@ -14,12 +14,18 @@ public sealed record VariableReferenceArgumentSyntax(string Name, TextSpan Span)
 
 public sealed record SplatArgumentSyntax(ArgumentSyntax Value, TextSpan Span) : ArgumentSyntax(Span);
 
+/// <param name="Initializer">
+/// The <c>{| … |}</c> that follows the constructor, or <see langword="null"/> when there is none
+/// — <c>TOAST-0091</c>. The constructor still runs; these fields are assigned to the value it
+/// returned, so invariants hold and a `fluid`-less struct is not silently mutated.
+/// </param>
 public sealed record NewObjectArgumentSyntax(
     string TypeName,
     IReadOnlyList<ArgumentSyntax> Arguments,
     TextSpan Span,
     string? BareTypeName = null,
-    IReadOnlyList<string>? TypeArguments = null) : ArgumentSyntax(Span)
+    IReadOnlyList<string>? TypeArguments = null,
+    RecordLiteralArgumentSyntax? Initializer = null) : ArgumentSyntax(Span)
 {
     /// <summary>The unqualified type name without the <c>&lt;...&gt;</c> suffix.
     /// For non-generic constructions this equals <see cref="TypeName"/>.</summary>
