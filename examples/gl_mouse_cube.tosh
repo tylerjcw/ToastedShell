@@ -164,7 +164,7 @@ Gl.Window.Open("TōSh · drag the cube", new Size(720, 720), func (win) {
         $program.Use()
         $program.SetMatrix4("uMvp", $model * $view * $proj)
         $program.SetMatrix4("uModel", $model)
-        $program.SetVector3("uLightDir", Vector3.Normalize(new Vector3(0.4, 0.8, 1.0)))
+        $program.SetVector3("uLightDir", Vector3.Normalize(new Vector3(0.7, 0.9, 0.4)))
         $program.SetVector3("uAmbient", new Vector3(0.22, 0.22, 0.28))
         $program.SetVector3("uSpecular", new Vector3(0.6, 0.6, 0.55))
         $program.SetVector3("uViewPos", new Vector3(0.0, 0.0, $cameraDistance))

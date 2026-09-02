@@ -4,6 +4,7 @@
 
 **A .NET-native shell, REPL, and scripting language with object-first pipelines.**
 
+![Static Badge](https://img.shields.io/badge/Version-26.8.48.10-orange)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com)
 [![Spec](https://img.shields.io/badge/spec-LaTeX-008080.svg)](docs/spec)

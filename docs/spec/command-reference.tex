@@ -552,7 +552,7 @@ bytes|\allowbreak type-name & Byte count to allocate, or a native interop type n
 \bottomrule
 \end{tabular}
 
-\textbf{Output:} A native pointer (IntPtr) to the freshly allocated buffer.
+\textbf{Output:} A NativeBuffer wrapping the freshly allocated memory: `.Pointer` is the address and `.ByteLength` its size.
 
 \begin{lstlisting}
 alloc 64  # Allocate a 64-byte native buffer
@@ -647,7 +647,7 @@ native-read <cstring|bytes|type-name> [buffer|pointer] [--at <offset>] \\
 cstring|\allowbreak bytes|\allowbreak type-name & Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type. \\
 buffer|\allowbreak pointer & NativeBuffer or pointer to read from. May be supplied from the pipeline. (optional) \\
 --at & Byte offset from the buffer or pointer before reading. (optional) \textit{(int)} \\
---count & Byte count. Required when the mode is `bytes`; ignored otherwise. (optional) \textit{(int)} \\
+--count & How many to read. Bytes when the mode is `bytes`, where it is required; otherwise elements of the named type, and a single value is read without it. (optional) \textit{(int)} \\
 \bottomrule
 \end{tabular}
 
@@ -705,7 +705,7 @@ Writes a C string, byte sequence, or struct-layout value into native memory.
 \textit{Aliases:} \code{write-buffer}
 
 \begin{signature}
-native-write <buffer|pointer> <value> [--at <offset>]
+native-write <buffer|pointer> <value> [--as <type>] [--at <offset>]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -715,6 +715,7 @@ native-write <buffer|pointer> <value> [--at <offset>]
 buffer|\allowbreak pointer & NativeBuffer or pointer to write into. \\
 value & String, byte sequence, enum, primitive, pointer-sized value, or struct-layout value to write. \\
 --at & Byte offset from the buffer or pointer before writing. (optional) \textit{(int)} \\
+--as & Native interop type to write the value as, fixing the width. Without it the width comes from the value’s own type, which is `Int32` for an integer only while it fits. (optional) \textit{(string)} \\
 \bottomrule
 \end{tabular}
 
@@ -724,6 +725,7 @@ value & String, byte sequence, enum, primitive, pointer-sized value, or struct-l
 native-write $buffer "hello"  # Write a C string
 native-write $buffer [72 105 0]  # Write explicit bytes
 native-write $buffer 42 --at 8  # Write at an offset
+native-write $buffer $n --as int32 --at 8  # Write four bytes whatever $n is
 \end{lstlisting}
 
 \end{cmdbox}
@@ -7178,6 +7180,19 @@ Apropos performs fuzzy help search across commands and Tosh language topics.
 
 \end{cmdbox}
 
+\subsection{\texttt{attempt}}
+\label{ref:attempt}
+\icmd{attempt}
+
+\begin{cmdbox}{attempt}
+User-defined rune (macro).
+
+\begin{signature}
+attempt <body>
+\end{signature}
+
+\end{cmdbox}
+
 \subsection{\texttt{benchmark}}
 \label{ref:benchmark}
 \icmd{benchmark}
@@ -7633,6 +7648,19 @@ code ... & Diagnostic codes (e.g. tosh.runtime.fading\_member) to suppress. \tex
 hush tosh.runtime.fading_member  # Suppress a deprecation warning in the current scope
 $tosh.Config.Diagnostics.Hushed.Add("tosh.naming.shadowed_builtin")  # Suppress globally from a profile.tosh entry
 \end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{option-from}}
+\label{ref:option-from}
+\icmd{option-from}
+
+\begin{cmdbox}{option-from}
+User-defined Tosh function.
+
+\begin{signature}
+option-from <value>
+\end{signature}
 
 \end{cmdbox}
 
