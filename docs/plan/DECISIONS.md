@@ -339,3 +339,82 @@ is what both modes actually implement.
   compiler can self-host" as a non-goal, and Phase G ports it incrementally while
   retaining the .NET target as a peer. The shell continues to receive bug fixes and
   no architectural investment.
+
+### August 28, 2026 — `::` reaches everything in a type, and `.` stays equal to it
+
+- **`::` reaches any type-level member, static methods included.** `Account::describe()`
+  parses, as does `Account::Count`, `Account::Tier::Gold` and `new Account::Ledger()`. This is
+  `TOAST-0090`'s acceptance text as written ("static members"), confirmed after the surface was
+  demonstrated rather than assumed.
+- **Instance access is `.` only, and stays that way.** `$a::Owner` and `$a::deposit(50)` are
+  `tosh.parser.path_operator_on_value`. `::` never reaches into a value.
+- **Neither spelling is preferred yet.** `.` on a type is *not* being deprecated for now, and no
+  `prefer-path` analysis, formatter rule or warning is to be built. Revisit only when
+  `TOAST-0092`'s notation actually needs the distinction enforced — the reason the operator was
+  designed in the first place.
+- **`::` is expression-land, not command-land.** `geo.area 1` is a command-style invocation;
+  `geo::area 1` is `unknown_command`, and bare `geo::area` yields the function itself rather
+  than calling it with no arguments. This is a real trade rather than a strict improvement:
+  command-style invocation is a core TōSh spelling and `::` removes that reading. Recorded so it
+  is not later mistaken for a defect.
+
+### August 28, 2026 — the typed literal is `new T {| … |}`, and its constructor runs
+
+- **Spelled with `new`.** `TOAST-0091`'s bare `Villager {| … |}` is grammatically identical to a
+  command invocation passing a record — `f {| a = 7 |}` already works — so telling them apart
+  needs a type table in the parser. That is the heuristic class of problem `TS-P2-16` recorded
+  and `TOAST-0090` was built to retire; reintroducing it for a literal form is going backwards.
+  `new` already marks construction and is unambiguous.
+- **The constructor runs, then the remaining named fields are assigned.** Not populate-only:
+  invariants hold, and a struct is immutable unless declared `fluid`, so "allocate and assign"
+  is not available for the default struct at all — the two tiers could not be consistent under
+  it.
+- Both forms are accepted: `new Villager {| … |}` and `new Villager("a", 1) {| … |}`. Omitted
+  required constructor arguments, unknown field names, and members that cannot be assigned are
+  each a diagnostic naming the member rather than a silent default.
+
+### August 29, 2026 — how `Option` and `Result` arrive, and what must precede them
+
+- **They are ToastScript source, loaded as a prelude before user source.** Not CLR types in the
+  alias table beside `Error`: as ordinary unions they get pattern matching, exhaustiveness,
+  `::` and serialisation for free, whereas a CLR implementation would need
+  `TryDescribePatternSubject` and the exhaustiveness checker taught about a second shape. No
+  prelude mechanism exists today, so `TOAST-0083` has to build one.
+- **A user declaration shadows a core name and is warned about.** Resolution follows the rule the
+  parser already documents — "a bare name is where a declaration should win", the same
+  precedence by which a user `func double` beats the `double` alias — but silence would let it
+  happen by accident, so the shadowing is reported.
+- **Serialisation is not decided here.** A union currently serialises as
+  `{"Variant": "Ok", "Item1": 5}` with no record of the declaring union, so it cannot round-trip
+  without knowing the target type. That gap belongs to `TOAST-0092` and applies to *every*
+  declared type, not to these two — deciding it twice is the thing to avoid.
+- **Annotation-directed inference comes first.** `Option::None<int>()` requires its type argument
+  even where the target says `Option<int>`, and `None` is the most common value in the
+  optionality story. `TOAST-0096` takes it; `TOAST-0083` waits, so the core types read well the
+  day they arrive rather than being introduced with the friction baked into every example.
+
+### August 29, 2026 — effects are a closed set, and `TOAST-0083` finishes before TON
+
+- **`TOAST-0087`'s effect vocabulary is a closed enum**, with grouping and aliases for
+  presentation only. The checker can then match it exhaustively and `pure` is exactly the empty
+  set; the item's own "aliases/aggregation may present these more simply to users" line is
+  satisfied by display grouping rather than by an open namespace. Classifying the 252 commands
+  becomes mechanical, which is what the audit said the step needed.
+- **`TOAST-0083` is finished before `TOAST-0092` (TON)**: exhaustiveness over ambient unions,
+  then the `null`/`T?`/`Option` conversion rules, then the compiler-facing diagnostics fixtures,
+  then docs and metadata. The item closes rather than being left `partial` while its dependents
+  are built on top of it.
+
+### August 29, 2026 — TON keeps `new`, and writes type arguments only when they cannot be inferred
+
+- **A TON document is valid Tōast source.** The item's examples wrote `Villager {| … |}`, but
+  `TOAST-0091` settled on `new Villager {| … |}` because the bare form is grammatically identical
+  to a command invocation. TON keeps `new` rather than defining a terser grammar of its own: the
+  whole design rests on the notation being a *subset* of the language, and a document that only
+  the notation's parser accepts is not one.
+- **Generic type arguments are written only where the payload cannot supply them.**
+  `Option::Some(5)` infers `T`; `Option::None<int>()` and `Result::Ok<int, string>(3)` cannot, so
+  they carry theirs. This is the shortest form that still reconstructs without a target type,
+  which matters because a heterogeneous stream has no single target to supply — the reason the
+  item rejects a `--as <type>` flag as the general answer.
+- This settles the serialised contract `TOAST-0083` deferred here.
