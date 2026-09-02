@@ -1573,7 +1573,8 @@ public static partial class ToshParser
                 StaticPathSyntax.Canonicalize(methodToken.Text),
                 arguments.arguments,
                 TextSpan.FromBounds(methodToken.Span.Start, end),
-                explicitTypeArguments);
+                explicitTypeArguments,
+                StaticPathSyntax.UsesPathOperator(methodToken.Text));
         }
 
         /// <summary>

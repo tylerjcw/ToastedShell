@@ -1,0 +1,4 @@
+# The grammar says `path := typename "::" IDENT`, and the notation's safety argument rests on
+# member access not being in it. A reader that canonicalises both spellings must still refuse
+# this one, or it accepts documents an implementation written from the grammar rejects.
+Profession.Librarian

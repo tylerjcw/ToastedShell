@@ -98,6 +98,47 @@ public sealed class TonConformanceTests
         Assert.Contains("TON document", error.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("Profession.Librarian", "Profession::Librarian")]
+    [InlineData("Shape.Circle(2)", "Shape::Circle")]
+    public async Task A_member_access_is_refused_and_the_path_spelling_is_named(string document, string suggested)
+    {
+        // `TOAST-0090`. The parser canonicalises `::` to dots before the validator sees the name,
+        // so without the operator carried on the node the notation accepted both spellings — and
+        // read a document that an implementation written from the published grammar refuses.
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () => await ReadDocumentAsync(document));
+
+        Assert.Contains("member access", error.Message, StringComparison.Ordinal);
+
+        var diagnostic = Assert.Single(Assert.IsType<ToshDiagnosticException>(error).Diagnostics);
+        Assert.Contains("'::'", diagnostic.Label ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(suggested, diagnostic.Label ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_path_spelling_the_grammar_admits_still_reads()
+    {
+        Assert.NotEmpty(await ReadDocumentAsync("Profession::Librarian"));
+        Assert.NotEmpty(await ReadDocumentAsync("Shape::Circle(2)"));
+    }
+
+    private static async Task<IReadOnlyList<object?>> ReadDocumentAsync(string document)
+    {
+        var prelude = await File.ReadAllTextAsync(Path.Combine(CorpusRoot, "prelude.tosh"));
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        await foreach (var _ in engine.EvaluateAsync(prelude, "<prelude>")) { }
+
+        var results = new List<object?>();
+
+        await foreach (var value in engine.EvaluateAsync($"from ton {Quote(document)}", "<inline>"))
+        {
+            results.Add(value);
+        }
+
+        return results;
+    }
+
     [Fact]
     public void The_corpus_covers_both_outcomes()
     {

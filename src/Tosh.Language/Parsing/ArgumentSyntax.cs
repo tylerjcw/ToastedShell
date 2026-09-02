@@ -48,7 +48,15 @@ public sealed record StaticMethodCallArgumentSyntax(
     /// Type arguments written at the call site — the <c>int</c> of <c>Array.Empty&lt;int&gt;()</c>
     /// (<c>TS-P2-82</c>). Null when none were written, which is not the same as an empty list.
     /// </summary>
-    IReadOnlyList<string>? ExplicitTypeArguments = null) : ArgumentSyntax(Span);
+    IReadOnlyList<string>? ExplicitTypeArguments = null,
+
+    /// <summary>
+    /// Whether the call was written with the <c>::</c> path operator — <c>TOAST-0090</c>. Carried
+    /// for the same reason <see cref="StaticMemberAccessArgumentSyntax.UsedPathOperator"/> is: a
+    /// consumer that requires the path spelling, such as the TON validator, cannot recover it
+    /// once the name is canonicalised to dots.
+    /// </summary>
+    bool UsedPathOperator = false) : ArgumentSyntax(Span);
 
 /// <summary>
 /// A name reached inside a *type* — an enum member, a union variant, a static member, a nested

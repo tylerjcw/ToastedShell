@@ -118,7 +118,7 @@ internal static class TonValidator
                 return;
 
             case StaticMemberAccessArgumentSyntax path:
-                ValidatePath(path.Path, path.Span, types);
+                ValidatePath(path.Path, path.Span, path.UsedPathOperator, types);
                 return;
 
             case StaticMethodCallArgumentSyntax call:
@@ -176,7 +176,7 @@ internal static class TonValidator
 
     private static void ValidateVariantCall(StaticMethodCallArgumentSyntax call, IShellNamedTypeView? types)
     {
-        ValidatePath(call.Path, call.Span, types);
+        ValidatePath(call.Path, call.Span, call.UsedPathOperator, types);
 
         foreach (var argument in call.Arguments)
         {
@@ -199,13 +199,30 @@ internal static class TonValidator
     /// <summary>
     /// A path names a member of a declared enum or union, and nothing else.
     /// </summary>
-    private static void ValidatePath(string path, TextSpan span, IShellNamedTypeView? types)
+    private static void ValidatePath(string path, TextSpan span, bool usedPathOperator, IShellNamedTypeView? types)
     {
         var separator = path.LastIndexOf('.');
 
         if (separator <= 0)
         {
             throw Refuse($"the bare name '{path}'", span, "a path names a type's member, as 'Profession::Librarian'");
+        }
+
+        // `TOAST-0090`. The grammar published in `docs/spec/ton.md` says `path := typename "::"
+        // IDENT`, and rests its safety argument on member access not being in the grammar at all.
+        // The parser canonicalises both spellings to dots, so without this the notation quietly
+        // accepted `Profession.Librarian` — a document this implementation reads and one written
+        // from the published grammar refuses.
+        if (!usedPathOperator)
+        {
+            var dotted = path[..separator];
+            var member = path[(separator + 1)..];
+
+            throw Refuse(
+                $"the member access '{path}'",
+                span,
+                $"a path is written with '::', as '{dotted}::{member}' — member access is not part "
+                    + "of the notation");
         }
 
         RequireDeclaredType(path[..separator], span, types);
