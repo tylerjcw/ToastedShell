@@ -4221,7 +4221,8 @@ When evaluating \code{a OP b} where either operand is a class instance:
       with \code{b} as the argument.
     \item Otherwise, if the right operand defines an \code{OP} method, it
       is invoked with \code{a} as the argument (note: \code{\$this} is
-      still the right operand).
+      still the right operand). See \emph{Operand orientation} below --- for a
+      non-commutative operator the method must ask which side it was on.
     \item Otherwise, the standard built-in operator semantics apply.
     \item If no built-in rule supports the operand pair, TōSh looks for the
       corresponding compatible public static CLR \code{op\_*} method on the
@@ -4229,6 +4230,38 @@ When evaluating \code{a OP b} where either operand is a class instance:
     \item If neither operand supplies one, evaluation raises the ordinary
       incompatible-operand diagnostic naming both types.
 \end{enumerate}
+
+\subsubsection*{Operand orientation}
+
+An operator method may declare a \emph{second} parameter. It receives \code{true} when the
+instance is the \emph{right} operand --- that is, when the method is being asked for
+\tosh{other OP this} rather than \tosh{this OP other}:
+
+\begin{lstlisting}
+class Money(amount: double) {
+    prop Amount: double = $amount
+
+    func -(other, reversed) {
+        var scalar = ($other * 1.0)
+        return (new Money(($reversed) ? ($scalar - $this.Amount)
+                                      : ($this.Amount - $scalar)))
+    }
+}
+
+var m = (new Money(3.0))
+$m - 10    # Money(-7)
+10 - $m    # Money(7)
+\end{lstlisting}
+
+This matters only for operators that are not commutative. With the single-argument form,
+\tosh{10 - \$m} and \tosh{\$m - 10} arrive as the same call and cannot be told apart, so a class
+defining \code{-}, \code{/}, \code{\%}, \code{**} or \code{//} answers the same value to both ---
+one of which is wrong. \code{+} and \code{*} are unaffected.
+
+The two-argument form is offered first and the single-argument form is the fallback, so an
+operator written without the parameter keeps its existing behaviour exactly, including the wrong
+answer in the reversed position. Adding the parameter is how a class opts into being correct
+there.
 
 The CLR fallback uses \code{op\_Addition}, \code{op\_Subtraction},
 \code{op\_Multiply}, \code{op\_Division}, and \code{op\_Modulus} for arithmetic,

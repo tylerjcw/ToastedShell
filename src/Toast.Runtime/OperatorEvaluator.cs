@@ -42,7 +42,18 @@ public static class OperatorEvaluator
         };
     }
 
-    public static object? EvaluateBinary(object? left, string @operator, object? right)
+    /// <param name="resolveDeclaredTypeName">
+    /// Optional scoped resolver for a module-qualified declared-type name. Kept as a separate
+    /// overload rather than an optional parameter on the four-argument form: the compiler's
+    /// emitter binds these by exact signature
+    /// (<c>GetMethod(name, new[] { typeof(object), typeof(string), typeof(object) })</c>), so
+    /// widening the original would return null there and fail at emit rather than at compile.
+    /// </param>
+    public static object? EvaluateBinary(
+        object? left,
+        string @operator,
+        object? right,
+        Func<string, string?>? resolveDeclaredTypeName)
     {
         if (TryInvokeShellBinaryOperator(left, @operator, right, out var leftResult))
         {
@@ -80,8 +91,8 @@ public static class OperatorEvaluator
             "contains" => Contains(left, right),
             "starts-with" => StartsWith(left, right),
             "ends-with" => EndsWith(left, right),
-            "is" => IsType(left, right),
-            "is-not" => !IsType(left, right),
+            "is" => IsType(left, right, resolveDeclaredTypeName),
+            "is-not" => !IsType(left, right, resolveDeclaredTypeName),
             "as" => CastAs(left, right),
             "is-in" => IsIn(left, right),
             "is-not-in" => !IsIn(left, right),
@@ -104,6 +115,14 @@ public static class OperatorEvaluator
     /// throws, cancellation, control flow, defer failures, and diagnostics
     /// preserve their identity.
     /// </summary>
+    /// <remarks>
+    /// Declared *after* the implementation above on purpose: <c>OperatorParityTests</c> finds the
+    /// first <c>EvaluateBinary(</c> in this file and reads the operator switch out of its body, so
+    /// a forwarding overload placed first leaves the guard extracting nothing and passing vacuously.
+    /// </remarks>
+    public static object? EvaluateBinary(object? left, string @operator, object? right) =>
+        EvaluateBinary(left, @operator, right, resolveDeclaredTypeName: null);
+
     public static object? EvaluateBinaryWithDiagnostics(
         object? left,
         string @operator,
@@ -292,7 +311,16 @@ public static class OperatorEvaluator
         }
     }
 
-    public static bool Matches(object? actual, string @operator, object? expected, bool nullable)
+    /// <param name="resolveDeclaredTypeName">
+    /// See the note on <see cref="EvaluateBinary(object?, string, object?, Func{string, string?}?)"/>
+    /// — a separate overload, because the emitter binds the four-argument form by exact signature.
+    /// </param>
+    public static bool Matches(
+        object? actual,
+        string @operator,
+        object? expected,
+        bool nullable,
+        Func<string, string?>? resolveDeclaredTypeName)
     {
         if (actual is ShellTextLine actualLine) actual = actualLine.Text;
         if (expected is ShellTextLine expectedLine) expected = expectedLine.Text;
@@ -312,11 +340,18 @@ public static class OperatorEvaluator
             ">=" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison >= 0, "op_GreaterThanOrEqual"),
             "<" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison < 0, "op_LessThan"),
             "<=" => EvaluateOrderedComparison(actual, expected, nullable, comparison => comparison <= 0, "op_LessThanOrEqual"),
-            "is" => IsType(actual, expected),
-            "is-not" => !IsType(actual, expected),
+            "is" => IsType(actual, expected, resolveDeclaredTypeName),
+            "is-not" => !IsType(actual, expected, resolveDeclaredTypeName),
             _ => throw new InvalidOperationException($"Unsupported operator '{@operator}'. Supported operators: ==, !=, =~, !~, in, not-in, >, >=, <, <=, contains, starts-with, ends-with, is, is-not."),
         };
     }
+
+
+    /// <remarks>
+    /// After the implementation, for the reason given on <see cref="EvaluateBinary(object?, string, object?)"/>.
+    /// </remarks>
+    public static bool Matches(object? actual, string @operator, object? expected, bool nullable) =>
+        Matches(actual, @operator, expected, nullable, resolveDeclaredTypeName: null);
 
     public static bool AreEqual(object? actual, object? expected)
     {
@@ -1221,7 +1256,16 @@ public static class OperatorEvaluator
     /// </remarks>
     public static bool IsInstanceOfShellType(object? value, string typeName) => IsType(value, typeName);
 
-    private static bool IsType(object? value, object? typeSpecifier)
+    /// <param name="resolveDeclaredTypeName">
+    /// Optional scoped resolver mapping a possibly module-qualified declared-type name to the
+    /// simple name its instances answer to. Threaded from the host for the same reason
+    /// <c>CastAs</c> takes a resolver rather than reading a static: the lookup needs the
+    /// engine's scopes, and engine state does not belong in the portable operator runtime.
+    /// </param>
+    private static bool IsType(
+        object? value,
+        object? typeSpecifier,
+        Func<string, string?>? resolveDeclaredTypeName = null)
     {
         // Handle "is null" / "is-not null" — when the type specifier is null, check nullity.
         if (typeSpecifier is null)
@@ -1239,7 +1283,20 @@ public static class OperatorEvaluator
             return type.IsInstanceOfType(value);
         }
 
-        var typeName = ToOperatorString(typeSpecifier);
+        // `TOAST-0105`. A declared type used as the right operand — `$t is IR.Thing` — arrives
+        // here as its *definition object*, and neither ToshRecordDefinition nor
+        // ToshClassDefinition overrides ToString, so rendering it gave the CLR name
+        // "Tosh.Language.ToshRecordDefinition" and every check below compared against that.
+        // The result was a silent false for every qualified declared type, while the
+        // unqualified spelling inside the declaring module worked because it resolves to a
+        // bare name rather than to the definition.
+        //
+        // Asking the definition for its own name is both the fix and the simpler statement of
+        // what this line always meant.
+        var typeName = typeSpecifier is IShellStaticType declaredType
+            ? declaredType.ShellTypeName
+            : ToOperatorString(typeSpecifier);
+
         if (string.IsNullOrEmpty(typeName))
         {
             return false;
@@ -1272,6 +1329,32 @@ public static class OperatorEvaluator
             string.Equals(typed.ShellTypeDescriptor.ShellTypeName, typeName, StringComparison.OrdinalIgnoreCase))
         {
             return true;
+        }
+
+        // `TOAST-0105`. Both checks above compare against the *simple* declared name, which a
+        // declared type carries and a qualified spelling does not — so `$t is IR.Thing` was
+        // false while `$t is Thing` was true, and from outside the declaring module the
+        // qualified form is the only spelling available. Annotations never had the problem
+        // because they resolve through the engine's named-type table; this now asks that same
+        // table what the qualified name means and retries with the answer.
+        //
+        // Deliberately after the checks on the name as written: an exact match still wins, so
+        // this can only turn a false into a true for a name that resolves to a declared type.
+        if (resolveDeclaredTypeName is { } resolveDeclared &&
+            typeName.Contains('.', StringComparison.Ordinal) &&
+            resolveDeclared(typeName) is { Length: > 0 } declaredName &&
+            !string.Equals(declaredName, typeName, StringComparison.OrdinalIgnoreCase))
+        {
+            if (value is IShellTypeCheckable declaredCheckable && declaredCheckable.IsInstanceOf(declaredName))
+            {
+                return true;
+            }
+
+            if (value is IShellTypedObject declaredTyped &&
+                string.Equals(declaredTyped.ShellTypeDescriptor.ShellTypeName, declaredName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         // Check simple name match (e.g. "String", "Int32", "FileSystemEntry"), walking the

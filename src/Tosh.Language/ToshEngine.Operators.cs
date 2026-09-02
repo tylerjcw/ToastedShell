@@ -99,6 +99,7 @@ public sealed partial class ToshEngine
                     leftInstance,
                     @operator,
                     right,
+                    reversed: false,
                     cancellationToken);
                 if (leftOverload.Matched)
                 {
@@ -108,10 +109,13 @@ public sealed partial class ToshEngine
 
             if (right is ToshClassInstance rightInstance)
             {
+                // This instance is the *right* operand, so a two-argument overload is
+                // told so and can order the operands correctly (`TOAST-0106`).
                 var rightOverload = await TryInvokeClassBinaryOperatorAsync(
                     rightInstance,
                     @operator,
                     left,
+                    reversed: true,
                     cancellationToken);
                 if (rightOverload.Matched)
                 {
@@ -223,7 +227,55 @@ public sealed partial class ToshEngine
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return OperatorEvaluator.EvaluateBinary(left, @operator, right);
+        if (@operator == "as")
+        {
+            return OperatorEvaluator.CastAs(left, right, ResolveAsTarget);
+        }
+
+        return OperatorEvaluator.EvaluateBinary(left, @operator, right, ResolveDeclaredTypeName);
+    }
+
+    /// <summary>
+    /// Maps a module-qualified declared-type name to the simple name its instances answer to,
+    /// or <c>null</c> when the name does not resolve to a declared type.
+    /// </summary>
+    /// <remarks>
+    /// <c>TOAST-0105</c>. Threaded into <c>is</c> for the same reason <see cref="ResolveAsTarget"/>
+    /// is threaded into <c>as</c>: the lookup needs local, nested, imported and module-qualified
+    /// declarations, all of which live in engine scope, and the portable operator runtime holds
+    /// no engine state.
+    ///
+    /// Only dotted names are looked up. An unqualified name already matches by simple name in
+    /// the operator runtime, so asking here would cost a table walk per type test to reach the
+    /// same answer.
+    /// </remarks>
+    private string? ResolveDeclaredTypeName(string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName) || !typeName.Contains('.', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return TryGetNamedType(typeName, out var definition) ? ((IShellStaticType)definition).ShellTypeName : null;
+    }
+
+    /// <summary>
+    /// Resolves an <c>as</c> target by the same CLR-first, declaration-second rule as the
+    /// <c>cast</c> command. Keeping the scoped lookup here lets local, nested, imported, and
+    /// module-qualified declarations participate without putting engine state in the portable
+    /// operator runtime.
+    /// </summary>
+    private object? ResolveAsTarget(string typeName)
+    {
+        if (ResolveTypeName(typeName) is { } clrType)
+        {
+            return clrType;
+        }
+
+        return TryResolveShellStaticType(typeName, out var shellType) &&
+               shellType is IShellTypeDescriptor descriptor
+            ? descriptor
+            : null;
     }
 
     private async ValueTask<bool> MatchesOperatorAsync(
@@ -283,7 +335,7 @@ public sealed partial class ToshEngine
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return OperatorEvaluator.Matches(actual, @operator, expected, nullable);
+        return OperatorEvaluator.Matches(actual, @operator, expected, nullable, ResolveDeclaredTypeName);
     }
 
     /// <summary>

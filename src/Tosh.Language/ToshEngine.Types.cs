@@ -791,16 +791,42 @@ public sealed partial class ToshEngine
 
     /// <summary>
     /// Tries to invoke a user-defined binary operator method on <paramref name="instance"/>.
-    /// The left operand's class is tried first; the operator method receives <paramref name="other"/>
-    /// as its single argument.
+    /// The operator method receives <paramref name="other"/> as its argument, and optionally a
+    /// second argument saying whether <paramref name="instance"/> was the *right* operand.
     /// </summary>
-    private static ValueTask<(bool Matched, object? Value)> TryInvokeClassBinaryOperatorAsync(
+    /// <param name="reversed">
+    /// <c>true</c> when this instance is the right operand of the expression, so the method is
+    /// being asked for <c>other OP this</c> rather than <c>this OP other</c>.
+    /// </param>
+    /// <remarks>
+    /// <c>TOAST-0106</c>. The single-argument form cannot express a non-commutative operator when
+    /// the class is on the right: <c>10 - $p</c> and <c>$p - 10</c> arrive as the same call, so
+    /// <c>ToastLib.Math.Point2D</c> answered <c>(-9, -8)</c> to both when the first should be
+    /// <c>(9, 8)</c>. There was nothing the class could write instead — the information simply
+    /// was not passed.
+    ///
+    /// The two-argument form is offered first and the one-argument form is the fallback, so every
+    /// operator written before this keeps its exact behaviour and only a class that asks for the
+    /// flag is told anything new.
+    /// </remarks>
+    private static async ValueTask<(bool Matched, object? Value)> TryInvokeClassBinaryOperatorAsync(
         ToshClassInstance instance,
         string @operator,
         object? other,
+        bool reversed,
         CancellationToken cancellationToken)
     {
-        return instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+        var withOrientation = await instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+            instance,
+            @operator,
+            new object?[] { other, reversed },
+            cancellationToken);
+        if (withOrientation.Matched)
+        {
+            return withOrientation;
+        }
+
+        return await instance.Definition.TryInvokeSpecialInstanceMethodAsync(
             instance,
             @operator,
             new object?[] { other },
