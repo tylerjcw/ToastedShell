@@ -2135,6 +2135,16 @@ public sealed class ToshLexer
 
             if (ch == ':')
             {
+                // `::` is the path operator, not a format clause — `TOAST-0090`. Skipped the way
+                // `??` is above: without this, `{Level::Novice}` split into the expression
+                // `Level` and the format `:Novice`, and the hole failed with a format-clause
+                // error naming a type member.
+                if (index + 1 < hole.Length && hole[index + 1] == ':')
+                {
+                    index++;
+                    continue;
+                }
+
                 if (pendingConditionals > 0)
                 {
                     pendingConditionals--;

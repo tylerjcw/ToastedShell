@@ -19,6 +19,12 @@ namespace Tosh.Tests;
 /// by counting `?` at the same nesting level, so a colon with an open question mark
 /// before it closes that conditional rather than starting a format clause. `??` is
 /// null-coalescing and opens nothing.
+///
+/// **The second is the path operator**, found after `TOAST-0090` shipped: `::` is two
+/// colons, so `$"{Level::Novice}"` split into the expression `Level` and the format
+/// `:Novice`, and the hole failed with a format-clause error naming a type member. It is
+/// skipped the way `??` is — and a genuine clause after a path still binds, which is what
+/// `{Level::Expert.UnderlyingValue:X}` pins.
 /// </summary>
 public class InterpolationFormatTests
 {
@@ -145,4 +151,39 @@ public class InterpolationFormatTests
             for n in [1, 2, 3] { $parts = ($parts + $"{$n:F2}|") }
             $parts.TrimEnd("|")
             """));
+
+    // ── The path operator (`TOAST-0090`) ───────────────────────────────────────
+
+    [Fact]
+    public async Task A_path_in_a_hole_is_not_a_format_clause()
+    {
+        Assert.Equal("Novice", await RunAsync(
+            "enum PfLevel: int { Novice = 0, Expert = 12 }\necho $\"{PfLevel::Novice}\""));
+    }
+
+    [Fact]
+    public async Task A_variant_path_in_a_hole_is_not_a_format_clause()
+    {
+        var result = await RunAsync(
+            "union PfShape { Circle(r), Empty }\necho $\"{PfShape::Empty}\"");
+
+        Assert.Contains("Empty", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_format_clause_after_a_path_still_binds()
+    {
+        // The control that keeps the fix from being "ignore every colon": `::` is skipped,
+        // the single `:` that follows is still the clause.
+        Assert.Equal("C", await RunAsync(
+            "enum PfFuel: int { Mox = 3, Uranium = 12 }\n"
+            + "echo $\"{PfFuel::Uranium.UnderlyingValue:X}\""));
+    }
+
+    [Fact]
+    public async Task A_path_and_an_alignment_compose()
+    {
+        Assert.Equal("    Novice", await RunAsync(
+            "enum PfRank: int { Novice = 0 }\necho $\"{PfRank::Novice,10}\""));
+    }
 }
