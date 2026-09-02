@@ -19,7 +19,7 @@ export class Particle<T>
     }
 }
 
-var particles: list = new list()
+var particles: list<Particle> = new list<Particle>()
 var width: int = Math.Max(10, System.Console.WindowWidth  - 1)
 var height: int = Math.Max(10, System.Console.WindowHeight - 1)
 System.Console.CursorVisible = false

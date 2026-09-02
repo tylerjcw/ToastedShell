@@ -44,6 +44,12 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // ── Controls ───────────────────────────────────────────────────────
         yield return Case("arithmetic", "echo (1 + 2 * 3)");
         yield return Case("interpolation", "var n = 4\necho $\"n is {$n}\"");
+        yield return Case(
+            "typed-empty-collection-construction",
+            "var xs = new list<float>()\n"
+            + "var ys = new System.Collections.Generic.List<float>()\n"
+            + "echo $xs.GetType().FullName\n"
+            + "echo $ys.GetType().FullName");
 
         yield return Case(
             "module-simple-type-alias",

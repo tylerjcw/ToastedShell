@@ -3292,10 +3292,34 @@ public static class ToshHost
                 ToshStructDefinition st => st.CreateInstance(argList),
                 ToshEnumDefinition en => en.CreateInstance(argList),
                 ToshUnionDefinition un => un.CreateInstance(argList),
+                IShellStaticType shell when hasTypeArgs &&
+                    s_engine.TryResolveShellStaticTypeName(typeName, out var constructedShell) =>
+                    Runtime.Invoker.CreateInstance(constructedShell, argList),
+                IShellStaticType shell => Runtime.Invoker.CreateInstance(shell, argList),
                 _ => throw new InvalidOperationException(
                     $"type '{lookupName}' is not constructable"),
             };
         }
+
+        // Collection aliases are factories, not CLR constructor aliases: `new
+        // list<float>(1, 2)` is variadic and converts its items, and an empty
+        // `list<float>()` must not collapse to List<object>. Resolve the complete
+        // constructed spelling through the engine just as the interpreter does.
+        if (s_engine.TryResolveShellStaticTypeName(typeName, out var shellType))
+        {
+            return Runtime.Invoker.CreateInstance(shellType, argList);
+        }
+
+        // The engine's resolver understands imports, namespace aliases and constructed
+        // generic names. Type.GetType does not, and can only resolve an assembly-qualified
+        // spelling, so asking it first left `new System.Collections.Generic.List<float>()`
+        // holding the open List<T> definition.
+        if (s_engine.TryResolveTypeName(typeName) is { } resolvedClrType &&
+            !resolvedClrType.ContainsGenericParameters)
+        {
+            return Runtime.Invoker.CreateInstance(resolvedClrType, argList);
+        }
+
         var compiledClr = ResolveCompiledToshClrType(typeName);
         if (compiledClr is not null)
         {

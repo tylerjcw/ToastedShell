@@ -5726,6 +5726,15 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </summary>
     public Type? TryResolveTypeName(string name) => ResolveTypeName(name);
 
+    /// <summary>
+    /// Resolves a constructable shell type by its complete source spelling. The compiled-code
+    /// host uses this for collection factories such as <c>list&lt;float&gt;</c>, whose variadic
+    /// construction semantics cannot be reproduced by invoking the CLR <c>List&lt;T&gt;</c>
+    /// constructors directly.
+    /// </summary>
+    public bool TryResolveShellStaticTypeName(string name, out IShellStaticType definition) =>
+        TryResolveShellStaticType(name, out definition);
+
     /// <summary>UTF-8 without a byte-order mark, for everything redirection writes.</summary>
     /// <remarks>
     /// `TS-P2-64`. <c>Encoding.UTF8</c> is a <c>UTF8Encoding</c> constructed to emit the

@@ -1364,6 +1364,32 @@ public sealed class EngineTests
     }
 
     [Fact]
+    public async Task Expression_style_generic_collections_preserve_explicit_types_when_empty()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            var aliased = new list<float>()
+            var qualified = new System.Collections.Generic.List<float>()
+            var prefixed = new Sys.Collections.Generic.List<float>()
+            var array = new array<short>()
+            var set = new set<uint>()
+            var dict = new dict<string, double>()
+            type-of $aliased | get Name
+            type-of $qualified | get Name
+            type-of $prefixed | get Name
+            type-of $array | get Name
+            type-of $set | get Name
+            type-of $dict | get Name
+            """);
+
+        Assert.Equal(
+            ["list<float>", "list<float>", "list<float>", "array<short>", "set<uint>", "dict<string, double>"],
+            results);
+    }
+
+    [Fact]
     public async Task Command_style_new_and_types_surface_shell_collection_types()
     {
         var engine = ShellEngine.CreateFullShell();
