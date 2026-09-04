@@ -245,6 +245,25 @@ public sealed partial class ToshEngine
             // to refinement types that `is` had, in the surface where it at least failed loudly.
             // A conversion is what the annotation path performs, `coerce` clause and all, so
             // this reuses it rather than teaching `CastAs` about refinements.
+            // `TOAST-0113`. A qualified name arrives as the definition itself, so its own name is
+            // what the conversion path is given — the alias is already in hand and re-resolving
+            // the written spelling would fail for exactly the reason this fixes.
+            if (right is RefinementTypeDefinition castDefinition)
+            {
+                // Its own name, resolved in its own module: the written spelling is qualified and
+                // the bare name only means anything where the alias was declared.
+                using var castScope = new RefinementResolutionScope(this, castDefinition.DeclaringExports);
+
+                return ConvertAnnotatedValue(
+                    castDefinition.Name,
+                    refinement: null,
+                    left,
+                    span,
+                    sourceName,
+                    sourceText,
+                    $"as {castDefinition.Name}");
+            }
+
             if (right is string castName &&
                 TryResolveRefinementTypeForAnnotation(
                     castName.EndsWith("?", StringComparison.Ordinal) ? castName[..^1] : castName,
@@ -266,11 +285,23 @@ public sealed partial class ToshEngine
         // `TOAST-0111`. A refinement type is a name annotations resolve and enforce, so `is` has
         // to answer for it too. It cannot be done in the portable operator runtime: deciding it
         // means evaluating the `where` predicate, which needs the engine's scopes.
-        if (@operator is "is" or "is-not" &&
-            right is string refinementName &&
-            await TryTestRefinementTypeAsync(left, refinementName, cancellationToken) is bool satisfied)
+        if (@operator is "is" or "is-not")
         {
-            return @operator == "is" ? satisfied : !satisfied;
+            // `TOAST-0113`. A *qualified* name arrives as the definition itself, because the
+            // module member lookup answers for it; an unqualified one arrives as text.
+            bool? satisfied = right switch
+            {
+                RefinementTypeDefinition definition =>
+                    await TestRefinementDefinitionAsync(left, definition, cancellationToken),
+                string refinementName =>
+                    await TryTestRefinementTypeAsync(left, refinementName, cancellationToken),
+                _ => null,
+            };
+
+            if (satisfied is bool answer)
+            {
+                return @operator == "is" ? answer : !answer;
+            }
         }
 
         return OperatorEvaluator.EvaluateBinary(left, @operator, right, ResolveDeclaredTypeName);
@@ -314,17 +345,35 @@ public sealed partial class ToshEngine
 
         if (value is null) { return allowsNull; }
 
-        // The base first: a chain of refinements must satisfy every link.
-        var baseResult = await TryTestRefinementTypeAsync(value, definition.BaseTypeName, cancellationToken);
+        return await TestRefinementDefinitionAsync(value, definition, cancellationToken);
+    }
 
-        if (baseResult is bool nestedBase)
+    /// <summary>
+    /// Whether a value satisfies a refinement definition and every link above it.
+    /// </summary>
+    /// <remarks>
+    /// The base is resolved in the module the alias was declared in — `TOAST-0104` — so a chain
+    /// spanning modules is walked the way the conversion path walks it.
+    /// </remarks>
+    private async ValueTask<bool> TestRefinementDefinitionAsync(
+        object? value,
+        RefinementTypeDefinition definition,
+        CancellationToken cancellationToken)
+    {
+        bool? baseResult;
+
+        using (new RefinementResolutionScope(this, definition.DeclaringExports))
         {
-            if (!nestedBase) { return false; }
+            baseResult = await TryTestRefinementTypeAsync(value, definition.BaseTypeName, cancellationToken);
+
+            if (baseResult is null &&
+                !OperatorEvaluator.IsInstanceOfShellType(value, definition.BaseTypeName))
+            {
+                return false;
+            }
         }
-        else if (!OperatorEvaluator.IsInstanceOfShellType(value, definition.BaseTypeName))
-        {
-            return false;
-        }
+
+        if (baseResult is false) { return false; }
 
         if (definition.Refinement is null) { return true; }
 

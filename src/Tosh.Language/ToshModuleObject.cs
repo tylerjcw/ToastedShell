@@ -72,6 +72,17 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
             return true;
         }
 
+        // `TOAST-0113`. A refinement type is a member of its module in every other surface — an
+        // annotation resolves `M.T.Base` — but it lives in its own table, so a member lookup
+        // found nothing and `$v is M.T.Base` failed with "Member 'Base' was not found on
+        // ToshModuleObject". A declared class qualified the same way worked, because those are
+        // in `Types`.
+        if (_exports.RefinementTypes.TryGetValue(name, out var refinementType))
+        {
+            value = refinementType;
+            return true;
+        }
+
         if (_exports.Variables.TryGetValue(name, out value))
         {
             return true;

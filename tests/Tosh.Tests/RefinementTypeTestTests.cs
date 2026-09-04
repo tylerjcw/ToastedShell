@@ -107,4 +107,82 @@ public sealed class RefinementTypeTestTests
             echo ($p is PosInt)
             """));
     }
+
+    // ── Qualified refinement types (`TOAST-0113`) ─────────────────────────────
+
+    private const string Qualified = """
+        module M {
+            module T {
+                export type Base     = string where _.Length > 0
+                export type Short    = Base where _.Length < 5
+                export type Repaired = int {
+                    where  _ > 0
+                    coerce (_ == 0 ? 1 : Math.abs(_))
+                }
+            }
+        }
+        """;
+
+    private static async Task<string> RunQualifiedAsync(string body)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var results = await engine.ExecuteToListAsync(Qualified + "\n" + body);
+        return results.Count == 0 ? string.Empty : results[^1]?.ToString() ?? "null";
+    }
+
+    [Theory]
+    [InlineData("\"hi\" is M.T.Base", "True")]
+    [InlineData("\"\" is M.T.Base", "False")]
+    [InlineData("\"hi\" is-not M.T.Base", "False")]
+    [InlineData("\"hi\" is M.T::Base", "True")]
+    public async Task A_qualified_refinement_answers_a_type_test(string expression, string expected)
+    {
+        // Before this, the right operand was evaluated as module member access and the whole
+        // expression failed: "Member 'Base' was not found on type 'ToshModuleObject'". A
+        // refinement type lives in a module's own table rather than in `Types`, so the member
+        // lookup found nothing — while a declared class qualified the same way worked.
+        Assert.Equal(expected, await RunQualifiedAsync($"echo ({expression})"));
+    }
+
+    [Theory]
+    [InlineData("\"hi\" is M.T.Short", "True")]
+    [InlineData("\"far too long\" is M.T.Short", "False")]
+    public async Task A_qualified_chain_checks_every_link(string expression, string expected)
+    {
+        // `Short` derives from `Base` unqualified, so this also exercises TOAST-0104's rule that
+        // a base resolves in the module its alias was declared in.
+        Assert.Equal(expected, await RunQualifiedAsync($"echo ({expression})"));
+    }
+
+    [Fact]
+    public async Task As_through_a_qualified_name_converts_and_coerces()
+    {
+        Assert.Equal("hi", await RunQualifiedAsync("""echo ("hi" as M.T.Base)"""));
+        Assert.Equal("1", await RunQualifiedAsync("echo (0 as M.T.Repaired)"));
+        Assert.Equal("7", await RunQualifiedAsync("echo (-7 as M.T.Repaired)"));
+    }
+
+    [Fact]
+    public async Task A_qualified_cast_that_cannot_be_satisfied_still_fails()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await RunQualifiedAsync("""echo ("" as M.T.Base)"""));
+
+        Assert.Contains("refinement", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_qualified_declared_type_is_unaffected()
+    {
+        // The control: classes and records were already in a module's `Types` table and answered
+        // correctly. Adding refinements beside them must not disturb that.
+        Assert.Equal("True", await RunAsync("""
+            module Shapes {
+                export record Circle(r: int)
+            }
+
+            var c = new Shapes.Circle(r = 1)
+            echo ($c is Shapes.Circle)
+            """));
+    }
 }

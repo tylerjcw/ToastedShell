@@ -1,7 +1,7 @@
 ---
 id: TOAST-0113
 title: "A qualified refinement type in a type test is evaluated as module member access"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-04
@@ -48,14 +48,48 @@ module's members expecting types.
 
 ## Acceptance
 
-- [ ] `$v is M.T.Base` answers the refinement, for both the dotted and `::` spellings
-- [ ] `is-not` negates it
-- [ ] A qualified refinement over a qualified refinement chains
-- [ ] `as M.T.Base` converts, and runs the coercer
-- [ ] A qualified name that is genuinely not a member still reports usefully
-- [ ] Declared classes and records qualified the same way are unaffected
+- [x] `$v is M.T.Base` answers the refinement, for both the dotted and `::` spellings
+- [x] `is-not` negates it
+- [x] A qualified refinement over a qualified refinement chains
+- [x] `as M.T.Base` converts, and runs the coercer
+- [x] A qualified name that is genuinely not a member still reports usefully
+- [x] Declared classes and records qualified the same way are unaffected
 
 ## Notes
 
 Found while fixing `TOAST-0104`, by probing whether the alias resolved at all. It did — through
 the annotation path. The type test was the surface that did not.
+
+## Fix — 2026-09-04
+
+Taken at the module rather than at the operator: `ToshModuleObject.TryGetMember` consults
+`RefinementTypes` alongside `Types`. That was the direction worth preferring, because the member
+lookup is what every surface goes through — the operator-side alternative would have fixed `is`
+and left the next reader of a module's members with the same hole.
+
+Two consequences followed from the member now resolving:
+
+**`is` receives the definition, not a name.** An unqualified test arrives as text and an alias has
+to be looked up; a qualified one arrives as the `RefinementTypeDefinition` itself. The
+definition-testing core is shared, so both spellings check the same chain.
+
+**`as` had to resolve the alias in its own module.** The definition's `Name` is the bare `Base`,
+which means nothing where the cast is written — the first attempt reported
+`unknown type annotation 'Base'`. Installing the declaring scope, exactly as `TOAST-0104` does
+for a base chain, is what makes the bare name resolvable again.
+
+Full suite green with no changes: 7,146 passing.
+
+## The three-item pattern this closes
+
+`TOAST-0102`, `TOAST-0104` and this one were filed as possibly sharing a cause. They do not share
+a *mechanism* — they sit in the parser, the annotation resolver and the module member table
+respectively — but they share a shape, and it is worth writing down:
+
+> A name behaves differently depending on whether it is written qualified, because the
+> unqualified path consults a table the qualified path does not, or vice versa.
+
+Each fix was to make the two paths consult the same thing rather than to special-case the
+spelling. `TOAST-0102` went further and removed the distinction from the parser entirely, since
+whitespace decides it without any table at all — which is the ideal version of this fix, and the
+one to reach for when a fourth instance appears.
