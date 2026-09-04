@@ -128,4 +128,79 @@ public sealed class NarrowingTests
     {
         Assert.True(FlagsMissingMember(Hierarchy + $"\nfunc f(n: Node) -> int {{\n    {body}\n}}"));
     }
+
+    // ── The else branch of a negative test (`TOAST-0084`) ─────────────────────
+
+    /// <summary>
+    /// <c>is-not T</c> and <c>not (x is T)</c> carry the positive fact into the <em>else</em>
+    /// branch.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>is</c> narrowed, and only its then-branch, so the identical information written
+    /// the other way round was discarded: <c>if ($n is-not Leaf) { … } else { HERE }</c> knows
+    /// exactly as much as <c>if ($n is Leaf) { HERE }</c> does.
+    ///
+    /// Subtracting <c>T</c> from the then-branch of a *positive* test is still not done, because
+    /// it needs a type the model cannot spell. That asymmetry is why the two spellings are not
+    /// interchangeable, and why the negative one is worth recognising on its own.
+    /// </remarks>
+    [Fact]
+    public void The_else_branch_of_is_not_is_narrowed()
+    {
+        Assert.False(FlagsMissingMember(Hierarchy + """
+
+            func describe(n: Node) -> string {
+                if ($n is-not Leaf) { return $n.Kind } else { return $"leaf {$n.Value}" }
+            }
+            """));
+    }
+
+    [Fact]
+    public void The_else_branch_of_a_negated_test_is_narrowed()
+    {
+        Assert.False(FlagsMissingMember(Hierarchy + """
+
+            func describe(n: Node) -> string {
+                if (not ($n is Leaf)) { return $n.Kind } else { return $"leaf {$n.Value}" }
+            }
+            """));
+    }
+
+    [Fact]
+    public void The_then_branch_of_is_not_is_not_narrowed()
+    {
+        // The control that keeps the fact on the correct branch. In the then-branch the value is
+        // precisely *not* a Leaf, so nothing may be assumed — a checker that narrowed here would
+        // be unsound rather than merely generous.
+        Assert.True(FlagsMissingMember(Hierarchy + """
+
+            func describe(n: Node) -> string {
+                if ($n is-not Leaf) { return $"leaf {$n.Value}" } else { return $n.Kind }
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_double_negation_returns_the_fact_to_the_then_branch()
+    {
+        Assert.False(FlagsMissingMember(Hierarchy + """
+
+            func describe(n: Node) -> string {
+                if (not ($n is-not Leaf)) { return $"leaf {$n.Value}" } else { return $n.Kind }
+            }
+            """));
+    }
+
+    [Fact]
+    public void The_else_branch_of_a_positive_test_is_still_not_narrowed()
+    {
+        // Unchanged, and deliberately so: subtracting Leaf from this branch needs a type the
+        // model cannot yet write down.
+        Assert.True(FlagsMissingMember(Hierarchy + """
+
+            func describe(n: Node) -> string {
+                if ($n is Leaf) { return $n.Kind } else { return $"leaf {$n.Value}" }
+            }
+            """));
+    }
 }

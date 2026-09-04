@@ -545,12 +545,36 @@ public static class Lowerer
     private static string? TryGetConditionNarrowedName(
         ArgumentSyntax condition,
         LowerContext ctx,
-        out BoundType? narrowedType)
+        out BoundType? narrowedType,
+        out bool narrowsThenBranch)
     {
         narrowedType = null;
+        narrowsThenBranch = true;
+
+        // `TOAST-0084`. `not (…)` swaps which branch the fact belongs to, and nests: the parser
+        // will not usually produce `not not`, but reading it costs nothing and guessing wrong
+        // would put a fact on the branch that disproves it.
+        while (condition is UnaryOperatorArgumentSyntax { Operator: var unary, Operand: var operand } &&
+               string.Equals(unary, "not", StringComparison.OrdinalIgnoreCase))
+        {
+            narrowsThenBranch = !narrowsThenBranch;
+            condition = operand;
+        }
 
         if (condition is not OperatorArgumentSyntax { Operator: var op } binary) return null;
-        if (!string.Equals(op, "is", StringComparison.OrdinalIgnoreCase)) return null;
+
+        // `is-not T` is the same fact as `is T` with the branches exchanged. Only the *else* of a
+        // negative test is spellable: the then-branch would need the type subtracted, which is
+        // this item's closed-alternative rule and needs a type the model cannot yet write down.
+        if (string.Equals(op, "is-not", StringComparison.OrdinalIgnoreCase))
+        {
+            narrowsThenBranch = !narrowsThenBranch;
+        }
+        else if (!string.Equals(op, "is", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         if (binary.Left is not VariableReferenceArgumentSyntax variable) return null;
 
         var typeName = binary.Right switch
@@ -572,20 +596,36 @@ public static class Lowerer
     {
         var condition = LowerExpression(ifStmt.Condition, ctx);
 
-        var narrowedName = TryGetConditionNarrowedName(ifStmt.Condition, ctx, out var narrowedType);
-        if (narrowedName is not null && narrowedType is not null)
+        var narrowedName = TryGetConditionNarrowedName(
+            ifStmt.Condition, ctx, out var narrowedType, out var narrowsThenBranch);
+
+        var narrows = narrowedName is not null && narrowedType is not null;
+
+        if (narrows && narrowsThenBranch)
         {
-            ctx.PushNarrowing(narrowedName, narrowedType);
+            ctx.PushNarrowing(narrowedName!, narrowedType!);
         }
 
         var thenBlock = LowerBlock(ifStmt.ThenBlock, ctx);
 
-        if (narrowedName is not null && narrowedType is not null)
+        if (narrows && narrowsThenBranch)
         {
             ctx.PopNarrowing();
         }
 
+        // The else branch of a negative test carries the positive fact — `TOAST-0084`.
+        if (narrows && !narrowsThenBranch)
+        {
+            ctx.PushNarrowing(narrowedName!, narrowedType!);
+        }
+
         var elseBlock = ifStmt.ElseBlock is null ? null : LowerBlock(ifStmt.ElseBlock, ctx);
+
+        if (narrows && !narrowsThenBranch)
+        {
+            ctx.PopNarrowing();
+        }
+
         return new BoundIfStatement(condition, thenBlock, elseBlock, ifStmt.Span);
     }
 

@@ -3817,6 +3817,30 @@ func viaIf(n: Node) -> string {
 has its declared type again, and a member that exists on neither the declared
 nor the narrowed type is still reported.
 
+\medskip
+\noindent A \emph{negative} test narrows its \code{else} branch, which is the
+same fact written the other way round:
+
+\begin{lstlisting}
+func viaNot(n: Node) -> string {
+    if ($n is-not Leaf) { return $n.Kind }
+    else                { return $"leaf {$n.Value}" }   # Leaf here
+}
+\end{lstlisting}
+
+\noindent \code{not (\$n is Leaf)} reads identically, and a doubled negation
+returns the fact to the then-branch.
+
+\begin{notebox}
+\textbf{The two spellings are not interchangeable.}  A positive test narrows its
+then-branch and leaves its \code{else} alone; a negative test narrows its
+\code{else} and leaves its then-branch alone.  In each case the branch that is
+narrowed is the one where the value \emph{is} the tested type.  Saying anything
+about the other branch means subtracting a type from a type, which the type
+model cannot yet write down --- so when both readings are available, write the
+test whose narrowed branch is the one carrying the work.
+\end{notebox}
+
 \begin{notebox}
 This is what makes a visitor over a class hierarchy writable: every pass over
 an AST is a \code{match} whose arms test node types and then read the members

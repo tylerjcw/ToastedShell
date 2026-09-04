@@ -116,8 +116,9 @@ and exhaustive matches contribute reachability facts.
 ## Acceptance
 
 - [ ] `x is null` / `x is-not null` narrows `T?` in the true and false paths
-- [~] `x is T` narrows in the true path, for `if` and for a match arm. Subtracting `T` in the
-      false path still needs a type the model cannot spell
+- [~] `x is T` narrows in the true path, for `if` and for a match arm; `x is-not T` and
+      `not (x is T)` narrow the **else** path. Subtracting `T` from the other branch of a
+      positive test is still not done — it needs a type the model cannot spell.
 - [ ] A union variant pattern gives every payload binding its declared substituted type
 - [ ] Refinement tests preserve the refinement type rather than only its base type
 - [ ] Early exit, short-circuit logic and exhaustive match arms contribute correct reachability facts
@@ -132,3 +133,21 @@ and exhaustive matches contribute reachability facts.
 Typed generic unions are complete in `TOAST-0052`; binding patterns are partial in `TOAST-0053`;
 nested usefulness/exhaustiveness remains in `TOAST-0054`. This item generalizes their local facts
 into the surrounding control-flow graph rather than adding another matcher.
+
+## Second slice — 2026-09-04: the else branch of a negative test
+
+`if ($n is-not Leaf) { … } else { HERE }` knows exactly as much as
+`if ($n is Leaf) { HERE }` does, and threw it away. Only `is` narrowed, and only its
+then-branch, so the same fact written the other way round bought nothing. `not ($n is Leaf)`
+reads identically, and negations nest — a doubled one returns the fact to the then-branch.
+
+**Which branch gets the fact is the whole content of this slice.** The narrowed branch is the one
+where the value *is* the tested type: the then-branch of a positive test, the else-branch of a
+negative one. Two controls pin that, and they assert the *presence* of a diagnostic — the
+then-branch of `is-not` must stay unnarrowed, because there the value is precisely not a `Leaf`
+and a checker that narrowed it would be unsound rather than generous.
+
+Still not done, and still for the same reason: subtracting `T` from the else of a positive test.
+That is the closed-alternative rule and it needs a type the model cannot write down. So the two
+spellings are not interchangeable, which the specification now says outright, with the advice
+that follows from it — write the test whose narrowed branch is the one carrying the work.
