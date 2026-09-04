@@ -68,7 +68,8 @@ public static class VariableBinder
     /// </param>
     public static IReadOnlyList<ToshDiagnostic> Bind(
         ParseResult parseResult,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions = null,
+        Func<string, bool>? isKnownTypeName = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
 
@@ -79,7 +80,9 @@ public static class VariableBinder
             new List<ToshDiagnostic>(),
             CollectPatternShapes(parseResult.Statement),
             CollectVariantUnions(parseResult.Statement, ambientUnions),
-            CollectUnionsByName(parseResult.Statement, ambientUnions));
+            CollectUnionsByName(parseResult.Statement, ambientUnions),
+            isKnownTypeName,
+            CollectDeclaredTypeNames(parseResult.Statement));
 
         VisitStatement(parseResult.Statement, ctx);
         return ctx.Diagnostics;
@@ -483,6 +486,7 @@ public static class VariableBinder
                 break;
 
             case OperatorArgumentSyntax oper:
+                CheckTypeTestTarget(oper, ctx);
                 VisitArgument(oper.Left, ctx);
                 VisitArgument(oper.Right, ctx);
                 break;
@@ -991,6 +995,113 @@ public static class VariableBinder
     }
 
     /// <summary>The patterns an arm can match on — one, or an or-pattern's alternatives.</summary>
+    /// <summary>
+    /// Every name this source declares that a type test could be qualified by.
+    /// </summary>
+    /// <remarks>
+    /// Read from the syntax rather than from the engine, because that is the whole point: these
+    /// are exactly the names the engine does not know yet at bind time.
+    /// </remarks>
+    private static IReadOnlySet<string> CollectDeclaredTypeNames(StatementSyntax statement)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        CollectDeclaredTypeNames(statement, names);
+        return names;
+    }
+
+    private static void CollectDeclaredTypeNames(
+        StatementSyntax statement,
+        HashSet<string> names,
+        string prefix = "")
+    {
+        void Add(string name)
+        {
+            names.Add(name);
+
+            if (prefix.Length > 0) { names.Add(prefix + name); }
+        }
+
+        switch (statement)
+        {
+            case ScriptStatementSyntax script:
+                foreach (var child in script.Statements) { CollectDeclaredTypeNames(child, names, prefix); }
+                break;
+
+            case ModuleDefinitionStatementSyntax module:
+                Add(module.Name);
+                foreach (var child in module.Body.Statements)
+                {
+                    CollectDeclaredTypeNames(child, names, prefix + module.Name + ".");
+                }
+
+                break;
+
+            case ClassDefinitionStatementSyntax @class: Add(@class.Name); break;
+            case RecordDefinitionStatementSyntax record: Add(record.Name); break;
+            case EnumDefinitionStatementSyntax @enum: Add(@enum.Name); break;
+            case UnionDefinitionStatementSyntax union: Add(union.Name); break;
+            case TypeAliasStatementSyntax alias: Add(alias.Name); break;
+            case InterfaceDefinitionStatementSyntax @interface: Add(@interface.Name); break;
+            case StructDefinitionStatementSyntax @struct: Add(@struct.Name); break;
+        }
+    }
+
+    /// <summary>
+    /// Reports <c>is</c> against a qualified name that resolves to no type — <c>TOAST-0105</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The complaint that opened <c>TOAST-0105</c> was that <c>is</c> cannot tell <em>no</em> from
+    /// <em>I do not know</em>. Real types resolve now, but a misspelt one still answers
+    /// <c>false</c> for exactly the same reason, so a typo in a type name is a silent wrong
+    /// answer.
+    /// </para>
+    /// <para>
+    /// Reported rather than raised. <c>is</c> stays total: making it throw would mean
+    /// <c>if ($v is SomeOptionalType)</c> could no longer be written defensively, and every type
+    /// test would become a possible throw site. The runtime answer is unchanged.
+    /// </para>
+    /// <para>
+    /// Only the <em>qualified</em> spelling is checked, and only when the host supplied a
+    /// resolver. A bare name has more ways to resolve — a CLR simple name, an alias, an import —
+    /// and the binder has no types of its own; the probe comes from the engine the same way
+    /// <c>isExecutableOnPath</c> and the ambient unions do.
+    /// </para>
+    /// </remarks>
+    private static void CheckTypeTestTarget(OperatorArgumentSyntax oper, Context ctx)
+    {
+        if (ctx.IsKnownTypeName is null) { return; }
+        if (oper.Operator is not ("is" or "is-not")) { return; }
+        if (oper.Right is not StaticMemberAccessArgumentSyntax path) { return; }
+
+        // Anything this source declares is invisible to the probe: the binder runs over the whole
+        // script before a line of it executes, so a module declared here is not registered yet.
+        // Measured — without this, `$c is Shapes.Circle` warned about a type that resolves.
+        //
+        // Qualified names are kept rather than only heads, so a module declared here can still
+        // answer for a member it does *not* declare: `Shapes.Typo` is reportable precisely
+        // because `Shapes` is known well enough to say what is in it.
+        if (ctx.DeclaredTypeNames.Contains(path.Path)) { return; }
+
+        var head = path.Path.Split('.')[0];
+        var declaredLocally = ctx.DeclaredTypeNames.Contains(head);
+
+        if (!declaredLocally && ctx.IsKnownTypeName(path.Path)) { return; }
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.bind.unknown_type_test",
+            Title: $"'{path.Path}' does not name a type, so this test is always false.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: path.Span,
+            Label: "no type by this name is in scope here",
+            Help: "check the spelling, or the module qualifier. `is` answers false for a name it "
+                + "cannot resolve rather than raising, so a mistyped type reads as a value that "
+                + "simply is not of that type.",
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Naming));
+    }
+
     /// <summary>
     /// Reports an arm written as a bare variant name beside arms that destructure the same
     /// union — <c>TOAST-0110</c>.
@@ -1685,5 +1796,7 @@ public static class VariableBinder
         List<ToshDiagnostic> Diagnostics,
         IReadOnlyDictionary<string, IReadOnlyList<string>> PatternShapes,
         IReadOnlyDictionary<string, IReadOnlyList<UnionShape>> VariantUnions,
-        IReadOnlyDictionary<string, UnionShape> UnionsByName);
+        IReadOnlyDictionary<string, UnionShape> UnionsByName,
+        Func<string, bool>? IsKnownTypeName,
+        IReadOnlySet<string> DeclaredTypeNames);
 }

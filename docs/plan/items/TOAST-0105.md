@@ -1,7 +1,7 @@
 ---
 id: TOAST-0105
 title: "`is` silently returns false for a declared type when the type name is qualified"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-31
@@ -73,15 +73,12 @@ handle the qualified form correctly.
 
 - [x] `$t is IR.Thing` is true for an `IR.Thing`, from inside and outside the module
 - [x] The same holds for a declared class and for a generic declared type
-- [ ] A qualified name that resolves to no type is a diagnostic, not a silent `false` —
-      **not done.** `$probe is QtModule.NotDeclared` still answers `False`, pinned by
-      `A_qualified_name_that_names_no_type_is_false`. See the note below: this is the same
-      failure mode the item opened with, and the half of it that is still open.
-- [ ] `is` and type annotations agree on every name either accepts — **not done; checked in
-      error on 2026-09-02 and corrected on 2026-09-04.** It was verified only against
-      module-qualified declared types. A refinement type is a counterexample: `var p: PosInt = 5`
-      resolves and enforces the predicate, while `5 is PosInt` answers `false`. Tracked as
-      `TOAST-0111`.
+- [x] A qualified name that resolves to no type is a diagnostic, not a silent `false` — a
+      **binder warning**; the runtime answer stays `false`, and the test that pins it stands.
+- [x] `is` and type annotations agree on every name either accepts — checked in error on
+      2026-09-02, corrected on 2026-09-04, and closed properly by `TOAST-0111`: it had been
+      verified only against module-qualified declared types, and a refinement type was a
+      counterexample.
 - [x] Corpus covers record, class, qualified, unqualified, inside and outside the module
 
 ## Progress (2026-09-02)
@@ -98,3 +95,28 @@ one still answers `false` for exactly the same reason, so a typo in a type name 
 wrong answer rather than a diagnostic. Closing it needs a decision that is not obviously mine to
 make: `is` is a test, and tests conventionally do not raise, so refusing an unresolvable name is a
 departure worth stating explicitly before it is written.
+
+## Progress (2026-09-04) — both remaining boxes
+
+**The unresolvable name is a warning, not a raise.** `is` stays total: making it throw would mean
+`if ($v is SomeOptionalType)` could no longer be written defensively, and every type test would
+become a possible throw site. The runtime answer is unchanged, and
+`A_qualified_name_that_names_no_type_is_false` still passes — the behaviour is pinned, the
+*silence* is what was fixed.
+
+It could not live in the binder as first sketched: the binder has no types at all, only a command
+registry. The probe is supplied by the engine the way `isExecutableOnPath` and the ambient unions
+already are, so the CLI and the editor report the same thing rather than diverging.
+
+**The first attempt was a false positive.** `$c is Shapes.Circle` warned about a type that
+resolves, because the binder runs over the whole script before a line of it executes — a module
+declared in the same source is not registered yet. Declared names are now read from the syntax,
+which is exactly what the engine cannot know at that point. Qualified names are kept rather than
+only heads, so a locally declared module can still answer for a member it does *not* declare:
+`Shapes.Typo` is reportable precisely because `Shapes` is known well enough to say what is in it.
+
+Only the qualified spelling is checked. A bare name has more ways to resolve — a CLR simple name,
+an alias, an import — and a warning that fires on those would be worse than none.
+
+Blast radius: zero. The only qualified type tests in the author's library are two
+`System.Dynamic.ExpandoObject` checks, which resolve.

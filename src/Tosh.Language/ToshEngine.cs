@@ -623,7 +623,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             LanguageRuntime.Commands,
             IsInteractiveSession,
             isExecutableOnPath: null,
-            ambientUnions: CollectAmbientUnionShapes());
+            ambientUnions: CollectAmbientUnionShapes(),
+            isKnownTypeName: IsKnownTypeNameForBinder);
         if (diagnostics.Count == 0) return;
 
         switch (BinderStrictness)
@@ -5724,6 +5725,25 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// type-argument strings (e.g. <c>"int"</c>, <c>"list&lt;string&gt;"</c>)
     /// against the engine's named-type registry and CLR fallback.
     /// </summary>
+    /// <summary>
+    /// Whether a qualified name in a type test resolves to anything — <c>TOAST-0105</c>.
+    /// </summary>
+    /// <remarks>
+    /// Supplied to the binder the way the ambient unions are: the binder has no types of its own,
+    /// and every table this consults lives in engine scope. Deliberately generous — a CLR type, a
+    /// declared type, a refinement — because the diagnostic is only worth having if it never fires
+    /// on a name that does resolve.
+    /// </remarks>
+    private bool IsKnownTypeNameForBinder(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) { return true; }
+
+        return ResolveTypeName(name) is not null ||
+               TryGetNamedType(name, out _) ||
+               TryResolveShellStaticType(name, out _) ||
+               TryGetRefinementType(name, out _);
+    }
+
     public Type? TryResolveTypeName(string name) => ResolveTypeName(name);
 
     /// <summary>

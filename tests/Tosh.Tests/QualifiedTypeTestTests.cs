@@ -1,4 +1,6 @@
 using Tosh.Language;
+using Tosh.Language.Parsing;
+using Tosh.Language.Binding;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -146,5 +148,100 @@ public sealed class QualifiedTypeTestTests
             """);
 
         Assert.Equal("True,False", output);
+    }
+
+    // ── An unresolvable qualified name is reported (`TOAST-0105`) ─────────────
+
+    /// <summary>
+    /// Binds with a stub type probe standing in for the engine's tables.
+    /// </summary>
+    private static IReadOnlyList<ToshDiagnostic> DiagnoseWithProbe(string source, params string[] knownTypes)
+    {
+        var known = new HashSet<string>(knownTypes, StringComparer.Ordinal);
+
+        return Binder.Bind(
+            ToshParser.Parse(source, "test.tosh"),
+            ToshRuntime.CreateDefault().Language.Commands,
+            isInteractive: false,
+            isExecutableOnPath: null,
+            ambientUnions: null,
+            isKnownTypeName: known.Contains);
+    }
+
+    private static IReadOnlyList<ToshDiagnostic> UnknownTypeTests(IReadOnlyList<ToshDiagnostic> diagnostics) =>
+        diagnostics.Where(d => d.Code == "tosh.bind.unknown_type_test").ToList();
+
+    [Fact]
+    public void A_qualified_name_that_resolves_to_nothing_is_reported()
+    {
+        var diagnostics = DiagnoseWithProbe("echo ($v is Shapes.Typo)", "Shapes.Circle");
+
+        var warning = Assert.Single(UnknownTypeTests(diagnostics));
+        Assert.Equal(ToshDiagnosticSeverity.Warning, warning.Severity);
+        Assert.Contains("Shapes.Typo", warning.Title, StringComparison.Ordinal);
+        Assert.Contains("always false", warning.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_qualified_name_that_resolves_is_not_reported()
+    {
+        Assert.Empty(UnknownTypeTests(
+            DiagnoseWithProbe("echo ($v is System.String)", "System.String")));
+    }
+
+    [Fact]
+    public void A_type_declared_in_this_source_is_not_reported()
+    {
+        // The binder runs over the whole script before a line of it executes, so a module
+        // declared here is not registered with the engine yet and the probe cannot see it.
+        // Without the syntax-side check this warned about a type that resolves.
+        Assert.Empty(UnknownTypeTests(DiagnoseWithProbe("""
+            module Shapes {
+                export record Circle(r: int)
+            }
+
+            echo ($v is Shapes.Circle)
+            """)));
+    }
+
+    [Fact]
+    public void A_missing_member_of_a_locally_declared_module_is_still_reported()
+    {
+        // The module is known well enough to say what is *not* in it.
+        var diagnostics = UnknownTypeTests(DiagnoseWithProbe("""
+            module Shapes {
+                export record Circle(r: int)
+            }
+
+            echo ($v is Shapes.Typo)
+            """));
+
+        Assert.Single(diagnostics);
+    }
+
+    [Fact]
+    public void An_unqualified_name_is_left_alone()
+    {
+        // A bare name has more ways to resolve — a CLR simple name, an alias, an import — and
+        // this check is deliberately only about the qualified spelling.
+        Assert.Empty(UnknownTypeTests(DiagnoseWithProbe("echo ($v is Circle)")));
+    }
+
+    [Fact]
+    public void Is_not_is_checked_the_same_way()
+    {
+        Assert.Single(UnknownTypeTests(DiagnoseWithProbe("echo ($v is-not Shapes.Typo)")));
+    }
+
+    [Fact]
+    public void Without_a_probe_nothing_is_reported()
+    {
+        // The binder has no types of its own, so a host that supplies no resolver gets no
+        // type-shaped diagnostics rather than guesses.
+        var diagnostics = Binder.Bind(
+            ToshParser.Parse("echo ($v is Shapes.Typo)", "test.tosh"),
+            ToshRuntime.CreateDefault().Language.Commands);
+
+        Assert.Empty(UnknownTypeTests(diagnostics));
     }
 }

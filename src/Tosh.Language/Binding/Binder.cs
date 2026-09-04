@@ -60,7 +60,8 @@ public static class Binder
         ICommandTable commandRegistry,
         bool isInteractive = false,
         Func<string, bool>? isExecutableOnPath = null,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions = null,
+        Func<string, bool>? isKnownTypeName = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commandRegistry);
@@ -83,7 +84,7 @@ public static class Binder
         // Phase 2: variable-name scope analysis runs as a separate pass.
         // Concatenated diagnostics come back in source order across both
         // passes, since each pass walks the AST top-down.
-        var variableDiagnostics = VariableBinder.Bind(parseResult, ambientUnions);
+        var variableDiagnostics = VariableBinder.Bind(parseResult, ambientUnions, isKnownTypeName);
         if (variableDiagnostics.Count == 0) return context.Diagnostics;
         if (context.Diagnostics.Count == 0) return variableDiagnostics;
 
