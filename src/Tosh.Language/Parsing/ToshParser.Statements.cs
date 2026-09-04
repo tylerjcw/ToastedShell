@@ -699,10 +699,67 @@ public static partial class ToshParser
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
             var typeToken = NextToken();
-            var nameToken = ExpectVariableName();
-            var typeParameters = ParseTypeParameterList();
-            var equalsToken = ExpectEqualsToken("Type aliases use '=' between the alias name and the base type.");
-            var baseTypeName = ParseTypeName("alias base type");
+            // Taken raw when it is a bareword, the way `enum` takes its name token: with the
+            // colon spelling the token is `Name:` or `Name:Base`, which is not a valid
+            // identifier until the colon is split off below.
+            var nameToken = Current.Kind == SyntaxTokenKind.Bareword ? NextToken() : ExpectVariableName();
+
+            // `TOAST-0112`. `type Name: Base` reads the way `enum Name: int` does, and the lexer
+            // hands both over the same way: the colon rides on the name token.
+            ParseTypedIdentifierToken(
+                nameToken.Text,
+                out var aliasName,
+                out var inlineBaseTypeName,
+                out var expectsFollowingBaseType);
+
+            var usedColonSpelling = nameToken.Text.Contains(':', StringComparison.Ordinal);
+            var typeParameters = usedColonSpelling ? Array.Empty<string>() : ParseTypeParameterList();
+
+            // `TOAST-0112`. The base type is what a refinement refines, so it cannot be left out
+            // — but the omission is an easy one to make when the body is a brace block, and the
+            // message should show both spellings rather than only complain.
+            // Only when the base is genuinely absent. Under the colon spelling with no space —
+            // `type A:int { … }` — the brace is the body and the base is already in hand.
+            var missingBaseType = Current.Kind == SyntaxTokenKind.OpenBrace &&
+                (!usedColonSpelling || expectsFollowingBaseType);
+
+            if (missingBaseType)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_alias_base_type",
+                    Title: $"Type '{aliasName}' does not say what it refines.",
+                    Span: Current.Span,
+                    Label: "a refinement needs the type it narrows",
+                    Help: $"write `type {aliasName}: int {{ … }}` or "
+                        + $"`type {aliasName} = int {{ … }}`, naming the base type."));
+            }
+
+            SyntaxToken equalsToken;
+            string baseTypeName;
+
+            if (missingBaseType)
+            {
+                // Reported once, above. Expecting a separator here as well would add a second
+                // error for the same missing word.
+                equalsToken = nameToken;
+                baseTypeName = string.Empty;
+            }
+            else if (usedColonSpelling)
+            {
+                equalsToken = nameToken;
+                baseTypeName = expectsFollowingBaseType
+                    ? ParseTypeName("alias base type")
+                    : inlineBaseTypeName ?? string.Empty;
+            }
+            else
+            {
+                equalsToken = IsColonToken(Current)
+                    ? NextToken()
+                    : ExpectEqualsToken(
+                        "Type aliases use '=' or ':' between the alias name and the base type.");
+
+                baseTypeName = ParseTypeName("alias base type");
+            }
             var rangeRefinement = TryParseTypeAliasRangeRefinementClause();
             var refinement = TryParseRefinementClause();
             var blockRefinement = TryParseTypeAliasRefinementBlock();
@@ -717,7 +774,7 @@ public static partial class ToshParser
             }
 
             return new TypeAliasStatementSyntax(
-                nameToken.Text,
+                aliasName,
                 typeParameters,
                 baseTypeName,
                 refinement,

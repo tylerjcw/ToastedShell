@@ -1984,6 +1984,47 @@ A \emph{refinement type} constrains an existing type with one or more
 predicates.  Values that fail a predicate are either repaired via a
 \code{coerce} clause or rejected at runtime.
 
+\subsection*{Declaring one}
+
+The base type is named with \code{:} or \code{=}, and the clauses follow either
+inline or in a brace body.  All four combinations mean the same thing:
+
+\begin{lstlisting}
+type PosInt: int where _ > 0
+type PosInt = int where _ > 0
+
+type PosInt: int {
+    where _ > 0
+}
+
+type Repaired: int {
+    where  _ > 0
+    coerce (_ == 0 ? 1 : Math.abs(_))
+}
+\end{lstlisting}
+
+\noindent The \code{:} spelling reads as \code{enum Level: int} does, and the
+brace body is the one to reach for once there is more than one clause.  The base
+type cannot be omitted --- it is the type being refined --- and leaving it out is
+a diagnostic that names both spellings.
+
+\subsection*{Testing one}
+
+\code{is} answers a refinement type: the value must already be the base type, and
+every predicate in the chain must hold.
+
+\begin{lstlisting}
+5 is PosInt                     # true
+-1 is PosInt                    # false
+"5" is PosInt                   # false -- a test never converts
+\end{lstlisting}
+
+\noindent The third line is the difference between a test and an annotation.
+\code{var p: PosInt = "5"} may coerce; \code{"5" is PosInt} is false for the same
+reason \code{"5" is int} is.  A test reports what a value \emph{is}, never what
+it could become.  \code{as}, being a conversion rather than a test, does run the
+\code{coerce} clause.
+
 \subsection*{How a value is admitted}
 
 Conversion into a refined slot follows one algorithm, and every step of it

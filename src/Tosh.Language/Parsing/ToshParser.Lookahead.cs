@@ -408,11 +408,28 @@ public static partial class ToshParser
         {
             var offset = GetDeclarationModifierOffset();
 
+            // `TOAST-0112`. `type Name: Base` glues the colon onto the name, so the token is
+            // `Name:` or `Name:Base` — neither a valid identifier on its own. The name is the
+            // part before the colon, exactly as `enum Level: int` reads it.
+            var declaredName = Peek(offset + 1).Text;
+            var colonIndex = declaredName.IndexOf(':', StringComparison.Ordinal);
+            var usedColonSpelling = colonIndex > 0;
+
+            if (usedColonSpelling)
+            {
+                declaredName = declaredName[..colonIndex];
+            }
+
             if (!(MatchesKeywordAtOffset(offset, "type") &&
                   Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
-                  IsValidIdentifier(Peek(offset + 1).Text)))
+                  IsValidIdentifier(declaredName)))
             {
                 return false;
+            }
+
+            if (usedColonSpelling)
+            {
+                return true;
             }
 
             var cursor = offset + 2;
@@ -440,7 +457,12 @@ public static partial class ToshParser
                 }
             }
 
-            return IsEqualsToken(Peek(cursor));
+            // `TOAST-0112`. `=` is the original spelling; `:` matches `enum Name: int`, and an
+            // `{` here is the base-less form, admitted so the statement parser can say what is
+            // missing rather than leaving the reader with "Command 'type' is not a builtin".
+            return IsEqualsToken(Peek(cursor)) ||
+                   IsColonToken(Peek(cursor)) ||
+                   Peek(cursor).Kind == SyntaxTokenKind.OpenBrace;
         }
 
         private bool LooksLikeStructDefinition()
