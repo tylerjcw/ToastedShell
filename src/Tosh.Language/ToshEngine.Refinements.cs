@@ -21,6 +21,30 @@ namespace Tosh.Language;
 public sealed partial class ToshEngine
 {
 
+    /// <summary>
+    /// Resolves names against the module a refinement alias was declared in — <c>TOAST-0104</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same device <c>ToshClassDefinition</c> uses around member invocation, for the same
+    /// reason: a base type is resolved where the alias is *used*, and by then the declaring
+    /// module's scope has left the stack.
+    /// </remarks>
+    private readonly struct RefinementResolutionScope : IDisposable
+    {
+        private readonly ToshEngine _engine;
+        private readonly ModuleExportTable? _previous;
+
+        public RefinementResolutionScope(ToshEngine engine, ModuleExportTable? exports)
+        {
+            _engine = engine;
+            _previous = engine.AnnotationResolutionExports;
+
+            if (exports is not null) { engine.AnnotationResolutionExports = exports; }
+        }
+
+        public void Dispose() => _engine.AnnotationResolutionExports = _previous;
+    }
+
     private RefinementTypeDefinition CreateRefinementTypeDefinition(
         string sourceName,
         string sourceText,
@@ -35,7 +59,10 @@ public sealed partial class ToshEngine
             sourceText,
             statement.Modifier,
             statement.Span,
-            statement.DocComment?.Description?.Trim() is { Length: > 0 } desc ? desc : null);
+            statement.DocComment?.Description?.Trim() is { Length: > 0 } desc ? desc : null,
+            // `TOAST-0104`. Captured now, because by the time the base is resolved this scope is
+            // gone. Null at top level, where the ordinary scope walk already finds siblings.
+            TryGetNearestModuleScope(out var declaringModule) ? declaringModule.Exports : null);
     }
 
     private RefinementAnnotation? CreateRefinementAnnotation(
@@ -490,7 +517,12 @@ public sealed partial class ToshEngine
             return typeName;
         }
 
-        var effectiveBase = GetEffectiveAnnotatedTypeName(refinementType.BaseTypeName, activeRefinements);
+        string effectiveBase;
+
+        using (new RefinementResolutionScope(this, refinementType.DeclaringExports))
+        {
+            effectiveBase = GetEffectiveAnnotatedTypeName(refinementType.BaseTypeName, activeRefinements);
+        }
         activeRefinements.Remove(refinementType.Name);
         return allowsNull && !effectiveBase.EndsWith("?", StringComparison.Ordinal)
             ? effectiveBase + "?"
@@ -542,6 +574,8 @@ public sealed partial class ToshEngine
                 converted = null;
                 return false;
             }
+
+            using var baseScope = new RefinementResolutionScope(this, refinementType.DeclaringExports);
 
             if (!TryConvertAnnotatedValue(refinementType.BaseTypeName, value, out var baseConverted, activeRefinements))
             {
@@ -1210,6 +1244,55 @@ public sealed partial class ToshEngine
         throw CreateRefinementFailedDiagnostic(refinement, span, sourceName, sourceText, owner);
     }
 
+    /// <summary>
+    /// The first alias in a chain whose base does not resolve — <c>TOAST-0104</c>.
+    /// </summary>
+    /// <remarks>
+    /// Each link's base is resolved in the module that link was declared in, so a chain crossing
+    /// modules is walked the way the conversion path walks it. Recursive rather than a loop
+    /// because each level's resolution scope has to stay installed for the level below.
+    /// </remarks>
+    private bool TryFindUnresolvableRefinementBase(
+        string typeName,
+        out string aliasName,
+        out string missingBase)
+    {
+        return Walk(typeName, new HashSet<string>(StringComparer.OrdinalIgnoreCase), out aliasName, out missingBase);
+
+        bool Walk(string name, HashSet<string> seen, out string alias, out string missing)
+        {
+            alias = string.Empty;
+            missing = string.Empty;
+
+            var normalized = name.EndsWith("?", StringComparison.Ordinal) ? name[..^1] : name;
+
+            if (!TryResolveRefinementTypeForAnnotation(normalized, out var definition) ||
+                !seen.Add(definition.Name))
+            {
+                return false;
+            }
+
+            using var scope = new RefinementResolutionScope(this, definition.DeclaringExports);
+
+            if (IsKnownAnnotatedType(
+                    definition.BaseTypeName,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            // The base may itself be a broken alias; the deepest break is the useful one.
+            if (Walk(definition.BaseTypeName, seen, out alias, out missing))
+            {
+                return true;
+            }
+
+            alias = definition.Name;
+            missing = definition.BaseTypeName;
+            return true;
+        }
+    }
+
     private void ThrowIfUnknownAnnotatedType(
         string typeName,
         TextSpan span,
@@ -1220,6 +1303,22 @@ public sealed partial class ToshEngine
         if (IsKnownAnnotatedType(typeName, new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
         {
             return;
+        }
+
+        // `TOAST-0104`. When the name *is* a declared alias whose base chain is broken, the
+        // annotation is not the problem and saying so sends the reader to the wrong file. Name
+        // the alias and the base it could not resolve instead.
+        if (TryFindUnresolvableRefinementBase(typeName, out var brokenAlias, out var missingBase))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.annotation_unknown_type",
+                Title: $"Type '{brokenAlias}' is declared over '{missingBase}', which does not name a type.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: $"'{typeName}' cannot be resolved because '{missingBase}' does not exist",
+                Help: $"'{missingBase}' is the base of '{brokenAlias}'. Declare it, correct the "
+                    + "spelling, or qualify it if it lives in another module."));
         }
 
         var suggestion = ResolveNearestAnnotatedTypeSuggestion(typeName);
@@ -1539,7 +1638,12 @@ public sealed partial class ToshEngine
                 return false;
             }
 
-            var known = IsKnownAnnotatedType(refinementType.BaseTypeName, activeRefinements);
+            bool known;
+
+            using (new RefinementResolutionScope(this, refinementType.DeclaringExports))
+            {
+                known = IsKnownAnnotatedType(refinementType.BaseTypeName, activeRefinements);
+            }
             activeRefinements.Remove(refinementType.Name);
             return known;
         }
