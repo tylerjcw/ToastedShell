@@ -1,7 +1,7 @@
 ---
 id: TOAST-0064
 title: "A CLR type annotation blocks start-up on a 17,000-name platform index"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -213,11 +213,11 @@ Left open deliberately: a wrong answer here is a type annotation quietly meaning
       exists**. A name that is not a CLR type still builds it, which is the open half
 - [x] A name that is *not* a CLR type does not build the index either — the cached index
       answers a miss authoritatively
-- [ ] A budget exists and is asserted, so the next regression fails a test rather than being
+- [x] A budget exists and is asserted, so the next regression fails a test rather than being
       noticed a month later
 - [x] Measured against `pwsh` on the same machine, using the interleaved minimum-of-N method
       above rather than a single timed run — and against a build published the same way
-- [ ] A negative control
+- [x] A negative control
 
 ## Notes
 
@@ -236,3 +236,38 @@ by thinking harder:
 
 A startup number is only meaningful against a build produced the same way and a configuration
 loaded the same way.
+
+## The guard — 2026-09-04
+
+`StartupBudgetTests`, out of process, minimum of five, asserting a **ratio** rather than a
+wall-clock number.
+
+Three design choices, each because the obvious version does not work:
+
+**A ratio, not a budget in milliseconds.** An absolute number measures the machine. The same
+script is 110 ms on the installed R2R build and 236 ms under `dotnet Tosh.Cli.dll` in Debug — a
+threshold that fits one is meaningless for the other, and CI is a third. The ratio is stable
+across all of them because both halves move together.
+
+**Out of process.** The platform index is a `static Lazy`, so in a shared test run it is already
+built by whatever executed first, and "was the index built" cannot be asked. This was the first
+design and it had to be abandoned: the state the guard wants to observe is destroyed by the test
+host before the guard runs.
+
+**A control that is not the subject.** An alias and a same-file class never needed the index, so
+if *those* regress the cause is start-up generally rather than type resolution — and the first
+test would stay green while the number a person feels got worse.
+
+### Negative control
+
+Measured on the same build the test runs against:
+
+| script | min | ratio |
+|---|---|---|
+| `echo 1` | 236 ms | — |
+| `func q(p: System.Text.StringBuilder) => clear` | 257 ms | **1.09** |
+| `sleep 300ms` — a deliberate regression | 544 ms | **2.31** |
+
+The threshold is 2.0. The current margin is nearly double, and a regression the size of the one
+this item fixed (100 ms on a 100 ms start-up, which was 2.21) fails it. So the guard is neither
+vacuous nor tight enough to flake.
