@@ -119,9 +119,10 @@ and exhaustive matches contribute reachability facts.
 - [~] `x is T` narrows in the true path, for `if` and for a match arm; `x is-not T` and
       `not (x is T)` narrow the **else** path. Subtracting `T` from the other branch of a
       positive test is still not done — it needs a type the model cannot spell.
-- [~] A union variant pattern gives every payload binding its declared substituted type —
-      **done for a union declared in this source, generic or not.** An *ambient* union, which
-      is what the prelude's `Option` and `Result` are, still narrows nothing; see below.
+- [x] A union variant pattern gives every payload binding its declared substituted type —
+      positional and named, generic and not, for a union declared in this source *or* ambient.
+      A binding inside a *nested* pattern is not typed; that needs the payload type's shape
+      rather than the union's, and is a slice of its own.
 - [ ] Refinement tests preserve the refinement type rather than only its base type
 - [ ] Early exit, short-circuit logic and exhaustive match arms contribute correct reachability facts
 - [ ] Reassignment, aliasing, captures and effectful calls invalidate facts where required for soundness
@@ -182,24 +183,35 @@ Both payload spellings substitute: `Some(value: T)` and the bare `Some(T)` the c
 itself uses. An *uninstantiated* `MyOpt` narrows nothing, and has a test — there is nothing to
 substitute and claiming a type there would be inventing one.
 
-### What remains: ambient unions
+### Ambient unions — done 2026-09-04
+
+`Lowerer.Lower` takes an optional ambient tree whose declarations are in scope without appearing
+in this source, and the engine passes the core prelude. So `Option<Payload>` and
+`Result<Payload, Problem>` now type their payloads, both of `Result`'s parameters included.
+
+The plumbing was far smaller than estimated, for one reason worth recording: **the prelude is
+already a cached static `ParseResult` on the engine**, loaded exactly as the built-in runes are.
+Nothing new is parsed, and no new snapshot shape was needed — the estimate of "a richer snapshot
+threaded from the engine to the front end" was written without checking whether the syntax was
+still in hand. It was.
+
+Ambient declarations are visited *before* the source ones, and `Register` assigns rather than
+`TryAdd`, so a source declaration displaces an ambient one. That is the shadowing rule the engine
+already warns about but does not refuse, so the registry has to agree about who wins — checked by
+a test that declares its own `Option`. It is also the precise mistake `TOAST-0108` had to undo two
+days ago in the exhaustiveness checker, where the same seeding used `TryAdd` and the ambient
+entry could never be displaced.
+
+The parameter is optional because this entry point has 113 callers, and a control asserts that
+one supplying nothing behaves exactly as before.
 
 
 
-Measured, and the difference is now only about *where the union was declared*:
+
+
+Both spellings now report, and both accept their real members:
 
 ```tosh
-union MyOpt<T> { Some(value: T) Nothing() }
 func f(o: MyOpt<Payload>)  { match ($o) { Some(v) => $v.Nope … } }   # reported
-func g(o: Option<Payload>) { match ($o) { Some(v) => $v.Nope … } }   # silent
+func g(o: Option<Payload>) { match ($o) { Some(v) => $v.Nope … } }   # reported
 ```
-
-`Lowerer.Lower` builds its type registry from the parsed source alone, so the prelude's `Option`
-and `Result` are not `UserUnionType`s there at all.
-
-Closing it is plumbing rather than design, but not small plumbing. `Lower` would take an optional
-ambient-type registry — 113 call sites, so it has to be optional — and the engine has nothing of
-the right shape to hand it: `CollectAmbientUnionShapes` returns variant *names* only, with no
-field types and no type parameters. A richer snapshot has to be built and threaded from the
-engine to the compiler front end, which is a boundary worth crossing deliberately rather than as
-a follow-on.

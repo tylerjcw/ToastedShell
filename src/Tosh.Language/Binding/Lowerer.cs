@@ -27,14 +27,26 @@ namespace Tosh.Language.Binding;
 /// </summary>
 public static class Lowerer
 {
-    public static BoundUnit Lower(ParseResult parseResult, ICommandTable commands)
+    /// <param name="ambientTypes">
+    /// A tree whose declarations are in scope without appearing in this source — the core
+    /// prelude, in practice. <c>TOAST-0084</c>: without it, <c>Option</c> and <c>Result</c> were
+    /// not user types here at all, so destructuring one gave its payload binding no type while
+    /// destructuring a union declared in the same file did.
+    ///
+    /// Optional because this entry point has a great many callers, and one that supplies nothing
+    /// should keep behaving exactly as it did.
+    /// </param>
+    public static BoundUnit Lower(
+        ParseResult parseResult,
+        ICommandTable commands,
+        StatementSyntax? ambientTypes = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
 
         var ctx = new LowerContext(
             commands,
-            BuildUserTypeRegistry(parseResult.Statement),
+            BuildUserTypeRegistry(parseResult.Statement, ambientTypes),
             BuildLocalFunctionOverloads(parseResult.Statement),
             BuildLocalFunctionReturns(parseResult.Statement));
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
@@ -54,9 +66,20 @@ public static class Lowerer
     /// information is filled in by the runtime when the declaration
     /// actually executes.
     /// </summary>
-    internal static IReadOnlyDictionary<string, BoundType> BuildUserTypeRegistry(StatementSyntax root)
+    internal static IReadOnlyDictionary<string, BoundType> BuildUserTypeRegistry(
+        StatementSyntax root,
+        StatementSyntax? ambientTypes = null)
     {
         var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+
+        // Ambient first, so a declaration in this source displaces it. That is the shadowing
+        // rule the rest of the language follows, and the engine warns when a user takes a core
+        // type's name — it does not refuse, so the registry must agree about who wins.
+        if (ambientTypes is not null)
+        {
+            Visit(ambientTypes, qualifier: null);
+        }
+
         Visit(root, qualifier: null);
         return registry;
 

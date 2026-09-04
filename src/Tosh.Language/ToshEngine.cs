@@ -576,7 +576,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         try
         {
-            var unit = Tosh.Language.Binding.Lowerer.Lower(parseResult, LanguageRuntime.Commands);
+            // `TOAST-0084`. The prelude's types are in scope for every script, so the checker has
+            // to know them: without this, destructuring an `Option` gave its payload binding no
+            // type while destructuring a union declared in the same file did. The parse is the
+            // cached one the engine already loads the prelude from.
+            var unit = Tosh.Language.Binding.Lowerer.Lower(
+                parseResult,
+                LanguageRuntime.Commands,
+                ambientTypes: _corePreludeParseResult.Statement);
 
             // Type-check pass: piggy-backs on the lowered unit. Same
             // disable env var (TOSH_DISABLE_LOWERER) suppresses both

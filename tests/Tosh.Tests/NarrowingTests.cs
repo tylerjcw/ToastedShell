@@ -35,6 +35,25 @@ public sealed class NarrowingTests
         return Tosh.Language.Binding.TypeChecker.Check(unit);
     }
 
+    /// <summary>
+    /// Checks with the core prelude's declarations in scope, the way the engine does.
+    /// </summary>
+    private static IReadOnlyList<ToshDiagnostic> CheckWithPrelude(string source)
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var parsed = Tosh.Language.Parsing.ToshParser.Parse(source, "<test>");
+        var prelude = Tosh.Language.Parsing.ToshParser.Parse(
+            Tosh.Language.CorePrelude.Source, "<core-prelude>");
+
+        var unit = Tosh.Language.Binding.Lowerer.Lower(
+            parsed, runtime.Language.Commands, ambientTypes: prelude.Statement);
+
+        return Tosh.Language.Binding.TypeChecker.Check(unit);
+    }
+
+    private static bool PreludeFlagsMissingMember(string source) =>
+        CheckWithPrelude(source).Any(d => d.Code == "tosh.type.member_not_found");
+
     private static bool FlagsMissingMember(string source) =>
         Check(source).Any(d => d.Code == "tosh.type.member_not_found");
 
@@ -386,6 +405,118 @@ public sealed class NarrowingTests
                 return (match ($o) {
                     Some(v) => $v.Nope
                     Nothing() => 0
+                })
+            }
+            """));
+    }
+
+    // ── The core prelude's unions (`TOAST-0084`) ──────────────────────────────
+
+    private const string Payloads = """
+        class Payload { prop Real: int = 1 }
+        class Problem { prop Why: string = "x" }
+        """;
+
+    /// <summary>
+    /// Destructuring an <c>Option</c> types its payload, which is the case this box was filed
+    /// for.
+    /// </summary>
+    /// <remarks>
+    /// <c>Lowerer.Lower</c> built its type registry from the parsed source alone, so the
+    /// prelude's <c>Option</c> and <c>Result</c> were not user types there at all — a union
+    /// declared in the same file narrowed and an <c>Option</c> did not. The prelude's parse is
+    /// the cached one the engine already loads it from, so nothing new is parsed to supply it.
+    /// </remarks>
+    [Fact]
+    public void An_option_payload_is_typed()
+    {
+        Assert.True(PreludeFlagsMissingMember(Payloads + """
+
+            func f(o: Option<Payload>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Nope
+                    None() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_real_member_of_an_option_payload_is_accepted()
+    {
+        Assert.False(PreludeFlagsMissingMember(Payloads + """
+
+            func f(o: Option<Payload>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Real
+                    None() => 0
+                })
+            }
+            """));
+    }
+
+    [Theory]
+    [InlineData("Ok(v) => $v.Nope", "Err(e) => \"\"")]
+    [InlineData("Ok(v) => \"\"", "Err(e) => $e.Nope")]
+    public void Both_of_a_results_type_parameters_substitute(string okArm, string errArm)
+    {
+        // `Result<T, E>` binds two parameters, and each arm sees a different one.
+        Assert.True(PreludeFlagsMissingMember(Payloads + $$"""
+
+            func f(r: Result<Payload, Problem>) -> string {
+                return (match ($r) {
+                    {{okArm}}
+                    {{errArm}}
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_results_real_members_are_accepted()
+    {
+        Assert.False(PreludeFlagsMissingMember(Payloads + """
+
+            func f(r: Result<Payload, Problem>) -> string {
+                return (match ($r) {
+                    Ok(v) => $"{$v.Real}"
+                    Err(e) => $e.Why
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_source_union_still_displaces_an_ambient_one()
+    {
+        // The engine warns when a declaration takes a core type's name but does not refuse it,
+        // so the registry has to agree about which one wins: the source declaration.
+        Assert.True(PreludeFlagsMissingMember("""
+            class Local { prop Here: int = 1 }
+            union Option<T> {
+                Some(only: Local)
+                None()
+            }
+
+            func f(o: Option<Local>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Nope
+                    None() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void Without_the_prelude_nothing_changes()
+    {
+        // The parameter is optional, and a caller that supplies nothing behaves as it did.
+        Assert.False(FlagsMissingMember(Payloads + """
+
+            func f(o: Option<Payload>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Nope
+                    None() => 0
                 })
             }
             """));
