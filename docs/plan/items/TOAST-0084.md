@@ -123,7 +123,8 @@ and exhaustive matches contribute reachability facts.
       positional and named, generic and not, for a union declared in this source *or* ambient.
       A binding inside a *nested* pattern is not typed; that needs the payload type's shape
       rather than the union's, and is a slice of its own.
-- [ ] Refinement tests preserve the refinement type rather than only its base type
+- [x] Refinement tests preserve the refinement type rather than only its base type — found
+      **already true** when measured, and pinned by tests so it cannot regress silently.
 - [ ] Early exit, short-circuit logic and exhaustive match arms contribute correct reachability facts
 - [ ] Reassignment, aliasing, captures and effectful calls invalidate facts where required for soundness
 - [ ] Branch joins compute the safe common type and do not adopt a type from a path that may not run
@@ -215,3 +216,31 @@ Both spellings now report, and both accept their real members:
 func f(o: MyOpt<Payload>)  { match ($o) { Some(v) => $v.Nope … } }   # reported
 func g(o: Option<Payload>) { match ($o) { Some(v) => $v.Nope … } }   # reported
 ```
+
+## Fourth slice — 2026-09-04: the refinement box was already satisfied
+
+Measured before writing anything, and there was nothing to write. `if ($x is PosInt)` narrows to
+`PosInt`, not to `int`:
+
+```
+Argument 1 of 'needsString' expects 'String' but received 'PosInt'.   # refinement
+Argument 1 of 'needsString' expects 'String' but received 'Int32'.    # its base, for contrast
+```
+
+The narrowing path resolves the *written* name, and that resolves to a `RefinementType` rather
+than to its base — so the property came free with the first slice and nobody noticed. A match arm
+behaves the same, and a refinement over a refinement keeps the outermost: `BigPos` reports as
+`BigPos`, not as `PosInt` and not as `Int32`.
+
+**Tests were added anyway**, because a property that holds by accident regresses silently.
+Nothing else in the suite would have noticed if narrowing had started reporting `Int32`.
+
+Finding the observable took longer than checking it. A refinement and its base are
+interchangeable nearly everywhere — that is what a refinement *is* — so passing one where the
+other is wanted proves nothing. The place the difference surfaces is where the checker has to
+**name** the type it inferred, which is a mismatch diagnostic against an unrelated type.
+
+One thing worth stating, because it looks like a counterexample: a member lookup on a narrowed
+refinement reports against the *base* (`Member 'Nope' was not found on type 'Int32'`). That is
+correct. A refinement adds a predicate, not members, so identity is preserved while member
+resolution passes through — and there is a test for each half so the distinction is not lost.

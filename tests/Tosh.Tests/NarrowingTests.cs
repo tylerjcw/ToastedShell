@@ -521,4 +521,106 @@ public sealed class NarrowingTests
             }
             """));
     }
+
+    // ── Refinement tests keep the refinement (`TOAST-0084`) ───────────────────
+
+    private const string Refinements = """
+        type PosInt = int where _ > 0
+        type BigPos = PosInt where _ > 100
+        func needsString(s: string) -> string { return $s }
+        """;
+
+    private static string? MismatchTitle(string source) =>
+        CheckWithPrelude(source).FirstOrDefault(d => d.Code == "tosh.type.mismatch")?.Title;
+
+    /// <summary>
+    /// Narrowing on a refinement type keeps that type, not the type it refines.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This box was found already satisfied when it was measured rather than implemented — the
+    /// narrowing path resolves the written name, and that resolves to a <c>RefinementType</c>
+    /// rather than to its base. These tests exist because a property that holds by accident
+    /// regresses silently: nothing else would have noticed if narrowing had started reporting
+    /// <c>Int32</c>.
+    /// </para>
+    /// <para>
+    /// The observable is the diagnostic's wording. A refinement and its base are
+    /// interchangeable almost everywhere — that is what a refinement is — so the place the
+    /// difference shows is where the checker has to *name* the type it inferred.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void An_if_test_keeps_the_refinement()
+    {
+        Assert.Contains("'PosInt'", MismatchTitle(Refinements + """
+
+            func f(x) -> string {
+                if ($x is PosInt) { return (needsString($x)) }
+                return ""
+            }
+            """) ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_match_arm_keeps_the_refinement()
+    {
+        Assert.Contains("'PosInt'", MismatchTitle(Refinements + """
+
+            func f(x) -> string {
+                return (match ($x) {
+                    _ is PosInt => (needsString($x))
+                    default => ""
+                })
+            }
+            """) ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_refinement_over_a_refinement_keeps_the_outermost()
+    {
+        // `BigPos` refines `PosInt`, which refines `int`. The narrowed type is the one that was
+        // tested, not either of the two it is built on.
+        var title = MismatchTitle(Refinements + """
+
+            func f(x) -> string {
+                if ($x is BigPos) { return (needsString($x)) }
+                return ""
+            }
+            """) ?? string.Empty;
+
+        Assert.Contains("'BigPos'", title, StringComparison.Ordinal);
+        Assert.DoesNotContain("'PosInt'", title, StringComparison.Ordinal);
+        Assert.DoesNotContain("'Int32'", title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Members_still_resolve_through_to_the_base()
+    {
+        // Keeping the refinement is about type *identity*. A refinement adds a predicate, not
+        // members, so a member lookup must still reach the base — and report against it.
+        var diagnostic = CheckWithPrelude(Refinements + """
+
+            func f(x) -> int {
+                if ($x is PosInt) { return $x.Nope }
+                return 0
+            }
+            """).FirstOrDefault(d => d.Code == "tosh.type.member_not_found");
+
+        Assert.NotNull(diagnostic);
+        Assert.Contains("Int32", diagnostic!.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_unnarrowed_value_reports_its_own_type()
+    {
+        // The control: without the test in front of it the value is dynamic, so nothing is
+        // reported at all and the assertions above are not passing vacuously.
+        Assert.Null(MismatchTitle(Refinements + """
+
+            func f(x) -> string {
+                return (needsString($x))
+            }
+            """));
+    }
 }
