@@ -963,6 +963,25 @@ public static partial class ToshParser
                 return false;
             }
 
+            // `TOAST-0102`. A space between an unqualified name and its parenthesis says this is
+            // a command invocation, not a call: `Upper ($x) 1 2 3` against `Upper($x, 1, 2, 3)`.
+            //
+            // The rule this replaces was capitalisation, and it made case load-bearing in a way
+            // nothing documented: `lower ($x) 1 2 3` parsed and `Upper ($x) 1 2 3` did not, so a
+            // pure rename to .NET-style naming broke a file. Worse, it depended on *where* the
+            // callee was declared — a name this source declares is carved out above, so the same
+            // call parsed in one file and failed once the definition moved to another.
+            //
+            // Whitespace needs no name knowledge, which is the point: the parser cannot see
+            // another file's declarations, and every rule that pretends otherwise fails at a file
+            // boundary. A qualified name is unaffected — it returned true long before here.
+            if (!Current.Text.Contains('.', StringComparison.Ordinal) &&
+                Peek(1).Kind == SyntaxTokenKind.OpenParen &&
+                Peek(1).Span.Start > Current.Span.End)
+            {
+                return false;
+            }
+
             // Disambiguate: an unqualified PascalCase name followed by parens containing
             // operator expressions (e.g., Name($a + "," + $b)) is a bareword argument
             // followed by a parenthesized subexpression, not a static method call.
