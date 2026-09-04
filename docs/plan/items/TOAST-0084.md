@@ -119,7 +119,9 @@ and exhaustive matches contribute reachability facts.
 - [~] `x is T` narrows in the true path, for `if` and for a match arm; `x is-not T` and
       `not (x is T)` narrow the **else** path. Subtracting `T` from the other branch of a
       positive test is still not done — it needs a type the model cannot spell.
-- [ ] A union variant pattern gives every payload binding its declared substituted type
+- [~] A union variant pattern gives every payload binding its declared type — **the
+      substituted part is not done.** A union declared in the same source narrows; the
+      prelude's generic `Option<T>` does not, for the two reasons stated below.
 - [ ] Refinement tests preserve the refinement type rather than only its base type
 - [ ] Early exit, short-circuit logic and exhaustive match arms contribute correct reachability facts
 - [ ] Reassignment, aliasing, captures and effectful calls invalidate facts where required for soundness
@@ -151,3 +153,42 @@ Still not done, and still for the same reason: subtracting `T` from the else of 
 That is the closed-alternative rule and it needs a type the model cannot write down. So the two
 spellings are not interchangeable, which the specification now says outright, with the advice
 that follows from it — write the test whose narrowed branch is the one carrying the work.
+
+## Third slice — 2026-09-04: variant payload bindings
+
+`Full(v) => $v.Nope` reported nothing. The binding carried no type at all, so a member that does
+not exist on the declared payload was never checked — which made destructuring a shape that
+happens to carry the right value at run time rather than something the checker knows about.
+
+A payload binding now takes the field type the union declared, positionally and by name, in both
+the `Full { v }` shorthand and the `Full { v: got }` renaming form.
+
+**The union comes from the matched value's type, not from the variant name.** A name would need
+an index and would be ambiguous the moment two unions share a variant — the mistake `TOAST-0108`
+had to undo in the exhaustiveness checker two days ago. The matched value's type is already in
+hand, so there is nothing to guess.
+
+A field with no declared type contributes nothing, and there is a test for that: a union that did
+not say what it holds cannot have anything claimed about it.
+
+### What "substituted" still means, and why it is not done
+
+Measured, and the difference is sharp:
+
+```tosh
+union MyOpt { Some(v: Payload) None }
+func f(o: MyOpt)            { match ($o) { Some(v) => $v.Nope … } }   # reported
+func g(o: Option<Payload>)  { match ($o) { Some(v) => $v.Nope … } }   # silent
+```
+
+Two separate reasons, both real:
+
+1. **The lowerer registers unions from the parsed source only**, so the core prelude's `Option`
+   and `Result` are not `UserUnionType`s here at all.
+2. **`Some(v: T)` needs `T` substituted from `Option<Payload>`** before the field type means
+   anything. Nothing in the bound type model carries the binding of a union's type arguments to a
+   use site.
+
+The first is plumbing; the second is the item's word *substituted*, and it is the larger half. So
+the box stays `[~]`: destructuring a union you declared is checked, and destructuring an `Option`
+is not yet.

@@ -1768,6 +1768,14 @@ public static class Lowerer
                 ctx.PushNarrowing(narrowedName, narrowedType);
             }
 
+            // A variant pattern's payload bindings take the field types the union declared.
+            var payloadNarrowings = TryGetVariantPayloadNarrowings(value.Type, arm.Pattern, ctx);
+
+            if (payloadNarrowings is not null)
+            {
+                ctx.PushNarrowings(payloadNarrowings);
+            }
+
             BoundBlock body;
             switch (arm.Body)
             {
@@ -1794,6 +1802,11 @@ public static class Lowerer
                     break;
             }
 
+            if (payloadNarrowings is not null)
+            {
+                ctx.PopNarrowing();
+            }
+
             if (narrowedName is not null && narrowedType is not null)
             {
                 ctx.PopNarrowing();
@@ -1811,6 +1824,87 @@ public static class Lowerer
     /// for every other shape — guards, destructuring and literal patterns carry
     /// no type information to propagate.
     /// </summary>
+    /// <summary>
+    /// The declared types of a variant pattern's payload bindings — <c>TOAST-0084</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>Full(v) =&gt; $v.Nope</c> reported nothing: the binding carried no type, so a member
+    /// that does not exist on the declared payload was never checked. This is the box that makes
+    /// <c>Option</c> and <c>Result</c> pay off — destructuring <c>Ok(value)</c> should give
+    /// <c>value</c> the payload's type rather than a dynamic object that happens to carry it.
+    /// </para>
+    /// <para>
+    /// The union comes from the *matched value's* type, not from the variant name. A variant name
+    /// would need an index and would be ambiguous once two unions share one — the mistake
+    /// <c>TOAST-0108</c> had to undo in the exhaustiveness checker. Here the type is already in
+    /// hand, so there is nothing to guess.
+    /// </para>
+    /// <para>
+    /// Fields with no declared type contribute nothing; a binding is narrowed only where the
+    /// union actually said what it holds.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, BoundType>? TryGetVariantPayloadNarrowings(
+        BoundType? matchedType,
+        ArgumentSyntax? pattern,
+        LowerContext ctx)
+    {
+        if (matchedType is not UserUnionType { Definition: UnionDefinitionStatementSyntax unionDef })
+        {
+            return null;
+        }
+
+        if (pattern is not VariantPatternSyntax variant) { return null; }
+
+        var member = variant.VariantName;
+        var separator = member.LastIndexOf('.');
+        if (separator >= 0) { member = member[(separator + 1)..]; }
+
+        var declared = unionDef.Variants.FirstOrDefault(
+            candidate => string.Equals(candidate.Name, member, StringComparison.Ordinal));
+
+        if (declared is null) { return null; }
+
+        var frame = new Dictionary<string, BoundType>(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 0; index < variant.Positional.Count && index < declared.Fields.Count; index++)
+        {
+            AddPayloadNarrowing(frame, variant.Positional[index], declared.Fields[index].TypeName, ctx);
+        }
+
+        foreach (var named in variant.Named)
+        {
+            var field = declared.Fields.FirstOrDefault(
+                candidate => string.Equals(candidate.Name, named.Field, StringComparison.OrdinalIgnoreCase));
+
+            if (field is null) { continue; }
+
+            AddPayloadNarrowing(frame, named.Pattern, field.TypeName, ctx);
+        }
+
+        return frame.Count == 0 ? null : frame;
+    }
+
+    private static void AddPayloadNarrowing(
+        Dictionary<string, BoundType> frame,
+        ArgumentSyntax binding,
+        string? declaredTypeName,
+        LowerContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(declaredTypeName)) { return; }
+
+        // Only a plain binding name. A nested pattern binds names of its own, and typing them
+        // needs the payload type's shape rather than the union's — a slice of its own.
+        if (binding is not BarewordArgumentSyntax { Value: var name }) { return; }
+        if (name.Length == 0 || name == "_" || name.StartsWith('$')) { return; }
+
+        var resolved = ctx.ResolveType(declaredTypeName);
+        if (resolved is null || resolved.IsDynamic) { return; }
+
+        frame[name] = resolved;
+    }
+
     private static string? TryGetNarrowedName(
         ArgumentSyntax matchValue,
         ArgumentSyntax? pattern,
@@ -2710,6 +2804,12 @@ public static class Lowerer
             };
             _narrowings.Add(frame);
         }
+
+        /// <summary>
+        /// Several names at once — <c>TOAST-0084</c>. A variant pattern binds one name per field,
+        /// and they enter and leave scope together, so one frame keeps the pops symmetric.
+        /// </summary>
+        public void PushNarrowings(Dictionary<string, BoundType> frame) => _narrowings.Add(frame);
 
         public void PopNarrowing() => _narrowings.RemoveAt(_narrowings.Count - 1);
 

@@ -203,4 +203,107 @@ public sealed class NarrowingTests
             }
             """));
     }
+
+    // ── Variant payload bindings (`TOAST-0084`) ───────────────────────────────
+
+    private const string Union = """
+        class Payload { prop Real: int = 1 }
+        union Box {
+            Full(v: Payload)
+            Empty
+        }
+        """;
+
+    /// <summary>
+    /// A variant pattern's payload binding takes the field type the union declared.
+    /// </summary>
+    /// <remarks>
+    /// <c>Full(v) =&gt; $v.Nope</c> reported nothing: the binding carried no type, so a member
+    /// that does not exist on the payload was never checked. This is the box that makes
+    /// destructuring worth having — <c>Ok(value)</c> should give <c>value</c> a type rather than
+    /// a dynamic object that happens to carry the right thing at run time.
+    ///
+    /// The union is taken from the matched value's type rather than from the variant name. A
+    /// name would need an index and would be ambiguous once two unions share a variant — the
+    /// mistake <c>TOAST-0108</c> had to undo in the exhaustiveness checker.
+    /// </remarks>
+    [Fact]
+    public void A_positional_payload_binding_is_typed()
+    {
+        Assert.True(FlagsMissingMember(Union + """
+
+            func f(b: Box) -> int {
+                return (match ($b) {
+                    Full(v) => $v.Nope
+                    Empty() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_real_member_on_that_binding_is_accepted()
+    {
+        Assert.False(FlagsMissingMember(Union + """
+
+            func f(b: Box) -> int {
+                return (match ($b) {
+                    Full(v) => $v.Real
+                    Empty() => 0
+                })
+            }
+            """));
+    }
+
+    [Theory]
+    [InlineData("Full { v } => $v.Nope")]
+    [InlineData("Full { v: got } => $got.Nope")]
+    public void A_named_payload_binding_is_typed(string arm)
+    {
+        // Both the shorthand and the renaming form, since they bind through different syntax.
+        Assert.True(FlagsMissingMember(Union + $$"""
+
+            func f(b: Box) -> int {
+                return (match ($b) {
+                    {{arm}}
+                    Empty() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_named_binding_accepts_a_real_member()
+    {
+        Assert.False(FlagsMissingMember(Union + """
+
+            func f(b: Box) -> int {
+                return (match ($b) {
+                    Full { v } => $v.Real
+                    Empty() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void An_untyped_payload_field_narrows_nothing()
+    {
+        // A union that did not say what it holds cannot have anything claimed about it. The
+        // binding stays dynamic and the member check stays quiet, which is the honest answer
+        // rather than a guess.
+        Assert.False(FlagsMissingMember("""
+            union Loose {
+                Full(v)
+                Empty
+            }
+
+            func f(b: Loose) -> int {
+                return (match ($b) {
+                    Full(v) => $v.Nope
+                    Empty() => 0
+                })
+            }
+            """));
+    }
 }
