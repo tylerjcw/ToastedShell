@@ -306,4 +306,88 @@ public sealed class NarrowingTests
             }
             """));
     }
+
+    // ── A generic union substitutes its type arguments (`TOAST-0084`) ─────────
+
+    private const string GenericUnion = """
+        class Payload { prop Real: int = 1 }
+        union MyOpt<T> {
+            Some(value: T)
+            Nothing()
+        }
+        """;
+
+    /// <summary>
+    /// A payload field declared as one of the union's own type parameters takes what the use
+    /// site supplied.
+    /// </summary>
+    /// <remarks>
+    /// Without this the field type is the text <c>T</c>, which names no type anywhere, so the
+    /// binding stayed dynamic and nothing was checked. <c>MyOpt&lt;Payload&gt;</c> resolves to a
+    /// generic instance wrapping the union, and that is where the arguments live.
+    /// </remarks>
+    [Fact]
+    public void A_generic_payload_takes_the_supplied_argument()
+    {
+        Assert.True(FlagsMissingMember(GenericUnion + """
+
+            func f(o: MyOpt<Payload>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Nope
+                    Nothing() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void A_real_member_of_the_supplied_argument_is_accepted()
+    {
+        Assert.False(FlagsMissingMember(GenericUnion + """
+
+            func f(o: MyOpt<Payload>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Real
+                    Nothing() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void The_bare_payload_spelling_is_typed_too()
+    {
+        // `Some(T)` — the spelling the core prelude's `Option` uses — declares the payload's
+        // type without naming the field, and must substitute the same way.
+        Assert.True(FlagsMissingMember("""
+            class Payload { prop Real: int = 1 }
+            union Bare<T> {
+                Some(T)
+                Nothing()
+            }
+
+            func f(o: Bare<Payload>) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Nope
+                    Nothing() => 0
+                })
+            }
+            """));
+    }
+
+    [Fact]
+    public void An_uninstantiated_generic_union_narrows_nothing()
+    {
+        // Without type arguments there is nothing to substitute, and `T` names no type. Staying
+        // quiet is the honest answer; claiming a type here would be inventing one.
+        Assert.False(FlagsMissingMember(GenericUnion + """
+
+            func f(o: MyOpt) -> int {
+                return (match ($o) {
+                    Some(v) => $v.Nope
+                    Nothing() => 0
+                })
+            }
+            """));
+    }
 }

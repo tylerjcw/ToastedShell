@@ -119,9 +119,9 @@ and exhaustive matches contribute reachability facts.
 - [~] `x is T` narrows in the true path, for `if` and for a match arm; `x is-not T` and
       `not (x is T)` narrow the **else** path. Subtracting `T` from the other branch of a
       positive test is still not done — it needs a type the model cannot spell.
-- [~] A union variant pattern gives every payload binding its declared type — **the
-      substituted part is not done.** A union declared in the same source narrows; the
-      prelude's generic `Option<T>` does not, for the two reasons stated below.
+- [~] A union variant pattern gives every payload binding its declared substituted type —
+      **done for a union declared in this source, generic or not.** An *ambient* union, which
+      is what the prelude's `Option` and `Result` are, still narrows nothing; see below.
 - [ ] Refinement tests preserve the refinement type rather than only its base type
 - [ ] Early exit, short-circuit logic and exhaustive match arms contribute correct reachability facts
 - [ ] Reassignment, aliasing, captures and effectful calls invalidate facts where required for soundness
@@ -171,24 +171,35 @@ hand, so there is nothing to guess.
 A field with no declared type contributes nothing, and there is a test for that: a union that did
 not say what it holds cannot have anything claimed about it.
 
-### What "substituted" still means, and why it is not done
+### Substitution — done 2026-09-04
 
-Measured, and the difference is sharp:
+`MyOpt<Payload>` resolves to a `GenericInstanceType` wrapping the union, and that is where the
+type arguments live. Binding the union's own parameter names to them lets a field declared `T`
+take what the use site supplied; without it the field type is the text `T`, which names no type
+anywhere, so the binding stayed dynamic and nothing was checked.
+
+Both payload spellings substitute: `Some(value: T)` and the bare `Some(T)` the core prelude
+itself uses. An *uninstantiated* `MyOpt` narrows nothing, and has a test — there is nothing to
+substitute and claiming a type there would be inventing one.
+
+### What remains: ambient unions
+
+
+
+Measured, and the difference is now only about *where the union was declared*:
 
 ```tosh
-union MyOpt { Some(v: Payload) None }
-func f(o: MyOpt)            { match ($o) { Some(v) => $v.Nope … } }   # reported
-func g(o: Option<Payload>)  { match ($o) { Some(v) => $v.Nope … } }   # silent
+union MyOpt<T> { Some(value: T) Nothing() }
+func f(o: MyOpt<Payload>)  { match ($o) { Some(v) => $v.Nope … } }   # reported
+func g(o: Option<Payload>) { match ($o) { Some(v) => $v.Nope … } }   # silent
 ```
 
-Two separate reasons, both real:
+`Lowerer.Lower` builds its type registry from the parsed source alone, so the prelude's `Option`
+and `Result` are not `UserUnionType`s there at all.
 
-1. **The lowerer registers unions from the parsed source only**, so the core prelude's `Option`
-   and `Result` are not `UserUnionType`s here at all.
-2. **`Some(v: T)` needs `T` substituted from `Option<Payload>`** before the field type means
-   anything. Nothing in the bound type model carries the binding of a union's type arguments to a
-   use site.
-
-The first is plumbing; the second is the item's word *substituted*, and it is the larger half. So
-the box stays `[~]`: destructuring a union you declared is checked, and destructuring an `Option`
-is not yet.
+Closing it is plumbing rather than design, but not small plumbing. `Lower` would take an optional
+ambient-type registry — 113 call sites, so it has to be optional — and the engine has nothing of
+the right shape to hand it: `CollectAmbientUnionShapes` returns variant *names* only, with no
+field types and no type parameters. A richer snapshot has to be built and threaded from the
+engine to the compiler front end, which is a boundary worth crossing deliberately rather than as
+a follow-on.

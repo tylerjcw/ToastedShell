@@ -1850,12 +1850,29 @@ public static class Lowerer
         ArgumentSyntax? pattern,
         LowerContext ctx)
     {
-        if (matchedType is not UserUnionType { Definition: UnionDefinitionStatementSyntax unionDef })
+        // `MyOpt<Payload>` resolves to a generic instance wrapping the union, which is where the
+        // type arguments live — without them a field declared `T` means nothing at a use site.
+        var typeArguments = matchedType is GenericInstanceType generic
+            ? generic.TypeArguments
+            : Array.Empty<BoundType>();
+
+        var unionType = matchedType is GenericInstanceType instance ? instance.Template : matchedType;
+
+        if (unionType is not UserUnionType { Definition: UnionDefinitionStatementSyntax unionDef })
         {
             return null;
         }
 
         if (pattern is not VariantPatternSyntax variant) { return null; }
+
+        // The union's own parameter names, bound to what the use site supplied.
+        var substitutions = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+        var parameters = unionDef.TypeParameters ?? Array.Empty<string>();
+
+        for (var index = 0; index < parameters.Count && index < typeArguments.Count; index++)
+        {
+            substitutions[parameters[index]] = typeArguments[index];
+        }
 
         var member = variant.VariantName;
         var separator = member.LastIndexOf('.');
@@ -1870,7 +1887,8 @@ public static class Lowerer
 
         for (var index = 0; index < variant.Positional.Count && index < declared.Fields.Count; index++)
         {
-            AddPayloadNarrowing(frame, variant.Positional[index], declared.Fields[index].TypeName, ctx);
+            AddPayloadNarrowing(
+                frame, variant.Positional[index], declared.Fields[index].TypeName, substitutions, ctx);
         }
 
         foreach (var named in variant.Named)
@@ -1880,7 +1898,7 @@ public static class Lowerer
 
             if (field is null) { continue; }
 
-            AddPayloadNarrowing(frame, named.Pattern, field.TypeName, ctx);
+            AddPayloadNarrowing(frame, named.Pattern, field.TypeName, substitutions, ctx);
         }
 
         return frame.Count == 0 ? null : frame;
@@ -1890,6 +1908,7 @@ public static class Lowerer
         Dictionary<string, BoundType> frame,
         ArgumentSyntax binding,
         string? declaredTypeName,
+        IReadOnlyDictionary<string, BoundType> substitutions,
         LowerContext ctx)
     {
         if (string.IsNullOrWhiteSpace(declaredTypeName)) { return; }
@@ -1899,7 +1918,12 @@ public static class Lowerer
         if (binding is not BarewordArgumentSyntax { Value: var name }) { return; }
         if (name.Length == 0 || name == "_" || name.StartsWith('$')) { return; }
 
-        var resolved = ctx.ResolveType(declaredTypeName);
+        // A field declared as one of the union's own type parameters takes what the use site
+        // supplied. Resolving the text would find nothing: `T` names no type anywhere.
+        var resolved = substitutions.TryGetValue(declaredTypeName, out var substituted)
+            ? substituted
+            : ctx.ResolveType(declaredTypeName);
+
         if (resolved is null || resolved.IsDynamic) { return; }
 
         frame[name] = resolved;
