@@ -77,7 +77,11 @@ handle the qualified form correctly.
       **not done.** `$probe is QtModule.NotDeclared` still answers `False`, pinned by
       `A_qualified_name_that_names_no_type_is_false`. See the note below: this is the same
       failure mode the item opened with, and the half of it that is still open.
-- [x] `is` and type annotations agree on every name either accepts
+- [ ] `is` and type annotations agree on every name either accepts — **not done; checked in
+      error on 2026-09-02 and corrected on 2026-09-04.** It was verified only against
+      module-qualified declared types. A refinement type is a counterexample: `var p: PosInt = 5`
+      resolves and enforces the predicate, while `5 is PosInt` answers `false`. Tracked as
+      `TOAST-0111`.
 - [x] Corpus covers record, class, qualified, unqualified, inside and outside the module
 
 ## Progress (2026-09-02)

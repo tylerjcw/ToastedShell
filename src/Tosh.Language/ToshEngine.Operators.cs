@@ -124,6 +124,9 @@ public sealed partial class ToshEngine
             }
 
             return await EvaluateFallbackBinaryOperatorAsync(
+                sourceName,
+                sourceText,
+                span,
                 left,
                 @operator,
                 right,
@@ -156,6 +159,9 @@ public sealed partial class ToshEngine
     }
 
     private async ValueTask<object?> EvaluateFallbackBinaryOperatorAsync(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
         object? left,
         string @operator,
         object? right,
@@ -194,6 +200,9 @@ public sealed partial class ToshEngine
             "+" when right is string => await ToOperatorStringAsync(left, cancellationToken)
                 + (string)right,
             _ => await EvaluateClrFallbackOperatorAsync(
+                sourceName,
+                sourceText,
+                span,
                 left,
                 @operator,
                 right,
@@ -202,6 +211,9 @@ public sealed partial class ToshEngine
     }
 
     private async ValueTask<object?> EvaluateClrFallbackOperatorAsync(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
         object? left,
         string @operator,
         object? right,
@@ -229,10 +241,94 @@ public sealed partial class ToshEngine
         cancellationToken.ThrowIfCancellationRequested();
         if (@operator == "as")
         {
+            // `TOAST-0111`. `5 as PosInt` reported "Unknown type 'PosInt'" — the same blindness
+            // to refinement types that `is` had, in the surface where it at least failed loudly.
+            // A conversion is what the annotation path performs, `coerce` clause and all, so
+            // this reuses it rather than teaching `CastAs` about refinements.
+            if (right is string castName &&
+                TryResolveRefinementTypeForAnnotation(
+                    castName.EndsWith("?", StringComparison.Ordinal) ? castName[..^1] : castName,
+                    out _))
+            {
+                return ConvertAnnotatedValue(
+                    castName,
+                    refinement: null,
+                    left,
+                    span,
+                    sourceName,
+                    sourceText,
+                    $"as {castName}");
+            }
+
             return OperatorEvaluator.CastAs(left, right, ResolveAsTarget);
         }
 
+        // `TOAST-0111`. A refinement type is a name annotations resolve and enforce, so `is` has
+        // to answer for it too. It cannot be done in the portable operator runtime: deciding it
+        // means evaluating the `where` predicate, which needs the engine's scopes.
+        if (@operator is "is" or "is-not" &&
+            right is string refinementName &&
+            await TryTestRefinementTypeAsync(left, refinementName, cancellationToken) is bool satisfied)
+        {
+            return @operator == "is" ? satisfied : !satisfied;
+        }
+
         return OperatorEvaluator.EvaluateBinary(left, @operator, right, ResolveDeclaredTypeName);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="value"/> satisfies the refinement type <paramref name="typeName"/>,
+    /// or <c>null</c> when that name is not a refinement type — <c>TOAST-0111</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Measured before this existed: <c>var p: PosInt = 5</c> resolved the type and enforced its
+    /// predicate, while <c>5 is PosInt</c> answered <c>false</c> — and <c>5 is-not PosInt</c>
+    /// therefore answered <c>true</c>, which is not merely unhelpful but wrong. A refinement type
+    /// is the thing a type test is most obviously *for*.
+    /// </para>
+    /// <para>
+    /// The value must already be the base type. It is not converted first, which is the
+    /// difference between this and the annotation path: <c>var p: PosInt = "5"</c> may coerce,
+    /// but <c>"5" is PosInt</c> is false for the same reason <c>"5" is int</c> is. A test reports
+    /// what a value <em>is</em>, never what it could become.
+    /// </para>
+    /// <para>
+    /// A refinement over a refinement recurses, so the predicates of the whole chain must hold.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<bool?> TryTestRefinementTypeAsync(
+        object? value,
+        string typeName,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(typeName)) { return null; }
+
+        var allowsNull = typeName.EndsWith("?", StringComparison.Ordinal);
+        var normalized = allowsNull ? typeName[..^1] : typeName;
+
+        if (!TryResolveRefinementTypeForAnnotation(normalized, out var definition))
+        {
+            return null;
+        }
+
+        if (value is null) { return allowsNull; }
+
+        // The base first: a chain of refinements must satisfy every link.
+        var baseResult = await TryTestRefinementTypeAsync(value, definition.BaseTypeName, cancellationToken);
+
+        if (baseResult is bool nestedBase)
+        {
+            if (!nestedBase) { return false; }
+        }
+        else if (!OperatorEvaluator.IsInstanceOfShellType(value, definition.BaseTypeName))
+        {
+            return false;
+        }
+
+        if (definition.Refinement is null) { return true; }
+
+        return await EvaluateRefinementPredicateAsync(definition.Refinement, value, cancellationToken);
     }
 
     /// <summary>
