@@ -567,6 +567,7 @@ public static class VariableBinder
             case MatchArgumentSyntax match:
                 VisitArgument(match.Value, ctx);
                 CheckMatchExhaustiveness(match, ctx);
+                CheckBarewordVariantArms(match, ctx);
                 foreach (var arm in match.Arms)
                 {
                     if (arm.Pattern is not null) VisitArgument(arm.Pattern, ctx);
@@ -990,6 +991,82 @@ public static class VariableBinder
     }
 
     /// <summary>The patterns an arm can match on — one, or an or-pattern's alternatives.</summary>
+    /// <summary>
+    /// Reports an arm written as a bare variant name beside arms that destructure the same
+    /// union — <c>TOAST-0110</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A bareword arm is a <em>string literal</em> pattern: <c>match ("hello") { hello => … }</c>
+    /// matches, and that is a real feature. So <c>None</c> beside <c>Some(v)</c> compares the
+    /// value against the text <c>"None"</c> and can never match an <c>Option</c> — silently, and
+    /// with the exhaustiveness check bailing as well, because a non-variant arm means "not a
+    /// union-shaped match".
+    /// </para>
+    /// <para>
+    /// A unit variant is written <c>None()</c>. Since <c>TOAST-0083</c> put <c>Option</c> and
+    /// <c>Result</c> in the prelude this is going to be one of the most common mistakes in the
+    /// language, and nothing reported it.
+    /// </para>
+    /// <para>
+    /// A <b>warning</b>, not an error, because the binder has no types: a value that is sometimes
+    /// a union and sometimes the string <c>"None"</c> would make the arm meaningful. The trigger
+    /// is narrow for the same reason — another arm in the same match must destructure a variant
+    /// of the union the bareword names, so the author has already shown what they are matching.
+    /// Matching a plain string against the bareword <c>Ok</c> is untouched.
+    /// </para>
+    /// </remarks>
+    private static void CheckBarewordVariantArms(MatchArgumentSyntax match, Context ctx)
+    {
+        var members = new List<string>();
+
+        foreach (var arm in match.Arms)
+        {
+            if (arm.Pattern is null) { continue; }
+
+            foreach (var alternative in PatternAlternatives(arm.Pattern))
+            {
+                if (alternative is VariantPatternSyntax variant)
+                {
+                    SplitVariantName(variant.VariantName, out _, out var member);
+                    members.Add(member);
+                }
+            }
+        }
+
+        if (members.Count == 0) { return; }
+
+        var union = ResolveUnionFromMembers(members, ctx);
+        if (union is null) { return; }
+
+        foreach (var arm in match.Arms)
+        {
+            if (arm.IsWildcard || arm.Pattern is null) { continue; }
+
+            foreach (var alternative in PatternAlternatives(arm.Pattern))
+            {
+                if (alternative is not BarewordArgumentSyntax { Value: var name } bareword) { continue; }
+                if (name.Length == 0 || name == "_" || name.StartsWith('$')) { continue; }
+
+                SplitVariantName(name, out _, out var bare);
+                if (!union.Variants.Contains(bare, StringComparer.Ordinal)) { continue; }
+
+                ctx.Diagnostics.Add(new ToshDiagnostic(
+                    Code: "tosh.bind.bareword_variant_arm",
+                    Title: $"Arm '{name}' matches the text \"{name}\", not the '{union.Name}' variant.",
+                    SourceName: ctx.SourceName,
+                    SourceText: ctx.SourceText,
+                    Span: bareword.Span,
+                    Label: $"'{bare}' is a variant of '{union.Name}', which another arm here destructures",
+                    Help: $"write `{bare}()` to match the variant — a unit variant takes parentheses "
+                        + $"like any other. A bareword arm is a string literal pattern, so quote it "
+                        + $"as `\"{name}\"` if a string really is what this arm means.",
+                    Severity: ToshDiagnosticSeverity.Warning,
+                    Category: ToshDiagnosticCategory.Naming));
+            }
+        }
+    }
+
     /// <summary>
     /// Reports a <c>match</c> whose arms cover every variant but not every *value* — the second
     /// slice of <c>TOAST-0054</c>.

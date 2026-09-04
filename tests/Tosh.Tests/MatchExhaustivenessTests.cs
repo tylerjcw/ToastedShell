@@ -1,5 +1,6 @@
 using Tosh.Language;
 using Tosh.Language.Binding;
+using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -518,5 +519,104 @@ public sealed class MatchExhaustivenessTests
             """);
 
         Assert.Contains("Add(Add(Add(_, _), _), _)", error.Message, StringComparison.Ordinal);
+    }
+
+    // ── A bare variant name is a string, not the variant (`TOAST-0110`) ───────
+
+    /// <summary>
+    /// Binds with <c>Option</c> supplied the way the core prelude supplies it, so these read the
+    /// same environment real source does.
+    /// </summary>
+    private static IReadOnlyList<ToshDiagnostic> Diagnose(string source)
+    {
+        var parsed = ToshParser.Parse(source, "test.tosh");
+        var ambient = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            ["Option"] = ["Some", "None"],
+        };
+
+        return Binder.Bind(
+            parsed,
+            ToshRuntime.CreateDefault().Language.Commands,
+            isInteractive: false,
+            isExecutableOnPath: null,
+            ambientUnions: ambient);
+    }
+
+    [Fact]
+    public void A_bare_variant_name_beside_a_destructuring_arm_is_reported()
+    {
+        // The shape people will write, and it silently never matches: `None` compares the value
+        // against the text "None". Nothing said so, and exhaustiveness bailed too, because a
+        // non-variant arm means "not a union-shaped match".
+        var diagnostics = Diagnose("""
+            echo (match ($o) {
+                Some(v) => "some"
+                None => "none"
+            })
+            """);
+
+        var warning = Assert.Single(diagnostics, d => d.Code == "tosh.bind.bareword_variant_arm");
+        Assert.Equal(ToshDiagnosticSeverity.Warning, warning.Severity);
+        Assert.Contains("None()", warning.Help ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("Option", warning.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_parenthesised_form_is_not_reported()
+    {
+        var diagnostics = Diagnose("""
+            echo (match ($o) {
+                Some(v) => "some"
+                None() => "none"
+            })
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Code == "tosh.bind.bareword_variant_arm");
+    }
+
+    [Fact]
+    public void A_plain_string_match_is_untouched()
+    {
+        // A bareword arm is a string literal pattern, and that is a real feature. Without another
+        // arm destructuring the same union there is nothing to suggest a mistake.
+        var diagnostics = Diagnose("""
+            echo (match ("Ok") {
+                Ok => "fine"
+                default => "no"
+            })
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Code == "tosh.bind.bareword_variant_arm");
+    }
+
+    [Fact]
+    public void A_bareword_naming_a_different_unions_variant_is_untouched()
+    {
+        // `Leaf` is not a variant of `Option`, so nothing about this arm looks like the mistake.
+        var diagnostics = Diagnose("""
+            union Tree { Leaf(v: int) Branch(l: int, r: int) }
+
+            echo (match ($o) {
+                Some(v) => "some"
+                Leaf => "text"
+                default => "no"
+            })
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Code == "tosh.bind.bareword_variant_arm");
+    }
+
+    [Fact]
+    public void A_binding_arm_is_not_mistaken_for_a_variant_name()
+    {
+        var diagnostics = Diagnose("""
+            echo (match ($o) {
+                Some(v) => "some"
+                other => $other
+            })
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.Code == "tosh.bind.bareword_variant_arm");
     }
 }
