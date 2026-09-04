@@ -129,10 +129,9 @@ a literal that is not there. Both have tests.
 
 Three things it deliberately does not do. An untyped `{| … |}` is left alone — it has no type to
 complete against and must not acquire one. A position after `=` is a value, not a field name, so
-the ordinary sources answer there. And a struct is not answered for at all: struct definitions are
-not in the declaration index, so there is nothing to offer, and saying nothing beats guessing.
-That last one is a real gap in the index rather than a decision, and worth its own item if struct
-literals become common.
+the ordinary sources answer there. And a struct was not answered for at all, because struct definitions
+were not in the declaration index — a real gap rather than a decision, since filed and fixed as
+`TOAST-0114`.
 
 **The formatter box needed nothing**, for the reason recorded on `TOAST-0090`: it leaves every
 expression interior alone, verified by control.
