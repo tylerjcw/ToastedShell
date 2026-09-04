@@ -1,7 +1,7 @@
 ---
 id: TOAST-0091
 title: "A value whose state is not entirely constructor arguments has no literal form"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -64,7 +64,7 @@ justify it alone.
 - [x] A field the type does not have, or cannot accept, is a diagnostic naming it
 - [x] Required state a literal omits is a diagnostic rather than a default-initialised surprise
 - [x] Untyped `{| … |}` is unchanged
-- [ ] Formatter, LSP completion and hover understand the form
+- [x] Formatter, LSP completion and hover understand the form
 - [~] Interpreter and compiler agree — **compiled backend diverges, recorded not fixed**
 
 ## Decisions and progress (2026-08-28)
@@ -112,3 +112,31 @@ with no error*, which is worse than an unsupported one, so `BoundNewObject` carr
 `HasObjectInitializer` and `EmitNewObject` throws on it. The fields are still not lowered — this
 is a guard, not an implementation, and the interpreter remains authoritative. The divergence
 stays recorded; it is now a refusal rather than a wrong answer.
+
+## Progress (2026-09-03) — the editor surface
+
+Measured first, as with `TOAST-0090`: the cursor inside `new Box {| … |}` returned the same 373
+generic entries as anywhere else, with the type's own members in none of them. A field name is a
+bare identifier, so nothing in the completion chain recognised the position.
+
+A class's properties and a record's fields are offered now, inserted as `Name = ` so the common
+next keystroke is already there, and hover on a field names the type it belongs to. Both use the
+declaration index that `TOAST-0090` taught about declared types, so this was mostly wiring.
+
+**The literal is found by scanning forward from the start of the document, not backward from the
+cursor.** Backward is cheaper and wrong: a `"{|"` inside a string, or one in a `#` comment, opens
+a literal that is not there. Both have tests.
+
+Three things it deliberately does not do. An untyped `{| … |}` is left alone — it has no type to
+complete against and must not acquire one. A position after `=` is a value, not a field name, so
+the ordinary sources answer there. And a struct is not answered for at all: struct definitions are
+not in the declaration index, so there is nothing to offer, and saying nothing beats guessing.
+That last one is a real gap in the index rather than a decision, and worth its own item if struct
+literals become common.
+
+**The formatter box needed nothing**, for the reason recorded on `TOAST-0090`: it leaves every
+expression interior alone, verified by control.
+
+Closing the hover box required fixing `TOAST-0109` first — any `|` within three characters of the
+cursor was read as a pipeline, so hovering a field in a *short* typed literal returned a pipeline
+card. It worked for `Box` and failed for `Point`, purely because of the type name's length.

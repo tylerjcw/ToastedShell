@@ -159,6 +159,45 @@ public sealed class DeclarationIndex
             .ToArray();
     }
 
+    /// <summary>
+    /// The members a typed literal may set — a class's properties, a record's fields;
+    /// <c>TOAST-0091</c>. This is what <c>new T {| … |}</c> completes to.
+    /// </summary>
+    /// <remarks>
+    /// Shares the scope rule with <see cref="GetTypeMembers"/>: the type must be visible from the
+    /// cursor, its members are found by their declaring scope. A struct is not answered for —
+    /// struct definitions are not in the index at all, so there is nothing to offer and saying
+    /// nothing is better than guessing.
+    /// </remarks>
+    public IReadOnlyList<IndexedTypeMember> GetInitializableMembers(int offset, string typeName)
+    {
+        var declaringType = GetVisibleDeclarations(
+                offset,
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record)
+            .FirstOrDefault(declaration => string.Equals(declaration.Name, typeName, StringComparison.Ordinal));
+
+        if (declaringType is null)
+        {
+            return Array.Empty<IndexedTypeMember>();
+        }
+
+        var memberKind = declaringType.Kind == DeclarationKind.Class
+            ? DeclarationKind.Property
+            : DeclarationKind.RecordField;
+
+        return _declarations
+            .Where(declaration =>
+                declaration.Kind == memberKind &&
+                declaration.ScopeStart == declaringType.DeclStart &&
+                declaration.ScopeEnd == declaringType.DeclEnd)
+            .Select(declaration => new IndexedTypeMember(
+                declaration.Name,
+                declaringType.Name,
+                declaringType.Kind == DeclarationKind.Class ? "Property" : "Field",
+                declaration.DocComment))
+            .ToArray();
+    }
+
     public IReadOnlyList<string> GetVisibleModules(int offset)
     {
         return GetVisibleDeclarations(offset, declaration => declaration.Kind == DeclarationKind.Module)

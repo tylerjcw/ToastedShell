@@ -266,6 +266,22 @@ public sealed class ToshLanguageFeatures
             return items.Values.OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
+        // `TOAST-0091`. Inside `new T {| … |}` the names that belong are the type's own settable
+        // members. Checked before the qualified context: a field name is a bare identifier, so
+        // nothing below would recognise it, and the caller fell through to the global list.
+        if (TryGetTypedLiteralContext(text, offset, out var literalType, out var literalPartial))
+        {
+            AddItems(items, GetInitializableMemberCompletions(index, offset, literalType, literalPartial));
+
+            // The type says what may be set, so this is the answer whether or not it is empty.
+            // Falling through would offer every command and keyword in a position where only a
+            // field name can go.
+            if (index.GetInitializableMembers(offset, literalType).Count > 0)
+            {
+                return items.Values.OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
+            }
+        }
+
         if (TryGetQualifiedCompletionContext(
                 text, offset, out var qualifiedTarget, out var qualifiedPartial, out var viaPathOperator))
         {
@@ -783,6 +799,10 @@ public sealed class ToshLanguageFeatures
         else if (GetDeclaredTypeMemberHoverDescription(index, text, token.Start, normalizedWord) is { } memberDescription)
         {
             description = memberDescription;
+        }
+        else if (GetTypedLiteralMemberHoverDescription(index, text, token.Start, normalizedWord) is { } literalDescription)
+        {
+            description = literalDescription;
         }
         else if (GetTypeLikeDeclarationHoverDescription(index, offset, normalizedWord) is { } typeDescription)
         {
@@ -1718,11 +1738,210 @@ public sealed class ToshLanguageFeatures
     }
 
     /// <summary>
+    /// Whether the cursor sits in a field-name position of a typed record literal, and if so the
+    /// type it is constructing — <c>TOAST-0091</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Found by scanning forward from the start of the document rather than backward from the
+    /// cursor. Backward is cheaper and wrong: a <c>"{|"</c> inside a string, or a <c>#</c>
+    /// comment, would open a literal that is not there. Forward, the scanner knows which of
+    /// those it is inside, and documents are small enough that the cost does not matter.
+    /// </para>
+    /// <para>
+    /// The type is read from what precedes the opener: an identifier, optionally preceded by a
+    /// parenthesised constructor call, preceded by <c>new</c>. An untyped <c>{| … |}</c> has no
+    /// <c>new</c> before it and is left alone, which is what keeps ordinary record literals free
+    /// of type-shaped completions.
+    /// </para>
+    /// </remarks>
+    private static bool TryGetTypedLiteralContext(
+        string text,
+        int offset,
+        out string typeName,
+        out string partial)
+    {
+        typeName = string.Empty;
+        partial = string.Empty;
+
+        var open = FindEnclosingRecordLiteral(text, offset);
+        if (open < 0) { return false; }
+
+        if (!TryReadTypedLiteralHead(text, open, out typeName)) { return false; }
+
+        // Only a field-name position. After an `=` the author is writing a value, and the type's
+        // member names are not what belongs there.
+        for (var index = offset - 1; index > open + 1; index--)
+        {
+            var ch = text[index];
+            if (ch is ',' or '\n') { break; }
+            if (ch == '=' && (index == 0 || text[index - 1] is not ('=' or '!' or '<' or '>'))) { return false; }
+        }
+
+        var start = offset;
+        while (start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_'))
+        {
+            start--;
+        }
+
+        partial = text[start..offset];
+        return true;
+    }
+
+    /// <summary>
+    /// Index of the <c>{</c> of the innermost <c>{|</c> the cursor is inside, or -1.
+    /// </summary>
+    private static int FindEnclosingRecordLiteral(string text, int offset)
+    {
+        var openings = new Stack<int>();
+        var limit = Math.Clamp(offset, 0, text.Length);
+
+        for (var index = 0; index < limit; index++)
+        {
+            var ch = text[index];
+
+            if (ch == '#')
+            {
+                while (index < limit && text[index] != '\n') { index++; }
+                continue;
+            }
+
+            if (ch is '"' or '\'')
+            {
+                index = SkipQuotedSpan(text, index, ch, limit);
+                continue;
+            }
+
+            if (ch == '{' && index + 1 < limit && text[index + 1] == '|')
+            {
+                openings.Push(index);
+                index++;
+                continue;
+            }
+
+            if (ch == '|' && index + 1 < limit && text[index + 1] == '}')
+            {
+                if (openings.Count > 0) { openings.Pop(); }
+                index++;
+            }
+        }
+
+        return openings.Count > 0 ? openings.Peek() : -1;
+    }
+
+    private static int SkipQuotedSpan(string text, int start, char quote, int limit)
+    {
+        for (var index = start + 1; index < limit; index++)
+        {
+            if (text[index] == '\\') { index++; continue; }
+            if (text[index] == quote) { return index; }
+        }
+
+        return limit;
+    }
+
+    /// <summary>
+    /// Reads <c>new T</c> or <c>new T(args)</c> immediately before a literal's <c>{|</c>.
+    /// </summary>
+    private static bool TryReadTypedLiteralHead(string text, int open, out string typeName)
+    {
+        typeName = string.Empty;
+        var cursor = open - 1;
+
+        while (cursor >= 0 && char.IsWhiteSpace(text[cursor])) { cursor--; }
+
+        // `new T(args) {| … |}` is accepted too, so a constructor call is skipped as a unit.
+        if (cursor >= 0 && text[cursor] == ')')
+        {
+            var depth = 0;
+
+            while (cursor >= 0)
+            {
+                if (text[cursor] == ')') { depth++; }
+                else if (text[cursor] == '(')
+                {
+                    depth--;
+                    if (depth == 0) { cursor--; break; }
+                }
+
+                cursor--;
+            }
+
+            if (depth != 0) { return false; }
+
+            while (cursor >= 0 && char.IsWhiteSpace(text[cursor])) { cursor--; }
+        }
+
+        var nameEnd = cursor + 1;
+
+        while (cursor >= 0 && (char.IsLetterOrDigit(text[cursor]) || text[cursor] is '_' or '.'))
+        {
+            cursor--;
+        }
+
+        var nameStart = cursor + 1;
+        if (nameStart >= nameEnd) { return false; }
+
+        while (cursor >= 0 && char.IsWhiteSpace(text[cursor])) { cursor--; }
+
+        // Without `new` this is an untyped record literal, which has no type to complete against.
+        const string New = "new";
+        if (cursor - New.Length + 1 < 0) { return false; }
+        if (text.AsSpan(cursor - New.Length + 1, New.Length) is not "new") { return false; }
+
+        var before = cursor - New.Length;
+        if (before >= 0 && (char.IsLetterOrDigit(text[before]) || text[before] is '_' or '$'))
+        {
+            return false;
+        }
+
+        typeName = text[nameStart..nameEnd];
+        return true;
+    }
+
+    /// <summary>
     /// An enum's members and a union's variants, which is what a path into a declared type
     /// reaches — <c>TOAST-0090</c>. Neither the shell-class resolver nor the CLR catalog answers
     /// for these, so before this they completed to nothing and the caller fell through to the
     /// global list.
     /// </summary>
+    /// <summary>
+    /// A class's properties and a record's fields, which is what a typed literal sets —
+    /// <c>TOAST-0091</c>.
+    /// </summary>
+    private static IReadOnlyList<LspCompletionItem> GetInitializableMemberCompletions(
+        DeclarationIndex index,
+        int offset,
+        string typeName,
+        string partial)
+    {
+        var members = index.GetInitializableMembers(offset, typeName);
+
+        if (members.Count == 0)
+        {
+            return Array.Empty<LspCompletionItem>();
+        }
+
+        var items = new List<LspCompletionItem>(members.Count);
+
+        foreach (var member in members)
+        {
+            if (!MatchesPrefix(member.Name, partial))
+            {
+                continue;
+            }
+
+            items.Add(new LspCompletionItem(
+                member.Name,
+                Kind: member.KindLabel == "Property" ? 10 : 5, // Property / Field
+                Detail: $"{member.KindLabel} of {member.DeclaringType}",
+                Documentation: member.DocComment?.Summary,
+                InsertText: member.Name + " = "));
+        }
+
+        return items;
+    }
+
     private static IReadOnlyList<LspCompletionItem> GetDeclaredTypeMemberCompletions(
         DeclarationIndex index,
         int offset,
@@ -1983,6 +2202,46 @@ public sealed class ToshLanguageFeatures
 
         var qualifier = text[qualifierStart..qualifierEnd];
         var member = index.GetTypeMembers(qualifierStart, qualifier)
+            .FirstOrDefault(candidate => string.Equals(candidate.Name, word, StringComparison.Ordinal));
+
+        if (member is null)
+        {
+            return null;
+        }
+
+        var parts = new List<string> { $"{member.KindLabel} of `{member.DeclaringType}`" };
+        AppendDeprecatedBanner(parts, member.DocComment);
+        AppendSummary(parts, member.DocComment);
+
+        return string.Join("\n\n", parts);
+    }
+
+    /// <summary>
+    /// A field name inside <c>new T {| … |}</c> — <c>TOAST-0091</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the path-member case: a member's scope is its declaring type's span, so
+    /// looking the bare name up from the cursor finds nothing. The enclosing literal is what says
+    /// which type to ask.
+    /// </remarks>
+    private static string? GetTypedLiteralMemberHoverDescription(
+        DeclarationIndex index,
+        string text,
+        int wordStart,
+        string word)
+    {
+        if (string.IsNullOrWhiteSpace(word) || word.StartsWith("$", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var open = FindEnclosingRecordLiteral(text, wordStart);
+        if (open < 0 || !TryReadTypedLiteralHead(text, open, out var typeName))
+        {
+            return null;
+        }
+
+        var member = index.GetInitializableMembers(wordStart, typeName)
             .FirstOrDefault(candidate => string.Equals(candidate.Name, word, StringComparison.Ordinal));
 
         if (member is null)
@@ -3499,14 +3758,55 @@ public sealed class ToshLanguageFeatures
         for (int delta = 0; delta <= 3; delta++)
         {
             int p1 = offset + delta;
-            if (p1 >= 0 && p1 < text.Length && (text[p1] == '|' || text[p1] == '>'))
+            if (p1 >= 0 && p1 < text.Length && IsPipelineOrRedirectAt(text, p1))
                 return p1;
 
             int p2 = offset - delta;
-            if (p2 >= 0 && p2 < text.Length && (text[p2] == '|' || text[p2] == '>'))
+            if (p2 >= 0 && p2 < text.Length && IsPipelineOrRedirectAt(text, p2))
                 return p2;
         }
         return -1;
+    }
+
+    /// <summary>
+    /// Whether the character at <paramref name="index"/> really is a pipeline or redirect
+    /// operator — <c>TOAST-0109</c>.
+    /// </summary>
+    /// <remarks>
+    /// The search above accepts any <c>|</c> or <c>&gt;</c> within three characters of the
+    /// cursor, which caught a great deal that is neither: the <c>|</c> of a record literal's
+    /// <c>{|</c> and <c>|}</c>, of a dict's <c>{%</c> pair's siblings, of an or-pattern's
+    /// alternatives, of <c>||</c>; and the <c>&gt;</c> of <c>=&gt;</c>, <c>&gt;=</c> and
+    /// <c>-&gt;</c>. Hovering a field name in a short typed literal produced a "Pipeline Data
+    /// Stream" card about a pipeline that is not there.
+    /// </remarks>
+    private static bool IsPipelineOrRedirectAt(string text, int index)
+    {
+        var ch = text[index];
+
+        if (ch == '|')
+        {
+            // A collection or record delimiter, not a pipe.
+            if (index > 0 && text[index - 1] is '{' or '[') { return false; }
+            if (index + 1 < text.Length && text[index + 1] is '}' or ']') { return false; }
+
+            // `||` is logical or; `<|` is the comprehension separator.
+            if (index > 0 && text[index - 1] is '|' or '<') { return false; }
+            if (index + 1 < text.Length && text[index + 1] == '|') { return false; }
+
+            return true;
+        }
+
+        if (ch == '>')
+        {
+            // `=>`, `->` and `>=` are not redirects.
+            if (index > 0 && text[index - 1] is '=' or '-') { return false; }
+            if (index + 1 < text.Length && text[index + 1] == '=') { return false; }
+
+            return true;
+        }
+
+        return false;
     }
 
     private sealed record CommandCallSite(CommandSyntax Command, int ActiveParameter);
