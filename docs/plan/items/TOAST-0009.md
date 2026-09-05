@@ -35,14 +35,18 @@ rewrite.
 
 ## Acceptance
 
-- [ ] Each bound node type carries its own evaluate method; dispatch is a virtual call, not a thirty-nine-case switch
+- [~] Each bound node type carries its own evaluate method; dispatch is a virtual call, not a
+      thirty-nine-case switch — **each case is now its own method**, so the shared state
+      machine is gone. Dispatch is still a switch over syntax nodes, not a virtual call
+      over bound nodes; that is the remaining half.
 - [ ] Shapes that cannot suspend are synchronous by construction rather than special-cased
 - [~] A differential harness compares old evaluator against new over the conformance corpus,
       and both agree exactly — **the harness exists and is green**; it compares the two
       evaluators that exist *today*, and is where a bound-tree evaluator will hang.
 - [ ] Streaming laziness preserved — `TS-P2-113` and `TS-P2-89` both have scars here
 - [ ] Generators, cancellation and `NativeCallbackScope` re-entrancy all preserved
-- [ ] Allocation per iteration measured before and after, A/B against a worktree build
+- [x] Allocation per iteration measured before and after — A/B on the *same* build via the
+      fast-path seam, which is sharper than a worktree comparison and cannot drift.
 
 ## Where this sits, corrected 2026-08-17
 
@@ -79,7 +83,33 @@ worth 25% on expressions, and cross-run comparison produced a false regression t
 
 ## Starting work — 2026-09-04
 
-### The allocation case is much weaker than the item states
+### Correction — 2026-09-05: the allocation case is real, and larger than stated
+
+**The section below is wrong, and is kept because the mistake is instructive.** It measured
+`bench/Tosh.AllocationProbe`'s shapes and concluded the state-machine cost had evaporated. Those
+shapes are precisely the ones the synchronous fast path answers, so the measurement was of the
+workaround, not of the thing the item is about.
+
+Measured properly, using the fast-path suppression seam to compare the two paths on the *same*
+source:
+
+| Shape | fast path | slow path | delta |
+|---|---:|---:|---:|
+| empty `for` iteration | 1,778 B | 1,778 B | 0 |
+| `$s = $t` | 2,306 B | 2,307 B | 1 B |
+| `$s = ($t)` | 2,554 B | 7,699 B | **+5,145 B** |
+| `$s = ($t + 1)` | 2,722 B | 10,139 B | **+7,417 B** |
+
+Entering `EvaluateArgumentSlowAsync` costs thousands of bytes per evaluation, and a nested
+expression pays it once per node. The item's estimate of ~2,545 B per entry was conservative.
+
+Five of thirty-nine shapes take the fast path. **The other thirty-four pay this on every
+evaluation**, which is why the probe's numbers looked reassuring and were not.
+
+The lesson is the one this session keeps relearning: a measurement that does not exercise the
+code under discussion measures something else and reports it confidently.
+
+### Superseded — the allocation case is much weaker than the item states
 
 Re-measured with `bench/Tosh.AllocationProbe`, 200,000 iterations, best of three:
 
@@ -121,3 +151,40 @@ flips, so nodes can migrate one shape at a time with every step checked against 
 they are replacing. That is the only way a rewrite of semantics-carrying code — with streaming
 laziness, generators, cancellation and `NativeCallbackScope` re-entrancy all riding on it — can
 be done in slices rather than as one unreviewable jump.
+
+## First slice — 2026-09-05: the shared state machine is gone
+
+Every one of the thirty-nine cases now lives in its own method. The dispatcher went from 1,196
+lines to 409, of which 308 are its two catch clauses; only `LiteralArgumentSyntax` and
+`BarewordArgumentSyntax` remain inline, because both are one synchronous expression and
+contribute nothing to a state machine.
+
+Measured with the suppression seam, A/B on the same build:
+
+| Shape | before | after | |
+|---|---:|---:|---:|
+| `$s = ($t)` | +5,145 B | **+1,936 B** | −62% |
+| `$s = ($t + 1)` | +7,417 B | **+2,520 B** | −66% |
+
+The catch clauses were left where they are, deliberately: they contain no `await`, so their
+locals were never in the state machine. Moving them would shorten the method without moving a
+byte.
+
+### What this does not do
+
+Dispatch is still a switch over *syntax* nodes. The acceptance box asks for a virtual call over
+bound nodes, and that is the half that makes this Phase C work rather than a refactor — the
+engine evaluates the syntax tree, while `Lowerer`'s `BoundUnit` is still produced for checking
+and discarded. Nothing here changes that, and the seam is what a bound-tree evaluator will hang
+from when it does.
+
+### The guard, and the assumption that nearly made it flaky
+
+`ArgumentEvaluationCostTests` holds the win with a byte budget. Allocation is deterministic *in a
+dedicated process* — which is where the bench harness runs, and where that reputation comes from.
+`GC.GetTotalAllocatedBytes` is process-wide, so inside the parallel suite the guard was measuring
+every other test allocating at the same moment: it read 4,863 bytes against 2,520 run alone, noise
+nearly twice the size of the signal, and failed on its first full-suite run.
+
+It runs in a serial collection now, and is stable across repeated full-suite runs. The assumption
+worth not repeating is that a property holding in one process holds in a shared one.

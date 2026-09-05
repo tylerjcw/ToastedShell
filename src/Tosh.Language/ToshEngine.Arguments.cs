@@ -864,1125 +864,79 @@ public sealed partial class ToshEngine
                     return literal.Value;
 
                 case VariableReferenceArgumentSyntax variableReference:
-                    {
-                        if (TryGetVariableBinding(variableReference.Name, out var binding))
-                        {
-                            if (binding.IsAllocatedOnly)
-                            {
-                                throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                    Code: "tosh.runtime.uninitialized_variable",
-                                    Title: $"Variable '{variableReference.Name}' has been declared but not assigned yet.",
-                                    SourceName: sourceName,
-                                    SourceText: sourceText,
-                                    Span: variableReference.Span,
-                                    Label: $"assign a value to '{variableReference.Name}' before using it",
-                                    Help: $"try '${variableReference.Name} = ...' or assign a member like '${variableReference.Name}.Name = ...'."));
-                            }
-
-                            // Rune thunk: transparently evaluate the deferred argument
-                            if (binding.Value is RuneThunk thunk)
-                            {
-                                return await EvaluateRuneThunkAsync(thunk, cancellationToken);
-                            }
-
-                            return binding.Value;
-                        }
-
-                        // `TS-P2-81`. A primary-constructor parameter used outside a stored
-                        // property initializer is not an undeclared variable — it is a name that
-                        // was in scope while the value was being built and is gone once it is.
-                        // "declare it first with 'var x = …'" is the wrong advice for it, and the
-                        // bare spelling of the same mistake already says so (`TS-P2-41`).
-                        if (DescribeOutOfScopeConstructorParameter(variableReference.Name) is { } parameterHelp)
-                        {
-                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh.runtime.unknown_variable",
-                                Title: $"'${variableReference.Name}' is a constructor parameter of "
-                                     + $"'{CurrentClass!.Name}' and is not in scope here.",
-                                SourceName: sourceName,
-                                SourceText: sourceText,
-                                Span: variableReference.Span,
-                                Label: $"'${variableReference.Name}' is not available once the value is built",
-                                Help: parameterHelp));
-                        }
-
-                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh.runtime.unknown_variable",
-                            Title: $"Variable '{variableReference.Name}' was not found.",
-                            SourceName: sourceName,
-                            SourceText: sourceText,
-                            Span: variableReference.Span,
-                            Label: $"'{variableReference.Name}' is not defined in this scope",
-                            Help: DescribeUnknownVariable(variableReference.Name)));
-                    }
-
+                    return await EvaluateVariableReferenceAsync(sourceName, sourceText, variableReference, cancellationToken);
                 case NewObjectArgumentSyntax newObject:
-                {
-                    // `TOAST-0091`. The construction itself is unchanged and has nine exits, so
-                    // it stays a unit; the initializer is applied once to whatever it produced.
-                    async Task<object?> ConstructAsync()
-                    {
-                            var constructorArguments = await EvaluateArgumentsAsync(sourceName, sourceText, newObject.Arguments, cancellationToken);
-
-                            var bareName = newObject.EffectiveBareName;
-                            var typeArgList = newObject.EffectiveTypeArguments;
-                            var hasAngles = newObject.HasExplicitTypeArgumentList;
-
-                            // Reject empty `<>` early — it's never useful and
-                            // is almost always a typo for an inferred-args
-                            // attempt that we don't yet support.
-                            if (hasAngles && typeArgList.Count == 0)
-                            {
-                                throw new InvalidOperationException(
-                                    $"Empty type-argument list '<>' is not allowed on 'new {bareName}'. Either omit the angle brackets or supply concrete type arguments.");
-                            }
-
-                            if (TryResolveShellStaticType(bareName, out var shellType))
-                            {
-                                if (shellType is ToshClassDefinition classDef)
-                                {
-                                    if (classDef.TypeParameterNames.Count == 0)
-                                    {
-                                        if (hasAngles)
-                                        {
-                                            throw new InvalidOperationException(
-                                                $"Class '{bareName}' is not generic and does not accept type arguments.");
-                                        }
-
-                                        return await classDef.CreateInstanceAsync(
-                                            constructorArguments,
-                                            cancellationToken);
-                                    }
-
-                                    // Generic class — must have matching type-arg list
-                                    if (!hasAngles)
-                                    {
-                                        if (TryInferTypeArgumentsFromCtorArgs(
-                                                classDef.TypeParameterNames,
-                                                classDef.PrimaryConstructorParameters,
-                                                constructorArguments,
-                                                out var inferredResolved,
-                                                out var inferredDisplay))
-                                        {
-                                            return await classDef.CreateGenericInstanceAsync(
-                                                inferredResolved,
-                                                inferredDisplay,
-                                                constructorArguments,
-                                                cancellationToken);
-                                        }
-
-                                        throw new InvalidOperationException(
-                                            $"Generic class '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", classDef.TypeParameterNames)}>(…)'.");
-                                    }
-
-                                    if (typeArgList.Count != classDef.TypeParameterNames.Count)
-                                    {
-                                        throw new InvalidOperationException(
-                                            $"Generic class '{bareName}' expects {classDef.TypeParameterNames.Count} type argument(s) " +
-                                            $"<{string.Join(", ", classDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
-                                    }
-
-                                    var resolved = new Type?[typeArgList.Count];
-                                    for (int i = 0; i < typeArgList.Count; i++)
-                                    {
-                                        resolved[i] = ResolveTypeArgument(typeArgList[i]);
-                                    }
-                                    return await classDef.CreateGenericInstanceAsync(
-                                        resolved,
-                                        typeArgList,
-                                        constructorArguments,
-                                        cancellationToken);
-                                }
-
-                                if (shellType is ToshRecordDefinition recordDef)
-                                {
-                                    if (recordDef.TypeParameterNames.Count == 0)
-                                    {
-                                        if (hasAngles)
-                                        {
-                                            throw new InvalidOperationException(
-                                                $"Record '{bareName}' is not generic and does not accept type arguments.");
-                                        }
-
-                                        return recordDef.CreateInstance(constructorArguments);
-                                    }
-
-                                    if (!hasAngles)
-                                    {
-                                        if (TryInferTypeArgumentsFromRecordFields(
-                                                recordDef.TypeParameterNames,
-                                                recordDef.Fields,
-                                                constructorArguments,
-                                                out var inferredResolvedRec,
-                                                out var inferredDisplayRec))
-                                        {
-                                            return recordDef.CreateGenericInstance(inferredResolvedRec, inferredDisplayRec, constructorArguments);
-                                        }
-
-                                        throw new InvalidOperationException(
-                                            $"Generic record '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", recordDef.TypeParameterNames)}>(\u2026)'.");
-                                    }
-
-                                    if (typeArgList.Count != recordDef.TypeParameterNames.Count)
-                                    {
-                                        throw new InvalidOperationException(
-                                            $"Generic record '{bareName}' expects {recordDef.TypeParameterNames.Count} type argument(s) " +
-                                            $"<{string.Join(", ", recordDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
-                                    }
-
-                                    var resolvedRec = new Type?[typeArgList.Count];
-                                    for (int i = 0; i < typeArgList.Count; i++)
-                                    {
-                                        resolvedRec[i] = ResolveTypeName(typeArgList[i]);
-                                    }
-                                    return recordDef.CreateGenericInstance(resolvedRec, typeArgList, constructorArguments);
-                                }
-
-                                // Non-Tosh-class shell static type
-                                // (built-in collection alias such as
-                                // 'list', 'array', 'dict', or a CLR-backed
-                                // descriptor). Resolve the full constructed
-                                // spelling before invoking its factory: the bare
-                                // descriptor for `list` is `List<object>`, while
-                                // `list<float>` must remain `List<float>` even when
-                                // it is empty and has no values to infer from.
-                                if (hasAngles &&
-                                    BuiltInShellTypes.TryResolveStaticType(
-                                        newObject.TypeName,
-                                        CreateScopedTypeResolver(),
-                                        out var constructedShellType))
-                                {
-                                    return await LanguageRuntime.Invoker.CreateInstanceAsync(
-                                        constructedShellType,
-                                        constructorArguments,
-                                        cancellationToken);
-                                }
-
-                                return await LanguageRuntime.Invoker.CreateInstanceAsync(
-                                    shellType,
-                                    constructorArguments,
-                                    cancellationToken);
-                            }
-
-                            // Fall back to CLR resolution — pass the original
-                            // (concatenated) type name including any generic
-                            // suffix so reflection can find e.g. 'List`1'.
-                            var lookupName = newObject.TypeName;
-                            var type = ResolveTypeName(lookupName)
-                                       ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
-                            return await LanguageRuntime.Invoker.CreateInstanceAsync(
-                                type,
-                                constructorArguments,
-                                cancellationToken);
-                    }
-
-                    var constructed = await ConstructAsync();
-
-                    return newObject.Initializer is null
-                        ? constructed
-                        : await ApplyObjectInitializerAsync(
-                            constructed, newObject, sourceName, sourceText, cancellationToken);
-                }
-
+                    return await EvaluateNewObjectAsync(sourceName, sourceText, newObject, cancellationToken);
                 case StaticMethodCallArgumentSyntax staticMethodCall:
-                    {
-                        var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, staticMethodCall.Arguments, cancellationToken);
-
-                        if (staticMethodCall.ExplicitTypeArguments is { } unionTypeArguments &&
-                            TryInvokeGenericUnionVariant(
-                                staticMethodCall.Path,
-                                methodArguments,
-                                unionTypeArguments,
-                                out var unionValue))
-                        {
-                            return unionValue;
-                        }
-
-                        // `TS-P2-82`. Resolved here rather than in the invoker: the names need the
-                        // scope, aliases and declared types the engine holds, and passing names
-                        // down would mean a second, weaker resolver living there.
-                        var typeArguments = staticMethodCall.ExplicitTypeArguments is null
-                            ? null
-                            : ResolveExplicitTypeArguments(
-                                staticMethodCall.ExplicitTypeArguments,
-                                sourceName,
-                                sourceText,
-                                staticMethodCall.Span);
-
-                        // `TS-P2-114`. A bare name here may be a function in scope
-                        // rather than a type. In statement position `Helper(3)`
-                        // parses as a command and resolves against the scope; an
-                        // interpolation hole is re-parsed as a pure expression, where
-                        // the same text becomes a qualified path and went straight to
-                        // CLR resolution — so a module's sibling function was
-                        // unreachable from a hole while `{M.Helper(3)}`, `{$f(3)}` and
-                        // a top-level `{Plain(3)}` all worked.
-                        //
-                        // Resolved through the same scoped view a command call uses,
-                        // which is the rule `TS-P2-01` already established for
-                        // `f() + 1`. Only single-segment paths are considered: a
-                        // dotted path is a qualified name and belongs below.
-                        if (!staticMethodCall.Path.Contains('.', StringComparison.Ordinal) &&
-                            CreateScopedCommandView().TryGet(staticMethodCall.Path, out var scopedCommand) &&
-                            scopedCommand is IShellCallable scopedCallable)
-                        {
-                            return await InvokeCallableInExpressionAsync(
-                                scopedCallable,
-                                methodArguments,
-                                sourceName,
-                                sourceText,
-                                staticMethodCall.Span,
-                                staticMethodCall.Arguments.Select(argument => argument.Span).ToArray(),
-                                cancellationToken);
-                        }
-
-                        return await InvokeQualifiedMethodAsync(
-                            staticMethodCall.Path,
-                            methodArguments,
-                            cancellationToken,
-                            typeArguments);
-                    }
-
+                    return await EvaluateStaticMethodCallAsync(sourceName, sourceText, staticMethodCall, cancellationToken);
                 case StaticMemberAccessArgumentSyntax staticMemberAccess:
-                    {
-                        return ResolveQualifiedAccessOrFallback(staticMemberAccess.Path);
-                    }
-
+                    return await EvaluateStaticMemberAccessAsync(sourceName, sourceText, staticMemberAccess, cancellationToken);
                 case ArrayLiteralArgumentSyntax listLiteral:
-                    {
-                        var items = new List<object?>();
-
-                        foreach (var element in listLiteral.Items)
-                        {
-                            if (element is SpreadElementArgumentSyntax spread)
-                            {
-                                var spreadValue = await EvaluateArgumentAsync(sourceName, sourceText, spread.Value, cancellationToken);
-
-                                if (spreadValue is string)
-                                {
-                                    items.Add(spreadValue);
-                                }
-                                else if (spreadValue is IEnumerable enumerable)
-                                {
-                                    foreach (var item in enumerable)
-                                    {
-                                        items.Add(item);
-                                    }
-                                }
-                                else
-                                {
-                                    items.Add(spreadValue);
-                                }
-                            }
-                            else
-                            {
-                                items.Add(await EvaluateArgumentAsync(sourceName, sourceText, element, cancellationToken));
-                            }
-                        }
-
-                        return CreateTypedArray(items);
-                    }
-
+                    return await EvaluateArrayLiteralAsync(sourceName, sourceText, listLiteral, cancellationToken);
                 case DictLiteralArgumentSyntax dictLiteral:
-                    {
-                        var dict = new Dictionary<object, object?>();
-
-                        foreach (var entry in dictLiteral.Entries)
-                        {
-                            var key = await EvaluateArgumentAsync(sourceName, sourceText, entry.Key, cancellationToken);
-                            var value = await EvaluateArgumentAsync(sourceName, sourceText, entry.Value, cancellationToken);
-                            dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh.runtime.null_dict_key",
-                                Title: "Dict keys cannot be null.",
-                                SourceName: sourceName,
-                                SourceText: sourceText,
-                                Span: entry.Key.Span,
-                                Label: "this key evaluated to null"))] = value;
-                        }
-
-                        return CreateTypedDictionary(dict);
-                    }
-
+                    return await EvaluateDictLiteralAsync(sourceName, sourceText, dictLiteral, cancellationToken);
                 case RecordLiteralArgumentSyntax recordLiteral:
-                    {
-                        IDictionary<string, object?> record = new System.Dynamic.ExpandoObject();
-
-                        foreach (var entry in recordLiteral.Fields)
-                        {
-                            switch (entry)
-                            {
-                                case RecordFieldSyntax field:
-                                    record[field.Name] = await EvaluateArgumentAsync(sourceName, sourceText, field.Value, cancellationToken);
-                                    break;
-
-                                case ComputedRecordFieldSyntax computed:
-                                    {
-                                        var key = await EvaluateArgumentAsync(sourceName, sourceText, computed.NameExpression, cancellationToken);
-                                        var value = await EvaluateArgumentAsync(sourceName, sourceText, computed.Value, cancellationToken);
-                                        record[key?.ToString() ?? string.Empty] = value;
-                                    }
-                                    break;
-
-                                case SpreadRecordEntrySyntax spread:
-                                    {
-                                        var spreadValue = await EvaluateArgumentAsync(sourceName, sourceText, spread.Value, cancellationToken);
-
-                                        if (spreadValue is IDictionary<string, object?> dict)
-                                        {
-                                            foreach (var kvp in dict)
-                                            {
-                                                record[kvp.Key] = kvp.Value;
-                                            }
-                                        }
-                                        else if (spreadValue is IShellRecordObject shellRecord)
-                                        {
-                                            foreach (var member in await shellRecord.GetMembersAsync(
-                                                         includeHidden: false,
-                                                         cancellationToken))
-                                            {
-                                                record[member.Key] = member.Value;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                                Code: "tosh.runtime.spread_requires_record",
-                                                Title: "Spread in a record literal requires a record or dictionary value.",
-                                                SourceName: sourceName,
-                                                SourceText: sourceText,
-                                                Span: spread.Span,
-                                                Label: "this value is not a record"));
-                                        }
-                                    }
-                                    break;
-                            }
-                        }
-
-                        return record;
-                    }
-
+                    return await EvaluateRecordLiteralAsync(sourceName, sourceText, recordLiteral, cancellationToken);
                 case TupleLiteralArgumentSyntax tupleLiteral:
-                    {
-                        var items = new object?[tupleLiteral.Items.Count];
-
-                        for (var i = 0; i < tupleLiteral.Items.Count; i++)
-                        {
-                            items[i] = await EvaluateArgumentAsync(sourceName, sourceText, tupleLiteral.Items[i], cancellationToken);
-                        }
-
-                        return new ToshTuple(items);
-                    }
-
+                    return await EvaluateTupleLiteralAsync(sourceName, sourceText, tupleLiteral, cancellationToken);
                 case SetLiteralArgumentSyntax setLiteral:
-                    {
-                        var set = new HashSet<object?>(ShellKeyComparer.Instance);
-
-                        foreach (var element in setLiteral.Items)
-                        {
-                            var value = await EvaluateArgumentAsync(sourceName, sourceText, element, cancellationToken);
-                            set.Add(value);
-                        }
-
-                        return set;
-                    }
-
+                    return await EvaluateSetLiteralAsync(sourceName, sourceText, setLiteral, cancellationToken);
                 case ListComprehensionArgumentSyntax listComp:
-                    {
-                        var items = new List<object?>();
-                        await EvaluateComprehensionClauseAsync(
-                            sourceName, sourceText, listComp.Clause,
-                            async ct =>
-                            {
-                                items.Add(await EvaluateArgumentAsync(sourceName, sourceText, listComp.Body, ct));
-                            },
-                            cancellationToken);
-                        return CreateTypedArray(items);
-                    }
-
+                    return await EvaluateListComprehensionAsync(sourceName, sourceText, listComp, cancellationToken);
                 case SetComprehensionArgumentSyntax setComp:
-                    {
-                        var set = new HashSet<object?>(ShellKeyComparer.Instance);
-                        await EvaluateComprehensionClauseAsync(
-                            sourceName, sourceText, setComp.Clause,
-                            async ct =>
-                            {
-                                set.Add(await EvaluateArgumentAsync(sourceName, sourceText, setComp.Body, ct));
-                            },
-                            cancellationToken);
-                        return set;
-                    }
-
+                    return await EvaluateSetComprehensionAsync(sourceName, sourceText, setComp, cancellationToken);
                 case DictComprehensionArgumentSyntax dictComp:
-                    {
-                        var dict = new Dictionary<object, object?>();
-                        await EvaluateComprehensionClauseAsync(
-                            sourceName, sourceText, dictComp.Clause,
-                            async ct =>
-                            {
-                                var key = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Key, ct);
-                                var value = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Value, ct);
-                                dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                    Code: "tosh.runtime.null_dict_key",
-                                    Title: "Dict keys cannot be null.",
-                                    SourceName: sourceName,
-                                    SourceText: sourceText,
-                                    Span: dictComp.Key.Span,
-                                    Label: "this key evaluated to null"))] = value;
-                            },
-                            cancellationToken);
-                        return CreateTypedDictionary(dict);
-                    }
-
+                    return await EvaluateDictComprehensionAsync(sourceName, sourceText, dictComp, cancellationToken);
                 case GeneratorComprehensionArgumentSyntax genComp:
-                    {
-                        // Evaluate the source eagerly so it captures current scope
-                        var genSourceValue = await EvaluateArgumentAsync(sourceName, sourceText, genComp.Clause.Source, cancellationToken);
-
-                        // Produce a lazy sequence that evaluates body items on demand
-                        return new LazySequence(
-                            EnumerateComprehensionLazily(sourceName, sourceText, genComp.Clause, genComp.Body, genSourceValue),
-                            label: null);
-                    }
-
+                    return await EvaluateGeneratorComprehensionAsync(sourceName, sourceText, genComp, cancellationToken);
                 case BlockArgumentSyntax blockArgument:
-                    {
-                        return new ShellBlock(blockArgument.Block, sourceName, sourceText, blockArgument.Span);
-                    }
-
+                    return await EvaluateBlockAsync(sourceName, sourceText, blockArgument, cancellationToken);
                 case QuoteArgumentSyntax quoteArgument:
-                    {
-                        // If the inner expression references a rune parameter (RuneThunk),
-                        // return the thunk's AST wrapped as a QuotedSyntax.
-                        if (quoteArgument.Inner is VariableReferenceArgumentSyntax varRef &&
-                            TryGetVariableBinding(varRef.Name, out var quoteBinding) &&
-                            quoteBinding.Value is RuneThunk quotedThunk)
-                        {
-                            return new QuotedSyntax(
-                                quotedThunk.Syntax,
-                                quotedThunk.SourceName,
-                                quotedThunk.SourceText);
-                        }
-
-                        // Otherwise, capture the inner expression as-is
-                        return new QuotedSyntax(quoteArgument.Inner, sourceName, sourceText);
-                    }
-
+                    return await EvaluateQuoteAsync(sourceName, sourceText, quoteArgument, cancellationToken);
                 case AnonymousFunctionArgumentSyntax anonymousFunction:
-                    {
-                        var definition = CreateFunctionDefinition(
-                            "<lambda>",
-                            anonymousFunction.Parameters,
-                            returnTypeName: anonymousFunction.ReturnTypeName,
-                            anonymousFunction.Body,
-                            isCommandWrapper: false,
-                            sourceName,
-                            sourceText,
-                            anonymousFunction.Span);
-
-                        return new ToshLambda(this, definition);
-                    }
-
+                    return await EvaluateAnonymousFunctionAsync(sourceName, sourceText, anonymousFunction, cancellationToken);
                 case MemberProjectionArgumentSyntax projection:
-                    {
-                        return new ProjectedMemberSelection(projection.MemberPaths);
-                    }
-
+                    return await EvaluateMemberProjectionAsync(sourceName, sourceText, projection, cancellationToken);
                 case MemberAccessArgumentSyntax memberAccess:
-                    {
-                        var target = await EvaluateArgumentAsync(sourceName, sourceText, memberAccess.Target, cancellationToken);
-
-                        if (target is null)
-                        {
-                            // `TOAST-0018`. Reading a member of `null` used to answer
-                            // `null` silently — for *any* member name, so `$x.Lenght` on a
-                            // null reported nothing while the same typo on a string
-                            // raised. That also left `?.` meaning nothing: both spellings
-                            // behaved identically, though `?.` is documented as yielding
-                            // null "instead of failing".
-                            //
-                            // Now `.` joins method calls and indexing, which already
-                            // raised on a null receiver, and `?.` is how an author asks
-                            // for propagation.
-                            if (memberAccess.NullSafe)
-                            {
-                                return null;
-                            }
-
-                            throw new InvalidOperationException(
-                                Tosh.Runtime.ToastMessages.MemberOfNull(memberAccess.MemberPath));
-                        }
-
-                        return await LanguageRuntime.ObjectAccessor.GetValueAsync(
-                            target,
-                            memberAccess.MemberPath,
-                            cancellationToken);
-                    }
-
+                    return await EvaluateMemberAccessAsync(sourceName, sourceText, memberAccess, cancellationToken);
                 case IndexAccessArgumentSyntax indexAccess:
-                    {
-                        var target = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Target, cancellationToken);
-                        var index = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Index, cancellationToken);
-                        return await ShellIndexingUtilities.GetIndexedValueAsync(
-                            target,
-                            index,
-                            indexAccess.LookupKind,
-                            cancellationToken);
-                    }
-
+                    return await EvaluateIndexAccessAsync(sourceName, sourceText, indexAccess, cancellationToken);
                 case MethodCallArgumentSyntax methodCall:
-                    {
-                        var target = await ResolveMethodCallTargetAsync(sourceName, sourceText, methodCall, cancellationToken);
-
-                        if (target is ShellTextLine textLine)
-                        {
-                            target = textLine.Text;
-                        }
-
-                        if (target is null)
-                        {
-                            if (methodCall.NullSafe)
-                            {
-                                return null;
-                            }
-
-                            throw new InvalidOperationException("Cannot invoke an instance method on null.");
-                        }
-
-                        var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, methodCall.Arguments, cancellationToken);
-
-                        // Names are resolved here rather than passed down: scope, aliases and
-                        // ToastScript-declared types are all knowledge the engine holds and the
-                        // invoker does not.
-                        var methodTypeArguments = ResolveCallSiteTypeArguments(
-                            methodCall.ExplicitTypeArguments,
-                            methodCall.MethodName,
-                            sourceName,
-                            sourceText,
-                            methodCall.Span);
-
-                        // `TOAST-0001`. Inside a closure a bare name is implicit member
-                        // access, so `where { double($_) }` arrives here as `$_.double($_)`
-                        // and reported a missing method on Int32 — an error about a
-                        // construct the reader had not written. Only the *synthesized*
-                        // receiver may mean something else, and only once the item has been
-                        // asked first.
-                        if (methodCall.ImplicitCurrentItem &&
-                            !ReceiverHasInstanceMember(target, methodCall.MethodName) &&
-                            !await HasExtensionMethodAsync(target, methodCall.MethodName))
-                        {
-                            return await InvokeImplicitItemFallbackAsync(
-                                sourceName,
-                                sourceText,
-                                methodCall,
-                                target,
-                                methodArguments,
-                                cancellationToken);
-                        }
-
-                        var invocation = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
-                            target,
-                            methodCall.MethodName,
-                            methodArguments,
-                            methodTypeArguments,
-                            cancellationToken);
-                        return invocation.ReturnedVoid ? target : invocation.Value;
-                    }
-
+                    return await EvaluateMethodCallAsync(sourceName, sourceText, methodCall, cancellationToken);
                 case CallableInvocationArgumentSyntax callableInvocation:
-                    {
-                        IShellCallable? callable = null;
-
-                        // `TS-P2-01`. A bareword target names a function rather than
-                        // holding one: in `(f() + 1)` the target is the word `f`, which
-                        // evaluates to the *string* "f" and is not callable. Resolved
-                        // through the same scoped view a command call uses, so a function
-                        // composes in an operator expression the way it already did as a
-                        // statement — `f() + 1` used to report "this value is not
-                        // callable" once the parser learned to build the invocation.
-                        if (callableInvocation.Target is BarewordArgumentSyntax { Value.Length: > 0 } named &&
-                            CreateScopedCommandView().TryGet(named.Value, out var namedCommand) &&
-                            namedCommand is IShellCallable namedCallable)
-                        {
-                            callable = namedCallable;
-                        }
-
-                        if (callable is null)
-                        {
-                            var target = await EvaluateArgumentAsync(sourceName, sourceText, callableInvocation.Target, cancellationToken);
-
-                            if (target is not IShellCallable evaluated)
-                            {
-                                throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                    Code: "tosh.runtime.value_not_callable",
-                                    Title: "The provided value is not callable.",
-                                    SourceName: sourceName,
-                                    SourceText: sourceText,
-                                    Span: callableInvocation.Target.Span,
-                                    Label: "this value cannot be invoked",
-                                    Help: "pass a lambda like 'func(x) => ...' or another callable shell value."));
-                            }
-
-                            callable = evaluated;
-                        }
-
-                        var callArguments = await EvaluateCallableInvocationArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);
-
-                        return await InvokeCallableInExpressionAsync(
-                            callable,
-                            callArguments,
-                            sourceName,
-                            sourceText,
-                            callableInvocation.Span,
-                            callableInvocation.Arguments.Select(argument => argument.Span).ToArray(),
-                            cancellationToken);
-                    }
-
+                    return await EvaluateCallableInvocationAsync(sourceName, sourceText, callableInvocation, cancellationToken);
                 case SubexpressionArgumentSyntax subexpression:
-                    {
-                        if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, subexpression.Pipeline, cancellationToken) is { Matched: true } raw)
-                        {
-                            return raw.Value;
-                        }
-
-                        var results = await AsyncEnumerableExtensions.ToListAsync(
-                            EvaluatePipelineAsync(sourceName, sourceText, subexpression.Pipeline, cancellationToken, outputIsCaptured: true),
-                            cancellationToken);
-
-                        if (results.Count <= 1)
-                        {
-                            return results.Count == 1 ? results[0] : null;
-                        }
-
-                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh.runtime.subexpression_requires_single_value",
-                            Title: "Subexpressions used as arguments must produce exactly one value.",
-                            SourceName: sourceName,
-                            SourceText: sourceText,
-                            Span: argument.Span,
-                            Label: $"this subexpression produced {results.Count} values",
-                            Help: "ensure the parenthesized pipeline returns exactly one object."));
-                    }
-
+                    return await EvaluateSubexpressionAsync(sourceName, sourceText, subexpression, cancellationToken);
                 case CommandSubstitutionArgumentSyntax commandSubstitution:
-                    {
-                        IReadOnlyList<object?> results;
-
-                        if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, commandSubstitution.Pipeline, cancellationToken) is { Matched: true } raw)
-                        {
-                            results = [raw.Value];
-                        }
-                        else
-                        {
-                            results = await AsyncEnumerableExtensions.ToListAsync(
-                                EvaluatePipelineAsync(sourceName, sourceText, commandSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
-                                cancellationToken);
-                        }
-
-                        return string.Join(Environment.NewLine, results.Select(FormatCommandSubstitutionValue));
-                    }
-
+                    return await EvaluateCommandSubstitutionAsync(sourceName, sourceText, commandSubstitution, cancellationToken);
                 case InputProcessSubstitutionArgumentSyntax processSubstitution:
-                    {
-                        IReadOnlyList<object?> results;
-
-                        if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, processSubstitution.Pipeline, cancellationToken) is { Matched: true } raw)
-                        {
-                            results = [raw.Value];
-                        }
-                        else
-                        {
-                            results = await AsyncEnumerableExtensions.ToListAsync(
-                                EvaluatePipelineAsync(sourceName, sourceText, processSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
-                                cancellationToken);
-                        }
-
-                        return await PipelineFileMaterializer.MaterializeAsync("text", results, cancellationToken);
-                    }
-
+                    return await EvaluateInputProcessSubstitutionAsync(sourceName, sourceText, processSubstitution, cancellationToken);
                 case OutputProcessSubstitutionArgumentSyntax outputProcessSubstitution:
-                    {
-                        IReadOnlyList<object?> results;
-
-                        if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, outputProcessSubstitution.Pipeline, cancellationToken) is { Matched: true } rawOutput)
-                        {
-                            results = [rawOutput.Value];
-                        }
-                        else
-                        {
-                            results = await AsyncEnumerableExtensions.ToListAsync(
-                                EvaluatePipelineAsync(sourceName, sourceText, outputProcessSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
-                                cancellationToken);
-                        }
-
-                        return await PipelineFileMaterializer.MaterializeAsync("text", results, cancellationToken);
-                    }
-
+                    return await EvaluateOutputProcessSubstitutionAsync(sourceName, sourceText, outputProcessSubstitution, cancellationToken);
                 case ChainedComparisonArgumentSyntax chain:
-                    {
-                        // TS-P1-22: `a < b < c` means `(a < b) and (b < c)`
-                        // with each operand evaluated exactly once and
-                        // short-circuit preserved, so a failing earlier
-                        // comparison never evaluates later operands.
-                        var current = await EvaluateArgumentAsync(
-                            sourceName, sourceText, chain.Operands[0], cancellationToken);
-
-                        for (var i = 0; i < chain.Operators.Count; i++)
-                        {
-                            cancellationToken.ThrowIfCancellationRequested();
-                            var next = await EvaluateArgumentAsync(
-                                sourceName, sourceText, chain.Operands[i + 1], cancellationToken);
-
-                            var comparison = await EvaluateBinaryOperatorAsync(
-                                sourceName,
-                                sourceText,
-                                chain.OperatorSpans[i],
-                                current,
-                                chain.Operators[i],
-                                next,
-                                cancellationToken);
-
-                            if (!OperatorEvaluator.ToBoolean(comparison))
-                            {
-                                return false;
-                            }
-
-                            current = next;
-                        }
-
-                        return true;
-                    }
-
+                    return await EvaluateChainedComparisonAsync(sourceName, sourceText, chain, cancellationToken);
                 case OperatorArgumentSyntax operation:
-                    {
-                        // Constant-folded by the lowering pass: skip both
-                        // sub-evaluations and return the precomputed value.
-                        if (operation.FoldedConstant is { } cachedBinary)
-                        {
-                            return cachedBinary.Value;
-                        }
-
-                        var left = await EvaluateArgumentAsync(sourceName, sourceText, operation.Left, cancellationToken);
-
-                        // Short-circuit: do not evaluate the right side if unnecessary.
-                        if (operation.Operator == "and")
-                        {
-                            return OperatorEvaluator.ToBoolean(left)
-                                && OperatorEvaluator.ToBoolean(await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken));
-                        }
-
-                        if (operation.Operator == "or")
-                        {
-                            return OperatorEvaluator.ToBoolean(left)
-                                || OperatorEvaluator.ToBoolean(await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken));
-                        }
-
-                        if (operation.Operator == "??")
-                        {
-                            return left ?? await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken);
-                        }
-
-                        var right = await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken);
-
-                        return await EvaluateBinaryOperatorAsync(
-                            sourceName,
-                            sourceText,
-                            operation.Span,
-                            left,
-                            operation.Operator,
-                            right,
-                            cancellationToken);
-                    }
-
+                    return await EvaluateOperatorAsync(sourceName, sourceText, operation, cancellationToken);
                 case ConditionalArgumentSyntax conditional:
-                    {
-                        var condition = await EvaluateArgumentAsync(sourceName, sourceText, conditional.Condition, cancellationToken);
-                        return OperatorEvaluator.ToBoolean(condition)
-                            ? await EvaluateArgumentAsync(sourceName, sourceText, conditional.WhenTrue, cancellationToken)
-                            : await EvaluateArgumentAsync(sourceName, sourceText, conditional.WhenFalse, cancellationToken);
-                    }
-
+                    return await EvaluateConditionalAsync(sourceName, sourceText, conditional, cancellationToken);
                 case ThrowArgumentSyntax throwArg:
-                    {
-                        object? raised;
-                        if (throwArg.Value is null)
-                        {
-                            raised = new CommandFailure("An error was thrown.");
-                        }
-                        else
-                        {
-                            raised = await EvaluateArgumentAsync(sourceName, sourceText, throwArg.Value, cancellationToken);
-                        }
-                        await RaiseThrownValueAsync(throwArg.Span, raised, cancellationToken);
-                        return null; // unreachable; satisfies the compiler
-                    }
-
+                    return await EvaluateThrowAsync(sourceName, sourceText, throwArg, cancellationToken);
                 case MatchArgumentSyntax match:
-                    {
-                        var selection = await ResolveMatchArmAsync(sourceName, sourceText, match, cancellationToken);
-                        return await EvaluateMatchArmValueAsync(sourceName, sourceText, selection, cancellationToken);
-                    }
-
+                    return await EvaluateMatchAsync(sourceName, sourceText, match, cancellationToken);
                 case IfExpressionArgumentSyntax ifExpression:
-                    {
-                        var condition = await EvaluateConditionAsync(sourceName, sourceText, ifExpression.Condition, cancellationToken);
-                        var block = condition ? ifExpression.ThenBlock : ifExpression.ElseBlock;
-                        var values = await AsyncEnumerableExtensions.ToListAsync(
-                            ExecuteBlockAsync(sourceName, sourceText, block, cancellationToken),
-                            cancellationToken);
-
-                        return values.Count switch
-                        {
-                            0 => null,
-                            1 => values[0],
-                            _ => values.ToArray(),
-                        };
-                    }
-
+                    return await EvaluateIfExpressionAsync(sourceName, sourceText, ifExpression, cancellationToken);
                 case UnaryOperatorArgumentSyntax unaryOperation:
-                    {
-                        // Constant-folded by the lowering pass.
-                        if (unaryOperation.FoldedConstant is { } cachedUnary)
-                        {
-                            return cachedUnary.Value;
-                        }
-
-                        var operand = await EvaluateArgumentAsync(sourceName, sourceText, unaryOperation.Operand, cancellationToken);
-
-                        if (operand is ToshClassInstance unaryInst)
-                        {
-                            var unaryOverload = await TryInvokeClassUnaryOperatorAsync(
-                                unaryInst,
-                                unaryOperation.Operator,
-                                cancellationToken);
-                            if (unaryOverload.Matched)
-                            {
-                                return unaryOverload.Value;
-                            }
-                        }
-
-                        return OperatorEvaluator.EvaluateUnary(unaryOperation.Operator, operand);
-                    }
-
+                    return await EvaluateUnaryOperatorAsync(sourceName, sourceText, unaryOperation, cancellationToken);
                 case InterpolatedStringArgumentSyntax interpolated:
-                    {
-                        var builder = new System.Text.StringBuilder();
-
-                        foreach (var part in interpolated.Parts)
-                        {
-                            switch (part)
-                            {
-                                case InterpolatedStringLiteralPart literal:
-                                    builder.Append(literal.Text);
-                                    break;
-
-                                case InterpolatedStringExpressionPart expression:
-                                    {
-                                        // The hole's value is being consumed into a string, so an
-                                        // external command inside it must have its stdout piped
-                                        // rather than inherited — `echo $"{git rev-parse …}"` used
-                                        // to print the branch to the terminal and interpolate the
-                                        // empty string (TS-P1-32).
-                                        var hole = PrepareInterpolationHole(expression, sourceName);
-
-                                        // `TOAST-0023`. **A hole is one value unless it
-                                        // contains a pipeline.** `$"{$xs}"` where `$xs`
-                                        // holds a list gave `1 2 3`, because the hole was
-                                        // run as a pipeline and a collection yields its
-                                        // elements — while `$"{[1, 2, 3]}"` and `$"{($xs)}"`
-                                        // both rendered `[1, 2, 3]`. Three spellings of the
-                                        // same value, two answers, and the compiled backend
-                                        // rendered in all three.
-                                        //
-                                        // The parenthesised form already took this path;
-                                        // an expression hole now takes it too, so the
-                                        // difference is a `|` the reader can see rather than
-                                        // whether a variable happened to hold something
-                                        // enumerable.
-                                        if (TryGetHolePipeline(hole) is { } holePipeline &&
-                                            await TryEvaluateRawExpressionPipelineAsync(
-                                                sourceName, sourceText, holePipeline, cancellationToken)
-                                                is { Matched: true } single)
-                                        {
-                                            builder.Append(ApplyInterpolationClauses(
-                                                await FormatInterpolatedValueAsync(
-                                                    single.Value,
-                                                    cancellationToken,
-                                                    expression.Format,
-                                                    sourceName,
-                                                    sourceText,
-                                                    expression.ExpressionSpan),
-                                                expression.Alignment));
-                                            break;
-                                        }
-
-                                        var results = await AsyncEnumerableExtensions.ToListAsync(
-                                            EvaluateParseResultAsync(
-                                                hole,
-                                                cancellationToken,
-                                                outputIsCaptured: true),
-                                            cancellationToken);
-
-                                        if (results.Count == 1)
-                                        {
-                                            builder.Append(ApplyInterpolationClauses(
-                                                await FormatInterpolatedValueAsync(
-                                                    results[0],
-                                                    cancellationToken,
-                                                    expression.Format,
-                                                    sourceName,
-                                                    sourceText,
-                                                    expression.ExpressionSpan),
-                                                expression.Alignment));
-                                        }
-                                        else if (results.Count > 1)
-                                        {
-                                            var formatted = new string[results.Count];
-                                            for (var index = 0; index < results.Count; index++)
-                                            {
-                                                formatted[index] = await FormatInterpolatedValueAsync(
-                                                    results[index],
-                                                    cancellationToken,
-                                                    expression.Format,
-                                                    sourceName,
-                                                    sourceText,
-                                                    expression.ExpressionSpan);
-                                            }
-
-                                            // Alignment pads the joined text, not each item:
-                                            // the clause describes the field the hole occupies.
-                                            builder.Append(ApplyInterpolationClauses(
-                                                string.Join(" ", formatted),
-                                                expression.Alignment));
-                                        }
-
-                                        break;
-                                    }
-                            }
-                        }
-
-                        return builder.ToString();
-                    }
-
+                    return await EvaluateInterpolatedStringAsync(sourceName, sourceText, interpolated, cancellationToken);
                 case NameOfArgumentSyntax nameOf:
-                    {
-                        // If not a $-prefixed variable reference, check if the bare identifier
-                        // actually refers to a variable — if so, require '$'.
-                        //
-                        // `TS-P2-20`. A member or type path is exempt: its last segment is a
-                        // member name, and a variable that happens to share it says nothing about
-                        // what was written. Without this, `nameof(K.S)` beside a variable `$S`
-                        // would demand `nameof($S)` — a name the operand never mentioned.
-                        if (!nameOf.IsVariableReference && !nameOf.IsMemberChain &&
-                            TryGetVariableBinding(nameOf.Identifier, out _))
-                        {
-                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh.runtime.nameof_requires_dollar",
-                                Title: $"Variable references in nameof require '$'. Use nameof(${nameOf.Identifier}).",
-                                SourceName: sourceName,
-                                SourceText: sourceText,
-                                Span: nameOf.Span,
-                                Label: $"did you mean '${nameOf.Identifier}'?",
-                                Help: $"try nameof(${nameOf.Identifier}) to get the variable name."));
-                        }
-
-                        return nameOf.Identifier;
-                    }
-
+                    return await EvaluateNameOfAsync(sourceName, sourceText, nameOf, cancellationToken);
                 case FunctionReferenceArgumentSyntax funcRef:
-                    {
-                        // Look up the function/command by name and return it as a callable value.
-                        foreach (var scope in _scopes)
-                        {
-                            if (scope.Commands.TryGetValue(funcRef.Name, out var scopedCommand))
-                            {
-                                return scopedCommand;
-                            }
-                        }
-
-                        if (LanguageRuntime.Commands.TryGet(funcRef.Name, out var registeredCommand))
-                        {
-                            return registeredCommand;
-                        }
-
-                        // `TS-P2-94`. A dotted name is in neither flat table, so it is
-                        // resolved here.
-                        //
-                        // A static method is tried first, and the order matters: it is
-                        // not a value — reading `C.Method` deliberately raises "call it
-                        // with parentheses" — so letting the value path run first threw
-                        // that error before this branch was ever reached.
-                        if (funcRef.Name.LastIndexOf('.') is var dot and > 0 &&
-                            TryResolveShellStaticType(funcRef.Name[..dot], out var ownerType) &&
-                            ownerType is ToshClassDefinition ownerClass &&
-                            ownerClass.HasStaticMethod(funcRef.Name[(dot + 1)..]))
-                        {
-                            return new ToshStaticMethodReference(ownerClass, funcRef.Name[(dot + 1)..]);
-                        }
-
-                        // `&$obj.Method` — bound to a receiver. Tried before the
-                        // qualified-value path because `$obj.Method` on a class instance
-                        // is not a value either: reading a method without parentheses
-                        // raises the same "call it" error a static does, so the value
-                        // path would throw before this branch was reached.
-                        if (funcRef.Name.StartsWith('$') &&
-                            funcRef.Name.IndexOf('.', StringComparison.Ordinal) is var receiverDot and > 0 &&
-                            TryGetVariableValue(funcRef.Name[1..receiverDot], out var receiver) &&
-                            receiver is not null)
-                        {
-                            return new ToshBoundMethodReference(
-                                receiver,
-                                funcRef.Name[(receiverDot + 1)..],
-                                LanguageRuntime.Invoker);
-                        }
-
-                        // A module-qualified function, by contrast, already evaluates
-                        // to a callable through ordinary member access — `var f = M.E`
-                        // has always worked — so it needs only that same resolution.
-                        if (funcRef.Name.Contains('.', StringComparison.Ordinal) &&
-                            TryResolveQualifiedAccess(funcRef.Name, out var qualifiedValue, out _) &&
-                            qualifiedValue is IShellCallable qualifiedCallable)
-                        {
-                            return qualifiedCallable;
-                        }
-
-                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh.runtime.unknown_function_reference",
-                            Title: $"Function '{funcRef.Name}' was not found.",
-                            SourceName: sourceName,
-                            SourceText: sourceText,
-                            Span: funcRef.Span,
-                            Label: $"'{funcRef.Name}' is not defined in this scope",
-                            Help: "define the function first or check the spelling."));
-                    }
-
+                    return await EvaluateFunctionReferenceAsync(sourceName, sourceText, funcRef, cancellationToken);
                 case RangeArgumentSyntax range:
-                    {
-                        var startValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Start, cancellationToken);
-                        var start = ConvertToInt(startValue, "range start");
-
-                        int? end = null;
-                        if (range.End is not null)
-                        {
-                            var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
-                            end = ConvertToInt(endValue, "range end");
-                        }
-
-                        int? step = null;
-                        if (range.Step is not null)
-                        {
-                            var stepValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Step, cancellationToken);
-                            step = ConvertToInt(stepValue, "range step");
-                        }
-
-                        return new ToshRange(start, step, end);
-                    }
-
+                    return await EvaluateRangeAsync(sourceName, sourceText, range, cancellationToken);
                 case NamedArgumentSyntax namedArg:
-                    {
-                        var value = await EvaluateArgumentAsync(sourceName, sourceText, namedArg.Value, cancellationToken);
-                        return new NamedArgument(namedArg.Name, value);
-                    }
-
+                    return await EvaluateNamedAsync(sourceName, sourceText, namedArg, cancellationToken);
                 default:
                     throw new InvalidOperationException($"Unsupported argument syntax: {argument.GetType().Name}.");
             }
@@ -2040,6 +994,1496 @@ public sealed partial class ToshEngine
     /// candidate lose rather than fail the whole call (TS-P1-06): a
     /// sibling overload may well declare that parameter.
     /// </summary>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+
+    /// <summary>One shape of <see cref="EvaluateArgumentSlowAsync"/> — <c>TOAST-0009</c>.</summary>
+    /// <remarks>
+    /// Extracted so its locals live in their own state machine rather than in the shared one,
+    /// which every argument evaluation paid for whatever its shape. Behaviour is unchanged:
+    /// the dispatcher still wraps the call in the same try/catch.
+    /// </remarks>
+    private async ValueTask<object?> EvaluateAnonymousFunctionAsync(
+        string sourceName,
+        string sourceText,
+        AnonymousFunctionArgumentSyntax anonymousFunction,
+        CancellationToken cancellationToken)
+    {
+                    var definition = CreateFunctionDefinition(
+                        "<lambda>",
+                        anonymousFunction.Parameters,
+                        returnTypeName: anonymousFunction.ReturnTypeName,
+                        anonymousFunction.Body,
+                        isCommandWrapper: false,
+                        sourceName,
+                        sourceText,
+                        anonymousFunction.Span);
+
+                    return new ToshLambda(this, definition);
+    }
+    private async ValueTask<object?> EvaluateBlockAsync(
+        string sourceName,
+        string sourceText,
+        BlockArgumentSyntax blockArgument,
+        CancellationToken cancellationToken)
+    {
+                    return new ShellBlock(blockArgument.Block, sourceName, sourceText, blockArgument.Span);
+    }
+    private async ValueTask<object?> EvaluateConditionalAsync(
+        string sourceName,
+        string sourceText,
+        ConditionalArgumentSyntax conditional,
+        CancellationToken cancellationToken)
+    {
+                    var condition = await EvaluateArgumentAsync(sourceName, sourceText, conditional.Condition, cancellationToken);
+                    return OperatorEvaluator.ToBoolean(condition)
+                        ? await EvaluateArgumentAsync(sourceName, sourceText, conditional.WhenTrue, cancellationToken)
+                        : await EvaluateArgumentAsync(sourceName, sourceText, conditional.WhenFalse, cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateIfExpressionAsync(
+        string sourceName,
+        string sourceText,
+        IfExpressionArgumentSyntax ifExpression,
+        CancellationToken cancellationToken)
+    {
+                    var condition = await EvaluateConditionAsync(sourceName, sourceText, ifExpression.Condition, cancellationToken);
+                    var block = condition ? ifExpression.ThenBlock : ifExpression.ElseBlock;
+                    var values = await AsyncEnumerableExtensions.ToListAsync(
+                        ExecuteBlockAsync(sourceName, sourceText, block, cancellationToken),
+                        cancellationToken);
+
+                    return values.Count switch
+                    {
+                        0 => null,
+                        1 => values[0],
+                        _ => values.ToArray(),
+                    };
+    }
+    private async ValueTask<object?> EvaluateMatchAsync(
+        string sourceName,
+        string sourceText,
+        MatchArgumentSyntax match,
+        CancellationToken cancellationToken)
+    {
+                    var selection = await ResolveMatchArmAsync(sourceName, sourceText, match, cancellationToken);
+                    return await EvaluateMatchArmValueAsync(sourceName, sourceText, selection, cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateThrowAsync(
+        string sourceName,
+        string sourceText,
+        ThrowArgumentSyntax throwArg,
+        CancellationToken cancellationToken)
+    {
+                    object? raised;
+                    if (throwArg.Value is null)
+                    {
+                        raised = new CommandFailure("An error was thrown.");
+                    }
+                    else
+                    {
+                        raised = await EvaluateArgumentAsync(sourceName, sourceText, throwArg.Value, cancellationToken);
+                    }
+                    await RaiseThrownValueAsync(throwArg.Span, raised, cancellationToken);
+                    return null; // unreachable; satisfies the compiler
+    }
+    private async ValueTask<object?> EvaluateStaticMemberAccessAsync(
+        string sourceName,
+        string sourceText,
+        StaticMemberAccessArgumentSyntax staticMemberAccess,
+        CancellationToken cancellationToken)
+    {
+                    return ResolveQualifiedAccessOrFallback(staticMemberAccess.Path);
+    }
+    private async ValueTask<object?> EvaluateMemberProjectionAsync(
+        string sourceName,
+        string sourceText,
+        MemberProjectionArgumentSyntax projection,
+        CancellationToken cancellationToken)
+    {
+                    return new ProjectedMemberSelection(projection.MemberPaths);
+    }
+    private async ValueTask<object?> EvaluateIndexAccessAsync(
+        string sourceName,
+        string sourceText,
+        IndexAccessArgumentSyntax indexAccess,
+        CancellationToken cancellationToken)
+    {
+                    var target = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Target, cancellationToken);
+                    var index = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Index, cancellationToken);
+                    return await ShellIndexingUtilities.GetIndexedValueAsync(
+                        target,
+                        index,
+                        indexAccess.LookupKind,
+                        cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateTupleLiteralAsync(
+        string sourceName,
+        string sourceText,
+        TupleLiteralArgumentSyntax tupleLiteral,
+        CancellationToken cancellationToken)
+    {
+                    var items = new object?[tupleLiteral.Items.Count];
+
+                    for (var i = 0; i < tupleLiteral.Items.Count; i++)
+                    {
+                        items[i] = await EvaluateArgumentAsync(sourceName, sourceText, tupleLiteral.Items[i], cancellationToken);
+                    }
+
+                    return new ToshTuple(items);
+    }
+    private async ValueTask<object?> EvaluateGeneratorComprehensionAsync(
+        string sourceName,
+        string sourceText,
+        GeneratorComprehensionArgumentSyntax genComp,
+        CancellationToken cancellationToken)
+    {
+                    // Evaluate the source eagerly so it captures current scope
+                    var genSourceValue = await EvaluateArgumentAsync(sourceName, sourceText, genComp.Clause.Source, cancellationToken);
+
+                    // Produce a lazy sequence that evaluates body items on demand
+                    return new LazySequence(
+                        EnumerateComprehensionLazily(sourceName, sourceText, genComp.Clause, genComp.Body, genSourceValue),
+                        label: null);
+    }
+    private async ValueTask<object?> EvaluateListComprehensionAsync(
+        string sourceName,
+        string sourceText,
+        ListComprehensionArgumentSyntax listComp,
+        CancellationToken cancellationToken)
+    {
+                    var items = new List<object?>();
+                    await EvaluateComprehensionClauseAsync(
+                        sourceName, sourceText, listComp.Clause,
+                        async ct =>
+                        {
+                            items.Add(await EvaluateArgumentAsync(sourceName, sourceText, listComp.Body, ct));
+                        },
+                        cancellationToken);
+                    return CreateTypedArray(items);
+    }
+    private async ValueTask<object?> EvaluateSetComprehensionAsync(
+        string sourceName,
+        string sourceText,
+        SetComprehensionArgumentSyntax setComp,
+        CancellationToken cancellationToken)
+    {
+                    var set = new HashSet<object?>(ShellKeyComparer.Instance);
+                    await EvaluateComprehensionClauseAsync(
+                        sourceName, sourceText, setComp.Clause,
+                        async ct =>
+                        {
+                            set.Add(await EvaluateArgumentAsync(sourceName, sourceText, setComp.Body, ct));
+                        },
+                        cancellationToken);
+                    return set;
+    }
+    private async ValueTask<object?> EvaluateSetLiteralAsync(
+        string sourceName,
+        string sourceText,
+        SetLiteralArgumentSyntax setLiteral,
+        CancellationToken cancellationToken)
+    {
+                    var set = new HashSet<object?>(ShellKeyComparer.Instance);
+
+                    foreach (var element in setLiteral.Items)
+                    {
+                        var value = await EvaluateArgumentAsync(sourceName, sourceText, element, cancellationToken);
+                        set.Add(value);
+                    }
+
+                    return set;
+    }
+    private async ValueTask<object?> EvaluateCommandSubstitutionAsync(
+        string sourceName,
+        string sourceText,
+        CommandSubstitutionArgumentSyntax commandSubstitution,
+        CancellationToken cancellationToken)
+    {
+                    IReadOnlyList<object?> results;
+
+                    if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, commandSubstitution.Pipeline, cancellationToken) is { Matched: true } raw)
+                    {
+                        results = [raw.Value];
+                    }
+                    else
+                    {
+                        results = await AsyncEnumerableExtensions.ToListAsync(
+                            EvaluatePipelineAsync(sourceName, sourceText, commandSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
+                            cancellationToken);
+                    }
+
+                    return string.Join(Environment.NewLine, results.Select(FormatCommandSubstitutionValue));
+    }
+    private async ValueTask<object?> EvaluateInputProcessSubstitutionAsync(
+        string sourceName,
+        string sourceText,
+        InputProcessSubstitutionArgumentSyntax processSubstitution,
+        CancellationToken cancellationToken)
+    {
+                    IReadOnlyList<object?> results;
+
+                    if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, processSubstitution.Pipeline, cancellationToken) is { Matched: true } raw)
+                    {
+                        results = [raw.Value];
+                    }
+                    else
+                    {
+                        results = await AsyncEnumerableExtensions.ToListAsync(
+                            EvaluatePipelineAsync(sourceName, sourceText, processSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
+                            cancellationToken);
+                    }
+
+                    return await PipelineFileMaterializer.MaterializeAsync("text", results, cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateOutputProcessSubstitutionAsync(
+        string sourceName,
+        string sourceText,
+        OutputProcessSubstitutionArgumentSyntax outputProcessSubstitution,
+        CancellationToken cancellationToken)
+    {
+                    IReadOnlyList<object?> results;
+
+                    if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, outputProcessSubstitution.Pipeline, cancellationToken) is { Matched: true } rawOutput)
+                    {
+                        results = [rawOutput.Value];
+                    }
+                    else
+                    {
+                        results = await AsyncEnumerableExtensions.ToListAsync(
+                            EvaluatePipelineAsync(sourceName, sourceText, outputProcessSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
+                            cancellationToken);
+                    }
+
+                    return await PipelineFileMaterializer.MaterializeAsync("text", results, cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateQuoteAsync(
+        string sourceName,
+        string sourceText,
+        QuoteArgumentSyntax quoteArgument,
+        CancellationToken cancellationToken)
+    {
+                    // If the inner expression references a rune parameter (RuneThunk),
+                    // return the thunk's AST wrapped as a QuotedSyntax.
+                    if (quoteArgument.Inner is VariableReferenceArgumentSyntax varRef &&
+                        TryGetVariableBinding(varRef.Name, out var quoteBinding) &&
+                        quoteBinding.Value is RuneThunk quotedThunk)
+                    {
+                        return new QuotedSyntax(
+                            quotedThunk.Syntax,
+                            quotedThunk.SourceName,
+                            quotedThunk.SourceText);
+                    }
+
+                    // Otherwise, capture the inner expression as-is
+                    return new QuotedSyntax(quoteArgument.Inner, sourceName, sourceText);
+    }
+    private async ValueTask<object?> EvaluateDictLiteralAsync(
+        string sourceName,
+        string sourceText,
+        DictLiteralArgumentSyntax dictLiteral,
+        CancellationToken cancellationToken)
+    {
+                    var dict = new Dictionary<object, object?>();
+
+                    foreach (var entry in dictLiteral.Entries)
+                    {
+                        var key = await EvaluateArgumentAsync(sourceName, sourceText, entry.Key, cancellationToken);
+                        var value = await EvaluateArgumentAsync(sourceName, sourceText, entry.Value, cancellationToken);
+                        dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.null_dict_key",
+                            Title: "Dict keys cannot be null.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: entry.Key.Span,
+                            Label: "this key evaluated to null"))] = value;
+                    }
+
+                    return CreateTypedDictionary(dict);
+    }
+    private async ValueTask<object?> EvaluateDictComprehensionAsync(
+        string sourceName,
+        string sourceText,
+        DictComprehensionArgumentSyntax dictComp,
+        CancellationToken cancellationToken)
+    {
+                    var dict = new Dictionary<object, object?>();
+                    await EvaluateComprehensionClauseAsync(
+                        sourceName, sourceText, dictComp.Clause,
+                        async ct =>
+                        {
+                            var key = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Key, ct);
+                            var value = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Value, ct);
+                            dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh.runtime.null_dict_key",
+                                Title: "Dict keys cannot be null.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: dictComp.Key.Span,
+                                Label: "this key evaluated to null"))] = value;
+                        },
+                        cancellationToken);
+                    return CreateTypedDictionary(dict);
+    }
+    private async ValueTask<object?> EvaluateRangeAsync(
+        string sourceName,
+        string sourceText,
+        RangeArgumentSyntax range,
+        CancellationToken cancellationToken)
+    {
+                    var startValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Start, cancellationToken);
+                    var start = ConvertToInt(startValue, "range start");
+
+                    int? end = null;
+                    if (range.End is not null)
+                    {
+                        var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
+                        end = ConvertToInt(endValue, "range end");
+                    }
+
+                    int? step = null;
+                    if (range.Step is not null)
+                    {
+                        var stepValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Step, cancellationToken);
+                        step = ConvertToInt(stepValue, "range step");
+                    }
+
+                    return new ToshRange(start, step, end);
+    }
+    private async ValueTask<object?> EvaluateNameOfAsync(
+        string sourceName,
+        string sourceText,
+        NameOfArgumentSyntax nameOf,
+        CancellationToken cancellationToken)
+    {
+                    // If not a $-prefixed variable reference, check if the bare identifier
+                    // actually refers to a variable — if so, require '$'.
+                    //
+                    // `TS-P2-20`. A member or type path is exempt: its last segment is a
+                    // member name, and a variable that happens to share it says nothing about
+                    // what was written. Without this, `nameof(K.S)` beside a variable `$S`
+                    // would demand `nameof($S)` — a name the operand never mentioned.
+                    if (!nameOf.IsVariableReference && !nameOf.IsMemberChain &&
+                        TryGetVariableBinding(nameOf.Identifier, out _))
+                    {
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.nameof_requires_dollar",
+                            Title: $"Variable references in nameof require '$'. Use nameof(${nameOf.Identifier}).",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: nameOf.Span,
+                            Label: $"did you mean '${nameOf.Identifier}'?",
+                            Help: $"try nameof(${nameOf.Identifier}) to get the variable name."));
+                    }
+
+                    return nameOf.Identifier;
+    }
+    private async ValueTask<object?> EvaluateUnaryOperatorAsync(
+        string sourceName,
+        string sourceText,
+        UnaryOperatorArgumentSyntax unaryOperation,
+        CancellationToken cancellationToken)
+    {
+                    // Constant-folded by the lowering pass.
+                    if (unaryOperation.FoldedConstant is { } cachedUnary)
+                    {
+                        return cachedUnary.Value;
+                    }
+
+                    var operand = await EvaluateArgumentAsync(sourceName, sourceText, unaryOperation.Operand, cancellationToken);
+
+                    if (operand is ToshClassInstance unaryInst)
+                    {
+                        var unaryOverload = await TryInvokeClassUnaryOperatorAsync(
+                            unaryInst,
+                            unaryOperation.Operator,
+                            cancellationToken);
+                        if (unaryOverload.Matched)
+                        {
+                            return unaryOverload.Value;
+                        }
+                    }
+
+                    return OperatorEvaluator.EvaluateUnary(unaryOperation.Operator, operand);
+    }
+    private async ValueTask<object?> EvaluateSubexpressionAsync(
+        string sourceName,
+        string sourceText,
+        SubexpressionArgumentSyntax subexpression,
+        CancellationToken cancellationToken)
+    {
+                    if (await TryEvaluateRawExpressionPipelineAsync(sourceName, sourceText, subexpression.Pipeline, cancellationToken) is { Matched: true } raw)
+                    {
+                        return raw.Value;
+                    }
+
+                    var results = await AsyncEnumerableExtensions.ToListAsync(
+                        EvaluatePipelineAsync(sourceName, sourceText, subexpression.Pipeline, cancellationToken, outputIsCaptured: true),
+                        cancellationToken);
+
+                    if (results.Count <= 1)
+                    {
+                        return results.Count == 1 ? results[0] : null;
+                    }
+
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.subexpression_requires_single_value",
+                        Title: "Subexpressions used as arguments must produce exactly one value.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: subexpression.Span,
+                        Label: $"this subexpression produced {results.Count} values",
+                        Help: "ensure the parenthesized pipeline returns exactly one object."));
+    }
+    private async ValueTask<object?> EvaluateMemberAccessAsync(
+        string sourceName,
+        string sourceText,
+        MemberAccessArgumentSyntax memberAccess,
+        CancellationToken cancellationToken)
+    {
+                    var target = await EvaluateArgumentAsync(sourceName, sourceText, memberAccess.Target, cancellationToken);
+
+                    if (target is null)
+                    {
+                        // `TOAST-0018`. Reading a member of `null` used to answer
+                        // `null` silently — for *any* member name, so `$x.Lenght` on a
+                        // null reported nothing while the same typo on a string
+                        // raised. That also left `?.` meaning nothing: both spellings
+                        // behaved identically, though `?.` is documented as yielding
+                        // null "instead of failing".
+                        //
+                        // Now `.` joins method calls and indexing, which already
+                        // raised on a null receiver, and `?.` is how an author asks
+                        // for propagation.
+                        if (memberAccess.NullSafe)
+                        {
+                            return null;
+                        }
+
+                        throw new InvalidOperationException(
+                            Tosh.Runtime.ToastMessages.MemberOfNull(memberAccess.MemberPath));
+                    }
+
+                    return await LanguageRuntime.ObjectAccessor.GetValueAsync(
+                        target,
+                        memberAccess.MemberPath,
+                        cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateArrayLiteralAsync(
+        string sourceName,
+        string sourceText,
+        ArrayLiteralArgumentSyntax listLiteral,
+        CancellationToken cancellationToken)
+    {
+                    var items = new List<object?>();
+
+                    foreach (var element in listLiteral.Items)
+                    {
+                        if (element is SpreadElementArgumentSyntax spread)
+                        {
+                            var spreadValue = await EvaluateArgumentAsync(sourceName, sourceText, spread.Value, cancellationToken);
+
+                            if (spreadValue is string)
+                            {
+                                items.Add(spreadValue);
+                            }
+                            else if (spreadValue is IEnumerable enumerable)
+                            {
+                                foreach (var item in enumerable)
+                                {
+                                    items.Add(item);
+                                }
+                            }
+                            else
+                            {
+                                items.Add(spreadValue);
+                            }
+                        }
+                        else
+                        {
+                            items.Add(await EvaluateArgumentAsync(sourceName, sourceText, element, cancellationToken));
+                        }
+                    }
+
+                    return CreateTypedArray(items);
+    }
+    private async ValueTask<object?> EvaluateChainedComparisonAsync(
+        string sourceName,
+        string sourceText,
+        ChainedComparisonArgumentSyntax chain,
+        CancellationToken cancellationToken)
+    {
+                    // TS-P1-22: `a < b < c` means `(a < b) and (b < c)`
+                    // with each operand evaluated exactly once and
+                    // short-circuit preserved, so a failing earlier
+                    // comparison never evaluates later operands.
+                    var current = await EvaluateArgumentAsync(
+                        sourceName, sourceText, chain.Operands[0], cancellationToken);
+
+                    for (var i = 0; i < chain.Operators.Count; i++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var next = await EvaluateArgumentAsync(
+                            sourceName, sourceText, chain.Operands[i + 1], cancellationToken);
+
+                        var comparison = await EvaluateBinaryOperatorAsync(
+                            sourceName,
+                            sourceText,
+                            chain.OperatorSpans[i],
+                            current,
+                            chain.Operators[i],
+                            next,
+                            cancellationToken);
+
+                        if (!OperatorEvaluator.ToBoolean(comparison))
+                        {
+                            return false;
+                        }
+
+                        current = next;
+                    }
+
+                    return true;
+    }
+    private async ValueTask<object?> EvaluateOperatorAsync(
+        string sourceName,
+        string sourceText,
+        OperatorArgumentSyntax operation,
+        CancellationToken cancellationToken)
+    {
+                    // Constant-folded by the lowering pass: skip both
+                    // sub-evaluations and return the precomputed value.
+                    if (operation.FoldedConstant is { } cachedBinary)
+                    {
+                        return cachedBinary.Value;
+                    }
+
+                    var left = await EvaluateArgumentAsync(sourceName, sourceText, operation.Left, cancellationToken);
+
+                    // Short-circuit: do not evaluate the right side if unnecessary.
+                    if (operation.Operator == "and")
+                    {
+                        return OperatorEvaluator.ToBoolean(left)
+                            && OperatorEvaluator.ToBoolean(await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken));
+                    }
+
+                    if (operation.Operator == "or")
+                    {
+                        return OperatorEvaluator.ToBoolean(left)
+                            || OperatorEvaluator.ToBoolean(await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken));
+                    }
+
+                    if (operation.Operator == "??")
+                    {
+                        return left ?? await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken);
+                    }
+
+                    var right = await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken);
+
+                    return await EvaluateBinaryOperatorAsync(
+                        sourceName,
+                        sourceText,
+                        operation.Span,
+                        left,
+                        operation.Operator,
+                        right,
+                        cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateVariableReferenceAsync(
+        string sourceName,
+        string sourceText,
+        VariableReferenceArgumentSyntax variableReference,
+        CancellationToken cancellationToken)
+    {
+                    if (TryGetVariableBinding(variableReference.Name, out var binding))
+                    {
+                        if (binding.IsAllocatedOnly)
+                        {
+                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh.runtime.uninitialized_variable",
+                                Title: $"Variable '{variableReference.Name}' has been declared but not assigned yet.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: variableReference.Span,
+                                Label: $"assign a value to '{variableReference.Name}' before using it",
+                                Help: $"try '${variableReference.Name} = ...' or assign a member like '${variableReference.Name}.Name = ...'."));
+                        }
+
+                        // Rune thunk: transparently evaluate the deferred argument
+                        if (binding.Value is RuneThunk thunk)
+                        {
+                            return await EvaluateRuneThunkAsync(thunk, cancellationToken);
+                        }
+
+                        return binding.Value;
+                    }
+
+                    // `TS-P2-81`. A primary-constructor parameter used outside a stored
+                    // property initializer is not an undeclared variable — it is a name that
+                    // was in scope while the value was being built and is gone once it is.
+                    // "declare it first with 'var x = …'" is the wrong advice for it, and the
+                    // bare spelling of the same mistake already says so (`TS-P2-41`).
+                    if (DescribeOutOfScopeConstructorParameter(variableReference.Name) is { } parameterHelp)
+                    {
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.unknown_variable",
+                            Title: $"'${variableReference.Name}' is a constructor parameter of "
+                                 + $"'{CurrentClass!.Name}' and is not in scope here.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: variableReference.Span,
+                            Label: $"'${variableReference.Name}' is not available once the value is built",
+                            Help: parameterHelp));
+                    }
+
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.unknown_variable",
+                        Title: $"Variable '{variableReference.Name}' was not found.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: variableReference.Span,
+                        Label: $"'{variableReference.Name}' is not defined in this scope",
+                        Help: DescribeUnknownVariable(variableReference.Name)));
+    }
+    private async ValueTask<object?> EvaluateCallableInvocationAsync(
+        string sourceName,
+        string sourceText,
+        CallableInvocationArgumentSyntax callableInvocation,
+        CancellationToken cancellationToken)
+    {
+                    IShellCallable? callable = null;
+
+                    // `TS-P2-01`. A bareword target names a function rather than
+                    // holding one: in `(f() + 1)` the target is the word `f`, which
+                    // evaluates to the *string* "f" and is not callable. Resolved
+                    // through the same scoped view a command call uses, so a function
+                    // composes in an operator expression the way it already did as a
+                    // statement — `f() + 1` used to report "this value is not
+                    // callable" once the parser learned to build the invocation.
+                    if (callableInvocation.Target is BarewordArgumentSyntax { Value.Length: > 0 } named &&
+                        CreateScopedCommandView().TryGet(named.Value, out var namedCommand) &&
+                        namedCommand is IShellCallable namedCallable)
+                    {
+                        callable = namedCallable;
+                    }
+
+                    if (callable is null)
+                    {
+                        var target = await EvaluateArgumentAsync(sourceName, sourceText, callableInvocation.Target, cancellationToken);
+
+                        if (target is not IShellCallable evaluated)
+                        {
+                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh.runtime.value_not_callable",
+                                Title: "The provided value is not callable.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: callableInvocation.Target.Span,
+                                Label: "this value cannot be invoked",
+                                Help: "pass a lambda like 'func(x) => ...' or another callable shell value."));
+                        }
+
+                        callable = evaluated;
+                    }
+
+                    var callArguments = await EvaluateCallableInvocationArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);
+
+                    return await InvokeCallableInExpressionAsync(
+                        callable,
+                        callArguments,
+                        sourceName,
+                        sourceText,
+                        callableInvocation.Span,
+                        callableInvocation.Arguments.Select(argument => argument.Span).ToArray(),
+                        cancellationToken);
+    }
+    private async ValueTask<object?> EvaluateRecordLiteralAsync(
+        string sourceName,
+        string sourceText,
+        RecordLiteralArgumentSyntax recordLiteral,
+        CancellationToken cancellationToken)
+    {
+                    IDictionary<string, object?> record = new System.Dynamic.ExpandoObject();
+
+                    foreach (var entry in recordLiteral.Fields)
+                    {
+                        switch (entry)
+                        {
+                            case RecordFieldSyntax field:
+                                record[field.Name] = await EvaluateArgumentAsync(sourceName, sourceText, field.Value, cancellationToken);
+                                break;
+
+                            case ComputedRecordFieldSyntax computed:
+                                {
+                                    var key = await EvaluateArgumentAsync(sourceName, sourceText, computed.NameExpression, cancellationToken);
+                                    var value = await EvaluateArgumentAsync(sourceName, sourceText, computed.Value, cancellationToken);
+                                    record[key?.ToString() ?? string.Empty] = value;
+                                }
+                                break;
+
+                            case SpreadRecordEntrySyntax spread:
+                                {
+                                    var spreadValue = await EvaluateArgumentAsync(sourceName, sourceText, spread.Value, cancellationToken);
+
+                                    if (spreadValue is IDictionary<string, object?> dict)
+                                    {
+                                        foreach (var kvp in dict)
+                                        {
+                                            record[kvp.Key] = kvp.Value;
+                                        }
+                                    }
+                                    else if (spreadValue is IShellRecordObject shellRecord)
+                                    {
+                                        foreach (var member in await shellRecord.GetMembersAsync(
+                                                     includeHidden: false,
+                                                     cancellationToken))
+                                        {
+                                            record[member.Key] = member.Value;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                            Code: "tosh.runtime.spread_requires_record",
+                                            Title: "Spread in a record literal requires a record or dictionary value.",
+                                            SourceName: sourceName,
+                                            SourceText: sourceText,
+                                            Span: spread.Span,
+                                            Label: "this value is not a record"));
+                                    }
+                                }
+                                break;
+                        }
+                    }
+
+                    return record;
+    }
+    private async ValueTask<object?> EvaluateMethodCallAsync(
+        string sourceName,
+        string sourceText,
+        MethodCallArgumentSyntax methodCall,
+        CancellationToken cancellationToken)
+    {
+                    var target = await ResolveMethodCallTargetAsync(sourceName, sourceText, methodCall, cancellationToken);
+
+                    if (target is ShellTextLine textLine)
+                    {
+                        target = textLine.Text;
+                    }
+
+                    if (target is null)
+                    {
+                        if (methodCall.NullSafe)
+                        {
+                            return null;
+                        }
+
+                        throw new InvalidOperationException("Cannot invoke an instance method on null.");
+                    }
+
+                    var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, methodCall.Arguments, cancellationToken);
+
+                    // Names are resolved here rather than passed down: scope, aliases and
+                    // ToastScript-declared types are all knowledge the engine holds and the
+                    // invoker does not.
+                    var methodTypeArguments = ResolveCallSiteTypeArguments(
+                        methodCall.ExplicitTypeArguments,
+                        methodCall.MethodName,
+                        sourceName,
+                        sourceText,
+                        methodCall.Span);
+
+                    // `TOAST-0001`. Inside a closure a bare name is implicit member
+                    // access, so `where { double($_) }` arrives here as `$_.double($_)`
+                    // and reported a missing method on Int32 — an error about a
+                    // construct the reader had not written. Only the *synthesized*
+                    // receiver may mean something else, and only once the item has been
+                    // asked first.
+                    if (methodCall.ImplicitCurrentItem &&
+                        !ReceiverHasInstanceMember(target, methodCall.MethodName) &&
+                        !await HasExtensionMethodAsync(target, methodCall.MethodName))
+                    {
+                        return await InvokeImplicitItemFallbackAsync(
+                            sourceName,
+                            sourceText,
+                            methodCall,
+                            target,
+                            methodArguments,
+                            cancellationToken);
+                    }
+
+                    var invocation = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
+                        target,
+                        methodCall.MethodName,
+                        methodArguments,
+                        methodTypeArguments,
+                        cancellationToken);
+                    return invocation.ReturnedVoid ? target : invocation.Value;
+    }
+    private async ValueTask<object?> EvaluateStaticMethodCallAsync(
+        string sourceName,
+        string sourceText,
+        StaticMethodCallArgumentSyntax staticMethodCall,
+        CancellationToken cancellationToken)
+    {
+                    var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, staticMethodCall.Arguments, cancellationToken);
+
+                    if (staticMethodCall.ExplicitTypeArguments is { } unionTypeArguments &&
+                        TryInvokeGenericUnionVariant(
+                            staticMethodCall.Path,
+                            methodArguments,
+                            unionTypeArguments,
+                            out var unionValue))
+                    {
+                        return unionValue;
+                    }
+
+                    // `TS-P2-82`. Resolved here rather than in the invoker: the names need the
+                    // scope, aliases and declared types the engine holds, and passing names
+                    // down would mean a second, weaker resolver living there.
+                    var typeArguments = staticMethodCall.ExplicitTypeArguments is null
+                        ? null
+                        : ResolveExplicitTypeArguments(
+                            staticMethodCall.ExplicitTypeArguments,
+                            sourceName,
+                            sourceText,
+                            staticMethodCall.Span);
+
+                    // `TS-P2-114`. A bare name here may be a function in scope
+                    // rather than a type. In statement position `Helper(3)`
+                    // parses as a command and resolves against the scope; an
+                    // interpolation hole is re-parsed as a pure expression, where
+                    // the same text becomes a qualified path and went straight to
+                    // CLR resolution — so a module's sibling function was
+                    // unreachable from a hole while `{M.Helper(3)}`, `{$f(3)}` and
+                    // a top-level `{Plain(3)}` all worked.
+                    //
+                    // Resolved through the same scoped view a command call uses,
+                    // which is the rule `TS-P2-01` already established for
+                    // `f() + 1`. Only single-segment paths are considered: a
+                    // dotted path is a qualified name and belongs below.
+                    if (!staticMethodCall.Path.Contains('.', StringComparison.Ordinal) &&
+                        CreateScopedCommandView().TryGet(staticMethodCall.Path, out var scopedCommand) &&
+                        scopedCommand is IShellCallable scopedCallable)
+                    {
+                        return await InvokeCallableInExpressionAsync(
+                            scopedCallable,
+                            methodArguments,
+                            sourceName,
+                            sourceText,
+                            staticMethodCall.Span,
+                            staticMethodCall.Arguments.Select(argument => argument.Span).ToArray(),
+                            cancellationToken);
+                    }
+
+                    return await InvokeQualifiedMethodAsync(
+                        staticMethodCall.Path,
+                        methodArguments,
+                        cancellationToken,
+                        typeArguments);
+    }
+    private async ValueTask<object?> EvaluateNamedAsync(
+        string sourceName,
+        string sourceText,
+        NamedArgumentSyntax namedArg,
+        CancellationToken cancellationToken)
+    {
+                    var value = await EvaluateArgumentAsync(sourceName, sourceText, namedArg.Value, cancellationToken);
+                    return new NamedArgument(namedArg.Name, value);
+    }
+    private async ValueTask<object?> EvaluateFunctionReferenceAsync(
+        string sourceName,
+        string sourceText,
+        FunctionReferenceArgumentSyntax funcRef,
+        CancellationToken cancellationToken)
+    {
+                    // Look up the function/command by name and return it as a callable value.
+                    foreach (var scope in _scopes)
+                    {
+                        if (scope.Commands.TryGetValue(funcRef.Name, out var scopedCommand))
+                        {
+                            return scopedCommand;
+                        }
+                    }
+
+                    if (LanguageRuntime.Commands.TryGet(funcRef.Name, out var registeredCommand))
+                    {
+                        return registeredCommand;
+                    }
+
+                    // `TS-P2-94`. A dotted name is in neither flat table, so it is
+                    // resolved here.
+                    //
+                    // A static method is tried first, and the order matters: it is
+                    // not a value — reading `C.Method` deliberately raises "call it
+                    // with parentheses" — so letting the value path run first threw
+                    // that error before this branch was ever reached.
+                    if (funcRef.Name.LastIndexOf('.') is var dot and > 0 &&
+                        TryResolveShellStaticType(funcRef.Name[..dot], out var ownerType) &&
+                        ownerType is ToshClassDefinition ownerClass &&
+                        ownerClass.HasStaticMethod(funcRef.Name[(dot + 1)..]))
+                    {
+                        return new ToshStaticMethodReference(ownerClass, funcRef.Name[(dot + 1)..]);
+                    }
+
+                    // `&$obj.Method` — bound to a receiver. Tried before the
+                    // qualified-value path because `$obj.Method` on a class instance
+                    // is not a value either: reading a method without parentheses
+                    // raises the same "call it" error a static does, so the value
+                    // path would throw before this branch was reached.
+                    if (funcRef.Name.StartsWith('$') &&
+                        funcRef.Name.IndexOf('.', StringComparison.Ordinal) is var receiverDot and > 0 &&
+                        TryGetVariableValue(funcRef.Name[1..receiverDot], out var receiver) &&
+                        receiver is not null)
+                    {
+                        return new ToshBoundMethodReference(
+                            receiver,
+                            funcRef.Name[(receiverDot + 1)..],
+                            LanguageRuntime.Invoker);
+                    }
+
+                    // A module-qualified function, by contrast, already evaluates
+                    // to a callable through ordinary member access — `var f = M.E`
+                    // has always worked — so it needs only that same resolution.
+                    if (funcRef.Name.Contains('.', StringComparison.Ordinal) &&
+                        TryResolveQualifiedAccess(funcRef.Name, out var qualifiedValue, out _) &&
+                        qualifiedValue is IShellCallable qualifiedCallable)
+                    {
+                        return qualifiedCallable;
+                    }
+
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.unknown_function_reference",
+                        Title: $"Function '{funcRef.Name}' was not found.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: funcRef.Span,
+                        Label: $"'{funcRef.Name}' is not defined in this scope",
+                        Help: "define the function first or check the spelling."));
+    }
+    private async ValueTask<object?> EvaluateInterpolatedStringAsync(
+        string sourceName,
+        string sourceText,
+        InterpolatedStringArgumentSyntax interpolated,
+        CancellationToken cancellationToken)
+    {
+                    var builder = new System.Text.StringBuilder();
+
+                    foreach (var part in interpolated.Parts)
+                    {
+                        switch (part)
+                        {
+                            case InterpolatedStringLiteralPart literal:
+                                builder.Append(literal.Text);
+                                break;
+
+                            case InterpolatedStringExpressionPart expression:
+                                {
+                                    // The hole's value is being consumed into a string, so an
+                                    // external command inside it must have its stdout piped
+                                    // rather than inherited — `echo $"{git rev-parse …}"` used
+                                    // to print the branch to the terminal and interpolate the
+                                    // empty string (TS-P1-32).
+                                    var hole = PrepareInterpolationHole(expression, sourceName);
+
+                                    // `TOAST-0023`. **A hole is one value unless it
+                                    // contains a pipeline.** `$"{$xs}"` where `$xs`
+                                    // holds a list gave `1 2 3`, because the hole was
+                                    // run as a pipeline and a collection yields its
+                                    // elements — while `$"{[1, 2, 3]}"` and `$"{($xs)}"`
+                                    // both rendered `[1, 2, 3]`. Three spellings of the
+                                    // same value, two answers, and the compiled backend
+                                    // rendered in all three.
+                                    //
+                                    // The parenthesised form already took this path;
+                                    // an expression hole now takes it too, so the
+                                    // difference is a `|` the reader can see rather than
+                                    // whether a variable happened to hold something
+                                    // enumerable.
+                                    if (TryGetHolePipeline(hole) is { } holePipeline &&
+                                        await TryEvaluateRawExpressionPipelineAsync(
+                                            sourceName, sourceText, holePipeline, cancellationToken)
+                                            is { Matched: true } single)
+                                    {
+                                        builder.Append(ApplyInterpolationClauses(
+                                            await FormatInterpolatedValueAsync(
+                                                single.Value,
+                                                cancellationToken,
+                                                expression.Format,
+                                                sourceName,
+                                                sourceText,
+                                                expression.ExpressionSpan),
+                                            expression.Alignment));
+                                        break;
+                                    }
+
+                                    var results = await AsyncEnumerableExtensions.ToListAsync(
+                                        EvaluateParseResultAsync(
+                                            hole,
+                                            cancellationToken,
+                                            outputIsCaptured: true),
+                                        cancellationToken);
+
+                                    if (results.Count == 1)
+                                    {
+                                        builder.Append(ApplyInterpolationClauses(
+                                            await FormatInterpolatedValueAsync(
+                                                results[0],
+                                                cancellationToken,
+                                                expression.Format,
+                                                sourceName,
+                                                sourceText,
+                                                expression.ExpressionSpan),
+                                            expression.Alignment));
+                                    }
+                                    else if (results.Count > 1)
+                                    {
+                                        var formatted = new string[results.Count];
+                                        for (var index = 0; index < results.Count; index++)
+                                        {
+                                            formatted[index] = await FormatInterpolatedValueAsync(
+                                                results[index],
+                                                cancellationToken,
+                                                expression.Format,
+                                                sourceName,
+                                                sourceText,
+                                                expression.ExpressionSpan);
+                                        }
+
+                                        // Alignment pads the joined text, not each item:
+                                        // the clause describes the field the hole occupies.
+                                        builder.Append(ApplyInterpolationClauses(
+                                            string.Join(" ", formatted),
+                                            expression.Alignment));
+                                    }
+
+                                    break;
+                                }
+                        }
+                    }
+
+                    return builder.ToString();
+    }
+    private async ValueTask<object?> EvaluateNewObjectAsync(
+        string sourceName,
+        string sourceText,
+        NewObjectArgumentSyntax newObject,
+        CancellationToken cancellationToken)
+    {
+                // `TOAST-0091`. The construction itself is unchanged and has nine exits, so
+                // it stays a unit; the initializer is applied once to whatever it produced.
+                async Task<object?> ConstructAsync()
+                {
+                        var constructorArguments = await EvaluateArgumentsAsync(sourceName, sourceText, newObject.Arguments, cancellationToken);
+
+                        var bareName = newObject.EffectiveBareName;
+                        var typeArgList = newObject.EffectiveTypeArguments;
+                        var hasAngles = newObject.HasExplicitTypeArgumentList;
+
+                        // Reject empty `<>` early — it's never useful and
+                        // is almost always a typo for an inferred-args
+                        // attempt that we don't yet support.
+                        if (hasAngles && typeArgList.Count == 0)
+                        {
+                            throw new InvalidOperationException(
+                                $"Empty type-argument list '<>' is not allowed on 'new {bareName}'. Either omit the angle brackets or supply concrete type arguments.");
+                        }
+
+                        if (TryResolveShellStaticType(bareName, out var shellType))
+                        {
+                            if (shellType is ToshClassDefinition classDef)
+                            {
+                                if (classDef.TypeParameterNames.Count == 0)
+                                {
+                                    if (hasAngles)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Class '{bareName}' is not generic and does not accept type arguments.");
+                                    }
+
+                                    return await classDef.CreateInstanceAsync(
+                                        constructorArguments,
+                                        cancellationToken);
+                                }
+
+                                // Generic class — must have matching type-arg list
+                                if (!hasAngles)
+                                {
+                                    if (TryInferTypeArgumentsFromCtorArgs(
+                                            classDef.TypeParameterNames,
+                                            classDef.PrimaryConstructorParameters,
+                                            constructorArguments,
+                                            out var inferredResolved,
+                                            out var inferredDisplay))
+                                    {
+                                        return await classDef.CreateGenericInstanceAsync(
+                                            inferredResolved,
+                                            inferredDisplay,
+                                            constructorArguments,
+                                            cancellationToken);
+                                    }
+
+                                    throw new InvalidOperationException(
+                                        $"Generic class '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", classDef.TypeParameterNames)}>(…)'.");
+                                }
+
+                                if (typeArgList.Count != classDef.TypeParameterNames.Count)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Generic class '{bareName}' expects {classDef.TypeParameterNames.Count} type argument(s) " +
+                                        $"<{string.Join(", ", classDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                }
+
+                                var resolved = new Type?[typeArgList.Count];
+                                for (int i = 0; i < typeArgList.Count; i++)
+                                {
+                                    resolved[i] = ResolveTypeArgument(typeArgList[i]);
+                                }
+                                return await classDef.CreateGenericInstanceAsync(
+                                    resolved,
+                                    typeArgList,
+                                    constructorArguments,
+                                    cancellationToken);
+                            }
+
+                            if (shellType is ToshRecordDefinition recordDef)
+                            {
+                                if (recordDef.TypeParameterNames.Count == 0)
+                                {
+                                    if (hasAngles)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Record '{bareName}' is not generic and does not accept type arguments.");
+                                    }
+
+                                    return recordDef.CreateInstance(constructorArguments);
+                                }
+
+                                if (!hasAngles)
+                                {
+                                    if (TryInferTypeArgumentsFromRecordFields(
+                                            recordDef.TypeParameterNames,
+                                            recordDef.Fields,
+                                            constructorArguments,
+                                            out var inferredResolvedRec,
+                                            out var inferredDisplayRec))
+                                    {
+                                        return recordDef.CreateGenericInstance(inferredResolvedRec, inferredDisplayRec, constructorArguments);
+                                    }
+
+                                    throw new InvalidOperationException(
+                                        $"Generic record '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", recordDef.TypeParameterNames)}>(\u2026)'.");
+                                }
+
+                                if (typeArgList.Count != recordDef.TypeParameterNames.Count)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Generic record '{bareName}' expects {recordDef.TypeParameterNames.Count} type argument(s) " +
+                                        $"<{string.Join(", ", recordDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                }
+
+                                var resolvedRec = new Type?[typeArgList.Count];
+                                for (int i = 0; i < typeArgList.Count; i++)
+                                {
+                                    resolvedRec[i] = ResolveTypeName(typeArgList[i]);
+                                }
+                                return recordDef.CreateGenericInstance(resolvedRec, typeArgList, constructorArguments);
+                            }
+
+                            // Non-Tosh-class shell static type
+                            // (built-in collection alias such as
+                            // 'list', 'array', 'dict', or a CLR-backed
+                            // descriptor). Resolve the full constructed
+                            // spelling before invoking its factory: the bare
+                            // descriptor for `list` is `List<object>`, while
+                            // `list<float>` must remain `List<float>` even when
+                            // it is empty and has no values to infer from.
+                            if (hasAngles &&
+                                BuiltInShellTypes.TryResolveStaticType(
+                                    newObject.TypeName,
+                                    CreateScopedTypeResolver(),
+                                    out var constructedShellType))
+                            {
+                                return await LanguageRuntime.Invoker.CreateInstanceAsync(
+                                    constructedShellType,
+                                    constructorArguments,
+                                    cancellationToken);
+                            }
+
+                            return await LanguageRuntime.Invoker.CreateInstanceAsync(
+                                shellType,
+                                constructorArguments,
+                                cancellationToken);
+                        }
+
+                        // Fall back to CLR resolution — pass the original
+                        // (concatenated) type name including any generic
+                        // suffix so reflection can find e.g. 'List`1'.
+                        var lookupName = newObject.TypeName;
+                        var type = ResolveTypeName(lookupName)
+                                   ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
+                        return await LanguageRuntime.Invoker.CreateInstanceAsync(
+                            type,
+                            constructorArguments,
+                            cancellationToken);
+                }
+
+                var constructed = await ConstructAsync();
+
+                return newObject.Initializer is null
+                    ? constructed
+                    : await ApplyObjectInitializerAsync(
+                        constructed, newObject, sourceName, sourceText, cancellationToken);
+    }
     private static bool AllNamedArgumentsMatchParameters(
         IReadOnlyList<FunctionParameterDefinition> parameters,
         IReadOnlyDictionary<string, object?> namedArgs)
