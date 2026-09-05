@@ -736,12 +736,33 @@ public sealed partial class ToshEngine
         return instance;
     }
 
+    /// <summary>
+    /// Routes every argument through <see cref="EvaluateArgumentSlowAsync"/>, bypassing the
+    /// synchronous fast path — <c>TOAST-0009</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fast path is a second copy of semantics that already exists: every shape it answers is
+    /// also a case in the slow switch, and the danger is a copy that is <em>nearly</em> the same.
+    /// The comment on <see cref="TryEvaluateSimpleArgument"/> says as much and relies on each case
+    /// declining rather than guessing — which is a discipline, not a check.
+    /// </para>
+    /// <para>
+    /// This makes it checkable: with the fast path suppressed the same expression can be
+    /// evaluated the other way and the two answers compared. It is the harness the bound-tree
+    /// evaluator will be built against, and it is not vacuous before that work starts, because
+    /// the duplication it tests is already here.
+    /// </para>
+    /// </remarks>
+    internal bool SuppressSimpleArgumentFastPath { get; set; }
+
     private ValueTask<object?> EvaluateArgumentAsync(
         string sourceName,
         string sourceText,
         ArgumentSyntax argument,
         CancellationToken cancellationToken)
-        => TryEvaluateSimpleArgument(sourceName, sourceText, argument, out var value)
+        => !SuppressSimpleArgumentFastPath &&
+           TryEvaluateSimpleArgument(sourceName, sourceText, argument, out var value)
             ? new ValueTask<object?>(value)
             : EvaluateArgumentSlowAsync(sourceName, sourceText, argument, cancellationToken);
 
