@@ -87,7 +87,7 @@ public sealed class ExpressionPrecedenceCharacterizationTests
     public async Task Null_coalescing_sits_below_comparison()
     {
         Assert.Equal(5L, Convert.ToInt64(await EvalAsync("null ?? 5")));
-        Assert.Equal(true, Convert.ToBoolean(await EvalAsync("(null ?? 5) == 5")));
+        Assert.True(Convert.ToBoolean(await EvalAsync("(null ?? 5) == 5")));
     }
 
     [Fact]

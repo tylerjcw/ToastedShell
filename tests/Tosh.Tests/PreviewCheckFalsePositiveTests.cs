@@ -61,7 +61,7 @@ public sealed class PreviewCheckFalsePositiveTests : IClassFixture<ToshRuntimeFi
     {
         // Both halves matter: it has to run, and it has to be quiet about running.
         Assert.Equal(expected, (await EvalAsync(source))?.ToString());
-        Assert.Empty(Check(source).Where(d => d.Code.StartsWith("tosh.type.", StringComparison.Ordinal)));
+        Assert.DoesNotContain(Check(source), d => d.Code.StartsWith("tosh.type.", StringComparison.Ordinal));
     }
 
     // ── the checks must still catch what is genuinely wrong ────────────────────

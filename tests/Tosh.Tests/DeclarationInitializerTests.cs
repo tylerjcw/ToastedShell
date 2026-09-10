@@ -67,7 +67,8 @@ public sealed class DeclarationInitializerTests
         // must land on the `=` that is missing its value.
         var diagnostics = DiagnosticsFor("var x =\nvar y = 1");
         var initializer = Assert.Single(
-            diagnostics.Where(diagnostic => diagnostic.Code == "tosh.parser.expected_initializer"));
+            diagnostics,
+            diagnostic => diagnostic.Code == "tosh.parser.expected_initializer");
 
         Assert.Contains("'x'", initializer.Title, StringComparison.Ordinal);
         Assert.True(

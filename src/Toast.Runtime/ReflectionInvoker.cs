@@ -101,7 +101,9 @@ public sealed class ReflectionInvoker : IObjectInvoker
 
         if (bestConstructor is not null && bestBinding is not null)
         {
-            return InvokeUnwrapped(() => bestConstructor.Invoke(bestBinding.Value.BoundArguments));
+            // A constructor cannot return null, so the nullable result of the shared
+            // unwrapper is not a real possibility on this path.
+            return InvokeUnwrapped(() => bestConstructor.Invoke(bestBinding.Value.BoundArguments))!;
         }
 
         throw new InvalidOperationException($"No constructor matched '{type.FullName}' with {arguments.Count} argument(s).");

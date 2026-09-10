@@ -31,7 +31,7 @@ public class LspDiagnosticSeverityTests
             takesOne 1 2 3
             """);
 
-        var arity = Assert.Single(warnings.Where(d => d.Code == "tosh.type.arity"));
+        var arity = Assert.Single(warnings, d => d.Code == "tosh.type.arity");
         Assert.Equal(2, arity.Severity);
     }
 

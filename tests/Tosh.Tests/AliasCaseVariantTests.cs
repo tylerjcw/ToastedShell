@@ -134,7 +134,7 @@ public sealed class AliasCaseVariantTests : IClassFixture<ToshRuntimeFixture>
             BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         var cache = (System.Collections.IDictionary)field.GetValue(resolver)!;
-        Assert.Equal(0, cache.Count);
+        Assert.Empty(cache);
 
         Assert.NotNull(resolver.ResolveAliasCaseVariant("File"));
         Assert.True(cache.Count > 0, "resolving a case variant did not populate the cache");

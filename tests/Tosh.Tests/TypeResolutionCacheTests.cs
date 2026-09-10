@@ -44,7 +44,7 @@ public sealed class TypeResolutionCacheTests
             BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         var cache = (System.Collections.IDictionary)field.GetValue(resolver)!;
-        Assert.Equal(0, cache.Count);
+        Assert.Empty(cache);
 
         Assert.NotNull(resolver.Resolve("Path"));
         var afterFirst = cache.Count;

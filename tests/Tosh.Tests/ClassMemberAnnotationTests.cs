@@ -85,8 +85,8 @@ public sealed class ClassMemberAnnotationTests : IClassFixture<ToshRuntimeFixtur
     public void The_diagnostic_names_the_property_and_both_types()
     {
         var diagnostic = Assert.Single(
-            Diagnose("class C { prop Count: int = \"42\" }")
-            .Where(d => d.Code == "tosh.type.mismatch"));
+            Diagnose("class C { prop Count: int = \"42\" }"),
+            d => d.Code == "tosh.type.mismatch");
 
         // The CLR display name, not the annotation's spelling — worded exactly as the
         // sibling `var x: int = "42"` diagnostic is, so the two read alike.

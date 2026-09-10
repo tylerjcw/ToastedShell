@@ -521,7 +521,7 @@ public static class TypeChecker
                     // `TOAST-0046`. `void` and `nothing` are one bound type, so both arrive
                     // here as `BoundTypeKind.Void` and neither can behave differently from
                     // the other by construction.
-                    ctx.VoidFunctionName = fn.ReturnType.Kind == BoundTypeKind.Void ? fn.Name : null;
+                    ctx.VoidFunctionName = fn.ReturnType?.Kind == BoundTypeKind.Void ? fn.Name : null;
 
                     Walk(fn.Body, ctx);
                     ctx.CurrentReturnType = prev;

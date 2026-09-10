@@ -43,8 +43,8 @@ internal sealed class ToshBoundMethodReference(
     public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
         var result = receiver is IShellInvocableObject instance
-            ? await instance.InvokeInstanceMethodAsync(methodName, context.Arguments, context.CancellationToken)
-            : invoker.InvokeInstance(receiver, methodName, context.Arguments);
+            ? await instance.InvokeInstanceMethodAsync(CallableName, context.Arguments, context.CancellationToken)
+            : invoker.InvokeInstance(receiver, CallableName, context.Arguments);
 
         if (!result.ReturnedVoid)
         {

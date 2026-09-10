@@ -455,7 +455,11 @@ public static class ToastRenderer
                 return;
 
             default:
-                WriteClrObject(builder, value, depth, visited);
+                // `value` is declared non-nullable and is dereferenced above the switch,
+                // so it cannot be null here. The `not null` guards on two arms above are
+                // what narrow this one, by making the compiler treat their complement as
+                // possibly-null.
+                WriteClrObject(builder, value!, depth, visited);
                 return;
         }
     }

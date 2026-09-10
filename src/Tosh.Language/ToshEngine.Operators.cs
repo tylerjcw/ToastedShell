@@ -574,8 +574,11 @@ public sealed partial class ToshEngine
         // above is. The first attempt at *this* fix landed only on `OperatorEvaluator`
         // and changed nothing observable, because `==` comes through here: exactly the
         // failure this file's header records for `TS-P1-14`, repeated.
-        if (actual is not null && expected is not null &&
-            OperatorEvaluator.TryCompareIntegerWithFloat(actual, expected, out var exactNumeric))
+        // No null test: the guard above returns unless both are non-null. Repeating it
+        // here was not merely redundant — testing `is not null` again re-introduces the
+        // maybe-null state on the branch where the test fails, which is what made the
+        // two `GetType()` calls below warn.
+        if (OperatorEvaluator.TryCompareIntegerWithFloat(actual, expected, out var exactNumeric))
         {
             return exactNumeric;
         }
@@ -583,8 +586,7 @@ public sealed partial class ToshEngine
         // `TOAST-0026`. Delegated for the same reason, and missed for the same reason: the
         // rule was added to `OperatorEvaluator` alone and `==` still answered the old way,
         // which is the third time this file's header has been proved right in one session.
-        if (actual is not null && expected is not null &&
-            OperatorEvaluator.TryCompareDecimalWithFloat(actual, expected, out var exactDecimal))
+        if (OperatorEvaluator.TryCompareDecimalWithFloat(actual, expected, out var exactDecimal))
         {
             return exactDecimal;
         }

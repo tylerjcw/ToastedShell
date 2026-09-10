@@ -160,7 +160,8 @@ public sealed class StaticPropertyTests
         var result = new ReplCompletionEngine(runtime).GetCompletions("C.", "C.".Length);
 
         Assert.NotNull(result);
-        Assert.Single(result!.Suggestions.Where(
-            suggestion => string.Equals(suggestion.Label, "Only", StringComparison.Ordinal)));
+        Assert.Single(
+            result!.Suggestions,
+            suggestion => string.Equals(suggestion.Label, "Only", StringComparison.Ordinal));
     }
 }

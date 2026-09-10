@@ -282,9 +282,12 @@ public sealed class UnitSystemStabilizationTests
             echo $power.ToString("F1")
             """);
 
+        // Interpolated rather than `?.ToString()`: the projection is then `string`
+        // rather than `string?`, which is what xunit's overload wants, and a null would
+        // compare as empty rather than failing the constraint.
         Assert.Equal(
             ["483.06 MW", "483.06 MW", "483.1 MW"],
-            results.Select(value => value?.ToString()).ToArray());
+            results.Select(value => $"{value}").ToArray());
     }
 
     [Theory]
@@ -325,8 +328,9 @@ public sealed class UnitSystemStabilizationTests
         string source,
         double expectedMagnitude)
     {
-        var token = Assert.Single(new ToshLexer(source).Lex().Where(
-            candidate => candidate.Kind != SyntaxTokenKind.EndOfFile));
+        var token = Assert.Single(
+            new ToshLexer(source).Lex(),
+            candidate => candidate.Kind != SyntaxTokenKind.EndOfFile);
         var quantity = Assert.IsAssignableFrom<Quantity>(token.Value);
 
         Assert.Equal(SyntaxTokenKind.UnitLiteral, token.Kind);

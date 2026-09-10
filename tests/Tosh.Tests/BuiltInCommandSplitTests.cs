@@ -122,7 +122,7 @@ public sealed class BuiltInCommandSplitTests
         // without naming it. Keyed by type name so a command's source can be searched for it.
         var helpers = Directory
             .EnumerateFiles(stdlib, "*.cs", SearchOption.TopDirectoryOnly)
-            .ToDictionary(Path.GetFileNameWithoutExtension!, File.ReadAllText, StringComparer.Ordinal);
+            .ToDictionary(file => Path.GetFileNameWithoutExtension(file)!, File.ReadAllText, StringComparer.Ordinal);
 
         var offenders = new List<string>();
 

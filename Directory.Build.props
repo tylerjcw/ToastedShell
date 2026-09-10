@@ -123,11 +123,14 @@
   </PropertyGroup>
 
   <!--
-    SourceLink for github.com/komradbobo/tosh. Build-only PackageReference;
-    never propagates to consumers.
+    SourceLink for github.com/komradbobo/tosh needs no PackageReference: it has
+    shipped inside the .NET SDK since 8.0, and this repo builds on 10. The explicit
+    `Microsoft.SourceLink.GitHub` 8.0.0 reference that used to sit here was both
+    redundant and the only thing pulling in `Microsoft.Build.Tasks.Git` 8.0.0, which
+    carries GHSA-23fw-v26w-5fgq — 63 NU1902 warnings across the solution, one per
+    project per restore. The SDK's own copy is picked up automatically; the
+    `PublishRepositoryUrl` and `EmbedUntrackedSources` properties above are what
+    turn it on, and they are unchanged.
   -->
-  <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
-  </ItemGroup>
 
 </Project>

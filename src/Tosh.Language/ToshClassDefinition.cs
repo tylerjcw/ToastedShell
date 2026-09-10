@@ -1058,7 +1058,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             .Where(entry => includeHidden || !entry.IsShy)
             .Select(entry => new ShellMethodDescriptor(
                 entry.Command.Name,
-                ReturnTypeName: (entry.Command as Bridge.NativeFunctionCommand)?.ReturnTypeName,
+                ReturnTypeName: (entry.Command as Bridge.NativeFunctionCommand)?.ReturnTypeName ?? "any",
                 IsStatic: true,
                 ParameterCount: (entry.Command as Bridge.NativeFunctionCommand)?.CallableParameterCount ?? 0,
                 Signature: entry.Command.Usage,
@@ -1328,7 +1328,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         string name,
         bool includeHidden,
         ToshClassDefinition? accessor,
-        out ToshClassPropertyDefinition? property)
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ToshClassPropertyDefinition? property)
     {
         if (!_propertiesByName.TryGetValue(name, out property) ||
             !IsVisibleInstanceProperty(property, this, includeHidden, accessor))

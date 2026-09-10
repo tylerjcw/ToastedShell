@@ -25,7 +25,14 @@ public sealed class GroupByCommand : ShellCommand, ICurrentItemMemberPathCommand
         var selector = context.Arguments[0];
         // `TOAST-0018`. Grouped by the shared key relation; the JSON key this replaced
         // was field-order sensitive, so equal records fell into separate groups.
+        // Dictionary's TKey is constrained `notnull`, and the key here is deliberately
+        // nullable: grouping by a member that is null on some items is an ordinary
+        // request, and `ShellKeyComparer` handles a null key. Suppressed rather than
+        // worked around with a sentinel, which would only move the null somewhere the
+        // comparer cannot see it.
+#pragma warning disable CS8714
         var groups = new Dictionary<object?, (object? Key, List<object?> Items)>(ShellKeyComparer.Instance);
+#pragma warning restore CS8714
 
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
