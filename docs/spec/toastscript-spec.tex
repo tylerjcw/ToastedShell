@@ -5515,6 +5515,49 @@ module or class at the prompt behave as expected.  Members of the replaced
 declaration are gone.  This is the reason \code{partial} is required rather
 than inferred.
 
+\subsection*{Dotted Names}
+
+A module name may be dotted, which declares one module per segment:
+
+\begin{lstlisting}
+partial module App.Math.Geometry {
+    export func Area() -> double { return 1.0 }
+}
+
+App.Math.Geometry.Area()
+\end{lstlisting}
+
+The innermost module owns the body; the wrappers around it are implicitly
+\code{partial}, so two files may declare \code{App.Math.Geometry} and
+\code{App.Math.Colour} without colliding on \code{App.Math}.
+
+\subsection*{File-Scoped Modules}
+
+A module declared with \emph{no body} takes the rest of the file:
+
+\begin{lstlisting}
+# geometry.tosh
+using System.Math
+
+partial module App.Math.Geometry
+
+export class Rectangle(x, y, w, h) { ... }
+export func Area(r) { ... }
+\end{lstlisting}
+
+This is the same declaration as the braced form and produces the same
+modules; it saves the wrapping and the indentation, which in a library is
+paid once per file.  Statements written \emph{above} the line stay at the
+top level---which is what keeps \code{require} and \code{using} usable
+before it---and everything below is inside the module.  A braced
+\code{module} written below the line nests within it.
+
+A file may contain at most one bodyless declaration, and it may not appear
+inside a block: ``the rest of the file'' has no meaning within a brace.
+Both are reported as
+\code{tosh.parser.file\_scoped\_module\_repeated} and
+\code{tosh.parser.file\_scoped\_module\_nested}.
+
 \section{Class Definitions}
 \ikw{class}\ikw{prop}
 

@@ -2262,23 +2262,102 @@ public static partial class ToshParser
                 ? NextToken()
                 : ExpectVariableName();
             var segments = nameToken.Text.Split('.');
-            var body = ParseRequiredBlock("module");
-            var fullSpan = TextSpan.FromBounds(declarationStart, body.Span.End);
             var docComment = DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>());
 
-            // Innermost module owns the body and the doc-comment; intermediate
-            // wrappers are partial Default-scope shells that just propagate
-            // declarations outward.
+            // `TOAST-0120`. No brace means the file itself is the body. The statements
+            // are not available yet — they are what the top-level loop is about to read —
+            // so the header is recorded and `ApplyFileScopedModule` closes it over
+            // everything that follows.
+            if (Current.Kind != SyntaxTokenKind.OpenBrace)
+            {
+                return ParseFileScopedModuleHeader(
+                    segments,
+                    modifier,
+                    isPartial,
+                    docComment,
+                    TextSpan.FromBounds(declarationStart, nameToken.Span.End));
+            }
+
+            var body = ParseRequiredBlock("module");
+            var fullSpan = TextSpan.FromBounds(declarationStart, body.Span.End);
             var innerSpan = TextSpan.FromBounds(nameToken.Span.End, body.Span.End);
+
+            return BuildNestedModule(segments, body, modifier, isPartial, docComment, fullSpan, innerSpan);
+        }
+
+        /// <summary>
+        /// Records a `module A.B.C` written without a body — <c>TOAST-0120</c>.
+        /// </summary>
+        /// <remarks>
+        /// Returns a placeholder rather than a module, because the body is every statement
+        /// that follows and none of them have been read yet. <see cref="ApplyFileScopedModule"/>
+        /// replaces the placeholder once the file is parsed.
+        /// </remarks>
+        private StatementSyntax ParseFileScopedModuleHeader(
+            IReadOnlyList<string> segments,
+            DeclarationModifier modifier,
+            bool isPartial,
+            DocComment? docComment,
+            TextSpan span)
+        {
+            var marker = new PipelineStatementSyntax(new PipelineSyntax(Array.Empty<PipelineStageSyntax>()), span);
+            var name = string.Join(".", segments);
+
+            if (_elementBoundaryOwnerTokenIndices.Count > 0)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.file_scoped_module_nested",
+                    Title: "A module without a body takes the rest of the *file*, so it cannot be nested.",
+                    Span: span,
+                    Label: $"'{name}' is inside another block",
+                    Help: $"give it a body — 'module {name} {{ … }}' — or move it to the top of the file."));
+
+                return marker;
+            }
+
+            if (_fileScopedModule is { } existing)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.file_scoped_module_repeated",
+                    Title: "A file can declare only one module without a body.",
+                    Span: span,
+                    Label: $"'{string.Join(".", existing.Segments)}' already claims the rest of this file",
+                    Help: $"give this one a body — 'module {name} {{ … }}' — which nests it inside the first, "
+                        + "or move it to a file of its own."));
+
+                return marker;
+            }
+
+            _fileScopedModule = new FileScopedModule(marker, segments, modifier, isPartial, docComment, span);
+            return marker;
+        }
+
+        /// <summary>
+        /// Wraps <paramref name="body"/> in one module per dotted segment — <c>TOAST-0120</c>.
+        /// </summary>
+        /// <remarks>
+        /// The innermost module owns the body and the doc comment; the wrappers around it are
+        /// partial shells that only propagate declarations outward, so several files can
+        /// contribute siblings under the same parent without colliding.
+        /// </remarks>
+        private static StatementSyntax BuildNestedModule(
+            IReadOnlyList<string> segments,
+            BlockSyntax body,
+            DeclarationModifier modifier,
+            bool isPartial,
+            DocComment? docComment,
+            TextSpan fullSpan,
+            TextSpan innerSpan)
+        {
             StatementSyntax current = new ModuleDefinitionStatementSyntax(
                 Name: segments[^1],
                 Body: body,
-                Modifier: segments.Length == 1 ? modifier : DeclarationModifier.Export,
-                Span: segments.Length == 1 ? fullSpan : innerSpan,
+                Modifier: segments.Count == 1 ? modifier : DeclarationModifier.Export,
+                Span: segments.Count == 1 ? fullSpan : innerSpan,
                 DocComment: docComment,
                 IsPartial: isPartial);
 
-            for (var index = segments.Length - 2; index >= 0; index--)
+            for (var index = segments.Count - 2; index >= 0; index--)
             {
                 var wrapperBody = new BlockSyntax(
                     new[] { current },

@@ -237,6 +237,21 @@ public static partial class ToshParser
 
         private int _position;
         private bool _isParsingTopLevelStatement;
+
+        /// <summary>
+        /// A `module A.B.C` written without a body, whose body is the rest of the file —
+        /// <c>TOAST-0120</c>. At most one per file; the marker is the placeholder left in
+        /// the statement list where the header stood.
+        /// </summary>
+        private sealed record FileScopedModule(
+            StatementSyntax Marker,
+            IReadOnlyList<string> Segments,
+            DeclarationModifier Modifier,
+            bool IsPartial,
+            DocComment? DocComment,
+            TextSpan Span);
+
+        private FileScopedModule? _fileScopedModule;
         private bool _stopRefinementAtEquals;
 
         public InternalParser(
@@ -446,6 +461,8 @@ public static partial class ToshParser
                 }
             }
 
+            statements = ApplyFileScopedModule(statements);
+
             return statements.Count switch
             {
                 0 => new ScriptStatementSyntax(Array.Empty<StatementSyntax>(), new TextSpan(0, 0), scriptDoc),
@@ -463,6 +480,48 @@ public static partial class ToshParser
                     TextSpan.FromBounds(statements[0].Span.Start, statements[^1].Span.End),
                     scriptDoc),
             };
+        }
+
+        /// <summary>
+        /// Closes a file-scoped module over everything declared after it — <c>TOAST-0120</c>.
+        /// </summary>
+        /// <remarks>
+        /// Run once the top-level loop has finished, because the body is the rest of the
+        /// file and does not exist until then. Statements written *above* the declaration
+        /// stay where they are, which is what makes `require` and `using` lines usable
+        /// before it — the same shape C# gives a file-scoped namespace.
+        /// </remarks>
+        private List<StatementSyntax> ApplyFileScopedModule(List<StatementSyntax> statements)
+        {
+            if (_fileScopedModule is not { } scoped)
+            {
+                return statements;
+            }
+
+            var index = statements.IndexOf(scoped.Marker);
+            if (index < 0)
+            {
+                return statements;
+            }
+
+            var inner = statements.GetRange(index + 1, statements.Count - index - 1);
+            var bodySpan = inner.Count > 0
+                ? TextSpan.FromBounds(inner[0].Span.Start, inner[^1].Span.End)
+                : scoped.Span;
+            var fullSpan = TextSpan.FromBounds(scoped.Span.Start, bodySpan.End);
+
+            var module = BuildNestedModule(
+                scoped.Segments,
+                new BlockSyntax(inner, bodySpan),
+                scoped.Modifier,
+                scoped.IsPartial,
+                scoped.DocComment,
+                fullSpan,
+                bodySpan);
+
+            var result = statements.GetRange(0, index);
+            result.Add(module);
+            return result;
         }
 
         private StatementSyntax ParseDestructuringDeclaration(

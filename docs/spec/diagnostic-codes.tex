@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 581 diagnostic codes currently emitted by the
+This chapter lists all 583 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -215,6 +215,8 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.expected\_using\_target}] Using statements require a namespace or type alias target.
 \item[\texttt{\small tosh.parser.expected\_variable\_name}] Expected a variable name.
 \item[\texttt{\small tosh.parser.expression\_type\_annotation}] A type annotation names a type; it cannot be an expression.
+\item[\texttt{\small tosh.parser.file\_scoped\_module\_nested}] A module without a body takes the rest of the *file*, so it cannot be nested.
+\item[\texttt{\small tosh.parser.file\_scoped\_module\_repeated}] A file can declare only one module without a body.
 \item[\texttt{\small tosh.parser.hollow\_subcommand\_must\_be\_empty}] Hollow subcommand '\{nameToken.Text\}' may only contain nested subcommands.
 \item[\texttt{\small tosh.parser.if\_expression\_requires\_else}] If expressions require an else block.
 \item[\texttt{\small tosh.parser.incompatible\_subcommand\_modifiers}] 'eager' and 'hollow' cannot be combined on a subcommand.

@@ -371,10 +371,28 @@ public static partial class ToshParser
                 offset++;
             }
 
-            return MatchesKeywordAtOffset(offset, "module") &&
-                   Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
-                   IsValidQualifiedIdentifier(Peek(offset + 1).Text) &&
-                   Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace;
+            if (!MatchesKeywordAtOffset(offset, "module") ||
+                Peek(offset + 1).Kind != SyntaxTokenKind.Bareword ||
+                !IsValidQualifiedIdentifier(Peek(offset + 1).Text))
+            {
+                return false;
+            }
+
+            if (Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace)
+            {
+                return true;
+            }
+
+            // `TOAST-0120`: the file-scoped form, whose body is the rest of the file.
+            // Recognised only where the name ends the line, so that a `module` followed
+            // by anything else on the same line is still whatever it was before. Whether
+            // the position is one a file-scoped module may occupy is settled where it is
+            // parsed, which can say so.
+            var name = Peek(offset + 1);
+            var next = Peek(offset + 2);
+
+            return next.Kind is SyntaxTokenKind.EndOfFile or SyntaxTokenKind.Semicolon
+                || HasLineBreakBetween(name.Span.End, next.Span.Start);
         }
 
         private bool LooksLikeEnumDefinition()
