@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 540 diagnostic codes currently emitted by the
+This chapter lists all 579 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -34,6 +34,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.parser.*} & 1 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
 \texttt{tosh.runtime.*} & 1 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.ton.*} & 1 & --- \\
 \texttt{tosh.tui.*} & 1 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 1 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -42,7 +43,13 @@ regenerated whenever new diagnostics are added.
 
 \section{\texttt{tosh.bind.*}}
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
+\item[\texttt{\small tosh.bind.bareword\_variant\_arm}] Arm '\{name\}' matches the text "\{name\}", not the '\{union.Name\}' variant.
+\item[\texttt{\small tosh.bind.match\_not\_exhaustive}] This match over '\{union.Name\}' does not cover 
+\item[\texttt{\small tosh.bind.pattern\_arity}] Pattern for '\{variant.VariantName\}' binds 
+\item[\texttt{\small tosh.bind.pattern\_shadows\_variable}] Pattern binding '\{name\}' shadows '\$\{name\}' from an enclosing scope.
+\item[\texttt{\small tosh.bind.pattern\_unknown\_field}] '\{variant.VariantName\}' has no field '\{named.Field\}'.
 \item[\texttt{\small tosh.bind.unknown\_command}] Command '\{name\}' is not a registered builtin or function declared in this source.
+\item[\texttt{\small tosh.bind.unknown\_type\_test}] '\{path.Path\}' does not name a type, so this test is always false.
 \item[\texttt{\small tosh.bind.unknown\_variable}] Variable '\$\{name\}' is not declared in any enclosing scope.
 \end{description}
 
@@ -54,7 +61,7 @@ regenerated whenever new diagnostics are added.
 
 \section{\texttt{tosh.compile.*}}
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
-\item[\texttt{\small tosh.compile.implicit\_dynamic}] Variable '\{decl.Symbol.Name\}' has no type annotation and the inferrer could not pin down a concrete type.
+\item[\texttt{\small tosh.compile.implicit\_dynamic}] \textit{(see source)}
 \item[\texttt{\small tosh.compile.missing\_type\_annotation}] Function '\{fn.Name\}' is missing a return-type annotation.
 \item[\texttt{\small tosh.compile.void\_function\_produces\_output}] Function '\{name\}' returns 'void' and cannot \{what\}.
 \end{description}
@@ -104,6 +111,7 @@ Raised by the history subsystem (for example, replaying entries when no host is 
 \section{\texttt{tosh.naming.*}}
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
 \item[\texttt{\small tosh.naming.shadowed\_builtin}] Function '\{commandName\}' shadows built-in command '\{commandName\}'.
+\item[\texttt{\small tosh.naming.shadowed\_core\_type}] '\{typeName\}' shadows the core type '\{typeName\}'.
 \item[\texttt{\small tosh.naming.shadowed\_underscore}] Redeclaring '\_' shadows an existing binding.
 \end{description}
 
@@ -125,6 +133,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.duplicate\_input\_redirection}] Only one input redirection is allowed per pipeline.
 \item[\texttt{\small tosh.parser.duplicate\_subcommand\_modifier}] Subcommand modifier '\{modifierToken.Text\}' is repeated.
 \item[\texttt{\small tosh.parser.empty\_type\_refinement\_block}] Type refinement blocks require at least one clause.
+\item[\texttt{\small tosh.parser.expected\_alias\_base\_type}] Type '\{aliasName\}' does not say what it refines.
 \item[\texttt{\small tosh.parser.expected\_anonymous\_function\_body}] Anonymous functions require `=>` or a block body.
 \item[\texttt{\small tosh.parser.expected\_anonymous\_function\_expression}] Anonymous `=>` functions require an expression body.
 \item[\texttt{\small tosh.parser.expected\_assignment\_operator}] \textit{(see source)}
@@ -205,6 +214,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.expected\_union\_body}] Union definitions require a body.
 \item[\texttt{\small tosh.parser.expected\_using\_target}] Using statements require a namespace or type alias target.
 \item[\texttt{\small tosh.parser.expected\_variable\_name}] Expected a variable name.
+\item[\texttt{\small tosh.parser.expression\_type\_annotation}] A type annotation names a type; it cannot be an expression.
 \item[\texttt{\small tosh.parser.hollow\_subcommand\_must\_be\_empty}] Hollow subcommand '\{nameToken.Text\}' may only contain nested subcommands.
 \item[\texttt{\small tosh.parser.if\_expression\_requires\_else}] If expressions require an else block.
 \item[\texttt{\small tosh.parser.incompatible\_subcommand\_modifiers}] 'eager' and 'hollow' cannot be combined on a subcommand.
@@ -215,6 +225,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.invalid\_type\_refinement\_clause}] Type refinement blocks only support 'where', 'coerce', and 'if ... coerce' clauses.
 \item[\texttt{\small tosh.parser.invalid\_unit\_literal}] A unit literal contains an unknown or invalid unit expression.
 \item[\texttt{\small tosh.parser.invalid\_unit\_magnitude}] A unit literal must begin with a valid number.
+\item[\texttt{\small tosh.parser.list\_pattern\_second\_rest}] A list pattern may hold only one '...'.
 \item[\texttt{\small tosh.parser.match\_default\_keyword\_required}] Use 'default' instead of '\_' for the wildcard arm.
 \item[\texttt{\small tosh.parser.missing\_argument\_separator}] Arguments must be separated by ','.
 \item[\texttt{\small tosh.parser.missing\_bind\_member\_separator}] Bound functions must be separated by a newline or ';'.
@@ -249,10 +260,13 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.missing\_tuple\_separator}] Tuple elements must be separated by ','.
 \item[\texttt{\small tosh.parser.missing\_type\_argument\_separator}] Generic type arguments must be separated by ','.
 \item[\texttt{\small tosh.parser.missing\_type\_parameter\_separator}] Type parameters must be separated by ','.
+\item[\texttt{\small tosh.parser.missing\_union\_field\_separator}] Union variant fields must be separated by ','.
 \item[\texttt{\small tosh.parser.nameof\_expects\_a\_name}] '\{identifierToken.Text\}' does not name anything.
 \item[\texttt{\small tosh.parser.nameof\_missing\_close\_paren}] Expected ')' after nameof identifier.
 \item[\texttt{\small tosh.parser.native\_buffer\_requires\_length}] '\{typeName\}' needs a positive capacity.
 \item[\texttt{\small tosh.parser.numeric\_literal\_overflow}] This \{radix\} literal is too large for a 64-bit integer.
+\item[\texttt{\small tosh.parser.or\_pattern\_binding\_mismatch}] Every alternative of an or-pattern must bind the same names.
+\item[\texttt{\small tosh.parser.path\_operator\_on\_value}] '::' reaches into a type, not into a value.
 \item[\texttt{\small tosh.parser.range\_requires\_integer}] Range bounds and steps must be 32-bit integers.
 \item[\texttt{\small tosh.parser.raw\_func\_requires\_library}] A top-level 'raw func' needs a library.
 \item[\texttt{\small tosh.parser.raw\_struct\_array\_requires\_length}] Field '\{fieldName\}' needs a positive array length.
@@ -274,6 +288,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.unexpected\_projection\_separator}] A projected member path is required between commas.
 \item[\texttt{\small tosh.parser.unexpected\_token}] Unexpected token '\{Current.Text\}'.
 \item[\texttt{\small tosh.parser.unexpected\_trait\_member}] Trait bodies can contain method signatures (func) and property declarations (prop).
+\item[\texttt{\small tosh.parser.unexpected\_union\_field\_separator}] A union variant field is required between commas.
 \item[\texttt{\small tosh.parser.unknown\_property\_accessor}] Unknown property accessor '\{accessorName\}'.
 \item[\texttt{\small tosh.parser.unknown\_subcommand\_modifier}] Unknown subcommand modifier '\{text\}'.
 \item[\texttt{\small tosh.parser.unsupported\_double\_index\_lookup}] Index access supports '[value]', '[key,]', or '[,value]'.
@@ -298,12 +313,14 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
 \item[\texttt{\small tosh.runtime.alloc\_negative\_size}] Allocated buffers cannot have a negative size.
 \item[\texttt{\small tosh.runtime.alloc\_requires\_single\_value}] Allocated buffer declarations require exactly one size or type value.
-\item[\texttt{\small tosh.runtime.annotation\_conversion\_failed}] '\{owner\}' produced a value that could not be converted to '\{typeName\}'.
+\item[\texttt{\small tosh.runtime.annotation\_conversion\_failed}] '\{owner\}' produced \{value\}, which cannot become '\{typeName\}' without discarding its fractional part.
 \item[\texttt{\small tosh.runtime.annotation\_unknown\_type}] Argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.assert\_requires\_predicate}] The 'assert' command requires a predicate block or callable.
 \item[\texttt{\small tosh.runtime.assertion\_failed}] \textit{(see source)}
+\item[\texttt{\small tosh.runtime.auto\_cd\_not\_supported}] This host does not support AutoCd navigation.
 \item[\texttt{\small tosh.runtime.await\_requires\_future}] 'await' expects a future or a CLR Task.
 \item[\texttt{\small tosh.runtime.background\_command\_must\_be\_external}] Background jobs currently require external command stages.
+\item[\texttt{\small tosh.runtime.background\_jobs\_not\_supported}] This host does not support background jobs.
 \item[\texttt{\small tosh.runtime.background\_pipeline\_not\_supported}] Background jobs currently support an optional input expression followed by external command stages only.
 \item[\texttt{\small tosh.runtime.background\_pipeline\_requires\_command}] Background pipelines require at least one external command stage.
 \item[\texttt{\small tosh.runtime.base\_constructor\_already\_initialized}] CLR base class '\{ClrBaseType!.FullName\}' has already been initialized for this instance.
@@ -311,7 +328,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.base\_type\_argument\_missing}] Class '\{@class.Name\}' extends generic class '\{baseClassDef.Name\}' without supplying type arguments.
 \item[\texttt{\small tosh.runtime.bind\_target\_not\_native\_module}] '\{statement.ModuleName\}' is not a native library module.
 \item[\texttt{\small tosh.runtime.break\_outside\_loop}] 'break' can only be used inside 'for', 'while', or 'each' blocks.
-\item[\texttt{\small tosh.runtime.callable\_argument\_count\_mismatch}] Callable '\{callable.CallableName\}' expects at least \{callable.RequiredParameterCount\} argument(s) but received \{argumentCount\}.
+\item[\texttt{\small tosh.runtime.callable\_argument\_count\_mismatch}] Callable '\{CallableName\}' expects \{expected\} but received \{received\}.
 \item[\texttt{\small tosh.runtime.callable\_invocation\_requires\_single\_value}] Callable invocation in expression context must produce exactly one value.
 \item[\texttt{\small tosh.runtime.callable\_named\_argument}] Callable '\{CallableName\}' has no parameter named '\{named.Key\}'.
 \item[\texttt{\small tosh.runtime.cartesian\_product\_args}] 'cartesian-product' requires a second sequence and an optional combiner.
@@ -335,7 +352,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.constructor\_cycle}] Constructor cycle detected while initializing class '\{Name\}'.
 \item[\texttt{\small tosh.runtime.constructor\_parameter\_type\_conversion\_failed}] Constructor argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.continue\_outside\_loop}] 'continue' can only be used inside 'for', 'while', or 'each' blocks.
-\item[\texttt{\small tosh.runtime.contract\_member\_type\_mismatch}] Class '\{@class.Name\}' implements '\{contractName\}.\{memberName\}' with an incompatible \{found.What\}.
+\item[\texttt{\small tosh.runtime.contract\_member\_type\_mismatch}] Class '\{className\}' implements '\{contractName\}.\{memberName\}' with an incompatible \{mismatch.What\}.
 \item[\texttt{\small tosh.runtime.converge\_requires\_seed\_and\_callable}] 'converge' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.curry\_argument\_count\_mismatch}] Curried callable '\{\_inner.CallableName\}' accepts \{\_targetArity\} total argument(s) but received \{combinedArguments.Length\}.
 \item[\texttt{\small tosh.runtime.curry\_requires\_callable}] The 'curry' command requires exactly one callable value.
@@ -463,7 +480,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.native\_argument\_count\_mismatch}] Native function '\{ModuleName\}.\{Name\}' expects \{atLeast\}\{callableCount\} argument(s) but received \{context.Arguments.Count\}.
 \item[\texttt{\small tosh.runtime.native\_argument\_type\_conversion\_failed}] Argument \{argumentIndex + 1\} for native function '\{ModuleName\}.\{Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.native\_binding\_requires\_type}] Native \{owner\} requires an explicit CLR type.
-\item[\texttt{\small tosh.runtime.native\_buffer\_range}] '\{parameter.Name\}' needs a \{required\}-byte buffer but received \{nativeBuffer.ByteLength\} bytes.
+\item[\texttt{\small tosh.runtime.native\_buffer\_range}] \{operation\} would run past the end of a \{buffer.ByteLength\}-byte buffer.
 \item[\texttt{\small tosh.runtime.native\_buffer\_requires\_out}] Parameter '\{parameter.Name\}' must be declared 'out' to use a buffer.
 \item[\texttt{\small tosh.runtime.native\_callback\_buffer\_parameter}] Callback '\{rawCallback.Name\}' cannot take a buffer parameter.
 \item[\texttt{\small tosh.runtime.native\_callback\_by\_reference}] A callback cannot be passed by reference.
@@ -477,6 +494,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.native\_offsetof\_requires\_field\_name}] \{Name\} requires a field name.
 \item[\texttt{\small tosh.runtime.native\_offsetof\_requires\_struct\_layout\_type}] '\{type.FullName ?? type.Name\}' is not a sequential or explicit-layout struct.
 \item[\texttt{\small tosh.runtime.native\_pointer\_required}] \textit{(see source)}
+\item[\texttt{\small tosh.runtime.native\_read\_negative\_count}] native-read \{mode\} cannot read a negative number of elements.
 \item[\texttt{\small tosh.runtime.native\_read\_requires\_length}] native-read bytes requires a byte count.
 \item[\texttt{\small tosh.runtime.native\_read\_requires\_mode}] native-read needs a read mode or type name.
 \item[\texttt{\small tosh.runtime.native\_read\_requires\_native\_type}] native-read currently supports native scalar types, struct-layout types, 'cstring', or 'bytes', not '\{mode\}'.
@@ -486,8 +504,10 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.native\_variadic\_not\_last}] '...' must be the last parameter.
 \item[\texttt{\small tosh.runtime.native\_write\_argument\_count}] native-write expects a target, a value, and an optional offset.
 \item[\texttt{\small tosh.runtime.native\_write\_offset\_requires\_int}] native-write offsets must be integers.
+\item[\texttt{\small tosh.runtime.native\_write\_requires\_type\_name}] --as needs a native interop type name.
 \item[\texttt{\small tosh.runtime.native\_write\_requires\_value}] native-write requires a non-null value.
 \item[\texttt{\small tosh.runtime.native\_write\_unsupported\_value}] native-write does not know how to write values of type '\{runtimeType.Name\}'.
+\item[\texttt{\small tosh.runtime.native\_write\_value\_does\_not\_fit}] '\{value\}' cannot be written as '\{type.Name\}'.
 \item[\texttt{\small tosh.runtime.nested\_type\_not\_declared}] Nested type '\{member.Name\}' in class '\{@class.Name\}' did not produce a type.
 \item[\texttt{\small tosh.runtime.networkctl\_command\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.networkctl\_command\_missing}] The system 'networkctl' command was not found.
@@ -497,6 +517,9 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.nonzero\_exit\_code}] Command exited with code \{exitCode\}.
 \item[\texttt{\small tosh.runtime.not\_callable}] Value of type '\{(target?.GetType().Name ?? 
 \item[\texttt{\small tosh.runtime.null\_dict\_key}] Dict keys cannot be null.
+\item[\texttt{\small tosh.runtime.object\_initializer\_entry\_unsupported}] An object initialiser takes named fields only.
+\item[\texttt{\small tosh.runtime.object\_initializer\_failed}] '\{newObject.EffectiveBareName\}' cannot take '\{field.Name\}': \{exception.Message\}
+\item[\texttt{\small tosh.runtime.object\_initializer\_on\_null}] 'new \{newObject.EffectiveBareName\}' produced nothing to initialise.
 \item[\texttt{\small tosh.runtime.overrule\_no\_base\_method}] Method '\{method.Name\}' in class '\{@class.Name\}' is marked 'overrule' but no parent class defines '\{method.Name\}'.
 \item[\texttt{\small tosh.runtime.parallel\_requires\_callable\_or\_block}] 'parallel' requires a callable value or block.
 \item[\texttt{\small tosh.runtime.parameter\_default\_conversion\_failed}] The default value for parameter '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
@@ -507,6 +530,9 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.partial\_mismatch}] Cannot extend module '\{module.Name\}' as partial: the original module was not declared as partial.
 \item[\texttt{\small tosh.runtime.partial\_requires\_callable}] The 'partial' command requires a callable value.
 \item[\texttt{\small tosh.runtime.partition\_requires\_callable\_or\_block}] 'partition' requires exactly one callable value or block.
+\item[\texttt{\small tosh.runtime.pattern\_arity}] A \{subject.Kind\} cannot be destructured positionally.
+\item[\texttt{\small tosh.runtime.pattern\_unknown\_field}] '\{pattern.VariantName\}' has no field '\{named.Field\}'.
+\item[\texttt{\small tosh.runtime.pattern\_wrong\_qualifier}] '\{member\}' is declared by '\{owner\}', not by '\{qualifier\}'.
 \item[\texttt{\small tosh.runtime.permutations\_args}] 'permutations' accepts at most one integer argument (k).
 \item[\texttt{\small tosh.runtime.permutations\_k\_non\_negative}] k must be non-negative.
 \item[\texttt{\small tosh.runtime.predicate\_expression\_required}] 'skip-until' requires a predicate expression.
@@ -540,7 +566,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.require\_exports\_nothing}] '\{statement.Target\}' declares no exports, so this require imports nothing.
 \item[\texttt{\small tosh.runtime.require\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.reserved\_variable\_name}] '\{name\}' is a \{titleSuffix\}.
-\item[\texttt{\small tosh.runtime.return\_type\_conversion\_failed}] Function '\{definition.Name\}' returned a value that could not be converted to '\{definition.ReturnTypeName\}'.
+\item[\texttt{\small tosh.runtime.return\_type\_conversion\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.scan\_requires\_seed\_and\_callable}] 'scan' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.scope\_requires\_block}] 'scope' requires a block argument.
 \item[\texttt{\small tosh.runtime.script\_flag\_cannot\_be\_rest}] Script flags cannot use rest parameters.
@@ -585,6 +611,10 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.tree\_json\_parse\_failed}] Could not parse structured 'tree' output. \{exception.Message\}
 \item[\texttt{\small tosh.runtime.tuple\_assignment\_arity\_mismatch}] This destructuring has \{targetCount\} targets but the tuple has \{valueCount\} elements.
 \item[\texttt{\small tosh.runtime.type\_name\_conflict}] \{declaredKind\} '\{name\}' conflicts with an existing refinement alias.
+\item[\texttt{\small tosh.runtime.typed\_csv\_nesting}] '\{cell.Key\}' holds a nested value, which CSV cannot represent.
+\item[\texttt{\small tosh.runtime.typed\_unknown\_member}] '\{typeName\}' has no member '\{member ?? 
+\item[\texttt{\small tosh.runtime.typed\_unknown\_type}] '\{typeName\}' is not a type this program declares.
+\item[\texttt{\small tosh.runtime.typed\_unsupported\_kind}] '\{typeName\}' cannot be rebuilt from a tagged document yet.
 \item[\texttt{\small tosh.runtime.ulimit\_getrlimit\_failed}] Failed to read current limit for '\{resourceName\}'.
 \item[\texttt{\small tosh.runtime.ulimit\_invalid\_value}] Invalid limit value '\{newValue\}'.
 \item[\texttt{\small tosh.runtime.ulimit\_setrlimit\_failed}] Failed to set limit for '\{resourceName\}' (errno \{errno\}).
@@ -598,6 +628,8 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unfold\_requires\_pair\_or\_null}] 'unfold' callable must return a [value, next-state] pair or null to stop.
 \item[\texttt{\small tosh.runtime.unfold\_requires\_seed\_and\_callable}] 'unfold' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.uninitialized\_variable}] Variable '\{variableReference.Name\}' has been declared but not assigned yet.
+\item[\texttt{\small tosh.runtime.unit\_already\_applied}] A value that already carries a unit cannot take another.
+\item[\texttt{\small tosh.runtime.unit\_requires\_number}] A unit can only be applied to a number.
 \item[\texttt{\small tosh.runtime.unknown\_base\_class}] Class '\{@class.Name\}' extends unknown class '\{@class.BaseClassName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_cast\_target}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.unknown\_command}] Command '\{commandSyntax.Name\}' was not found.
@@ -630,17 +662,29 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.zip\_requires\_sequence}] 'zip' requires a second sequence and an optional combiner block.
 \end{description}
 
+\section{\texttt{tosh.ton.*}}
+\begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
+\item[\texttt{\small tosh.ton.malformed}] The document could not be parsed: \{first.Title\}
+\item[\texttt{\small tosh.ton.not\_a\_document}] A TON document cannot contain \{what\}.
+\item[\texttt{\small tosh.ton.unrepresentable}] A value of type '\{value.GetType().Name\}' has no TON spelling.
+\end{description}
+
 \section{\texttt{tosh.tui.*}}
 Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
+\item[\texttt{\small tosh.tui.add\_confirm.missing\_message}] 'tui add-confirm' requires a message.
+\item[\texttt{\small tosh.tui.file.unreadable\_directory}] Could not read directory '\{path\}'.
 \item[\texttt{\small tosh.tui.filter.no\_items}] No items provided for 'tui filter'.
+\item[\texttt{\small tosh.tui.input.multiline\_requires\_fullscreen}] 'tui input --multiline' cannot be combined with '--cli'.
+\item[\texttt{\small tosh.tui.invalid\_page\_size}] '--page-size' needs a positive whole number, not '\{text\}'.
 \item[\texttt{\small tosh.tui.layout.missing\_orientation}] The 'tui layout' subcommand requires an orientation.
 \item[\texttt{\small tosh.tui.missing\_subcommand}] The 'tui' command requires a subcommand.
 \item[\texttt{\small tosh.tui.no\_inline\_provider}] Inline prompts (--cli) are not available in this environment.
 \item[\texttt{\small tosh.tui.no\_screen}] Expected a TuiScreen from pipeline input.
 \item[\texttt{\small tosh.tui.pick.no\_items}] No items provided for 'tui pick'.
 \item[\texttt{\small tosh.tui.run.no\_screen}] No TuiScreen provided to 'tui run'.
+\item[\texttt{\small tosh.tui.unknown\_flag}] Unknown flag '--\{flag\}' for 'tui \{subcommand\}'.
 \item[\texttt{\small tosh.tui.unknown\_subcommand}] Unknown tui subcommand '\{subcommand\}'.
 \end{description}
 
