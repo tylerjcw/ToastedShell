@@ -40,6 +40,22 @@ public sealed class UnitRegistry
         }
     }
 
+    /// <summary>
+    /// The temperature-difference unit matching an absolute temperature scale, so a
+    /// subtraction answers on the scale it was written in: <c>100`degF - 50`degF</c>
+    /// is 50 deltaF rather than 27.8 deltaK. Unknown scales fall back to deltaK.
+    /// </summary>
+    public string GetTemperatureDifferenceSymbol(string absoluteSymbol)
+    {
+        return absoluteSymbol switch
+        {
+            "degC" or "°C" => "deltaC",
+            "degF" or "°F" => "deltaF",
+            "degR" or "°R" => "deltaR",
+            _ => "deltaK",
+        };
+    }
+
     /// <summary>Get the named category for a dimension expression, or null if unknown.</summary>
     public string? GetCategoryForDimension(UnitExpression dimension)
     {
@@ -359,6 +375,20 @@ public sealed class UnitRegistry
             role: UnitRole.AbsoluteTemperature);
         Register("°R", "degree Rankine", "Temperature", temperature, 5.0 / 9.0,
             role: UnitRole.AbsoluteTemperature);
+
+        // Temperature *differences*. A span between two temperatures is an
+        // ordinary linear quantity — it has no zero point to be offset from, so
+        // it adds, scales and negates like any other. Registered after the
+        // absolute scales so `K` keeps the dimension's canonical display.
+        //
+        // These are what `20`degC - 5`degC` answers in, and what has to be added
+        // to a temperature rather than another temperature. Kelvin is the unit of
+        // both a point and an interval in SI, but the two cannot share one symbol
+        // here without the role becoming ambiguous, hence `deltaK`.
+        Register("deltaK", "kelvins of difference", "Temperature", temperature, 1.0);
+        Register("deltaC", "Celsius degrees of difference", "Temperature", temperature, 1.0);
+        Register("deltaF", "Fahrenheit degrees of difference", "Temperature", temperature, 5.0 / 9.0);
+        Register("deltaR", "Rankine degrees of difference", "Temperature", temperature, 5.0 / 9.0);
 
         // ── Data ──────────────────────────────────────────────────
         Register("bit", "bit", "DataSize", data, 1.0);

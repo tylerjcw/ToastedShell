@@ -959,7 +959,7 @@ public sealed class ToshLanguageFeatures
                     rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 2, 0));
                     break;
 
-                case SyntaxTokenKind.Number or SyntaxTokenKind.UnitLiteral:
+                case SyntaxTokenKind.Number or SyntaxTokenKind.UnitLiteral or SyntaxTokenKind.UnitSuffix:
                     rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 3, 0));
                     break;
 

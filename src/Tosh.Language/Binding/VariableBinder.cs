@@ -388,6 +388,12 @@ public static class VariableBinder
                 VisitArgument(m.Target, ctx);
                 break;
 
+            case UnitApplicationArgumentSyntax unitApplication:
+                // The unit itself is resolved in the lexer; only the magnitude
+                // carries identifiers for the binder to check.
+                VisitArgument(unitApplication.Target, ctx);
+                break;
+
             case IndexAccessArgumentSyntax idx:
                 VisitArgument(idx.Target, ctx);
                 VisitArgument(idx.Index, ctx);

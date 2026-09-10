@@ -2523,6 +2523,23 @@ public static partial class ToshParser
                     continue;
                 }
 
+                // A unit written against the expression applies to it, so that
+                // `($x)`mph` and `$speed`kph` carry the unit the same way the
+                // `4`mph` literal does. Adjacency matches every other postfix
+                // above: a space before the unit means it is not one.
+                if (Current.Kind == SyntaxTokenKind.UnitSuffix &&
+                    Current.Span.Start == expression.Span.End)
+                {
+                    var unitToken = NextToken();
+                    var unit = (UnitSuffixInfo)unitToken.Value!;
+                    expression = new UnitApplicationArgumentSyntax(
+                        expression,
+                        unit.NormalizedSymbol,
+                        unit.Dimension,
+                        TextSpan.FromBounds(expression.Span.Start, unitToken.Span.End));
+                    continue;
+                }
+
                 break;
             }
 

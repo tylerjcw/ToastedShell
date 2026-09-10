@@ -494,8 +494,78 @@ public sealed class ToshLexer
                 continue;
             }
 
+            // Postfix unit application. A backtick or degree sign that *starts* a
+            // token and touches the one before it applies that unit to the
+            // expression preceding it (`($x)`mph`, `$speed`kph`, `($angle)\u00b0`).
+            // Adjacency is the whole rule: with a space before it the character
+            // opens an ordinary word, so nothing that already lexes is disturbed.
+            if (Current is '`' or '\u00b0'
+                && tokens.Count > 0
+                && tokens[^1].Span.End == _position
+                && tokens[^1].Kind is SyntaxTokenKind.CloseParen
+                    or SyntaxTokenKind.CloseBracket
+                    or SyntaxTokenKind.Bareword
+                    or SyntaxTokenKind.Number
+                    or SyntaxTokenKind.UnitLiteral)
+            {
+                tokens.Add(ReadUnitSuffix());
+                continue;
+            }
+
             tokens.Add(ReadBarewordOrLiteral());
         }
+    }
+
+    /// <summary>
+    /// Reads a unit written immediately after an expression. The magnitude-and-unit
+    /// literal (<c>4`mph</c>) is still read whole by <see cref="ReadBarewordOrLiteral"/>;
+    /// this path is only reached when the backtick or degree sign begins a token,
+    /// which cannot happen inside that literal.
+    /// </summary>
+    private SyntaxToken ReadUnitSuffix()
+    {
+        var start = _position;
+
+        // The backtick is punctuation; the degree sign is part of the symbol.
+        // This mirrors how TrySplitUnitLiteral divides each of the two forms.
+        var isDegree = Current == '\u00b0';
+        if (!isDegree)
+        {
+            _position++;
+        }
+
+        while (!IsAtEnd
+               && !char.IsWhiteSpace(Current)
+               && Current is not ('|' or '(' or ')' or '{' or '}' or '[' or ']'
+                   or ';' or ',' or '>' or '<' or '&' or '!' or '`'))
+        {
+            _position++;
+        }
+
+        var text = _source[start.._position];
+        var unitPart = isDegree ? text : text[1..];
+
+        if (!UnitExpressionParser.TryParseConversion(
+                unitPart,
+                out _,
+                out var dimension,
+                out var normalizedSymbol))
+        {
+            throw new LexerDiagnosticException(new SyntaxDiagnostic(
+                Code: "tosh.parser.invalid_unit_literal",
+                Title: "A unit literal contains an unknown or invalid unit expression.",
+                Span: new TextSpan(start, Math.Max(1, text.Length)),
+                Label: unitPart.Length == 0
+                    ? "a unit is required after the backtick"
+                    : $"'{unitPart}' is not registered or composable",
+                Help: "use a known unit symbol; absolute temperature scales cannot be used inside compound units."));
+        }
+
+        return new SyntaxToken(
+            SyntaxTokenKind.UnitSuffix,
+            start,
+            text,
+            new UnitSuffixInfo(dimension, normalizedSymbol));
     }
 
     private bool IsAtEnd => _position >= _source.Length;
@@ -1316,6 +1386,17 @@ public sealed class ToshLexer
             // is a variable reference, so nullable forms such as `string?`
             // and `name?` — and any `?` not followed by `.` — are untouched.
             if (Current == '?' && Peek() == '.'
+                && _position > start
+                && _source[start] == '$')
+            {
+                break;
+            }
+
+            // Postfix unit application: `$x`mph` must mean the same as `($x)`mph`.
+            // Only when the text so far is a variable reference, so the numeric
+            // literal path below keeps its single token and ordinary words that
+            // happen to contain a backtick are untouched.
+            if (Current is '`' or '\u00b0'
                 && _position > start
                 && _source[start] == '$')
             {

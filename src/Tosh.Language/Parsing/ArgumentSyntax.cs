@@ -115,6 +115,18 @@ public sealed record MemberProjectionArgumentSyntax(IReadOnlyList<string> Member
 
 public sealed record MemberAccessArgumentSyntax(ArgumentSyntax Target, string MemberPath, TextSpan Span, bool NullSafe = false) : ArgumentSyntax(Span);
 
+/// <summary>
+/// A unit written immediately after an expression — <c>($x)`mph</c>, <c>$speed`kph</c>,
+/// <c>($angle)°</c>. The magnitude-and-unit literal (<c>4`mph</c>) is still resolved
+/// whole by the lexer; this node carries the cases the lexer cannot, where the
+/// magnitude is an arbitrary expression rather than a numeric literal.
+/// </summary>
+public sealed record UnitApplicationArgumentSyntax(
+    ArgumentSyntax Target,
+    string UnitSymbol,
+    Tosh.Runtime.Units.UnitExpression Dimension,
+    TextSpan Span) : ArgumentSyntax(Span);
+
 public sealed record IndexAccessArgumentSyntax(
     ArgumentSyntax Target,
     ArgumentSyntax Index,

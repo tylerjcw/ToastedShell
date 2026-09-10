@@ -75,8 +75,35 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     public double BaseValue => _conversion.ToBase(Magnitude);
 
     /// <summary>Whether this value is an absolute temperature point.</summary>
-    public bool IsAbsoluteTemperature =>
-        Dimension == UnitExpression.Of(UnitDimension.Temperature);
+    /// <remarks>
+    /// Being *in* the temperature dimension is not enough: a temperature difference
+    /// lives there too and is an ordinary linear quantity. The unit's role is what
+    /// separates a point from a span, so this asks the registry rather than the
+    /// dimension. A symbol the registry cannot resolve keeps the older, stricter
+    /// answer, so nothing that used to be guarded silently stops being.
+    /// </remarks>
+    public bool IsAbsoluteTemperature
+    {
+        get
+        {
+            if (Dimension != UnitExpression.Of(UnitDimension.Temperature))
+            {
+                return false;
+            }
+
+            // Cached: this is read by every arithmetic operator, and TryResolve
+            // takes the registry lock. The unit symbol never changes for a given
+            // value, so the answer cannot go stale — and MemberwiseClone in
+            // WithMagnitude carries the cached answer to the derived value.
+            _isAbsoluteTemperature ??=
+                UnitRegistry.Instance.TryResolve(UnitSymbol) is not { } definition
+                || definition.Role == UnitRole.AbsoluteTemperature;
+
+            return _isAbsoluteTemperature.Value;
+        }
+    }
+
+    private bool? _isAbsoluteTemperature;
 
     /// <summary>The category name for display (e.g. "Length", "Speed"). Override in named types.</summary>
     public virtual string CategoryName => UnitRegistry.Instance.GetCategoryForDimension(Dimension) ?? "Quantity";
@@ -88,7 +115,12 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     public static Quantity operator +(Quantity left, Quantity right)
     {
         EnsureCompatibleDimensions(left, right, "+");
-        EnsureNotAbsoluteTemperature(left, "+");
+
+        if (left.IsAbsoluteTemperature || right.IsAbsoluteTemperature)
+        {
+            return AddTemperature(left, right);
+        }
+
         var rightConverted = left._conversion.FromBase(right.BaseValue);
         return left.WithMagnitude(left.Magnitude + rightConverted);
     }
@@ -96,9 +128,82 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     public static Quantity operator -(Quantity left, Quantity right)
     {
         EnsureCompatibleDimensions(left, right, "-");
-        EnsureNotAbsoluteTemperature(left, "-");
+
+        if (left.IsAbsoluteTemperature || right.IsAbsoluteTemperature)
+        {
+            return SubtractTemperature(left, right);
+        }
+
         var rightConverted = left._conversion.FromBase(right.BaseValue);
         return left.WithMagnitude(left.Magnitude - rightConverted);
+    }
+
+    /// <summary>
+    /// A temperature point plus a span is another point, on the scale the point was
+    /// written in. Two points have no sum — midway between them is an average, not
+    /// an addition — so that stays an error.
+    /// </summary>
+    private static Quantity AddTemperature(Quantity left, Quantity right)
+    {
+        if (left.IsAbsoluteTemperature && right.IsAbsoluteTemperature)
+        {
+            throw new InvalidOperationException(
+                "Cannot + two absolute temperatures; add a temperature difference "
+                + "(deltaC, deltaF, deltaK) to a temperature, or use average/min/max.");
+        }
+
+        var point = left.IsAbsoluteTemperature ? left : right;
+        var span = left.IsAbsoluteTemperature ? right : left;
+
+        return point.WithMagnitude(point.Magnitude + SpanOnScaleOf(span, point));
+    }
+
+    /// <summary>
+    /// Two temperature points have a distance even though they have no sum, and it is
+    /// reported on the left operand's own scale so <c>100`degF - 50`degF</c> reads as
+    /// 50 deltaF rather than 27.8 deltaK. A point minus a span is a point; a span
+    /// minus a point is not anything.
+    /// </summary>
+    private static Quantity SubtractTemperature(Quantity left, Quantity right)
+    {
+        if (left.IsAbsoluteTemperature && right.IsAbsoluteTemperature)
+        {
+            // Both are points on affine scales, so their offsets cancel: expressing the
+            // right one on the left's scale and taking the plain difference of the two
+            // magnitudes is exact, where a round trip through kelvin lands
+            // `20`degC - 5`degC` on 15.000000000000057.
+            var rightOnLeftScale = string.Equals(left.UnitSymbol, right.UnitSymbol, StringComparison.Ordinal)
+                ? right.Magnitude
+                : left._conversion.FromBase(right.BaseValue);
+
+            return UnitRegistry.Instance.CreateTyped(
+                left.Magnitude - rightOnLeftScale,
+                left.Dimension,
+                UnitRegistry.Instance.GetTemperatureDifferenceSymbol(left.UnitSymbol));
+        }
+
+        if (right.IsAbsoluteTemperature)
+        {
+            throw new InvalidOperationException(
+                "Cannot - an absolute temperature from a temperature difference; "
+                + "subtract two temperatures to get a difference.");
+        }
+
+        return left.WithMagnitude(left.Magnitude - SpanOnScaleOf(right, left));
+    }
+
+    /// <summary>
+    /// A span's magnitude in the degree size of a point's own scale, so adding it needs
+    /// no offset round trip: <c>20`degF + 5`deltaF</c> is 25 degF exactly rather than
+    /// 24.999999999999996.
+    /// </summary>
+    private static double SpanOnScaleOf(Quantity span, Quantity point)
+    {
+        var target = UnitRegistry.Instance.GetTemperatureDifferenceSymbol(point.UnitSymbol);
+
+        return string.Equals(span.UnitSymbol, target, StringComparison.Ordinal)
+            ? span.Magnitude
+            : span.To(target).Magnitude;
     }
 
     public static Quantity operator *(Quantity left, Quantity right)

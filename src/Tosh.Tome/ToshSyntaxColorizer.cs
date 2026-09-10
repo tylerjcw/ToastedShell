@@ -115,7 +115,7 @@ internal sealed class ToshSyntaxColorizer : ISyntaxColorizer
             SyntaxTokenKind.String => EscapedString,
             SyntaxTokenKind.InterpolatedString => Interpolated,
             SyntaxTokenKind.Number => Number,
-            SyntaxTokenKind.UnitLiteral => Number,
+            SyntaxTokenKind.UnitLiteral or SyntaxTokenKind.UnitSuffix => Number,
             SyntaxTokenKind.Boolean or SyntaxTokenKind.Null => Constant,
             SyntaxTokenKind.Pipe or SyntaxTokenKind.Ampersand
                 or SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanEqual

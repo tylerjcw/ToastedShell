@@ -140,7 +140,7 @@ public static class SyntaxHighlighter
             SyntaxTokenKind.String => GetStringStyle(input, token, runtime),
             SyntaxTokenKind.InterpolatedString => theme.InterpolatedString,
             SyntaxTokenKind.Number => GetNumberStyle(token, theme),
-            SyntaxTokenKind.UnitLiteral => theme.UnitLiteral,
+            SyntaxTokenKind.UnitLiteral or SyntaxTokenKind.UnitSuffix => theme.UnitLiteral,
             SyntaxTokenKind.Boolean or SyntaxTokenKind.Null => theme.Constant,
             SyntaxTokenKind.Pipe or SyntaxTokenKind.Ampersand => theme.Operator,
             SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanEqual

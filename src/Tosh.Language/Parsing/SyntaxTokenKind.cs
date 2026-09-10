@@ -53,6 +53,11 @@ public enum SyntaxTokenKind
     // Unit literals (e.g. 100`m, 9.8`m/s^2)
     UnitLiteral,
 
+    // A unit applied to the expression immediately before it, with no space
+    // between: `($x)`mph`, `$speed`kph`, `($angle)°`. The literal form above
+    // stays a single token; this is the postfix operator for everything else.
+    UnitSuffix,
+
     // Doc comments (## lines)
     DocComment,
 

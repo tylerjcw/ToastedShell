@@ -1,6 +1,8 @@
 using System.Collections;
+using System.Globalization;
 using System.Text;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using Tosh.Language.Binding;
 using Tosh.Language.Parsing;
 
@@ -899,6 +901,8 @@ public sealed partial class ToshEngine
                     return await EvaluateMemberProjectionAsync(sourceName, sourceText, projection, cancellationToken);
                 case MemberAccessArgumentSyntax memberAccess:
                     return await EvaluateMemberAccessAsync(sourceName, sourceText, memberAccess, cancellationToken);
+                case UnitApplicationArgumentSyntax unitApplication:
+                    return await EvaluateUnitApplicationAsync(sourceName, sourceText, unitApplication, cancellationToken);
                 case IndexAccessArgumentSyntax indexAccess:
                     return await EvaluateIndexAccessAsync(sourceName, sourceText, indexAccess, cancellationToken);
                 case MethodCallArgumentSyntax methodCall:
@@ -1684,6 +1688,70 @@ public sealed partial class ToshEngine
                         Label: $"this subexpression produced {results.Count} values",
                         Help: "ensure the parenthesized pipeline returns exactly one object."));
     }
+    /// <summary>
+    /// Applies a unit written against an expression (<c>($x)`mph</c>). The suffix
+    /// *tags* a plain number; it does not convert, so a value that already carries a
+    /// unit is an error rather than a silent reinterpretation — <c>.To(...)</c> is the
+    /// conversion, and keeping the two apart is what makes the tag safe to write.
+    /// </summary>
+    private async ValueTask<object?> EvaluateUnitApplicationAsync(
+        string sourceName,
+        string sourceText,
+        UnitApplicationArgumentSyntax unitApplication,
+        CancellationToken cancellationToken)
+    {
+        var target = await EvaluateArgumentAsync(sourceName, sourceText, unitApplication.Target, cancellationToken);
+
+        if (target is Quantity existing)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.unit_already_applied",
+                Title: "A value that already carries a unit cannot take another.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: unitApplication.Span,
+                Label: $"this is already in '{existing.UnitSymbol}'",
+                Help: $"the suffix tags a plain number; to change units write .To(\"{unitApplication.UnitSymbol}\")."));
+        }
+
+        if (target is null || !TryGetUnitMagnitude(target, out var magnitude))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.unit_requires_number",
+                Title: "A unit can only be applied to a number.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: unitApplication.Span,
+                Label: target is null ? "this is null" : $"this is {target.GetType().Name}",
+                Help: "write the unit against a numeric expression, for example ($x)`mph."));
+        }
+
+        return Quantity.FromParsed(magnitude, unitApplication.Dimension, unitApplication.UnitSymbol);
+    }
+
+    /// <summary>
+    /// Integers widen past 64 bits in ToastScript, so <see cref="System.Numerics.BigInteger"/>
+    /// is a magnitude the suffix has to accept; it is not an <see cref="IConvertible"/>
+    /// and would otherwise fall through to the "not a number" diagnostic.
+    /// </summary>
+    private static bool TryGetUnitMagnitude(object value, out double magnitude)
+    {
+        if (value is System.Numerics.BigInteger big)
+        {
+            magnitude = (double)big;
+            return true;
+        }
+
+        if (IsNumericType(value.GetType()))
+        {
+            magnitude = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        magnitude = 0;
+        return false;
+    }
+
     private async ValueTask<object?> EvaluateMemberAccessAsync(
         string sourceName,
         string sourceText,

@@ -45,6 +45,206 @@ public sealed class UnitSystemStabilizationTests
         Assert.Equal(1, fromBase.Magnitude, 12);
     }
 
+    // ── temperature differences ───────────────────────────────────────────────
+    //
+    // A temperature *point* has no sum, but two points have a distance, and a point
+    // plus a span is another point. Before this the guard keyed off the dimension,
+    // so every temperature-dimensioned value counted as absolute and there was no
+    // way to express a difference at all.
+
+    [Theory]
+    [InlineData("degC", 20, 5, "deltaC", 15)]
+    [InlineData("°C", 20, 5, "deltaC", 15)]
+    [InlineData("degF", 100, 50, "deltaF", 50)]
+    [InlineData("K", 300, 200, "deltaK", 100)]
+    public void Subtracting_two_temperatures_gives_a_difference_on_the_left_scale(
+        string unit,
+        double left,
+        double right,
+        string expectedUnit,
+        double expectedMagnitude)
+    {
+        var difference = Quantity.FromLiteral(left, unit) - Quantity.FromLiteral(right, unit);
+
+        Assert.Equal(expectedUnit, difference.UnitSymbol);
+        Assert.Equal(expectedMagnitude, difference.Magnitude, 12);
+        Assert.False(difference.IsAbsoluteTemperature);
+    }
+
+    [Fact]
+    public void Subtracting_across_scales_still_answers_on_the_left_scale()
+    {
+        // 100 degF is 37.7778 degC, so the gap is 17.7778 Celsius degrees — which is
+        // 32 Fahrenheit degrees, because the answer keeps the left operand's scale.
+        var difference = Quantity.FromLiteral(100, "degF") - Quantity.FromLiteral(20, "degC");
+
+        Assert.Equal("deltaF", difference.UnitSymbol);
+        Assert.Equal(32, difference.Magnitude, 10);
+    }
+
+    [Theory]
+    [InlineData("degF", 20, "deltaF", 5, 25)]
+    [InlineData("degC", 20, "deltaC", 5, 25)]
+    [InlineData("degC", 20, "deltaF", 5, 22.777777777777779)]
+    public void A_temperature_plus_a_difference_is_a_temperature(
+        string pointUnit,
+        double pointMagnitude,
+        string spanUnit,
+        double spanMagnitude,
+        double expected)
+    {
+        var point = Quantity.FromLiteral(pointMagnitude, pointUnit);
+        var span = Quantity.FromLiteral(spanMagnitude, spanUnit);
+
+        var forward = point + span;
+        var reversed = span + point;
+
+        Assert.Equal(pointUnit, forward.UnitSymbol);
+        Assert.Equal(pointUnit, reversed.UnitSymbol);
+        Assert.Equal(expected, forward.Magnitude, 10);
+        Assert.Equal(expected, reversed.Magnitude, 10);
+    }
+
+    [Fact]
+    public void Adding_a_difference_stays_on_the_scale_without_a_kelvin_round_trip()
+    {
+        // Going through the base unit lands this on 24.999999999999996; the offsets
+        // cancel only if the span is expressed in the point's own degree size first.
+        var result = Quantity.FromLiteral(20, "degF") + Quantity.FromLiteral(5, "deltaF");
+
+        Assert.Equal(25.0, result.Magnitude);
+        Assert.Equal("25 degF", result.ToString("R"));
+    }
+
+    [Fact]
+    public void A_temperature_minus_a_difference_is_a_temperature()
+    {
+        var result = Quantity.FromLiteral(20, "degC") - Quantity.FromLiteral(5, "deltaC");
+
+        Assert.Equal("degC", result.UnitSymbol);
+        Assert.Equal(15.0, result.Magnitude);
+    }
+
+    [Fact]
+    public void Two_temperatures_still_have_no_sum()
+    {
+        var error = Assert.Throws<InvalidOperationException>(
+            () => Quantity.FromLiteral(20, "degC") + Quantity.FromLiteral(5, "degC"));
+
+        Assert.Contains("two absolute temperatures", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_temperature_cannot_be_subtracted_from_a_difference()
+    {
+        var error = Assert.Throws<InvalidOperationException>(
+            () => Quantity.FromLiteral(5, "deltaC") - Quantity.FromLiteral(20, "degC"));
+
+        Assert.Contains("subtract two temperatures", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_difference_scales_and_negates_like_any_other_quantity()
+    {
+        var span = Quantity.FromLiteral(5, "deltaC");
+
+        Assert.Equal(10, (span * 2).Magnitude, 12);
+        Assert.Equal(2.5, (span / 2).Magnitude, 12);
+        Assert.Equal(-5, (-span).Magnitude, 12);
+        Assert.Equal(10, (span + span).Magnitude, 12);
+    }
+
+    [Theory]
+    [InlineData("20`degC * 2")]
+    [InlineData("20`degC / 2")]
+    public async Task An_absolute_temperature_still_refuses_scaling(string script)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(script));
+
+        Assert.Contains("absolute temperature", error.Message, StringComparison.Ordinal);
+    }
+
+    // ── postfix unit application ──────────────────────────────────────────────
+    //
+    // The magnitude-and-unit literal (`4`mph`) is resolved whole by the lexer and
+    // so only ever accepted a numeric literal. These cover the postfix operator
+    // that carries the same unit onto an arbitrary expression. Tagging and
+    // converting stay separate spellings: `` `unit `` tags, `as `unit` converts.
+
+    [Theory]
+    [InlineData("var x = 4\n($x)`mph", "mph", 4.0)]
+    [InlineData("var x = 4\n$x`mph", "mph", 4.0)]
+    [InlineData("(3 + 4)`kph", "kph", 7.0)]
+    [InlineData("var n = 6\n($n)`cy", "cy", 6.0)]
+    [InlineData("var q = 100`km\n$q.Magnitude`mi", "mi", 100.0)]
+    [InlineData("var a = 90\n($a)\u00b0", "\u00b0", 90.0)]
+    [InlineData("var t = 20\n($t)\u00b0C", "\u00b0C", 20.0)]
+    public async Task A_unit_written_against_an_expression_tags_it(
+        string script,
+        string expectedSymbol,
+        double expectedMagnitude)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var result = Assert.Single(await engine.ExecuteToListAsync(script));
+        var quantity = Assert.IsAssignableFrom<Quantity>(result);
+
+        Assert.Equal(expectedSymbol, quantity.UnitSymbol);
+        Assert.Equal(expectedMagnitude, quantity.Magnitude, 10);
+    }
+
+    [Fact]
+    public async Task Tagging_and_converting_compose()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var result = Assert.Single(await engine.ExecuteToListAsync("var x = 100\n$x`km as `mi"));
+        var distance = Assert.IsAssignableFrom<Quantity>(result);
+
+        Assert.Equal("mi", distance.UnitSymbol);
+        Assert.Equal(62.1371192237334, distance.Magnitude, 10);
+    }
+
+    [Fact]
+    public async Task A_value_that_already_carries_a_unit_will_not_take_another()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("var q = 100`km\n$q`mi"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.runtime.unit_already_applied");
+    }
+
+    [Fact]
+    public async Task A_unit_needs_a_number_to_attach_to()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("var s = \"hi\"\n($s)`mph"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.runtime.unit_requires_number");
+    }
+
+    [Fact]
+    public async Task An_unknown_unit_is_reported_where_it_is_written()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("var x = 4\n($x)`nonsense"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.parser.invalid_unit_literal");
+    }
+
+    [Fact]
+    public async Task Adjacency_is_the_whole_rule_so_a_spaced_backtick_is_still_a_word()
+    {
+        // `echo `foo`` predates the postfix operator and must keep lexing as a
+        // bareword: without the adjacency requirement it would become a unit.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var result = Assert.Single(await engine.ExecuteToListAsync("echo `foo`"));
+
+        Assert.Equal("`foo`", result?.ToString());
+    }
+
     [Fact]
     public async Task As_with_a_backtick_target_is_the_language_conversion_form()
     {
@@ -458,13 +658,22 @@ public sealed class UnitSystemStabilizationTests
     }
 
     [Fact]
-    public void Ambiguous_absolute_temperature_arithmetic_is_rejected_for_now()
+    public void Subtracting_absolute_temperatures_yields_a_difference()
     {
+        // This pinned the restriction rather than a semantic — the name said "for now"
+        // — and is now the contract it was standing in for: two points have a distance.
         var left = Quantity.FromLiteral(20, "°C");
         var right = Quantity.FromLiteral(10, "°C");
 
-        var exception = Assert.Throws<InvalidOperationException>(() => left - right);
-        Assert.Contains("temperature-difference", exception.Message, StringComparison.Ordinal);
+        var difference = left - right;
+
+        Assert.Equal("deltaC", difference.UnitSymbol);
+        Assert.Equal(10, difference.Magnitude, 12);
+        Assert.False(difference.IsAbsoluteTemperature);
+
+        // Their sum is still meaningless, which is the half of the old guard that stands.
+        var exception = Assert.Throws<InvalidOperationException>(() => left + right);
+        Assert.Contains("two absolute temperatures", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
