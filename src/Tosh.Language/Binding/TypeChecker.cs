@@ -2024,14 +2024,7 @@ public static class TypeChecker
         // If either operand isn't a built-in scalar, skip the check —
         // user-defined classes (and unresolved CLR types) may carry
         // operator overloads that the checker can't see.
-        bool isPrimitiveScalar(BoundType t)
-        {
-            var c = t.ClrType;
-            if (c is null) return false;
-            return c == typeof(bool) || c == typeof(string) || c == typeof(char)
-                || c == typeof(DateTime) || NumericRank(c) > 0;
-        }
-        if (!isPrimitiveScalar(left) || !isPrimitiveScalar(right)) return;
+        if (!IsPrimitiveScalar(left) || !IsPrimitiveScalar(right)) return;
 
         var op = binary.Operator;
         var ok = op switch
@@ -2068,10 +2061,35 @@ public static class TypeChecker
         }
     }
 
+    /// <summary>
+    /// A type the checker can reason about operators for on its own.
+    /// </summary>
+    /// <remarks>
+    /// Anything else — a user-defined class, an unresolved CLR type — may carry operator
+    /// overloads the checker cannot see, so it must decline to judge rather than warn.
+    /// Shared by the binary and unary checks: the binary one had this guard and the unary
+    /// one did not, so a class defining `func -()` had its negation work at run time while
+    /// the checker called it incompatible at every use.
+    /// </remarks>
+    private static bool IsPrimitiveScalar(BoundType t)
+    {
+        var c = t.ClrType;
+        if (c is null) return false;
+        return c == typeof(bool) || c == typeof(string) || c == typeof(char)
+            || c == typeof(DateTime) || NumericRank(c) > 0;
+    }
+
     private static void CheckUnaryOperator(BoundUnaryOperator unary, CheckContext ctx)
     {
         var operand = unary.Operand.Type;
         if (operand.IsDynamic) return;
+
+        // A Quantity is judged below rather than here: it is a known type with known
+        // unary behaviour, unlike a class the checker has never seen.
+        if (!IsPrimitiveScalar(operand) && !(operand.ClrType is { } q && typeof(Quantity).IsAssignableFrom(q)))
+        {
+            return;
+        }
 
         var ok = unary.Operator switch
         {

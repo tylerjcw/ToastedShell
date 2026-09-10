@@ -282,7 +282,7 @@ public sealed partial class ToshEngine
             {
                 try
                 {
-                    var currentValue = await ShellIndexingUtilities.GetIndexedValueAsync(
+                    var currentValue = await GetIndexedValueThroughClassAsync(
                         indexedTarget,
                         indexValue,
                         idx.LookupKind,
@@ -311,7 +311,7 @@ public sealed partial class ToshEngine
 
                 try
                 {
-                    await ShellIndexingUtilities.SetIndexedValueAsync(
+                    await SetIndexedValueThroughClassAsync(
                         indexedTarget,
                         indexValue,
                         coalescedBinding.Value,
@@ -337,7 +337,7 @@ public sealed partial class ToshEngine
             {
                 if (assignment.Operator != "=")
                 {
-                    var currentValue = await ShellIndexingUtilities.GetIndexedValueAsync(
+                    var currentValue = await GetIndexedValueThroughClassAsync(
                         indexedTarget,
                         indexValue,
                         idx.LookupKind,
@@ -352,7 +352,7 @@ public sealed partial class ToshEngine
                         cancellationToken);
                 }
 
-                await ShellIndexingUtilities.SetIndexedValueAsync(
+                await SetIndexedValueThroughClassAsync(
                     indexedTarget,
                     indexValue,
                     newValue,
@@ -1208,4 +1208,83 @@ public sealed partial class ToshEngine
         bool IsConst = false,
         string? DeclaredTypeName = null,
         RefinementAnnotation? DeclaredRefinement = null);
+    /// <summary>
+    /// Reads through a class's own <c>func [](index)</c> when it defines one, and through
+    /// the built-in indexers otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Needed by compound assignment, which reads the current value before writing it back:
+    /// without this `$v[1] = 2` worked on a class with an indexer while `$v[1] += 1` failed
+    /// on the read, which is a confusing pair to explain.
+    /// </remarks>
+    private static async ValueTask<object?> GetIndexedValueThroughClassAsync(
+        object? target,
+        object? index,
+        IndexLookupKind lookupKind,
+        CancellationToken cancellationToken)
+    {
+        var resolved = target is ToshClassSelfReference self ? self.Unwrap() : target;
+
+        if (resolved is ToshClassInstance instance)
+        {
+            var getter = await instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+                instance,
+                "[]",
+                new[] { index },
+                cancellationToken);
+
+            if (getter.Matched)
+            {
+                return getter.Value;
+            }
+        }
+
+        return await ShellIndexingUtilities.GetIndexedValueAsync(
+            target,
+            index,
+            lookupKind,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Assigns through a class's own <c>func []=(index, value)</c> when it defines one, and
+    /// through the built-in indexers otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of the <c>[]</c> getter consulted in <c>EvaluateIndexAccessAsync</c>.
+    /// Both assignment paths — plain and compound — route through here, so a class that
+    /// defines a setter is honoured by <c>$m[0] = 1</c> and <c>$m[0] += 1</c> alike rather
+    /// than by whichever one happened to be updated.
+    /// </remarks>
+    private static async ValueTask SetIndexedValueThroughClassAsync(
+        object? target,
+        object? index,
+        object? value,
+        IndexLookupKind lookupKind,
+        CancellationToken cancellationToken)
+    {
+        var resolved = target is ToshClassSelfReference self ? self.Unwrap() : target;
+
+        if (resolved is ToshClassInstance instance)
+        {
+            var setter = await instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+                instance,
+                "[]=",
+                new[] { index, value },
+                cancellationToken);
+
+            if (setter.Matched)
+            {
+                return;
+            }
+        }
+
+        await ShellIndexingUtilities.SetIndexedValueAsync(
+            target,
+            index,
+            value,
+            lookupKind,
+            cancellationToken);
+    }
+
 }

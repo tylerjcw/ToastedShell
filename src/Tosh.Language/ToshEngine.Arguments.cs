@@ -1364,6 +1364,33 @@ public sealed partial class ToshEngine
     {
                     var target = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Target, cancellationToken);
                     var index = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Index, cancellationToken);
+
+                    // A class may define `func [](i)`. Consulted before the built-in
+                    // indexers so a type that says how it is indexed is believed; a class
+                    // that says nothing still reaches the general path below and its
+                    // "does not support index access" message.
+                    // `$this` inside the class is a self-reference wrapper, not the
+                    // instance, so an indexer had to be unwrapped to be reachable from the
+                    // type that declares it — `$this[0]` otherwise reported that
+                    // ToshClassSelfReference does not support index access.
+                    var indexTarget = target is ToshClassSelfReference indexSelf
+                        ? indexSelf.Unwrap()
+                        : target;
+
+                    if (indexTarget is ToshClassInstance indexedInstance)
+                    {
+                        var indexer = await indexedInstance.Definition.TryInvokeSpecialInstanceMethodAsync(
+                            indexedInstance,
+                            "[]",
+                            new[] { index },
+                            cancellationToken);
+
+                        if (indexer.Matched)
+                        {
+                            return indexer.Value;
+                        }
+                    }
+
                     return await ShellIndexingUtilities.GetIndexedValueAsync(
                         target,
                         index,

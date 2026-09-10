@@ -235,6 +235,30 @@ public static partial class ToshParser
                 return new SyntaxToken(SyntaxTokenKind.Bareword, tok.Span.Start, operatorName, operatorName);
             }
 
+            // `[]` names the indexer's getter and `[]=` its setter, so an indexer is
+            // declared the way every other operator is rather than needing accessor
+            // syntax of its own. Adjacency is required: a `[` that does not immediately
+            // close is still an error, so nothing that used to be rejected now parses.
+            if (Current.Kind == SyntaxTokenKind.OpenBracket &&
+                Peek(1).Kind == SyntaxTokenKind.CloseBracket &&
+                Current.Span.End == Peek(1).Span.Start)
+            {
+                var openBracket = NextToken();
+                var closeBracket = NextToken();
+
+                var isSetter = Current.Kind == SyntaxTokenKind.Bareword &&
+                    Current.Text == "=" &&
+                    closeBracket.Span.End == Current.Span.Start;
+
+                if (isSetter)
+                {
+                    NextToken();
+                }
+
+                var indexerName = isSetter ? "[]=" : "[]";
+                return new SyntaxToken(SyntaxTokenKind.Bareword, openBracket.Span.Start, indexerName, indexerName);
+            }
+
             // "<(" is lexed as a single LessThanOpenParen token; treat as "<" operator with "(" already consumed.
             if (Current.Kind == SyntaxTokenKind.LessThanOpenParen)
             {

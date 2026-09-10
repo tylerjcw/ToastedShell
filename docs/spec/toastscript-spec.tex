@@ -4422,18 +4422,65 @@ retain TōSh's built-in and class-overload behavior.  This lookup is also the lo
 used by the \code{Add}, \code{Sub}, \code{Mul}, and \code{Div} type constraints, so
 constraint satisfaction and execution cannot disagree about whether an operator exists.
 
+\subsection{Unary Operators}
+
+Prefix \code{-} and \code{not} are overloaded by method name, as the binary forms are,
+with no parameters.  Arity is what tells the two \code{-} methods apart, so a type may
+define both.
+
+\begin{lstlisting}
+class Vec(x, y) {
+    prop X = $x
+    prop Y = $y
+
+    func -()   => (new Vec((0 - $this.X), (0 - $this.Y)))
+    func not() => (($this.X == 0) and ($this.Y == 0))
+}
+
+var v = (new Vec(3, 4))
+(- $v)      # Vec(-3, -4)
+(not $v)    # false
+\end{lstlisting}
+
+A type that defines no unary method keeps the built-in behaviour: \code{not} tests
+truthiness, and \code{-} is an error for a type that is not numeric.
+
+\subsection{Indexers}
+
+A class is indexed by defining \code{[]} for reads and \code{[]=} for writes.  They are
+ordinary operator methods --- the brackets are the name --- so nothing new is needed to
+declare or dispatch them.
+
+\begin{lstlisting}
+class Vec(x, y, z) {
+    shy prop Items = [$x, $y, $z]
+
+    func [](i)    => $this.Items[$i]
+    func []=(i, v) { $this.Items[$i] = $v }
+}
+
+var v = (new Vec(3, 4, 5))
+$v[0]        # 3
+$v[1] = 99
+$v[1] += 1   # 100
+\end{lstlisting}
+
+Compound assignment reads through \code{[]} and writes through \code{[]=}, so a type that
+defines both is indexed consistently however it is assigned.  A class that defines neither
+is not indexable, and says so.
+
 \subsection{Limitations}
 
 \begin{itemize}
-    \item Unary operators (prefix \code{-}, \code{not}) are not currently
-      overloadable. Only the binary forms above are accepted as method
-      names.
     \item Compound-assignment operators (\code{+=}, \code{-=}, etc.) are
       not overloadable directly; they desugar to the binary form, so
       defining \code{+} also covers \code{+=}.
-    \item Indexer-style access (\code{a[i]}) is parser-level wired but
-      not yet a spec-level guarantee; prefer named methods until indexer
-      semantics stabilise.
+    \item An indexer takes one argument.  Multi-argument indexing
+      (\code{\$m[\$i, \$j]}) is unavailable because a comma inside brackets
+      already selects between the three lookup forms --- \code{[value]},
+      \code{[key,]} and \code{[,value]} --- so the two spellings collide.
+    \item Unary and indexer resolution do not consult CLR \code{op\_*}
+      methods, unlike the binary operators above.
 \end{itemize}
 
 \section{Generator Functions}
