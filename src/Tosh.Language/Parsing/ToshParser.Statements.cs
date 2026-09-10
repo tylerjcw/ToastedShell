@@ -125,6 +125,26 @@ public static partial class ToshParser
                 return ParseVariableDeclarationStatement(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
             }
 
+            // Reported here rather than left to fall through: the declaration stops
+            // looking like one, so the line would be re-read as a command called `var`.
+            if (LooksLikeExpressionTypeAnnotation(out var annotationSpan, out var annotationText))
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expression_type_annotation",
+                    Title: "A type annotation names a type; it cannot be an expression.",
+                    Span: annotationSpan,
+                    Label: $"'{annotationText}' is a value, not a type name",
+                    Help: "An annotation is resolved where the declaration is written, and a value "
+                        + "only exists once the program runs. Drop the annotation and let the value "
+                        + "carry its own type (`var y = $x.Value`), name the type statically "
+                        + "(`type Meters = int`), take it through a generic parameter "
+                        + "(`func f<T>(box: Holder<T>) -> T`), or test it at run time "
+                        + "(`$x.Value is $x.Type`)."));
+
+                SkipToBlockBoundary();
+                return new PipelineStatementSyntax(new PipelineSyntax([]), annotationSpan);
+            }
+
             if (LooksLikeAllocStatement())
             {
                 return ParseAllocStatement(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);

@@ -23,7 +23,15 @@ internal sealed class ToshClassSelfReference : IShellRecordObject, IShellInvocab
 
     public string ShellTypeName => _instance.ShellTypeName;
 
-    public IShellTypeDescriptor ShellTypeDescriptor => _instance.Definition;
+    /// <remarks>
+    /// The instance's own descriptor, not its open definition. Reading the definition
+    /// meant a generic class could not see what it had been closed over from the
+    /// inside: `type-of $v` answered `Box&lt;Int32&gt;` and carried `TypeArguments`,
+    /// while `type-of $this` in the same class answered a bare `Box` and carried
+    /// none — so the only way to recover `T` from within was to ask a member that
+    /// happened to be typed `T`.
+    /// </remarks>
+    public IShellTypeDescriptor ShellTypeDescriptor => _instance.ShellTypeDescriptor;
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {

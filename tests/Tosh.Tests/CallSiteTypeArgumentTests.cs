@@ -32,6 +32,88 @@ public sealed class CallSiteTypeArgumentTests
     private const string Generic =
         "class A { func m<U>(x: U) -> U { return $x } }\nvar a = new A()\n";
 
+    // ── a generic class can see what it was closed over ───────────────────────
+    //
+    // `type-of $v` answered `Box<Int32>` and carried TypeArguments, while `type-of
+    // $this` inside that same class answered a bare `Box` and carried none: the
+    // self-reference handed back the class's *open* definition rather than the
+    // instance's own descriptor. The only way to recover T from the inside was to
+    // ask a member that happened to be typed T.
+
+    [Fact]
+    public async Task An_expression_in_a_type_annotation_says_what_went_wrong()
+    {
+        // `var y: $x.Type = $x.Value` is a natural thing to reach for once `type-of`
+        // can hand back a type, and it cannot work: an annotation is resolved where
+        // the declaration is written, and a value exists only once the program runs.
+        // The declaration simply stopped looking like one, so the line was re-read as
+        // a command and the reader was told `Command 'var' is not a registered
+        // builtin — did you mean 'vars'?`, which describes nothing that happened.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync(
+                """
+                class Box<T>(v: T) {
+                    prop Value: T = $v
+                    prop Type => ((type-of $this).TypeArguments[0])
+                }
+                var x = new Box(13)
+                var y: $x.Type = $x.Value
+                """));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.parser.expression_type_annotation");
+    }
+
+    [Theory]
+    [InlineData("var a: int = 5", "5")]
+    [InlineData("var a: string = \"hi\"", "hi")]
+    [InlineData("const a: double = 1.5", "1.5")]
+    public async Task An_ordinary_type_annotation_still_parses(string declaration, string expected)
+    {
+        // The check above must recognise an expression in the annotation slot without
+        // taking any real annotation with it.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var results = await engine.ExecuteToListAsync($"{declaration}\necho $a");
+
+        Assert.Equal(expected, Assert.Single(results)?.ToString());
+    }
+
+    [Fact]
+    public async Task A_generic_class_reads_its_own_type_argument_from_the_inside()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            class Box<T>(v: T) {
+                prop Value: T = $v
+                prop TypeOfT => ((type-of $this).TypeArguments[0])
+            }
+            echo (new Box<int>(5)).TypeOfT.Name
+            """);
+
+        Assert.Equal("Int32", Assert.Single(results)?.ToString());
+    }
+
+    [Fact]
+    public async Task The_inside_and_outside_views_of_a_closed_generic_agree()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            class Box<T>(v: T) {
+                prop Value: T = $v
+                prop SeenFromInside => ((type-of $this).Name)
+            }
+            var b = new Box<int>(5)
+            echo $"{$b.SeenFromInside}:{((type-of $b).Name)}"
+            """);
+
+        Assert.Equal("Box<Int32>:Box<Int32>", Assert.Single(results)?.ToString());
+    }
+
     [Fact]
     public async Task A_member_call_accepts_explicit_type_arguments()
     {

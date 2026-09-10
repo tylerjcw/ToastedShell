@@ -177,6 +177,55 @@ public static partial class ToshParser
                    IsVariableDeclarationTailTerminator(typeEndOffset, typeEndOffset + 1);
         }
 
+        /// <summary>
+        /// A `var`/`const` whose annotation is an expression rather than a type name,
+        /// as in <c>var y: $x.Type = $x.Value</c>.
+        /// </summary>
+        /// <remarks>
+        /// Worth recognising only to report it. An annotation is resolved when the
+        /// declaration is bound and <c>$x.Type</c> is a value that exists when the
+        /// program runs, so the two cannot meet — but the shape is a natural thing to
+        /// reach for once <c>type-of</c> can hand back a type. Without this the
+        /// declaration simply stopped looking like one, the line was re-read as a
+        /// command, and the reader was told <c>Command 'var' is not a registered
+        /// builtin — did you mean 'vars'?</c>, which describes nothing that happened.
+        /// </remarks>
+        private bool LooksLikeExpressionTypeAnnotation(out TextSpan annotationSpan, out string annotationText)
+        {
+            annotationSpan = default;
+            annotationText = string.Empty;
+
+            var offset = GetDeclarationModifierOffset();
+
+            if (!MatchesKeywordAtOffset(offset, "var") && !MatchesKeywordAtOffset(offset, "const"))
+            {
+                return false;
+            }
+
+            var afterKeyword = Peek(offset + 1);
+            if (afterKeyword.Kind != SyntaxTokenKind.Bareword)
+            {
+                return false;
+            }
+
+            ParseTypedIdentifierToken(afterKeyword.Text, out var varName, out var inlineType, out var expectsFollowingType);
+            if (!IsValidIdentifier(varName) || inlineType is not null || !expectsFollowingType)
+            {
+                return false;
+            }
+
+            // A `$`-prefixed word in the annotation slot is an expression, not a type.
+            var annotation = Peek(offset + 2);
+            if (annotation.Kind != SyntaxTokenKind.Bareword || !annotation.Text.StartsWith('$'))
+            {
+                return false;
+            }
+
+            annotationSpan = annotation.Span;
+            annotationText = annotation.Text;
+            return true;
+        }
+
         private bool LooksLikeAllocStatement()
         {
             var offset = GetDeclarationModifierOffset();
