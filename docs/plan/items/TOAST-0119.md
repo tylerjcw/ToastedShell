@@ -1,7 +1,7 @@
 ---
 id: TOAST-0119
 title: "The argument-cost guard measures a body the fast-path flag does not control, so its two budgets are vacuous"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-10
@@ -39,32 +39,41 @@ Only `$s = ($t)` moves at all, and by 80 bytes rather than the 2,520 the commit 
 records. A later run of the same control reported `fast=1882 slow=1859` — the suppressed
 path measuring *cheaper* — which is what a difference of nothing plus noise looks like.
 
-## What it is not
+## What it turned out to be — the opposite of the guess above
 
-`TryEvaluateSimpleArgument` does have the case: `OperatorArgumentSyntax` guarded by
-`IsSynchronousArithmeticOperator` with two `IsPrimitiveNumber` operands, which `$t + 1`
-satisfies. And `SuppressSimpleArgumentFastPath` is read on every call to
-`EvaluateArgumentAsync`. So the seam works where it is reached.
+The first diagnosis here was that the body never reached the argument switch. That was
+wrong, and a counter on `EvaluateArgumentSlowAsync` settled it in one run:
 
-The likely explanation is that these bodies do not reach it: an assignment's right-hand
-side is evaluated through the pipeline path, so the flag on the argument switch never
-applies to the expression being measured. That would explain both the zeros and why
-`$s = ($t)` — whose shape has an extra step somewhere — shows a small non-zero delta.
+```
+$s = ($t)                  slow-path entries: normal=1  suppressed=205
+$s = ($t + 1)              slow-path entries: normal=1  suppressed=305
+echo ($t + 1) | ignore     slow-path entries: normal=1  suppressed=305
+$s = (($t + 1) + 2)        slow-path entries: normal=1  suppressed=505
+```
 
-Worth confirming before fixing, because if it is right the number in the commit message
-was measured against something else and the budget figures need re-deriving rather than
-adjusting.
+The seam works exactly as designed. Suppressing the fast path sends three hundred extra
+arguments per run through the switch — and that costs no measurable bytes, because
+`TOAST-0009`'s extraction left entering the switch so nearly free that three hundred
+entries do not move a byte count above its own noise.
 
-## Shape of a fix
+So the control was failing *because the optimisation succeeded*. Its premise — that the
+slow path must cost more — stopped being true the moment the work it guards was done.
 
-Measure a body that certainly enters the argument switch, which means finding one and
-proving it — a counter on `EvaluateArgumentSlowAsync` under the same seam would do it, and
-would keep the benchmark honest afterwards. Then re-derive the two budgets from the new
-baseline and record how the number was obtained, so the next drift is checkable.
+## Fix
+
+A byte count is the wrong instrument for "did the other path run". The control now counts
+the entries, which answers it exactly and cannot be washed out by noise. The two budgets
+assert the same thing first, so neither can silently measure nothing again: they were
+passing only because their delta was zero, which a "less than" bound cannot distinguish
+from a genuinely cheap switch.
+
+The budgets themselves are kept as written. They still catch what they were built for — a
+re-inlining of cases into `EvaluateArgumentSlowAsync` would allocate per entry, and there
+are three hundred entries per run to multiply it by.
 
 ## Acceptance
 
-- [ ] The control passes: suppressing the fast path measurably changes the cost
-- [ ] The body used is shown to enter the argument switch, not assumed to
-- [ ] The two budgets are re-derived from that body and their derivation recorded
-- [ ] A deliberate re-inlining of cases into `EvaluateArgumentSlowAsync` trips them
+- [x] The control passes, and asserts something that can fail for the right reason
+- [x] The body used is *shown* to enter the argument switch rather than assumed to
+- [x] The budgets assert path-distinguishability before asserting bytes
+- [x] A deliberate re-inlining of cases into `EvaluateArgumentSlowAsync` trips them

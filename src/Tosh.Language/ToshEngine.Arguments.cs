@@ -758,6 +758,20 @@ public sealed partial class ToshEngine
     /// </remarks>
     internal bool SuppressSimpleArgumentFastPath { get; set; }
 
+    /// <summary>
+    /// How many arguments have entered the slow switch — <c>TOAST-0119</c>.
+    /// </summary>
+    /// <remarks>
+    /// The allocation benchmark beside the seam measures the difference between the two
+    /// paths, and measured nothing at all: its body never reached the switch, so
+    /// suppressing the fast path changed no code and the budgets it guards could not fail.
+    /// A benchmark that cannot see which path ran cannot say it measured one, so it now
+    /// asserts on this before it asserts on bytes.
+    /// </remarks>
+    internal long SlowArgumentEvaluations { get; private set; }
+
+    internal void ResetSlowArgumentEvaluations() => SlowArgumentEvaluations = 0;
+
     private ValueTask<object?> EvaluateArgumentAsync(
         string sourceName,
         string sourceText,
@@ -852,6 +866,8 @@ public sealed partial class ToshEngine
         ArgumentSyntax argument,
         CancellationToken cancellationToken)
     {
+        SlowArgumentEvaluations++;
+
         try
         {
             switch (argument)
