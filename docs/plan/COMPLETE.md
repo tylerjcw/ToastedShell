@@ -12,29 +12,40 @@
 | [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
+| [`TOAST-0113`](items/TOAST-0113.md) | P2 | complete | 6/6 | A qualified refinement type in a type test is evaluated as module member access |
+| [`TOAST-0090`](items/TOAST-0090.md) | P2 | complete | 8/8 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
 | [`TOAST-0089`](items/TOAST-0089.md) | P2 | complete | 4/4 | A declared record's collection fields vanish from a table, but an anonymous record's do not |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | complete | 5/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TOAST-0027`](items/TOAST-0027.md) | P2 | complete | 5/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
+| [`TOAST-0108`](items/TOAST-0108.md) | P1 | complete | 6/6 | A union whose variant names collide with the prelude's is checked against the prelude's union instead |
 | [`TS-P2-104`](items/TS-P2-104.md) | P2 | complete | 1/1 | A splat argument is rejected wherever it would be useful |
 | [`TOAST-0029`](items/TOAST-0029.md) | P2 | complete | 6/6 | `is` matches a CLR value's exact type name only, so `$x is IEnumerable` and `$e is Exception` are always false |
+| [`TOAST-0110`](items/TOAST-0110.md) | P2 | complete | 6/6 | A bare variant name in a match arm silently matches a string instead of the variant |
 | [`TOAST-0075`](items/TOAST-0075.md) | P2 | complete | 5/5 | A compiled non-nullable function parameter accepts null while the interpreter rejects the call |
 | [`TS-P2-94`](items/TS-P2-94.md) | P2 | complete | 1/1 | `&` cannot reference a method or a module-qualified function |
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOAST-0072`](items/TOAST-0072.md) | P2 | complete | 5/5 | A rune's block argument ran in the current scope, so a macro calling a macro never worked |
+| [`TOAST-0091`](items/TOAST-0091.md) | P2 | complete | 6/6 | A value whose state is not entirely constructor arguments has no literal form |
+| [`TOAST-0064`](items/TOAST-0064.md) | P2 | complete | 7/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0077`](items/TOAST-0077.md) | P2 | complete | 7/7 | Native writes take their width from the value, so a buffer's layout depends on its data |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TOAST-0078`](items/TOAST-0078.md) | P1 | complete | 6/6 | A bare name resolves to the runtime's internal types, so `Sys` means `Interop+Sys` |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
+| [`TOAST-0096`](items/TOAST-0096.md) | P2 | complete | — | A generic union's unit variant cannot infer its type arguments from where the value is going |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | complete | 5/5 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`TOAST-0034`](items/TOAST-0034.md) | P2 | complete | 8/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
+| [`TOAST-0111`](items/TOAST-0111.md) | P2 | complete | 6/6 | `is` and `as` do not see refinement types, so a type test on one is always false |
 | [`TOAST-0049`](items/TOAST-0049.md) | P2 | complete | 5/5 | Recursion is capped at 128 frames, and the cap is a stack size nobody can change |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | complete | 9/9 | The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways |
 | [`TOSH-0007`](items/TOSH-0007.md) | P1 | complete | 4/4 | The marshalled struct statvfs was 24 bytes short, corrupting memory on every call |
+| [`TOAST-0093`](items/TOAST-0093.md) | P1 | complete | — | A compiled unit claims its type names process-wide, so a bare name resolves to another script's compiled output |
+| [`TOAST-0112`](items/TOAST-0112.md) | P3 | complete | 7/7 | A refinement type cannot name its base with `:`, and omitting the base reports the wrong error |
 | [`TOAST-0073`](items/TOAST-0073.md) | P2 | complete | 5/5 | A compiled subexpression argument is not held to the one-value rule the interpreter enforces |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 7/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TOAST-0038`](items/TOAST-0038.md) | P2 | complete | 6/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
+| [`TOAST-0092`](items/TOAST-0092.md) | P2 | complete | 9/9 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0046`](items/TOAST-0046.md) | P2 | complete | 4/4 | `-> void` is unspecified, and disagrees with `-> nothing` for the same declared type |
@@ -42,7 +53,9 @@
 | [`TOAST-0069`](items/TOAST-0069.md) | P2 | complete | 7/7 | A rune call site forces whole-script source replay, so a program using a macro is not compiled at all |
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | complete | 8/8 | A trait's declared member types are not enforced on the implementing class |
+| [`TOAST-0102`](items/TOAST-0102.md) | P2 | complete | 4/4 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
+| [`TOAST-0114`](items/TOAST-0114.md) | P3 | complete | 7/7 | A struct is invisible to the editor: no outline entry, no hover, no completion |
 | [`TOAST-0074`](items/TOAST-0074.md) | P3 | complete | 5/5 | The two backends refuse the same return conversion in different words |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
 | [`TOAST-0018`](items/TOAST-0018.md) | P2 | complete | 10/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
@@ -51,21 +64,28 @@
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0068`](items/TOAST-0068.md) | P2 | complete | 5/5 | A refinement's coercer can put the wrong CLR type in a refined slot |
 | [`TOAST-0076`](items/TOAST-0076.md) | P2 | complete | 6/6 | A module-qualified type annotation is not resolved, and the diagnostic says the annotation is missing |
+| [`TOAST-0106`](items/TOAST-0106.md) | P2 | complete | 5/5 | Dispatching a non-commutative operator to the right operand produces a reversed result |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
 | [`TOSH-0010`](items/TOSH-0010.md) | P2 | complete | 6/6 | `build.tosh publish` reports failure after succeeding, on every RID |
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | complete | 6/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | complete | 6/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
 | [`TOAST-0067`](items/TOAST-0067.md) | P2 | complete | 4/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
+| [`TOAST-0095`](items/TOAST-0095.md) | P2 | complete | 5/5 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0052`](items/TOAST-0052.md) | P1 | complete | 8/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |
+| [`TOAST-0109`](items/TOAST-0109.md) | P3 | complete | 3/3 | Any `|` or `>` within three characters of the cursor produces a pipeline hover |
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |
+| [`TOAST-0107`](items/TOAST-0107.md) | P2 | complete | 6/6 | The path operator is unusable inside an interpolation hole, because `::` is read as a format clause |
 | [`TOAST-0051`](items/TOAST-0051.md) | P1 | complete | 7/7 | Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3` |
 | [`TOAST-0079`](items/TOAST-0079.md) | P2 | complete | 6/6 | An array cannot reach native memory, so the FFI has no data plane |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
+| [`TOAST-0054`](items/TOAST-0054.md) | P1 | complete | 8/8 | A `match` over a closed union is not checked for exhaustiveness |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
+| [`TOAST-0104`](items/TOAST-0104.md) | P2 | complete | 4/4 | A refinement type derived from a sibling in the same module silently fails to register |
+| [`TOAST-0105`](items/TOAST-0105.md) | P2 | complete | 5/5 | `is` silently returns false for a declared type when the type name is qualified |
 | [`TOAST-0044`](items/TOAST-0044.md) | P1 | complete | 5/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
 | [`TOAST-0050`](items/TOAST-0050.md) | P2 | complete | 8/8 | A tuple type resolves but cannot be written in an annotation |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | complete | 8/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
@@ -78,5 +98,6 @@
 | [`TS-P1-47`](items/TS-P1-47.md) | P1 | complete | — | A variable annotated with a base class rejects a subclass value when compiled |
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | complete | — | A lexical scope allocated ten collections it almost never used |
 | [`TOAST-0045`](items/TOAST-0045.md) | P2 | complete | 4/4 | A compiled function returning `record` cannot return a record literal |
+| [`TOAST-0083`](items/TOAST-0083.md) | P2 | complete | 9/9 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).
