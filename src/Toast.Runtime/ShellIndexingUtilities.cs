@@ -131,7 +131,9 @@ public static class ShellIndexingUtilities
 
         if (lookupKind == IndexLookupKind.ByValue)
         {
-            throw new InvalidOperationException($"Type '{target.GetType().FullName}' does not support value-based lookup.");
+            throw new ShellIndexNotSupportedException(
+                $"Type '{Describe(target)}' does not support value-based lookup.",
+                isAssignment: false);
         }
 
         if (TryGetIndexerPropertyValue(target, index, out var indexedPropertyValue))
@@ -139,8 +141,9 @@ public static class ShellIndexingUtilities
             return indexedPropertyValue;
         }
 
-        throw new InvalidOperationException(
-            $"Type '{target.GetType().FullName}' does not support index access with '{index?.GetType().FullName ?? "null"}'.");
+        throw new ShellIndexNotSupportedException(
+            $"Type '{Describe(target)}' does not support index access with '{Describe(index)}'.",
+            isAssignment: false);
     }
 
     public static object? GetIndexedValue(object? target, object? index, IndexLookupKind lookupKind = IndexLookupKind.Default)
@@ -284,9 +287,26 @@ public static class ShellIndexingUtilities
             return result;
         }
 
-        throw new InvalidOperationException(
-            $"Type '{target.GetType().FullName}' does not support range slicing.");
+        throw new ShellIndexNotSupportedException(
+            $"Type '{Describe(target)}' does not support range slicing.",
+            isAssignment: false);
     }
+
+    /// <summary>
+    /// Names a value's type the way its owner would — <c>TOAST-0117</c>.
+    /// </summary>
+    /// <remarks>
+    /// Every ToastScript object is one <c>ToshClassInstance</c>, so reporting the CLR name
+    /// told the reader about the implementation and nothing about their program. A value
+    /// that carries a shell type answers with it; anything else keeps the CLR name, which
+    /// for a genuine CLR value is what a reader wants.
+    /// </remarks>
+    private static string Describe(object? value) => value switch
+    {
+        null => "null",
+        IShellTypedObject typed => typed.ShellTypeDescriptor.ShellTypeName,
+        _ => value.GetType().FullName ?? value.GetType().Name,
+    };
 
     private static bool TryGetIntegerIndex(object? index, out int numericIndex)
     {
@@ -550,8 +570,9 @@ public static class ShellIndexingUtilities
             return;
         }
 
-        throw new InvalidOperationException(
-            $"Type '{target.GetType().FullName}' does not support index assignment with '{index?.GetType().FullName ?? "null"}'.");
+        throw new ShellIndexNotSupportedException(
+            $"Type '{Describe(target)}' does not support index assignment with '{Describe(index)}'.",
+            isAssignment: true);
     }
 
     private static bool TrySetIndexerProperty(object target, object? index, object? value)

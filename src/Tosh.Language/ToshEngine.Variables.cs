@@ -1279,12 +1279,26 @@ public sealed partial class ToshEngine
             }
         }
 
-        await ShellIndexingUtilities.SetIndexedValueAsync(
-            target,
-            index,
-            value,
-            lookupKind,
-            cancellationToken);
+        try
+        {
+            await ShellIndexingUtilities.SetIndexedValueAsync(
+                target,
+                index,
+                value,
+                lookupKind,
+                cancellationToken);
+        }
+        catch (ShellIndexNotSupportedException) when (resolved is ToshClassInstance noSetter)
+        {
+            // `TOAST-0117`, as for the getter: the general path answers where it can, and
+            // only its refusal names the member the class could have declared.
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.indexer_not_defined",
+                Title: $"Type '{noSetter.ShellTypeName}' does not define an index setter.",
+                Label: $"'{noSetter.ShellTypeName}' has no 'func []=(i, v)'",
+                Help: "declare one on the class — 'func []=(i, v) { $this.Items[$i] = $v }'. "
+                    + "Reading and writing are separate members, so a type may allow one and not the other."));
+        }
     }
 
 }

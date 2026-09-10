@@ -123,6 +123,80 @@ public sealed class UnaryAndIndexerOverloadTests : IClassFixture<ToshRuntimeFixt
             () => engine.ExecuteToListAsync("class Plain { prop N = 1 }\necho (new Plain())[0]"));
     }
 
+
+    // ── TOAST-0117: what a class that declared neither one is told ────────────
+    //
+    // `EvaluateUnary` expresses `-x` as `0 - x`, deliberately, so every widening and unit
+    // rule the binary operators carry applies unchanged. For a class that paid off as
+    // "Operator operands 'System.Int32' and 'Plain' are not compatible" — a binary
+    // mismatch against an integer written nowhere in the source. The indexer's message
+    // named `Tosh.Language.ToshClassInstance`, the CLR class behind every user object.
+    // Both now name the class and the member it could declare.
+
+    private const string Plain = "class Plain(x) { prop X = $x\n prop Y = 9 }\nvar p = (new Plain(1))\n";
+
+    [Theory]
+    [InlineData("-$p", "tosh.runtime.unary_operator_not_defined", "func -()")]
+    [InlineData("+$p", "tosh.runtime.unary_operator_not_defined", "func +()")]
+    [InlineData("$p[0]", "tosh.runtime.indexer_not_defined", "func [](i)")]
+    public async Task A_missing_operator_names_the_class_and_the_member(
+        string expression,
+        string expectedCode,
+        string expectedMember)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAnyAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync($"{Plain}{expression}"));
+
+        var diagnostic = Assert.Single(error.Diagnostics, d => d.Code == expectedCode);
+
+        Assert.Contains("Plain", diagnostic.Title, StringComparison.Ordinal);
+        Assert.DoesNotContain("Int32", diagnostic.Title, StringComparison.Ordinal);
+        Assert.DoesNotContain("ToshClassInstance", diagnostic.Title, StringComparison.Ordinal);
+        Assert.Contains(expectedMember, $"{diagnostic.Label} {diagnostic.Help}", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_missing_index_setter_is_reported_like_the_getter()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAnyAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync($"{Plain}$p[0] = 5"));
+
+        var diagnostic = Assert.Single(error.Diagnostics, d => d.Code == "tosh.runtime.indexer_not_defined");
+
+        Assert.Contains("Plain", diagnostic.Title, StringComparison.Ordinal);
+        Assert.Contains("func []=(i, v)", $"{diagnostic.Label} {diagnostic.Help}", StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_class_is_still_indexed_by_a_member_name()
+    {
+        // The general path can answer for a class — a name indexes one like a record — so it
+        // runs first and only its refusal is rewritten. Reporting before trying would have
+        // broken this.
+        Assert.Equal("1", await RunAsync($"{Plain}var key = \"X\"\necho $p[$key]"));
+    }
+
+    [Fact]
+    public async Task Not_still_falls_back_to_truthiness()
+    {
+        // `not` is left alone: unlike `-`, its fallback is a real answer for any object.
+        Assert.Equal("False", await RunAsync($"{Plain}echo (not $p)"));
+    }
+
+    [Fact]
+    public async Task A_non_class_value_keeps_its_clr_name()
+    {
+        // The CLR name is what a reader wants for a genuine CLR value; only values that
+        // carry a shell type answer with it.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var error = await Assert.ThrowsAnyAsync<Exception>(
+            () => engine.ExecuteToListAsync("var n = 5\necho $n[0]"));
+
+        Assert.Contains("System.Int32", error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("var xs = [10, 20, 30]\necho $xs[1]", "20")]
     [InlineData("var d = {% \"k\" => \"v\" %}\necho $d[\"k\"]", "v")]

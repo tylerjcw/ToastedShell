@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 579 diagnostic codes currently emitted by the
+This chapter lists all 581 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -417,6 +417,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.http\_request\_failed}] The HTTP request failed. \{exception.Message\}
 \item[\texttt{\small tosh.runtime.http\_status\_failed}] HTTP request returned \{(int)response.StatusCode\} \{response.ReasonPhrase ?? string.Empty\}
 \item[\texttt{\small tosh.runtime.index\_assignment\_failed}] \textit{(see source)}
+\item[\texttt{\small tosh.runtime.indexer\_not\_defined}] Type '\{noIndexer.ShellTypeName\}' does not define an indexer.
 \item[\texttt{\small tosh.runtime.infinite\_eager\_comprehension}] Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '| first N'.
 \item[\texttt{\small tosh.runtime.input\_redirection\_source\_not\_found}] Input redirection source '\{resolved\}' does not exist.
 \item[\texttt{\small tosh.runtime.input\_redirection\_source\_null}] Input redirection source cannot be null.
@@ -622,6 +623,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.ulimit\_unsupported}] `ulimit` is not supported on Windows.
 \item[\texttt{\small tosh.runtime.umask\_invalid}] Invalid umask value '\{arg\}'.
 \item[\texttt{\small tosh.runtime.umask\_unsupported}] `umask` is not supported on Windows.
+\item[\texttt{\small tosh.runtime.unary\_operator\_not\_defined}] Type '\{unaryInst.ShellTypeName\}' does not define a unary '\{missing\}' operator.
 \item[\texttt{\small tosh.runtime.unexpected\_exception}] Function '\{commandName\}' shadows built-in command '\{commandName\}'.
 \item[\texttt{\small tosh.runtime.unexpected\_interface\_type\_arguments}] Interface '\{ifaceDefinition.Name\}' is not generic and does not accept type arguments.
 \item[\texttt{\small tosh.runtime.unexpected\_script\_argument}] Unexpected script argument '\{FormatScriptArgumentForDiagnostic(unexpected.Value)\}'.

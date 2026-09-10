@@ -29,6 +29,7 @@
 | [`TOAST-0091`](items/TOAST-0091.md) | P2 | complete | 6/6 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0064`](items/TOAST-0064.md) | P2 | complete | 7/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0077`](items/TOAST-0077.md) | P2 | complete | 7/7 | Native writes take their width from the value, so a buffer's layout depends on its data |
+| [`TOAST-0117`](items/TOAST-0117.md) | P3 | complete | 7/7 | A missing unary or indexer operator is reported as a binary mismatch against an operand nobody wrote |
 | [`TOAST-0116`](items/TOAST-0116.md) | P1 | complete | 6/6 | A generic class that rebuilds itself inside its own method loses what it was closed over, constraint included |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TOAST-0078`](items/TOAST-0078.md) | P1 | complete | 6/6 | A bare name resolves to the runtime's internal types, so `Sys` means `Interop+Sys` |

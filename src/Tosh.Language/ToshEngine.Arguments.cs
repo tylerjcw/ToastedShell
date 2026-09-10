@@ -1391,11 +1391,31 @@ public sealed partial class ToshEngine
                         }
                     }
 
-                    return await ShellIndexingUtilities.GetIndexedValueAsync(
-                        target,
-                        index,
-                        indexAccess.LookupKind,
-                        cancellationToken);
+                    try
+                    {
+                        return await ShellIndexingUtilities.GetIndexedValueAsync(
+                            target,
+                            index,
+                            indexAccess.LookupKind,
+                            cancellationToken);
+                    }
+                    catch (ShellIndexNotSupportedException) when (indexTarget is ToshClassInstance noIndexer)
+                    {
+                        // `TOAST-0117`. The general path can still answer for a class — a
+                        // member name indexes one like a record — so it runs first and only
+                        // its refusal is rewritten. What it cannot know is that the class
+                        // could have said how it is indexed: `TOAST-0056` made `[]` a
+                        // declarable member, so there is a one-line answer to point at.
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.indexer_not_defined",
+                            Title: $"Type '{noIndexer.ShellTypeName}' does not define an indexer.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: indexAccess.Span,
+                            Label: $"'{noIndexer.ShellTypeName}' has no 'func [](i)'",
+                            Help: "declare one on the class — 'func [](i) => $this.Items[$i]' — "
+                                + "or index by a member name, which reads a class like a record."));
+                    }
     }
     private async ValueTask<object?> EvaluateTupleLiteralAsync(
         string sourceName,
@@ -1681,6 +1701,27 @@ public sealed partial class ToshEngine
                         if (unaryOverload.Matched)
                         {
                             return unaryOverload.Value;
+                        }
+
+                        // `TOAST-0117`. `EvaluateUnary` expresses `-x` as `0 - x` so that
+                        // every widening, unit and shell-numeric rule the binary operators
+                        // carry applies unchanged. For a class that pays off as a message
+                        // about operands 'System.Int32' and 'Plain' — a binary mismatch
+                        // against an integer written nowhere in the source, sending the
+                        // reader to look for it. `not` is left alone: its fallback tests
+                        // truthiness, which is a real answer for any object.
+                        if (unaryOperation.Operator is "-" or "+" or "bnot")
+                        {
+                            var missing = unaryOperation.Operator;
+                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh.runtime.unary_operator_not_defined",
+                                Title: $"Type '{unaryInst.ShellTypeName}' does not define a unary '{missing}' operator.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: unaryOperation.Span,
+                                Label: $"'{unaryInst.ShellTypeName}' has no 'func {missing}()'",
+                                Help: $"declare one on the class: 'func {missing}() => …'. It takes no "
+                                    + $"parameters, which is what tells it apart from the binary '{missing}'."));
                         }
                     }
 

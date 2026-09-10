@@ -8,7 +8,7 @@
 ##
 ##     docs/diagnostic-codes.md                            human-readable reference
 ##     docs/spec/diagnostic-codes.tex                      LaTeX chapter for the spec
-##     src/Tosh.Runtime/Generated/DiagnosticCodeManifest.g.cs   static C# manifest
+##     src/Toast.Runtime/Generated/DiagnosticCodeManifest.g.cs  static C# manifest
 ##
 ##   The port is verified by diffing all three against the Python output
 ##   rather than by reading, so "faithful" is a measurement and not a claim.
@@ -25,7 +25,12 @@ using System.Text.RegularExpressions
 flag src: string = "src"
 flag md: string = "docs/diagnostic-codes.md"
 flag tex: string = "docs/spec/diagnostic-codes.tex"
-flag csharp: string = "src/Tosh.Runtime/Generated/DiagnosticCodeManifest.g.cs"
+# The manifest moved to Toast.Runtime with the assembly split; the default here did
+# not follow it, so a plain run wrote a stray copy into a directory no project
+# compiles and left the real one untouched — silently, because writing a new file
+# is not an error. The namespace stays `Tosh.Runtime.Generated`, which is why the
+# mismatch was easy to miss.
+flag csharp: string = "src/Toast.Runtime/Generated/DiagnosticCodeManifest.g.cs"
 flag quiet: bool = false
 
 var CODE_RE = new Regex('"(tosh\.[a-z_]+(?:\.[a-z_]+)+)"')
