@@ -36,7 +36,8 @@ $s = $t                      fast=  1546 slow=  1546 delta=     0
 ```
 
 Only `$s = ($t)` moves at all, and by 80 bytes rather than the 2,520 the commit message
-records.
+records. A later run of the same control reported `fast=1882 slow=1859` — the suppressed
+path measuring *cheaper* — which is what a difference of nothing plus noise looks like.
 
 ## What it is not
 
