@@ -24,8 +24,9 @@ internal sealed class TuiInputScreen : ITuiScreen
         var width = size.Width;
         var height = size.Height;
 
-        // Center content vertically
-        var contentLines = 4;
+        // Center content vertically. A multiline value occupies one row per line, so the
+        // block grows with the text rather than overlapping the footer.
+        var contentLines = 4 + _input.Text.Count(static c => c == '\n');
         var startRow = Math.Max(0, (height - contentLines) / 2);
 
         for (var i = 0; i < startRow; i++)
@@ -39,10 +40,19 @@ internal sealed class TuiInputScreen : ITuiScreen
 
         _inputRow = startRow + 2;
 
-        var inputLine = _input.RenderWithCursor();
-        sb.AppendLine(inputLine.Length > width ? inputLine[..width] : inputLine);
+        // Multiline text arrives with newlines in it, so each line is emitted on its own
+        // row; a single-line field still renders exactly one row as before.
+        var rendered = _input.RenderWithCursor(_request.Password);
+
+        foreach (var line in rendered.Split('\n'))
+        {
+            sb.AppendLine(line.Length > width ? line[..width] : line);
+        }
+
         sb.AppendLine();
-        sb.Append("Enter: submit | Esc: cancel");
+        sb.Append(_request.Multiline
+            ? "Ctrl+Enter: submit | Enter: newline | Esc: cancel"
+            : "Enter: submit | Esc: cancel");
 
         return new TuiFrame(sb.ToString());
     }
@@ -68,7 +78,7 @@ internal sealed class TuiInputScreen : ITuiScreen
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
     {
-        var result = _input.HandleKey(key);
+        var result = _input.HandleKey(key, _request.Multiline);
 
         switch (result)
         {

@@ -13,7 +13,7 @@ namespace Tosh.Stdlib.Shell;
 [CommandArgument("input [prompt]", "Read text input, optionally multiline or password-style.", Required = false)]
 [CommandArgument("file", "Open a file or directory picker.", Required = false)]
 [CommandArgument("filter [items...]", "Open a fuzzy filter picker.", Required = false)]
-[CommandArgument("screen|add-*|layout|run", "Build and run composed TUI screens from pipeline-carried screen definitions.", Required = false)]
+[CommandArgument("screen|add-*|layout|run", "Build and run composed TUI screens from pipeline-carried screen definitions. Widgets: add-list, add-text, add-input, add-picker, add-confirm, add-file.", Required = false)]
 [CommandOption("--cli", "Use inline terminal prompts instead of returning fullscreen TUI request objects where supported.")]
 [CommandOption("--multi, -m", "Allow multiple selections for `pick`, `filter`, and list widgets.")]
 [CommandOption("--result", "Return a structured outcome object instead of only the selected value/result.")]
@@ -30,18 +30,20 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--searchable, -s", "Make a list widget searchable.")]
 [CommandOption("--bind <widget.property>", "Bind a text widget to another widget property.")]
 [CommandOption("--no-wrap", "Disable text wrapping for `add-text`.")]
+[CommandOption("--fullscreen", "Run `filter` as a fullscreen picker with search open, instead of its inline default.")]
 [CommandOption("--ratio <a:b>", "Layout split ratio for `layout`.")]
 [CommandOption("--gap <n>", "Gap between layout regions.")]
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
 [CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
-[CommandOutput("Emits nothing; drives the interactive TUI session as a side effect.")]
+[CommandExample("tui screen --title Deploy | tui add-confirm \"Deploy now?\" | tui run --result", Title = "Composed screen with a confirmation")]
+[CommandOutput("The user's selection: picked item(s) for `pick`/`filter`, a bool for `confirm`, the text for `input`, the path for `file`, or a TuiScreenOutcome when `--result` is given. Nothing is emitted when the prompt is cancelled and `--result` was not asked for. The screen-builder subcommands emit the TuiScreen being composed; without `--cli`, the modal subcommands emit a request object for the shell host to run.")]
 public sealed class TuiCommand : ShellCommand
 {
     public TuiCommand()
         : base("tui",
-            "Interactive TUI components for scripts. Provides list pickers, confirmations, text input, file pickers, and custom screens. Use --cli for inline (non-fullscreen) prompts.",
-            "tui pick|confirm|input|file|filter|screen|add-list|add-text|add-input|add-picker|layout|run [options]")
+            "Interactive TUI components for an interactive shell session. Provides list pickers, confirmations, text input, file pickers, and composed screens. Use --cli for inline (non-fullscreen) prompts. This command is shell-only: it needs a live terminal, so it cannot be used from a script run non-interactively.",
+            "tui pick|confirm|input|file|filter|screen|add-list|add-text|add-input|add-picker|add-confirm|add-file|layout|run [options]")
     { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
@@ -51,7 +53,7 @@ public sealed class TuiCommand : ShellCommand
             throw context.CreateDiagnostic(
                 code: "tosh.tui.missing_subcommand",
                 title: "The 'tui' command requires a subcommand.",
-                help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, layout, run");
+                help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, add-confirm, add-file, layout, run");
         }
 
         var subcommand = CommandArguments.RequireString(context.Arguments, 0, "subcommand");
@@ -78,13 +80,15 @@ public sealed class TuiCommand : ShellCommand
             "add-text" => ExecuteAddTextAsync(context),
             "add-input" => ExecuteAddInputAsync(context),
             "add-picker" => ExecuteAddPickerAsync(context),
+            "add-confirm" => ExecuteAddConfirmAsync(context),
+            "add-file" => ExecuteAddFileAsync(context),
             "layout" => ExecuteLayoutAsync(context),
             "run" => ExecuteRunAsync(context),
             _ => throw context.CreateDiagnostic(
                 code: "tosh.tui.unknown_subcommand",
                 title: $"Unknown tui subcommand '{subcommand}'.",
                 argumentIndex: 0,
-                help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, layout, run"),
+                help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, add-confirm, add-file, layout, run"),
         };
     }
 
@@ -93,14 +97,14 @@ public sealed class TuiCommand : ShellCommand
     // Or: <pipeline> | tui pick [--multi] [--prompt "text"] [--display <property>] [--result] [--cli]
     private static async IAsyncEnumerable<object?> ExecutePickAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "pick", "multi", "m", "result", "cli");
         var multi = parsed.HasFlag("multi", "m");
         var returnOutcome = parsed.HasFlag("result");
         var cli = parsed.HasFlag("cli");
         var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
         var display = ExtractNamedArgument(parsed.Positionals, "display");
-        var pageSizeStr = ExtractNamedArgument(parsed.Positionals, "page-size");
-        var pageSize = pageSizeStr is not null && int.TryParse(pageSizeStr, out var ps) ? ps : 10;
+        var pageSize = ReadPageSize(context, parsed.Positionals);
 
         var items = await CollectItemsAsync(context, parsed.Positionals, skipNamedArgs: new[] { "prompt", "display", "page-size" });
 
@@ -117,7 +121,11 @@ public sealed class TuiCommand : ShellCommand
             var provider = RequireInlineProvider(context);
             var result = provider.Pick(items, prompt, display, multi, pageSize);
 
-            if (result is not null)
+            if (returnOutcome)
+            {
+                yield return InlineOutcome(result);
+            }
+            else if (result is not null)
             {
                 foreach (var item in result)
                 {
@@ -137,7 +145,8 @@ public sealed class TuiCommand : ShellCommand
     {
         await Task.CompletedTask;
 
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "confirm", "result", "cli");
         var returnOutcome = parsed.HasFlag("result");
         var cli = parsed.HasFlag("cli");
 
@@ -162,7 +171,10 @@ public sealed class TuiCommand : ShellCommand
         {
             var provider = RequireInlineProvider(context);
             var result = provider.Confirm(message, defaultConfirm);
-            yield return result ?? false;
+
+            yield return returnOutcome
+                ? InlineOutcome(result is null ? null : new object?[] { result.Value }, "confirmed", result ?? false)
+                : result ?? false;
         }
         else
         {
@@ -176,7 +188,8 @@ public sealed class TuiCommand : ShellCommand
     {
         await Task.CompletedTask;
 
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "input", "multiline", "password", "result", "cli");
         var multiline = parsed.HasFlag("multiline");
         var returnOutcome = parsed.HasFlag("result");
         var cli = parsed.HasFlag("cli");
@@ -188,18 +201,32 @@ public sealed class TuiCommand : ShellCommand
 
         var defaultValue = ExtractNamedArgument(parsed.Positionals, "default");
 
+        if (cli && multiline)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh.tui.input.multiline_requires_fullscreen",
+                title: "'tui input --multiline' cannot be combined with '--cli'.",
+                help: "The inline prompt is a single-row box. Drop --cli for a multiline field, "
+                    + "or drop --multiline for an inline single-line prompt.");
+        }
+
         if (cli)
         {
             var provider = RequireInlineProvider(context);
-            var result = provider.Input(prompt, defaultValue, password);
-            if (result is not null)
+            var result = provider.Input(prompt, defaultValue, password, multiline);
+
+            if (returnOutcome)
+            {
+                yield return InlineOutcome(result is null ? null : new object?[] { result }, "text", result);
+            }
+            else if (result is not null)
             {
                 yield return result;
             }
         }
         else
         {
-            yield return new TuiInputRequest(prompt, defaultValue, multiline, returnOutcome);
+            yield return new TuiInputRequest(prompt, defaultValue, multiline, returnOutcome, password);
         }
     }
 
@@ -209,7 +236,8 @@ public sealed class TuiCommand : ShellCommand
     {
         await Task.CompletedTask;
 
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "file", "directory", "d", "result", "cli");
         var directoryOnly = parsed.HasFlag("directory", "d");
         var returnOutcome = parsed.HasFlag("result");
         var cli = parsed.HasFlag("cli");
@@ -218,28 +246,125 @@ public sealed class TuiCommand : ShellCommand
 
         if (cli)
         {
-            // For --cli file picking, list files and use the inline Pick provider
             var provider = RequireInlineProvider(context);
-            var basePath = initialPath ?? context.Shell().CurrentDirectory;
+            var chosen = PickPathInline(
+                context,
+                provider,
+                initialPath ?? context.Shell().CurrentDirectory,
+                filter,
+                directoryOnly);
 
-            var entries = directoryOnly
-                ? Directory.GetDirectories(basePath).Select(Path.GetFileName).Cast<object?>().ToArray()
-                : Directory.GetFileSystemEntries(basePath)
-                    .Where(e => filter is null || MatchesFilter(e, filter))
-                    .Select(Path.GetFileName)
-                    .Cast<object?>()
-                    .ToArray();
-
-            var result = provider.Pick(entries, directoryOnly ? "Select directory:" : "Select file:");
-
-            if (result is { Count: > 0 } && result[0] is string selected)
+            if (returnOutcome)
             {
-                yield return Path.Combine(basePath, selected);
+                yield return InlineOutcome(chosen is null ? null : new object?[] { chosen }, "path", chosen);
+            }
+            else if (chosen is not null)
+            {
+                yield return chosen;
             }
         }
         else
         {
             yield return new TuiFilePickRequest(initialPath, filter, directoryOnly, returnOutcome);
+        }
+    }
+
+    /// <summary>
+    /// Walks directories inline using the ordinary <see cref="IInlinePromptProvider.Pick"/>
+    /// prompt, so `--cli` gets the navigation the fullscreen picker has instead of a flat
+    /// listing of one directory that the caller can never leave. Composed from Pick rather
+    /// than drawing its own screen, which keeps it testable without a terminal.
+    /// </summary>
+    private static string? PickPathInline(
+        CommandContext context,
+        IInlinePromptProvider provider,
+        string startPath,
+        string? filter,
+        bool directoryOnly)
+    {
+        const string SelectCurrent = ".";
+        const string GoUp = "..";
+
+        var current = Path.GetFullPath(startPath);
+
+        while (true)
+        {
+            var directories = ReadDirectoryEntries(context, current, directoriesOnly: true);
+            var entries = new List<object?>();
+
+            // A directory-only pick needs a way to choose where it already is; otherwise
+            // descending into the target would be the only way to reach it, and the target
+            // itself could never be returned.
+            if (directoryOnly)
+            {
+                entries.Add(SelectCurrent);
+            }
+
+            if (Directory.GetParent(current) is not null)
+            {
+                entries.Add(GoUp);
+            }
+
+            entries.AddRange(directories.Select(d => (object?)(Path.GetFileName(d) + Path.DirectorySeparatorChar)));
+
+            if (!directoryOnly)
+            {
+                entries.AddRange(ReadDirectoryEntries(context, current, directoriesOnly: false)
+                    .Where(e => filter is null || MatchesFilter(e, filter))
+                    .Where(e => !Directory.Exists(e))
+                    .Select(e => (object?)Path.GetFileName(e)));
+            }
+
+            var prompt = directoryOnly ? $"Select directory ({current}):" : $"Select file ({current}):";
+            var result = provider.Pick(entries, prompt);
+
+            if (result is not { Count: > 0 } || result[0] is not string selected)
+            {
+                return null;
+            }
+
+            if (selected == SelectCurrent)
+            {
+                return current;
+            }
+
+            if (selected == GoUp)
+            {
+                current = Directory.GetParent(current)!.FullName;
+                continue;
+            }
+
+            var candidate = Path.Combine(current, selected.TrimEnd(Path.DirectorySeparatorChar));
+
+            if (Directory.Exists(candidate))
+            {
+                current = candidate;
+                continue;
+            }
+
+            return candidate;
+        }
+    }
+
+    /// <summary>
+    /// Reads a directory, turning the filesystem's own exceptions into a tosh diagnostic.
+    /// Unguarded, an unreadable or missing path surfaced a raw .NET exception from inside
+    /// an interactive prompt.
+    /// </summary>
+    private static string[] ReadDirectoryEntries(CommandContext context, string path, bool directoriesOnly)
+    {
+        try
+        {
+            return directoriesOnly
+                ? Directory.GetDirectories(path)
+                : Directory.GetFileSystemEntries(path);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh.tui.file.unreadable_directory",
+                title: $"Could not read directory '{path}'.",
+                help: error.Message);
         }
     }
 
@@ -249,12 +374,13 @@ public sealed class TuiCommand : ShellCommand
     // Always inline (no fullscreen equivalent).
     private static async IAsyncEnumerable<object?> ExecuteFilterAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "filter", "multi", "m", "result", "cli", "fullscreen");
         var multi = parsed.HasFlag("multi", "m");
+        var returnOutcome = parsed.HasFlag("result");
         var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
         var display = ExtractNamedArgument(parsed.Positionals, "display");
-        var pageSizeStr = ExtractNamedArgument(parsed.Positionals, "page-size");
-        var pageSize = pageSizeStr is not null && int.TryParse(pageSizeStr, out var ps) ? ps : 10;
+        var pageSize = ReadPageSize(context, parsed.Positionals);
 
         var items = await CollectItemsAsync(context, parsed.Positionals, skipNamedArgs: new[] { "prompt", "display", "page-size" });
 
@@ -266,16 +392,53 @@ public sealed class TuiCommand : ShellCommand
                 help: "Pipe items into 'tui filter' or provide them as arguments.");
         }
 
+        // Filter had no fullscreen form at all, so a script could not choose the
+        // presentation every other modal subcommand offers. It is opt-in rather than the
+        // default because inline *is* filter's established contract — seven tests pin it,
+        // including one asserting filter requires the inline provider — and flipping it
+        // would silently change what existing scripts do. The fullscreen form is the
+        // picker with its search bar already open, not a second screen.
+        if (parsed.HasFlag("fullscreen"))
+        {
+            yield return new TuiPickRequest(items, display, prompt, multi, returnOutcome, StartInSearch: true);
+            yield break;
+        }
+
         var provider = RequireInlineProvider(context);
         var result = provider.Filter(items, prompt, display, multi, pageSize);
 
-        if (result is not null)
+        if (returnOutcome)
+        {
+            yield return InlineOutcome(result);
+        }
+        else if (result is not null)
         {
             foreach (var item in result)
             {
                 yield return item;
             }
         }
+    }
+
+    /// <summary>
+    /// Builds the same <see cref="TuiScreenOutcome"/> the fullscreen screens return, so
+    /// `--result` means one thing in both modes. A null selection is the inline providers'
+    /// signal for "cancelled" — without this the two are indistinguishable inline, which
+    /// is what made `tui confirm --cli` report Escape as a deliberate "no".
+    /// </summary>
+    private static TuiScreenOutcome InlineOutcome(
+        IReadOnlyList<object?>? selected,
+        string? valueKey = null,
+        object? value = null)
+    {
+        return new TuiScreenOutcome
+        {
+            Selected = selected ?? Array.Empty<object?>(),
+            Cancelled = selected is null,
+            Values = valueKey is null || selected is null
+                ? new Dictionary<string, object?>()
+                : new Dictionary<string, object?> { [valueKey] = value },
+        };
     }
 
     // ── tui screen ────────────────────────────────────────────
@@ -285,7 +448,8 @@ public sealed class TuiCommand : ShellCommand
     {
         await Task.CompletedTask;
 
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "screen");
         var title = ExtractNamedArgument(parsed.Positionals, "title");
 
         var screen = new TuiScreen();
@@ -302,7 +466,8 @@ public sealed class TuiCommand : ShellCommand
     // Usage: <screen> | tui add-list <items-var> [--id <id>] [--display <prop>] [--multi] [--searchable] [--prompt "text"]
     private static async IAsyncEnumerable<object?> ExecuteAddListAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "add-list", "searchable", "s", "multi", "m");
         var multi = parsed.HasFlag("multi", "m");
         var searchable = parsed.HasFlag("searchable", "s");
         var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"list-{Guid.NewGuid():N}"[..12];
@@ -330,7 +495,8 @@ public sealed class TuiCommand : ShellCommand
     // Usage: <screen> | tui add-text [content] [--id <id>] [--bind <widget.property>] [--no-wrap]
     private static async IAsyncEnumerable<object?> ExecuteAddTextAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "add-text", "no-wrap");
         var noWrap = parsed.HasFlag("no-wrap");
         var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"text-{Guid.NewGuid():N}"[..12];
         var bindSpec = ExtractNamedArgument(parsed.Positionals, "bind");
@@ -362,7 +528,8 @@ public sealed class TuiCommand : ShellCommand
     // Usage: <screen> | tui add-input [--id <id>] [--prompt "text"] [--default <value>] [--multiline]
     private static async IAsyncEnumerable<object?> ExecuteAddInputAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "add-input", "multiline");
         var multiline = parsed.HasFlag("multiline");
         var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"input-{Guid.NewGuid():N}"[..12];
         var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
@@ -381,11 +548,74 @@ public sealed class TuiCommand : ShellCommand
         yield return screen;
     }
 
+    // ── tui add-confirm ───────────────────────────────────────
+    // Usage: <screen> | tui add-confirm <message> [--id <id>] [--default yes|no]
+    //
+    // `TuiCustomScreen` has rendered a ConfirmationWidgetHost since it was written; only
+    // the command to put one on a screen was missing, so a composed screen could not ask
+    // a yes/no question without dropping out to the standalone `tui confirm`.
+    private static async IAsyncEnumerable<object?> ExecuteAddConfirmAsync(CommandContext context)
+    {
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "add-confirm");
+        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"confirm-{Guid.NewGuid():N}"[..14];
+        var defaultValue = ExtractNamedArgument(parsed.Positionals, "default");
+
+        var (screen, remainingPositionals) = await ReadScreenFromPipelineAsync(context);
+        var remaining = FilterNamedArguments(remainingPositionals, new[] { "id", "default" });
+        var message = remaining.Count > 0 ? remaining[0]?.ToString() : null;
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh.tui.add_confirm.missing_message",
+                title: "'tui add-confirm' requires a message.",
+                help: "Write the question to ask: tui add-confirm \"Deploy now?\"");
+        }
+
+        var widget = new TuiConfirmationConfig(id, message)
+        {
+            DefaultConfirm = !(string.Equals(defaultValue, "no", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(defaultValue, "false", StringComparison.OrdinalIgnoreCase)),
+        };
+
+        screen.AddWidget(widget);
+        yield return screen;
+    }
+
+    // ── tui add-file ──────────────────────────────────────────
+    // Usage: <screen> | tui add-file [--id <id>] [--path <start>] [--filter "*.tosh"] [--directory]
+    //
+    // The FilePickerWidgetHost counterpart of `add-confirm` above: rendered all along,
+    // unreachable from the command surface.
+    private static async IAsyncEnumerable<object?> ExecuteAddFileAsync(CommandContext context)
+    {
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "add-file", "directory", "d");
+        var directoryOnly = parsed.HasFlag("directory", "d");
+        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"file-{Guid.NewGuid():N}"[..11];
+        var initialPath = ExtractNamedArgument(parsed.Positionals, "path");
+        var filter = ExtractNamedArgument(parsed.Positionals, "filter");
+
+        var (screen, _) = await ReadScreenFromPipelineAsync(context);
+
+        var widget = new TuiFilePickerConfig(id)
+        {
+            InitialPath = initialPath,
+            Filter = filter,
+            DirectoryOnly = directoryOnly,
+        };
+
+        screen.AddWidget(widget);
+        yield return screen;
+    }
+
     // ── tui add-picker ────────────────────────────────────────
     // Usage: <screen> | tui add-picker <items-var> [--id <id>] [--display <prop>] [--prompt "text"]
     private static async IAsyncEnumerable<object?> ExecuteAddPickerAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "add-picker");
         var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"picker-{Guid.NewGuid():N}"[..12];
         var display = ExtractNamedArgument(parsed.Positionals, "display");
         var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
@@ -407,7 +637,8 @@ public sealed class TuiCommand : ShellCommand
     // Usage: <screen> | tui layout <orientation> [--ratio 30:70] [--gap <n>]
     private static async IAsyncEnumerable<object?> ExecuteLayoutAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "layout");
         var ratio = ExtractNamedArgument(parsed.Positionals, "ratio");
         var gapStr = ExtractNamedArgument(parsed.Positionals, "gap");
 
@@ -443,7 +674,8 @@ public sealed class TuiCommand : ShellCommand
     // Or: tui run <screen-variable> [--result]
     private static async IAsyncEnumerable<object?> ExecuteRunAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
+        RejectUnknownFlags(context, parsed, "run", "result");
         var returnOutcome = parsed.HasFlag("result");
 
         TuiScreen? screen = null;
@@ -479,6 +711,124 @@ public sealed class TuiCommand : ShellCommand
     }
 
     // ── Helpers ───────────────────────────────────────────────
+
+    /// <summary>
+    /// The names of `tui` options that take a value.
+    /// </summary>
+    private static readonly HashSet<string> ValueOptionNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "prompt", "display", "page-size", "default", "path", "filter",
+        "id", "bind", "ratio", "gap", "title",
+    };
+
+    /// <summary>
+    /// Rewrites <c>--name value</c> into <c>name value</c> before the ordinary argument
+    /// parse sees it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ParsedCommandArguments"/> routes anything starting with <c>--</c> into
+    /// its flag set, which orphaned the value in the positionals: every documented
+    /// <c>--name &lt;value&gt;</c> option silently did nothing, and its value was left
+    /// behind as data. <c>tui pick x y --prompt "Choose:"</c> showed no prompt and offered
+    /// <c>Choose:</c> as a third item. Normalising here keeps one downstream code path and
+    /// leaves the undashed spelling — which the tests and existing scripts use — working.
+    /// </remarks>
+    private static IReadOnlyList<object?> NormalizeOptionSyntax(IReadOnlyList<object?> arguments)
+    {
+        List<object?>? rewritten = null;
+
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (arguments[i] is not string text)
+            {
+                rewritten?.Add(arguments[i]);
+                continue;
+            }
+
+            // `--` ends option parsing; everything after it is data.
+            if (text == "--")
+            {
+                rewritten ??= new List<object?>(arguments.Take(i));
+
+                for (var rest = i; rest < arguments.Count; rest++)
+                {
+                    rewritten.Add(arguments[rest]);
+                }
+
+                return rewritten;
+            }
+
+            if (text.Length > 2 &&
+                text.StartsWith("--", StringComparison.Ordinal) &&
+                ValueOptionNames.Contains(text[2..]) &&
+                i + 1 < arguments.Count)
+            {
+                rewritten ??= new List<object?>(arguments.Take(i));
+                rewritten.Add(text[2..]);
+                continue;
+            }
+
+            rewritten?.Add(arguments[i]);
+        }
+
+        return rewritten ?? arguments;
+    }
+
+    /// <summary>
+    /// Rejects a flag the subcommand does not accept, so a typo is reported rather than
+    /// silently changing what the prompt does. <see cref="ParsedCommandArguments"/> keeps
+    /// every flag it sees without checking any of them, so `tui pick --muti` quietly
+    /// single-selected and `--cli` on a fullscreen-only subcommand quietly did nothing.
+    /// Value-taking options are already normalised into positionals by
+    /// <see cref="NormalizeOptionSyntax"/>, so anything still here is meant to be boolean.
+    /// </summary>
+    private static void RejectUnknownFlags(
+        CommandContext context,
+        ParsedCommandArguments parsed,
+        string subcommand,
+        params string[] allowed)
+    {
+        foreach (var flag in parsed.Flags)
+        {
+            if (allowed.Contains(flag, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var known = allowed.Length == 0
+                ? $"'tui {subcommand}' takes no flags."
+                : $"'tui {subcommand}' accepts: {string.Join(", ", allowed.Where(a => a.Length > 1).Select(a => "--" + a))}.";
+
+            throw context.CreateDiagnostic(
+                code: "tosh.tui.unknown_flag",
+                title: $"Unknown flag '--{flag}' for 'tui {subcommand}'.",
+                help: known);
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>--page-size</c>, refusing a value that is not a positive number rather than
+    /// silently falling back to the default and showing a differently sized list.
+    /// </summary>
+    private static int ReadPageSize(CommandContext context, IReadOnlyList<object?> positionals)
+    {
+        var text = ExtractNamedArgument(positionals, "page-size");
+
+        if (text is null)
+        {
+            return 10;
+        }
+
+        if (!int.TryParse(text, out var pageSize) || pageSize <= 0)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh.tui.invalid_page_size",
+                title: $"'--page-size' needs a positive whole number, not '{text}'.",
+                help: "For example: tui pick $items --page-size 20");
+        }
+
+        return pageSize;
+    }
 
     private static string? ExtractNamedArgument(IReadOnlyList<object?> positionals, string name)
     {
@@ -554,7 +904,7 @@ public sealed class TuiCommand : ShellCommand
     {
         TuiScreen? screen = null;
         var remaining = new List<object?>();
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
 
         // First check if any positional is a TuiScreen
         foreach (var pos in parsed.Positionals)

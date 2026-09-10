@@ -25,11 +25,24 @@ internal sealed class TuiTextInputState
         _buffer.SetText(text ?? string.Empty);
     }
 
-    public TuiTextInputResult HandleKey(ConsoleKeyInfo key)
+    public TuiTextInputResult HandleKey(ConsoleKeyInfo key) => HandleKey(key, multiline: false);
+
+    /// <summary>
+    /// Handles one key. In <paramref name="multiline"/> mode Enter inserts a newline and
+    /// Ctrl+Enter submits, so a caller that asked for multiline can actually type a second
+    /// line; single-line mode keeps Enter as submit.
+    /// </summary>
+    public TuiTextInputResult HandleKey(ConsoleKeyInfo key, bool multiline)
     {
         switch (key.Key)
         {
             case ConsoleKey.Enter:
+                if (multiline && (key.Modifiers & ConsoleModifiers.Control) == 0)
+                {
+                    _buffer.Insert('\n');
+                    return TuiTextInputResult.Changed;
+                }
+
                 return TuiTextInputResult.Submit;
             case ConsoleKey.Escape:
                 return TuiTextInputResult.Cancel;
@@ -56,9 +69,29 @@ internal sealed class TuiTextInputState
         return TuiTextInputResult.None;
     }
 
-    public string RenderWithCursor()
+    public string RenderWithCursor() => RenderWithCursor(mask: false);
+
+    /// <summary>
+    /// Renders the text with a cursor marker. When <paramref name="mask"/> is set every
+    /// character but a line break is replaced, so a password field does not display what
+    /// was typed. Masking happens here rather than at the call site so the cursor stays
+    /// on the character it is actually on.
+    /// </summary>
+    public string RenderWithCursor(bool mask)
     {
         var text = Text;
+
+        if (mask)
+        {
+            text = string.Create(text.Length, text, static (span, source) =>
+            {
+                for (var i = 0; i < source.Length; i++)
+                {
+                    span[i] = source[i] == '\n' ? '\n' : '\u2022';
+                }
+            });
+        }
+
         var cursor = Math.Clamp(CursorIndex, 0, text.Length);
         return text.Insert(cursor, "|");
     }

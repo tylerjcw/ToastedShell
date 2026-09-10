@@ -1,5 +1,6 @@
 using Tosh.Runtime;
 using Tosh.Language;
+using Tosh.Tui;
 using Tosh.Tui.Requests;
 
 namespace Tosh.Tests;
@@ -85,6 +86,153 @@ public sealed class TuiInlineTests
         var results = await engine.ExecuteToListAsync("tui pick a b c --cli");
 
         Assert.Empty(results);
+    }
+
+    // ── documented `--name <value>` spelling ──────────────────
+    //
+    // Every value-taking option was silently dropped and its value left behind as data:
+    // `--prompt "Choose:"` showed no prompt and offered `Choose:` as a third item. The
+    // suite had encoded the undashed spelling, so nothing caught it.
+
+    [Fact]
+    public async Task Dashed_option_is_read_and_does_not_become_an_item()
+    {
+        var mock = new MockInlineProvider(pickResult: ["x"]);
+        var engine = CreateEngine(mock);
+        await engine.ExecuteToListAsync("tui pick x y --cli --prompt \"Choose:\"");
+
+        Assert.Equal("Choose:", mock.LastPickPrompt);
+        Assert.Equal(2, mock.LastPickItems!.Count);
+    }
+
+    [Fact]
+    public async Task Undashed_option_spelling_keeps_working()
+    {
+        var mock = new MockInlineProvider(pickResult: ["x"]);
+        var engine = CreateEngine(mock);
+        await engine.ExecuteToListAsync("tui pick x y --cli prompt \"Choose:\"");
+
+        Assert.Equal("Choose:", mock.LastPickPrompt);
+        Assert.Equal(2, mock.LastPickItems!.Count);
+    }
+
+    [Fact]
+    public async Task An_unknown_flag_is_rejected_rather_than_ignored()
+    {
+        var mock = new MockInlineProvider(pickResult: ["x"]);
+        var engine = CreateEngine(mock);
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("tui pick x y --cli --muti"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.tui.unknown_flag");
+    }
+
+    [Fact]
+    public async Task A_non_numeric_page_size_is_rejected_rather_than_defaulted()
+    {
+        var mock = new MockInlineProvider(pickResult: ["x"]);
+        var engine = CreateEngine(mock);
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("tui pick x y --cli --page-size abc"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.tui.invalid_page_size");
+    }
+
+    // ── --result and cancellation in inline mode ──────────────
+
+    [Fact]
+    public async Task Cancelling_an_inline_pick_is_visible_through_result()
+    {
+        var mock = new MockInlineProvider(pickResult: null);
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("tui pick x y --cli --result");
+
+        var outcome = Assert.IsType<TuiScreenOutcome>(Assert.Single(results));
+        Assert.True(outcome.Cancelled);
+        Assert.Empty(outcome.Selected);
+    }
+
+    [Fact]
+    public async Task Cancelling_an_inline_confirm_is_not_reported_as_no()
+    {
+        // Without --result a cancelled confirm still answers false, which is the safe
+        // direction; --result is what makes the two distinguishable.
+        var mock = new MockInlineProvider(confirmResult: null);
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("tui confirm \"ok?\" --cli --result");
+
+        var outcome = Assert.IsType<TuiScreenOutcome>(Assert.Single(results));
+        Assert.True(outcome.Cancelled);
+    }
+
+    [Fact]
+    public async Task An_answered_inline_confirm_carries_its_value()
+    {
+        var mock = new MockInlineProvider(confirmResult: true);
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("tui confirm \"ok?\" --cli --result");
+
+        var outcome = Assert.IsType<TuiScreenOutcome>(Assert.Single(results));
+        Assert.False(outcome.Cancelled);
+        Assert.Equal(true, outcome.Values["confirmed"]);
+    }
+
+    [Fact]
+    public async Task Filter_honours_result()
+    {
+        var mock = new MockInlineProvider(filterResult: null);
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("tui filter x y --result");
+
+        var outcome = Assert.IsType<TuiScreenOutcome>(Assert.Single(results));
+        Assert.True(outcome.Cancelled);
+    }
+
+    // ── input: password and multiline ─────────────────────────
+
+    [Fact]
+    public async Task Filter_can_opt_into_a_fullscreen_picker()
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync("tui filter x y --fullscreen");
+
+        var request = Assert.IsType<TuiPickRequest>(Assert.Single(results));
+        Assert.True(request.StartInSearch);
+        Assert.Equal(2, request.Items.Count);
+    }
+
+    [Fact]
+    public async Task Filter_stays_inline_by_default()
+    {
+        var mock = new MockInlineProvider(filterResult: ["x"]);
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("tui filter x y");
+
+        Assert.Equal(["x"], results);
+    }
+
+    [Fact]
+    public async Task Password_reaches_the_fullscreen_request()
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync("tui input \"Secret:\" --password");
+
+        var request = Assert.IsType<TuiInputRequest>(Assert.Single(results));
+        Assert.True(request.Password);
+    }
+
+    [Fact]
+    public async Task Multiline_with_cli_is_rejected_rather_than_ignored()
+    {
+        var mock = new MockInlineProvider(inputResult: "x");
+        var engine = CreateEngine(mock);
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("tui input \"Notes:\" --cli --multiline"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.tui.input.multiline_requires_fullscreen");
     }
 
     [Fact]
@@ -375,8 +523,11 @@ public sealed class TuiInlineTests
             LastHelpInitialTopicName = initialTopicName;
         }
 
+        public IReadOnlyList<object?>? LastPickItems { get; private set; }
+
         public IReadOnlyList<object?>? Pick(IReadOnlyList<object?> items, string? prompt, string? displayProperty, bool multiSelect, int pageSize)
         {
+            LastPickItems = items;
             LastPickPrompt = prompt;
             LastPickDisplayProperty = displayProperty;
             LastPickPageSize = pageSize;
@@ -385,7 +536,7 @@ public sealed class TuiInlineTests
 
         public bool? Confirm(string message, bool defaultValue) => _confirmResult;
 
-        public string? Input(string? prompt, string? defaultValue, bool password)
+        public string? Input(string? prompt, string? defaultValue, bool password, bool multiline)
         {
             LastInputPassword = password;
             return _inputResult;

@@ -18,8 +18,13 @@ public interface IInlinePromptProvider
     /// <summary>Shows an inline yes/no confirmation. Returns true for yes, false for no, null if cancelled.</summary>
     bool? Confirm(string message, bool defaultValue = true);
 
-    /// <summary>Shows an inline text input prompt. Returns the entered text or null if cancelled.</summary>
-    string? Input(string? prompt = null, string? defaultValue = null, bool password = false);
+    /// <summary>
+    /// Shows an inline text input prompt. Returns the entered text or null if cancelled.
+    /// When <paramref name="multiline"/> is set, Enter inserts a newline and the prompt is
+    /// submitted with Ctrl+Enter, so a caller asking for multiline gets it rather than
+    /// silently getting a single line.
+    /// </summary>
+    string? Input(string? prompt = null, string? defaultValue = null, bool password = false, bool multiline = false);
 
     /// <summary>Shows an inline searchable filter list. Returns selected item(s) or null if cancelled.</summary>
     IReadOnlyList<object?>? Filter(IReadOnlyList<object?> items, string? prompt = null, string? displayProperty = null, bool multiSelect = false, int pageSize = 10);

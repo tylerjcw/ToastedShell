@@ -23,6 +23,10 @@ internal sealed class TuiPickScreen : ITuiScreen
         _request = request;
         _formatter = formatter;
         _filteredItems = request.Items;
+
+        // `tui filter` is this screen with the search bar already open, which is what
+        // gives filter a fullscreen mode without a second screen implementation.
+        _searchActive = request.StartInSearch;
     }
 
     public TuiScreenOutcome? Outcome { get; private set; }

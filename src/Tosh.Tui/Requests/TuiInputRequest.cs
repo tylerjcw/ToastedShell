@@ -5,4 +5,5 @@ public sealed record TuiInputRequest(
     string? Prompt = null,
     string? DefaultValue = null,
     bool Multiline = false,
-    bool ReturnOutcome = false);
+    bool ReturnOutcome = false,
+    bool Password = false);

@@ -81,7 +81,7 @@ public sealed class VarsCommandTests
         public bool? Confirm(string message, bool defaultValue = true)
             => true;
 
-        public string? Input(string? prompt = null, string? defaultValue = null, bool password = false)
+        public string? Input(string? prompt = null, string? defaultValue = null, bool password = false, bool multiline = false)
             => defaultValue;
 
         public IReadOnlyList<object?>? Filter(IReadOnlyList<object?> items, string? prompt = null, string? displayProperty = null, bool multiSelect = false, int pageSize = 10)

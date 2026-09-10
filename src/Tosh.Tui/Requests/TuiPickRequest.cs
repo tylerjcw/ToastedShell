@@ -6,4 +6,5 @@ public sealed record TuiPickRequest(
     string? DisplayProperty = null,
     string? Prompt = null,
     bool MultiSelect = false,
-    bool ReturnOutcome = false);
+    bool ReturnOutcome = false,
+    bool StartInSearch = false);

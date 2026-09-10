@@ -315,7 +315,14 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
         }
     }
 
-    public string? Input(string? prompt = null, string? defaultValue = null, bool password = false)
+    /// <remarks>
+    /// <paramref name="multiline"/> is not honoured here: the inline prompt is a fixed
+    /// three-row box whose cursor arithmetic assumes a single content row. `tui input`
+    /// rejects `--multiline --cli` rather than letting the flag pass through and do
+    /// nothing, so this parameter exists to satisfy the interface and to keep that
+    /// rejection honest if the box ever grows.
+    /// </remarks>
+    public string? Input(string? prompt = null, string? defaultValue = null, bool password = false, bool multiline = false)
     {
         var tableTheme = _runtime?.Config.Theme.Tables ?? new ToshTableThemeConfig();
         var tuiTheme = _runtime?.Config.Theme.Tui ?? new ToshTuiThemeConfig();
