@@ -103,6 +103,38 @@ public sealed class CallAndUnaryCompositionTests
         Assert.Equal(expected, Convert.ToInt64(await EvalAsync($"var x = 3\nvar r = ({expression})\n$r")));
     }
 
+    // ── TOAST-0115: unparenthesised, in assignment position ───────────────────
+    //
+    // Every case above is wrapped in `var r = (…)`, and the parentheses are what made
+    // them pass: `_expressionDepth` is raised by `(`, `[` and collection literals and by
+    // nothing else, so TS-P2-02's break could not fire on a bare right-hand side.
+    // `var u = -$x` reported `Command '-$x' was not found` while `- $x` and `(-$x)` both
+    // worked.
+
+    [Theory]
+    [InlineData("var r = -$x", -3L)]
+    [InlineData("var r = +$x", 3L)]
+    [InlineData("var r = 0\n$r = -$x", -3L)]
+    [InlineData("var r = 10\n$r -= -$x", 13L)]
+    [InlineData("var r = 1\n$r += -$x", -2L)]
+    public async Task A_glued_sign_negates_without_parentheses(string assignment, long expected)
+    {
+        Assert.Equal(expected, Convert.ToInt64(await EvalAsync($"var x = 3\n{assignment}\n$r")));
+    }
+
+    [Theory]
+    [InlineData("echo -$x", "-$x")]
+    [InlineData("echo --n=5", "--n=5")]
+    [InlineData("echo --name", "--name")]
+    [InlineData("echo a$x", "a$x")]
+    [InlineData("echo ../p", "../p")]
+    public async Task Command_argument_position_still_reads_a_flag(string command, string expected)
+    {
+        // The break must stay off in argument position: `-$x` there is a flag, and that is
+        // the reason TS-P2-02 was narrow in the first place.
+        Assert.Equal(expected, $"{await EvalAsync($"var x = 3\n{command}")}");
+    }
+
     [Fact]
     public async Task Unary_negation_works_on_a_double()
     {

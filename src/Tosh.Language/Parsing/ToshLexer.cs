@@ -512,7 +512,7 @@ public sealed class ToshLexer
                 continue;
             }
 
-            tokens.Add(ReadBarewordOrLiteral());
+            tokens.Add(ReadBarewordOrLiteral(FollowsAssignmentOperator(tokens)));
         }
     }
 
@@ -566,6 +566,28 @@ public sealed class ToshLexer
             start,
             text,
             new UnitSuffixInfo(dimension, normalizedSymbol));
+    }
+
+    /// <summary>
+    /// True when the last token emitted was an assignment operator, so the next word is a
+    /// value rather than a command argument.
+    /// </summary>
+    /// <remarks>
+    /// `--opt=value` is a single bareword rather than a standalone `=`, so an option that
+    /// carries its own value does not look like an assignment here and command-argument
+    /// position is untouched.
+    /// </remarks>
+    private static bool FollowsAssignmentOperator(List<SyntaxToken> tokens)
+    {
+        if (tokens.Count == 0)
+        {
+            return false;
+        }
+
+        var previous = tokens[^1];
+
+        return previous.Kind == SyntaxTokenKind.Bareword && previous.Text is
+            "=" or "+=" or "-=" or "*=" or "/=" or "//=" or "%=" or "**=" or "??=";
     }
 
     private bool IsAtEnd => _position >= _source.Length;
@@ -1324,7 +1346,15 @@ public sealed class ToshLexer
         return builder.ToString();
     }
 
-    private SyntaxToken ReadBarewordOrLiteral()
+    /// <summary>
+    /// Reads a bareword, a literal, or a magnitude-and-unit literal.
+    /// </summary>
+    /// <param name="afterAssignment">
+    /// True when the previous token was an assignment operator, so what follows is a value
+    /// rather than a command argument. `TOAST-0115`: it is what lets a glued unary sign
+    /// break away from a variable outside brackets.
+    /// </param>
+    private SyntaxToken ReadBarewordOrLiteral(bool afterAssignment = false)
     {
         var start = _position;
 
@@ -1414,7 +1444,13 @@ public sealed class ToshLexer
             // purpose — only when the text so far is exactly one sign character, so
             // flags (`--name`), paths and `a$b` are untouched — and only in expression
             // context, where `-$x` cannot be a command's flag.
-            if (Current == '$' && InExpressionContext
+            // `TOAST-0115` widens this past brackets. `_expressionDepth` is raised only
+            // by `(`, `[` and collection literals, so an assignment's right-hand side —
+            // a value position if ever there was one — was not covered, and `var u = -$x`
+            // reported `Command '-$x' was not found` while `- $x` and `(-$x)` both worked.
+            // After an assignment operator what follows is a value and cannot be a flag,
+            // which is the same reasoning that made the bracketed case safe.
+            if (Current == '$' && (InExpressionContext || afterAssignment)
                 && _position == start + 1
                 && _source[start] is '-' or '+')
             {
