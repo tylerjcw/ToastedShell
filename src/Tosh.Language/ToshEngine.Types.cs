@@ -403,6 +403,18 @@ public sealed partial class ToshEngine
         // Validate used traits and inject default methods/properties
         if (@class.UsedTraits is { Count: > 0 })
         {
+            // Traits are applied in two passes: every trait's defaults are injected
+            // first, and only then are requirements checked.
+            //
+            // A single pass made the result depend on the order they were listed in.
+            // Where one trait requires what another supplies — `Shape2D` wants an
+            // `Area`, `Polygonal` derives one from a vertex list — `uses Polygonal,
+            // Shape2D` compiled and `uses Shape2D, Polygonal` did not, because the
+            // requirement was checked before the default that satisfies it existed.
+            // A class either satisfies the traits it uses or it does not; the order
+            // it names them in is not part of that question.
+            var usedTraits = new List<(string Name, ToshTraitDefinition Definition)>();
+
             foreach (var traitName in @class.UsedTraits)
             {
                 if (!TryGetNamedType(traitName, out var namedType) || namedType is not ToshTraitDefinition traitDefinition)
@@ -416,6 +428,65 @@ public sealed partial class ToshEngine
                         Label: $"'{traitName}' is not a known trait"));
                 }
 
+                usedTraits.Add((traitName, traitDefinition));
+            }
+
+            // Pass 1 — inject, so that a later check sees every trait's contribution.
+            foreach (var (_, traitDefinition) in usedTraits)
+            {
+                // Inject default methods that the class doesn't already define
+                foreach (var traitMethod in traitDefinition.Methods.Where(m => m.HasDefaultBody))
+                {
+                    if (!definition.Methods.Any(m => string.Equals(m.Name, traitMethod.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        definition.AddMethod(new ToshClassMethodDefinition(
+                            traitMethod.Name,
+                            traitMethod.Parameters,
+                            traitMethod.ReturnTypeName,
+                            traitMethod.DefaultBody!,
+                            IsStatic: false,
+                            IsShy: false,
+                            IsAbstract: false,
+                            IsOverride: false,
+                            IsGuarded: false,
+                            IsFading: false,
+                            IsLocal: false,
+                            IsRaw: false,
+                            sourceName,
+                            sourceText,
+                            @class.Span,
+                            CapturedScopes: CaptureVisibleScopes()));
+                    }
+                }
+
+                // Inject default property values for properties the class doesn't define
+                foreach (var traitProp in traitDefinition.Properties.Where(p => p.DefaultValue is not null))
+                {
+                    if (!definition.Properties.Any(p => string.Equals(p.Name, traitProp.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        definition.AddProperty(new ToshClassPropertyDefinition(
+                            traitProp.Name,
+                            traitProp.TypeName,
+                            traitProp.DefaultValue,
+                            GetterBody: null,
+                            SetterBody: null,
+                            IsShy: false,
+                            IsStatic: false,
+                            IsFixed: false,
+                            IsVital: false,
+                            IsGuarded: false,
+                            IsLazy: false,
+                            IsFading: false,
+                            IsLocal: false,
+                            IsAbstract: false,
+                            @class.Span));
+                    }
+                }
+            }
+
+            // Pass 2 — validate against the fully assembled class.
+            foreach (var (traitName, traitDefinition) in usedTraits)
+            {
                 // Check required methods (those without default bodies)
                 var missingMethods = traitDefinition.GetMissingMethods(definition);
                 if (missingMethods.Count > 0)
@@ -466,55 +537,6 @@ public sealed partial class ToshEngine
                         SourceText: sourceText,
                         Span: @class.Span,
                         Label: $"missing: {string.Join(", ", missingProps)}"));
-                }
-
-                // Inject default methods that the class doesn't already define
-                foreach (var traitMethod in traitDefinition.Methods.Where(m => m.HasDefaultBody))
-                {
-                    if (!definition.Methods.Any(m => string.Equals(m.Name, traitMethod.Name, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        definition.AddMethod(new ToshClassMethodDefinition(
-                            traitMethod.Name,
-                            traitMethod.Parameters,
-                            traitMethod.ReturnTypeName,
-                            traitMethod.DefaultBody!,
-                            IsStatic: false,
-                            IsShy: false,
-                            IsAbstract: false,
-                            IsOverride: false,
-                            IsGuarded: false,
-                            IsFading: false,
-                            IsLocal: false,
-                            IsRaw: false,
-                            sourceName,
-                            sourceText,
-                            @class.Span,
-                            CapturedScopes: CaptureVisibleScopes()));
-                    }
-                }
-
-                // Inject default property values for properties the class doesn't define
-                foreach (var traitProp in traitDefinition.Properties.Where(p => p.DefaultValue is not null))
-                {
-                    if (!definition.Properties.Any(p => string.Equals(p.Name, traitProp.Name, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        definition.AddProperty(new ToshClassPropertyDefinition(
-                            traitProp.Name,
-                            traitProp.TypeName,
-                            traitProp.DefaultValue,
-                            GetterBody: null,
-                            SetterBody: null,
-                            IsShy: false,
-                            IsStatic: false,
-                            IsFixed: false,
-                            IsVital: false,
-                            IsGuarded: false,
-                            IsLazy: false,
-                            IsFading: false,
-                            IsLocal: false,
-                            IsAbstract: false,
-                            @class.Span));
-                    }
                 }
             }
 

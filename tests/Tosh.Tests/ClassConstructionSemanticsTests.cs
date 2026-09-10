@@ -5,6 +5,67 @@ namespace Tosh.Tests;
 
 public sealed class ClassConstructionSemanticsTests
 {
+    // ── a property default reads a value; it must not reshape it ──────────────
+    //
+    // `prop P = $v` parses as an expression stage, so it ran as a pipeline: the
+    // value was enumerated and then re-collected by count. Reading a collection
+    // silently changed what it was — an empty array became null, and a one-element
+    // array became the element itself, losing the array. Only the bare-name spelling
+    // was shortcut, and the expression spelling was not.
+
+    [Theory]
+    [InlineData("[]", 0)]
+    [InlineData("[5]", 1)]
+    [InlineData("[5, 6]", 2)]
+    public async Task A_collection_keeps_its_shape_through_a_property_default(string literal, int expected)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var results = await engine.ExecuteToListAsync(
+            $$"""
+            class Holder(v) { prop Items = $v }
+            var held = (new Holder({{literal}})).Items
+            echo $"{($held is array)}:{($held | count)}"
+            """);
+
+        Assert.Equal($"true:{expected}", Assert.Single(results)?.ToString());
+    }
+
+    [Fact]
+    public async Task An_annotated_property_accepts_an_empty_collection()
+    {
+        // The reshaping surfaced here as a conversion failure rather than a wrong
+        // value: null does not satisfy `array`, so the class could not be built at all.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            class Holder(v: array) { fixed prop Items: array = $v }
+            echo ((new Holder([])).Items | count)
+            """);
+
+        Assert.Equal("0", Assert.Single(results)?.ToString());
+    }
+
+    [Fact]
+    public async Task A_property_default_that_streams_is_still_collected()
+    {
+        // The fix must not stop a generator being materialised: reading a local
+        // cannot produce a stream, but calling something can.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            func gen() { yield 1
+                         yield 2 }
+            class Holder { prop Items = gen() }
+            var held = (new Holder()).Items
+            echo $"{($held is array)}:{($held | count)}"
+            """);
+
+        Assert.Equal("true:2", Assert.Single(results)?.ToString());
+    }
+
     [Fact]
     public async Task Construction_binds_each_layer_locals_and_runs_base_to_leaf_once()
     {

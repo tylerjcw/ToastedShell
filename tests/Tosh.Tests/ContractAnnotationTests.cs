@@ -36,6 +36,102 @@ public class ContractAnnotationTests
         Assert.Equal("circle", output);
     }
 
+    // ── trait bodies parse like class bodies ──────────────────────────────
+    //
+    // A trait body is a brace-delimited member list separated by newlines, but it
+    // never registered itself as a boundary owner, so the element-boundary check
+    // fell through to a heuristic that does not fire there. Two consequences, both
+    // fixed together: an arrow-bodied default consumed whatever member followed it,
+    // and `##` documentation was reported as an unexpected member.
+
+    [Fact]
+    public async Task An_arrow_bodied_trait_default_does_not_swallow_the_next_member()
+    {
+        var output = await RunAsync(
+            """
+            trait Sized {
+                func Width() -> int => 3
+                func Height() -> int => 4
+                func Area() -> int { return ($this.Width() * $this.Height()) }
+            }
+            class Box uses Sized { prop Name = "box" }
+            echo (new Box()).Area()
+            """);
+
+        Assert.Equal("12", output);
+    }
+
+    [Fact]
+    public async Task A_trait_member_may_be_documented()
+    {
+        var output = await RunAsync(
+            """
+            trait Named {
+                ## The name this value answers to.
+                prop Name: string
+
+                ## A greeting built from the name.
+                func Greet() -> string => $"hello {$this.Name}"
+            }
+            class Person uses Named { prop Name: string = "Ada" }
+            echo (new Person()).Greet()
+            """);
+
+        Assert.Equal("hello Ada", output);
+    }
+
+    [Fact]
+    public async Task A_trait_still_rejects_a_member_that_is_neither_func_nor_prop()
+    {
+        // The doc-comment fix must not turn the trait body into a block that accepts
+        // anything: a stray statement is still an error.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => engine.ExecuteToListAsync(
+                """
+                trait Bad { var x = 1 }
+                class C uses Bad { prop N = 1 }
+                """));
+    }
+
+    [Theory]
+    [InlineData("uses Requires, Provides")]
+    [InlineData("uses Provides, Requires")]
+    public async Task One_trait_may_satisfy_another_whatever_order_they_are_listed_in(string usesClause)
+    {
+        // Traits were applied in one pass, so a requirement was checked before a
+        // later trait's default could satisfy it: listing the requirer first failed
+        // and listing the provider first worked. Which order a class names its
+        // traits in is not part of whether it satisfies them.
+        var output = await RunAsync(
+            $$"""
+            trait Requires { func Area() -> int }
+            trait Provides { func Area() -> int { return 12 } }
+            class Tile {{usesClause}} { prop Name = "tile" }
+            echo (new Tile()).Area()
+            """);
+
+        Assert.Equal("12", output);
+    }
+
+    [Fact]
+    public async Task A_member_no_trait_supplies_is_still_reported_missing()
+    {
+        // The injection pass must not make the check vacuous.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync(
+                """
+                trait Requires { func Area() -> int }
+                trait Unrelated { func Name() -> string { return "x" } }
+                class Tile uses Requires, Unrelated { prop N = 1 }
+                """));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.runtime.missing_trait_methods");
+    }
+
     [Fact]
     public async Task A_trait_annotation_accepts_a_class_that_uses_it()
     {

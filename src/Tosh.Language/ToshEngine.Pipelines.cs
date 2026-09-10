@@ -698,6 +698,19 @@ public sealed partial class ToshEngine
             return true;
         }
 
+        // The same shorthand written as an expression rather than a bare name.
+        // `prop Points = $vertices` parses as an expression stage, so it missed the
+        // branch above and ran as a pipeline — which *enumerates* a collection and
+        // then re-collects it by count. Reading a value silently changed its shape:
+        // an empty array became null, and a one-element array became that element.
+        // Reading a local cannot produce a stream, so there is nothing to collect.
+        if (pipeline.Stages[0] is ExpressionPipelineStageSyntax expressionStage &&
+            expressionStage.Expression is VariableReferenceArgumentSyntax variable &&
+            locals.TryGetValue(variable.Name, out value))
+        {
+            return true;
+        }
+
         value = null;
         return false;
     }

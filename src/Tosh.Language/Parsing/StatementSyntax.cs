@@ -441,13 +441,15 @@ public sealed record TraitMethodSignatureSyntax(
     IReadOnlyList<FunctionParameterSyntax> Parameters,
     string? ReturnTypeName,
     BlockSyntax? DefaultBody,
-    TextSpan Span);
+    TextSpan Span,
+    DocComment? DocComment = null);
 
 public sealed record TraitPropertySignatureSyntax(
     string Name,
     string? TypeName,
     PipelineSyntax? DefaultValue,
-    TextSpan Span);
+    TextSpan Span,
+    DocComment? DocComment = null);
 
 public sealed record TraitDefinitionStatementSyntax(
     string Name,

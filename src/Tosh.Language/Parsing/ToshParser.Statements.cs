@@ -2747,15 +2747,35 @@ public static partial class ToshParser
                     DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
+            // A trait body is a brace-delimited member list whose members separate by
+            // newline, so it has to register itself the way a class body does. Without
+            // an owner the boundary check falls back to a line-break heuristic that
+            // never fires here, and an arrow-bodied default swallowed the member after
+            // it — `func A() => 1` followed by any second member failed to parse, while
+            // the identical pair inside a class was fine.
+            var openBraceTokenIndex = _position;
             NextToken(); // consume '{'
+            using var traitBoundaryOwner = PushBoundaryOwner(openBraceTokenIndex);
+
             var methods = new List<TraitMethodSignatureSyntax>();
             var properties = new List<TraitPropertySignatureSyntax>();
+            List<SyntaxToken>? memberDocTokens = null;
 
             while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 if (Current.Kind is SyntaxTokenKind.Semicolon)
                 {
                     NextToken();
+                    continue;
+                }
+
+                // Trait members take `##` documentation exactly as class members do.
+                // These used to reach the `else` below and be reported as an unexpected
+                // member, so a trait could not document any of its own requirements.
+                if (Current.Kind is SyntaxTokenKind.DocComment)
+                {
+                    memberDocTokens ??= new List<SyntaxToken>();
+                    memberDocTokens.Add(NextToken());
                     continue;
                 }
 
@@ -2810,7 +2830,9 @@ public static partial class ToshParser
                         propName,
                         typeName,
                         defaultValue,
-                        TextSpan.FromBounds(propStart, propNameToken.Span.End)));
+                        TextSpan.FromBounds(propStart, propNameToken.Span.End),
+                        DocComment: DocComment.Parse(memberDocTokens ?? (IReadOnlyList<SyntaxToken>)Array.Empty<SyntaxToken>())));
+                    memberDocTokens = null;
                 }
                 else if (Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, "func", StringComparison.OrdinalIgnoreCase))
                 {
@@ -2851,7 +2873,9 @@ public static partial class ToshParser
                         parameters,
                         returnTypeName,
                         defaultBody,
-                        TextSpan.FromBounds(methodStart, parameters.Count > 0 ? parameters[^1].Span.End : methodName.Span.End)));
+                        TextSpan.FromBounds(methodStart, parameters.Count > 0 ? parameters[^1].Span.End : methodName.Span.End),
+                        DocComment: DocComment.Parse(memberDocTokens ?? (IReadOnlyList<SyntaxToken>)Array.Empty<SyntaxToken>())));
+                    memberDocTokens = null;
                 }
                 else
                 {
@@ -2860,6 +2884,7 @@ public static partial class ToshParser
                         Title: "Trait bodies can contain method signatures (func) and property declarations (prop).",
                         Span: Current.Span,
                         Label: "expected 'func' or 'prop'"));
+                    memberDocTokens = null;
                     NextToken();
                 }
             }
