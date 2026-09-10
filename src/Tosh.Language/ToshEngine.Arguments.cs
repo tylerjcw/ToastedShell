@@ -2529,7 +2529,12 @@ public sealed partial class ToshEngine
                                 var resolvedRec = new Type?[typeArgList.Count];
                                 for (int i = 0; i < typeArgList.Count; i++)
                                 {
-                                    resolvedRec[i] = ResolveTypeName(typeArgList[i]);
+                                    // `TOAST-0116`: a record rebuilt inside a generic class's
+                                    // method reads its `T` from the receiver, as a class does.
+                                    resolvedRec[i] =
+                                        TryResolveTypeParameterFromReceiver(typeArgList[i], out var recordBound)
+                                            ? recordBound
+                                            : ResolveTypeName(typeArgList[i]);
                                 }
                                 return recordDef.CreateGenericInstance(resolvedRec, typeArgList, constructorArguments);
                             }

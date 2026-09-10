@@ -33,6 +33,19 @@ internal sealed class ToshClassSelfReference : IShellRecordObject, IShellInvocab
     /// </remarks>
     public IShellTypeDescriptor ShellTypeDescriptor => _instance.ShellTypeDescriptor;
 
+    /// <summary>
+    /// What this instance's type parameters are closed over, seen from the class whose code
+    /// is running — <c>TOAST-0116</c>.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the accessor rather than the instance's own class so that a base method
+    /// writing <c>new Base&lt;T&gt;</c> resolves <c>T</c> as <em>Base</em> declared it, even
+    /// when the instance is a subclass that named its parameter something else or supplied
+    /// a concrete type for it.
+    /// </remarks>
+    internal IReadOnlyDictionary<string, Type?>? TypeArgumentBindings =>
+        _instance.GetBindingsFor(_accessor ?? _instance.Definition);
+
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {
         return _instance.Definition.TryGetInstanceMember(_instance, name, includeHidden: true, _accessor, out value);

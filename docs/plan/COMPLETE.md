@@ -29,6 +29,7 @@
 | [`TOAST-0091`](items/TOAST-0091.md) | P2 | complete | 6/6 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0064`](items/TOAST-0064.md) | P2 | complete | 7/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0077`](items/TOAST-0077.md) | P2 | complete | 7/7 | Native writes take their width from the value, so a buffer's layout depends on its data |
+| [`TOAST-0116`](items/TOAST-0116.md) | P1 | complete | 6/6 | A generic class that rebuilds itself inside its own method loses what it was closed over, constraint included |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TOAST-0078`](items/TOAST-0078.md) | P1 | complete | 6/6 | A bare name resolves to the runtime's internal types, so `Sys` means `Interop+Sys` |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
@@ -78,6 +79,7 @@
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |
 | [`TOAST-0107`](items/TOAST-0107.md) | P2 | complete | 6/6 | The path operator is unusable inside an interpolation hole, because `::` is read as a format clause |
 | [`TOAST-0051`](items/TOAST-0051.md) | P1 | complete | 7/7 | Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3` |
+| [`TOAST-0115`](items/TOAST-0115.md) | P3 | complete | 10/10 | Unary minus glued to a variable is read as a command name outside brackets |
 | [`TOAST-0079`](items/TOAST-0079.md) | P2 | complete | 6/6 | An array cannot reach native memory, so the FFI has no data plane |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |

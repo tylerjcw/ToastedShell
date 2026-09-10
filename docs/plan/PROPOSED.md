@@ -17,7 +17,6 @@
 | [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 1/4 | Replace the switch-based evaluator with a bound-tree evaluator |
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TOAST-0117`](items/TOAST-0117.md) | P3 | proposed | 0/5 | A missing unary or indexer operator is reported as a binary mismatch against an operand nobody wrote |
-| [`TOAST-0116`](items/TOAST-0116.md) | P1 | proposed | 0/6 | A generic class that rebuilds itself inside its own method loses what it was closed over, constraint included |
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
@@ -34,8 +33,8 @@
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
+| [`TOAST-0118`](items/TOAST-0118.md) | P2 | proposed | 0/5 | A generic method's own type parameter is unbound in anything it constructs |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
-| [`TOAST-0115`](items/TOAST-0115.md) | P3 | proposed | 0/5 | Unary minus glued to a variable is read as a command name in assignment position |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
 | [`TS-P3-21`](items/TS-P3-21.md) | P3 | proposed | — | Native runtime: GC, object layout, and startup budget |

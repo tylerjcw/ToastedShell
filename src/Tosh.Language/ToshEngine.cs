@@ -5635,12 +5635,54 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </remarks>
     private Type? ResolveTypeArgument(string typeArgument)
     {
+        // A type parameter of the class whose method is running shadows a type of the same
+        // name, as it does in C#. Checked first because otherwise `T` is looked up among the
+        // session's types, is not one, and binds null — which is what left a rebuilt instance
+        // reporting `A<T>` and, because a null binding is read as "nominal only, accept
+        // anything", no longer enforcing its own `where` clause (`TOAST-0116`).
+        if (TryResolveTypeParameterFromReceiver(typeArgument, out var fromReceiver))
+        {
+            return fromReceiver;
+        }
+
         if (TryGetNamedType(typeArgument, out _))
         {
             return null;
         }
 
         return ResolveTypeName(typeArgument);
+    }
+
+    /// <summary>
+    /// Resolves a type-argument name against the type parameters of the class whose method is
+    /// currently running — <c>TOAST-0116</c>.
+    /// </summary>
+    /// <remarks>
+    /// The receiver is reached through <c>this</c> in scope, so the lookup follows the same
+    /// path the body itself does and needs no separate notion of a "current class". A lambda
+    /// written inside a method sees the same <c>this</c>, and so resolves the same way.
+    /// </remarks>
+    /// <inheritdoc cref="TryResolveTypeParameterFromReceiver"/>
+    internal bool TryResolveReceiverTypeParameter(string name, out Type? bound) =>
+        TryResolveTypeParameterFromReceiver(name, out bound);
+
+    private bool TryResolveTypeParameterFromReceiver(string name, out Type? bound)
+    {
+        bound = null;
+
+        if (!TryGetVariableBinding("this", out var binding))
+        {
+            return false;
+        }
+
+        var bindings = binding.Value switch
+        {
+            ToshClassSelfReference self => self.TypeArgumentBindings,
+            ToshClassInstance instance => instance.TypeArguments,
+            _ => null,
+        };
+
+        return bindings is not null && bindings.TryGetValue(name, out bound);
     }
 
     private bool TryResolveShellStaticType(string path, out IShellStaticType definition)

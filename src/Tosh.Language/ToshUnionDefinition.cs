@@ -151,8 +151,20 @@ public sealed class ToshUnionDefinition : IShellNamedType
 
             for (var i = 0; i < TypeParameterNames.Count; i++)
             {
-                _owner.ValidateUnionTypeArgument(explicitTypeArguments[i], Span, SourceName, SourceText, Name);
-                bindings[TypeParameterNames[i]] = explicitTypeArguments[i];
+                // `TOAST-0116`. Inside a generic class's method, `Box.Full<T>(…)` names that
+                // class's type parameter rather than a type, and the union has no way to know
+                // that on its own: the name reached validation as written and was reported as
+                // `unknown type 'T'` against the union's own declaration, several files from
+                // where it was written. `DescribeClrType` is the same naming inference already
+                // produces, so a resolved argument is indistinguishable from an inferred one.
+                var argument = explicitTypeArguments[i];
+                if (_owner.TryResolveReceiverTypeParameter(argument, out var bound) && bound is not null)
+                {
+                    argument = DescribeClrType(bound);
+                }
+
+                _owner.ValidateUnionTypeArgument(argument, Span, SourceName, SourceText, Name);
+                bindings[TypeParameterNames[i]] = argument;
             }
 
             return bindings;
