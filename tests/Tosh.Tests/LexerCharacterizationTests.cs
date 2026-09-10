@@ -122,16 +122,22 @@ public sealed class LexerCharacterizationTests
     }
 
     [Theory]
-    // ---- shapes whose tokenization is the root cause of a filed defect ----
+    // ---- where a glued sign breaks away, and where it does not ----
+    //
+    // TS-P2-02 filed this as unary minus being absorbed into the bareword, so the
+    // expression read as a command name; it was pinned here as a known defect while the
+    // break was confined to brackets. TOAST-0115 widened it to every position where a
+    // flag is impossible, and these are the shapes that moved.
+    [InlineData("-$x", "Bareword:- Bareword:$x")]
+    [InlineData("2 + -$x", "Number:2 Bareword:+ Bareword:- Bareword:$x")]
 
-    // TS-P2-02: unary minus against a variable is absorbed into the
-    // bareword, so the expression is read as a command name.
-    [InlineData("-$x", "Bareword:-$x")]
+    // Argument position is what kept the original fix narrow, and still does: a stage
+    // that opened with a command name reads a leading sign as that command's flag.
+    [InlineData("echo -$x", "Bareword:echo Bareword:-$x")]
+    [InlineData("echo a -$x", "Bareword:echo Bareword:a Bareword:-$x")]
 
-    public void Known_defective_tokenization_is_pinned(string source, string expected)
+    public void A_glued_sign_breaks_only_where_a_flag_is_impossible(string source, string expected)
     {
-        // Pinned so the mode-switching rework shows exactly which of
-        // these flip, rather than changing them incidentally.
         Assert.Equal(expected, Render(source));
     }
 

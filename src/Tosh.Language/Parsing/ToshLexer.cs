@@ -512,7 +512,7 @@ public sealed class ToshLexer
                 continue;
             }
 
-            tokens.Add(ReadBarewordOrLiteral(FollowsAssignmentOperator(tokens)));
+            tokens.Add(ReadBarewordOrLiteral(AllowsGluedUnarySign(tokens)));
         }
     }
 
@@ -588,6 +588,129 @@ public sealed class ToshLexer
 
         return previous.Kind == SyntaxTokenKind.Bareword && previous.Text is
             "=" or "+=" or "-=" or "*=" or "/=" or "//=" or "%=" or "**=" or "??=";
+    }
+
+    /// <summary>
+    /// True when a lone `-` or `+` glued to the `$` after it is a unary operator rather
+    /// than the first two characters of a word — `TOAST-0115`.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-02` established that the break is safe inside brackets and `TOAST-0115` that
+    /// it is safe after an assignment operator. Both rest on the same fact: a flag needs a
+    /// command to be a flag *of*. Two further positions have no command either.
+    ///
+    /// The first is command-*name* position — nothing emitted in this stage yet, whether
+    /// because the line just began or because `|`, `;`, `&amp;&amp;`, `{` or `=&gt;` ended
+    /// the last one. A command name never begins with a sign, so `-$pt` alone on a line
+    /// could only ever report `Command '-$pt' was not found`.
+    ///
+    /// The second is a stage that already cannot be a command because of how it opened: a
+    /// number, a string, a boolean, a `$`-prefixed word, or `return`/`throw`. There the old
+    /// reading was not an error but a wrong answer — `2 + -$pt` concatenated the literal
+    /// text to make `"2-$pt"`, and `true and -$pt` was true because a non-empty word is.
+    ///
+    /// A stage that opened with an ordinary bareword *is* a command, and its arguments keep
+    /// the reading they had: `echo -$x` still passes a flag. The test is on how the stage
+    /// opened rather than on the token immediately before, so that `ls * -$x` is left alone
+    /// while `2 * -$x` is not, without curating a list of operators.
+    /// </remarks>
+    private bool AllowsGluedUnarySign(List<SyntaxToken> tokens)
+    {
+        // The whole question only arises for a sign glued to a variable; every other
+        // bareword is read exactly as before, and the backward scan below never runs.
+        if (Current is not ('-' or '+') || Peek() != '$')
+        {
+            return false;
+        }
+
+        if (FollowsAssignmentOperator(tokens))
+        {
+            return true;
+        }
+
+        if (!TryFindStageStart(tokens, out var stageStart, out var opensAValue))
+        {
+            return opensAValue;
+        }
+
+        var opener = tokens[stageStart];
+
+        if (opener.Kind is SyntaxTokenKind.Number
+            or SyntaxTokenKind.String
+            or SyntaxTokenKind.InterpolatedString
+            or SyntaxTokenKind.UnitLiteral
+            or SyntaxTokenKind.Boolean
+            or SyntaxTokenKind.Null)
+        {
+            return true;
+        }
+
+        return opener.Kind == SyntaxTokenKind.Bareword
+            && (opener.Text.StartsWith('$') || opener.Text is "return" or "throw");
+    }
+
+    /// <summary>
+    /// Finds the first token of the stage the lexer is currently reading. Returns false
+    /// when the stage has no tokens yet — the position a command's name would occupy.
+    /// </summary>
+    /// <param name="opensAValue">
+    /// Whether a stage beginning here is allowed to be a value at all. A statement may be
+    /// a bare expression and so may an arrow body, but `|`, `&amp;&amp;` and `||` each want
+    /// a command on their right. Breaking the sign off there would only trade
+    /// `Command '-$x' was not found` for `Command '-' was not found`.
+    /// </param>
+    private bool TryFindStageStart(List<SyntaxToken> tokens, out int index, out bool opensAValue)
+    {
+        index = tokens.Count;
+        opensAValue = true;
+
+        for (var i = tokens.Count - 1; i >= 0; i--)
+        {
+            // A line break ends a stage as surely as a ';' does.
+            var followingStart = i + 1 < tokens.Count ? tokens[i + 1].Span.Start : _position;
+            if (HasLineBreakBetween(tokens[i].Span.End, followingStart))
+            {
+                break;
+            }
+
+            if (tokens[i].Kind is SyntaxTokenKind.Pipe
+                or SyntaxTokenKind.DoublePipe
+                or SyntaxTokenKind.DoubleAmpersand)
+            {
+                opensAValue = false;
+                break;
+            }
+
+            if (tokens[i].Kind is SyntaxTokenKind.Semicolon
+                or SyntaxTokenKind.OpenBrace
+                or SyntaxTokenKind.CloseBrace
+                or SyntaxTokenKind.FatArrow)
+            {
+                break;
+            }
+
+            index = i;
+        }
+
+        return index < tokens.Count;
+    }
+
+    private bool HasLineBreakBetween(int start, int end)
+    {
+        if (end <= start || start < 0 || end > _source.Length)
+        {
+            return false;
+        }
+
+        for (var index = start; index < end; index++)
+        {
+            if (_source[index] is '\n' or '\r')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool IsAtEnd => _position >= _source.Length;
@@ -1349,12 +1472,11 @@ public sealed class ToshLexer
     /// <summary>
     /// Reads a bareword, a literal, or a magnitude-and-unit literal.
     /// </summary>
-    /// <param name="afterAssignment">
-    /// True when the previous token was an assignment operator, so what follows is a value
-    /// rather than a command argument. `TOAST-0115`: it is what lets a glued unary sign
-    /// break away from a variable outside brackets.
+    /// <param name="unarySignAllowed">
+    /// True when a lone leading `-` or `+` here cannot be a command's flag, so it may break
+    /// away from the variable glued to it. See <see cref="AllowsGluedUnarySign"/>.
     /// </param>
-    private SyntaxToken ReadBarewordOrLiteral(bool afterAssignment = false)
+    private SyntaxToken ReadBarewordOrLiteral(bool unarySignAllowed = false)
     {
         var start = _position;
 
@@ -1445,12 +1567,11 @@ public sealed class ToshLexer
             // flags (`--name`), paths and `a$b` are untouched — and only in expression
             // context, where `-$x` cannot be a command's flag.
             // `TOAST-0115` widens this past brackets. `_expressionDepth` is raised only
-            // by `(`, `[` and collection literals, so an assignment's right-hand side —
-            // a value position if ever there was one — was not covered, and `var u = -$x`
-            // reported `Command '-$x' was not found` while `- $x` and `(-$x)` both worked.
-            // After an assignment operator what follows is a value and cannot be a flag,
-            // which is the same reasoning that made the bracketed case safe.
-            if (Current == '$' && (InExpressionContext || afterAssignment)
+            // by `(`, `[` and collection literals, so the several value positions that are
+            // not bracketed were not covered — see `AllowsGluedUnarySign` for which, and
+            // for the one argument that admits all of them: a flag needs a command to be
+            // a flag *of*, and none of those positions has one.
+            if (Current == '$' && (InExpressionContext || unarySignAllowed)
                 && _position == start + 1
                 && _source[start] is '-' or '+')
             {

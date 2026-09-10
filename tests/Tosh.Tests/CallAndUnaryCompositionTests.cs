@@ -122,6 +122,65 @@ public sealed class CallAndUnaryCompositionTests
         Assert.Equal(expected, Convert.ToInt64(await EvalAsync($"var x = 3\n{assignment}\n$r")));
     }
 
+    // ── TOAST-0115, widened: every position where a flag is impossible ────────
+    //
+    // Assignment was not the only unbracketed value position. `2 + -$x` was worse than
+    // the reported case rather than better: it did not fail, it concatenated the literal
+    // text and answered the string "2-$x". The test is now on how the *stage* opened
+    // rather than on the token immediately before, so `2 * -$x` negates while
+    // `echo a -$x` keeps its arguments, without a curated list of operators.
+
+    [Theory]
+    [InlineData("-$x", -3d)]                        // command-name position: a name never starts with a sign
+    [InlineData("+$x", 3d)]
+    [InlineData("2 + -$x", -1d)]                    // the stage opened with a number, so it is not a command
+    [InlineData("2 - -$x", 5d)]
+    [InlineData("2 * -$x", -6d)]
+    [InlineData("2 ** -$x", 0.125d)]
+    [InlineData("$x + -$x", 0d)]                    // …or with a `$` word
+    public async Task A_glued_sign_negates_wherever_a_flag_is_impossible(string statement, double expected)
+    {
+        Assert.Equal(expected, Convert.ToDouble(await EvalAsync($"var x = 3\n{statement}")), 6);
+    }
+
+    [Fact]
+    public async Task A_glued_sign_negates_after_a_string_operand()
+    {
+        Assert.Equal("a-3", $"{await EvalAsync("var x = 3\n\"a\" + -$x")}");
+    }
+
+    [Theory]
+    [InlineData("func f() { return -$x }\nf", -3L)]      // `return` takes a value, never a flag
+    [InlineData("func f() => -$x\nf", -3L)]              // an arrow body is a value position
+    [InlineData("if (true) { -$x }", -3L)]               // a block opens a statement
+    [InlineData("var r = 0; -$x", -3L)]                  // and so does `;`
+    public async Task A_glued_sign_negates_after_a_statement_boundary(string script, long expected)
+    {
+        Assert.Equal(expected, Convert.ToInt64(await EvalAsync($"var x = 3\n{script}")));
+    }
+
+    [Fact]
+    public async Task A_class_can_negate_its_own_member_without_parentheses()
+    {
+        var script = "class C(v) {\n"
+            + "    prop X = $v\n"
+            + "    func Neg() { return -$this.X }\n"
+            + "}\n"
+            + "(new C(4)).Neg()";
+
+        Assert.Equal(-4L, Convert.ToInt64(await EvalAsync(script)));
+    }
+
+    [Fact]
+    public async Task A_command_combinator_still_wants_a_command_on_its_right()
+    {
+        // `|`, `&&` and `||` each want a command, so the sign is left glued: breaking it
+        // would only trade `Command '-$x' was not found` for `Command '-' was not found`.
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => EvalAsync("var x = 3\n1 | -$x"));
+
+        Assert.Contains("-$x", error.Message);
+    }
+
     [Theory]
     [InlineData("echo -$x", "-$x")]
     [InlineData("echo --n=5", "--n=5")]
