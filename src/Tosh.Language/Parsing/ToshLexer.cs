@@ -1533,6 +1533,25 @@ public sealed class ToshLexer
                 break;
             }
 
+            // `TOAST-0121`. The same break for a variable reference. Without it a
+            // range whose *left* operand is a variable never reached the range
+            // operator at all: `$a..$b` scanned as one bareword and the parser read
+            // the dots as member access, reporting `Member '$b' was not found on
+            // type 'Int32'`. `1..$b` worked, because a number cannot continue into a
+            // bareword — which is why only the left operand was ever affected, and
+            // why the spelling that fails is the one most likely to be written.
+            //
+            // Narrow in the same way the `?.` break below is: the text so far must be
+            // a plain variable reference, so a path keeps its dots and `$dir/../x` is
+            // untouched.
+            if (Current == '.' && Peek() == '.' && Peek(2) != '.'
+                && _position > start
+                && _source[start] == '$'
+                && IsVariableReferenceText(_source.AsSpan(start, _position - start)))
+            {
+                break;
+            }
+
             // Fused safe navigation (TS-P2-04): `$x?.Length` must mean the
             // same thing as `$x ?. Length`. Only break when the text so far
             // is a variable reference, so nullable forms such as `string?`
@@ -2196,6 +2215,49 @@ public sealed class ToshLexer
             if (!char.IsLetterOrDigit(ch) && ch != '_') return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// True for a plain variable reference: <c>$name</c>, or <c>$name.Member.Path</c>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately narrow — it gates the break before a range operator, and a path must
+    /// keep its dots. Anything but identifier characters and the dots between them
+    /// disqualifies the text, so <c>$dir/../x</c> stays one word.
+    /// </remarks>
+    private static bool IsVariableReferenceText(ReadOnlySpan<char> text)
+    {
+        if (text.Length < 2 || text[0] != '$')
+        {
+            return false;
+        }
+
+        var expectingSegment = true;
+
+        for (var index = 1; index < text.Length; index++)
+        {
+            var character = text[index];
+
+            if (character == '.')
+            {
+                if (expectingSegment)
+                {
+                    return false;
+                }
+
+                expectingSegment = true;
+                continue;
+            }
+
+            if (!char.IsLetterOrDigit(character) && character != '_')
+            {
+                return false;
+            }
+
+            expectingSegment = false;
+        }
+
+        return !expectingSegment;
     }
 
     private static bool IsNumericRangePrefix(ReadOnlySpan<char> text)

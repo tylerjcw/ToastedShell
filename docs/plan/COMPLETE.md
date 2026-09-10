@@ -85,6 +85,7 @@
 | [`TOAST-0079`](items/TOAST-0079.md) | P2 | complete | 6/6 | An array cannot reach native memory, so the FFI has no data plane |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
+| [`TOAST-0121`](items/TOAST-0121.md) | P2 | complete | 6/6 | A range whose left operand is a variable is read as member access |
 | [`TOAST-0054`](items/TOAST-0054.md) | P1 | complete | 8/8 | A `match` over a closed union is not checked for exhaustiveness |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |

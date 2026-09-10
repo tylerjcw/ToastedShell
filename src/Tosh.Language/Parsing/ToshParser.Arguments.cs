@@ -1093,8 +1093,16 @@ public static partial class ToshParser
             // Check for range operator: <expr>..<expr> or <expr>..<expr>..<expr>
             if (allowRange && result is not null && Current.Kind == SyntaxTokenKind.DotDot)
             {
+                // `TOAST-0121`. Only where a member name could actually have been meant.
+                // `$obj..Name` is worth asking about — the finger slipped on the dot — but
+                // `$a..$b` and `$a..3` are not: there is no member called `$b` or `3`, so
+                // the reading the message proposes does not exist and a range is the only
+                // thing the line can be. Until the lexer learned to end a variable
+                // reference before `..`, those two could not reach here at all.
                 if (result is VariableReferenceArgumentSyntax or MemberAccessArgumentSyntax
-                    && result.Span.End == Current.Span.Start)
+                    && result.Span.End == Current.Span.Start
+                    && Peek(1).Kind == SyntaxTokenKind.Bareword
+                    && !Peek(1).Text.StartsWith('$'))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.accidental_double_dot",
