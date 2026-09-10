@@ -1,7 +1,7 @@
 ---
 id: TOAST-0118
 title: "A generic method's own type parameter is unbound in anything it constructs"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-10
@@ -64,12 +64,48 @@ The shadowing itself is worth a warning independently: a method that declares `<
 `class A<T>` almost always means the class's, and today the two are indistinguishable at
 the point of use.
 
+## What the fix turned out to be
+
+Three things, not one.
+
+**The bindings existed and had nowhere to go.** A generic call's type arguments were
+computed — from the call site, the target annotation, or inference — and used for exactly
+one purpose, converting the return value. Nothing evaluated inside the body could see them.
+They now enter a saved-and-restored field for the body's duration, next to
+`_currentReturnAnnotation`, which is the same shape and the same lifetime.
+
+**Static methods never received them at all.** `InvokeStaticMethodAsync` on a ToastScript
+class had no type-arguments parameter, and neither did the `IShellStaticType` overload on
+the invoker. So `A.NoArg<int>()` had nothing to bind and — worse —
+`A.WithArg<double>(1)` silently used what inference made of the argument instead of what
+the call site asked for. A wrong answer, not an error.
+
+**A class reached through a module took a third path.** `M.A.NoArg<int>()` resolves the
+class as a *member* of the module, so the call went through the instance-method overload
+even though the target is a class definition and the call is static. That path dropped the
+type arguments too, and it is the one ToastLib's factories use.
+
+Precedence is by name: `methodBindings` holds only what the method declared, so consulting
+it before the class's bindings is exactly the C# rule that a method's `<T>` shadows the
+enclosing type's. The other order converted `func Shadowed<T>(v: T)` inside `class A<T>` to
+the *instance's* `T` and rejected the argument the caller passed.
+
+## What it exposed
+
+`Vector2D.Zero<double>()` now fails, and should be understood before it is read as a
+regression. It used to "work" only because `T` was unbound and a null binding is read as
+"accept anything" — the check was skipped, not passed. With `T` bound to `Double` the check
+runs and refuses the integer `0`, exactly as `new Vector2D<double>(0, 0)` has always been
+refused, on any build. That strictness is filed separately as `TOAST-0124`.
+
 ## Acceptance
 
-- [ ] `A.Make<int>(1)` reports `A<Int32>` for both `shared` and `static` forms
-- [ ] A free `func MakeRec<T>(v: T) -> R<T>` binds the record's `T`
-- [ ] The constructed value enforces its constraint
-- [ ] A method parameter shadows a class parameter of the same name, and the class's is
+- [x] `A.Make<int>(1)` reports `A<Int32>` for both `shared` and `static` forms
+- [x] A free `func FreeMake<T>(v: T) -> A<T>` binds it too
+- [x] A method with no parameters binds from the call site alone
+- [x] A class inside a module binds them
+- [x] An explicit type argument beats inference rather than losing to it
+- [x] The constructed value enforces its constraint
+- [x] A method parameter shadows a class parameter of the same name, and the class's is
       still reachable where the method declares none
-- [ ] ToastLib's `Point2D.Empty<int>()` reports `Point2D<Int32>`, with a suite check that
-      asks about the closure rather than the components
+- [x] ToastLib's `Point2D.Empty<int>()` reports `Point2D<Int32>`

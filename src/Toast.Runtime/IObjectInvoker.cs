@@ -83,7 +83,8 @@ public interface IObjectInvoker
         IShellStaticType type,
         string methodName,
         IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? typeArguments = null);
 
     object? GetStaticMember(IShellStaticType type, string memberName);
 }

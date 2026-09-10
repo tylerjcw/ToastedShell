@@ -79,6 +79,7 @@
 | [`TOAST-0052`](items/TOAST-0052.md) | P1 | complete | 8/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |
 | [`TOAST-0109`](items/TOAST-0109.md) | P3 | complete | 3/3 | Any `|` or `>` within three characters of the cursor produces a pipeline hover |
+| [`TOAST-0118`](items/TOAST-0118.md) | P2 | complete | 8/8 | A generic method's own type parameter is unbound in anything it constructs |
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |
 | [`TOAST-0107`](items/TOAST-0107.md) | P2 | complete | 6/6 | The path operator is unusable inside an interpolation hole, because `::` is read as a format clause |
 | [`TOAST-0051`](items/TOAST-0051.md) | P1 | complete | 7/7 | Operator dispatch has no CLR `op_*` fallback, so a `Vector3` cannot be added to a `Vector3` |

@@ -34,7 +34,6 @@
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
-| [`TOAST-0118`](items/TOAST-0118.md) | P2 | proposed | 0/5 | A generic method's own type parameter is unbound in anything it constructs |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
@@ -52,3 +51,4 @@
 | [`TOAST-0099`](items/TOAST-0099.md) | P2 | proposed | 0/7 | A declared type cannot say where it lives, so nothing can write its qualified name back |
 | [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |
 | [`TS-P3-19`](items/TS-P3-19.md) | P3 | proposed | — | Annotated, fixed and refinement variable writes at Tier 1 |
+| [`TOAST-0124`](items/TOAST-0124.md) | P2 | proposed | 0/5 | A value bound to a type parameter is checked for an exact type, so an integer literal cannot fill a double |

@@ -16,10 +16,15 @@ public interface IShellStaticType
         return ValueTask.FromResult(CreateInstance(arguments));
     }
 
+    /// <param name="typeArguments">
+    /// Type arguments written at the call site — <c>Point2D.Empty&lt;int&gt;()</c>. Optional,
+    /// and ignored by a type that is not generic (<c>TOAST-0118</c>).
+    /// </param>
     ValueTask<InvocationResult> InvokeStaticMethodAsync(
         string methodName,
         IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? typeArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult(InvokeStaticMethod(methodName, arguments));

@@ -688,7 +688,8 @@ public sealed class ToshClassDefinition : IShellNamedType
     public async ValueTask<InvocationResult> InvokeStaticMethodAsync(
         string methodName,
         IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? typeArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -712,7 +713,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             if (BaseClass is not null)
             {
-                return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+                return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken, typeArguments);
             }
 
             // `TS-P2-93`, static side: a `shared prop` holding a callable answers
@@ -746,7 +747,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             // hidden by `shy`. A base may still offer it statically, so ask before refusing.
             if (BaseClass is not null)
             {
-                return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+                return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken, typeArguments);
             }
 
             // Said apart, because a `shy static` reported "is an instance method" — a description
@@ -764,7 +765,12 @@ public sealed class ToshClassDefinition : IShellNamedType
             staticCandidates,
             arguments,
             cancellationToken);
-        var values = await ExecuteMethodBlockAsync(method, locals, instance: null, cancellationToken);
+        // `TOAST-0118`. A static method's own type arguments were dropped here, so
+        // `Point2D.Empty<int>()` had nothing to bind `T` from — and, worse,
+        // `A.WithArg<double>(1)` silently used what inference made of the argument
+        // instead of what the call site asked for.
+        var values = await ExecuteMethodBlockAsync(
+            method, locals, instance: null, cancellationToken, typeArguments);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
     }
 
@@ -2672,8 +2678,14 @@ public sealed class ToshClassDefinition : IShellNamedType
                 {
                     if (parameter.RawTypeName is null) continue;
                     Type? bound = null;
-                    if (bindings is not null && bindings.TryGetValue(parameter.RawTypeName, out var classBound)) bound = classBound;
-                    if (bound is null && methodBindings is not null && methodBindings.TryGetValue(parameter.RawTypeName, out var mBound)) bound = mBound;
+
+                    // `TOAST-0118`. The method's own type parameters first: `methodBindings`
+                    // holds only names the method declared, so a hit there means the method
+                    // shadows the class, which is what C# does with the same spelling. The
+                    // other order converted `func Shadowed<T>(v: T)` inside `class A<T>` to
+                    // the *class's* T and rejected the argument the caller actually passed.
+                    if (methodBindings is not null && methodBindings.TryGetValue(parameter.RawTypeName, out var mBound)) bound = mBound;
+                    if (bound is null && bindings is not null && bindings.TryGetValue(parameter.RawTypeName, out var classBound)) bound = classBound;
                     if (bound is null) continue;
                     if (!boundLocals.TryGetValue(parameter.Name, out var value)) continue;
 
@@ -2734,7 +2746,8 @@ public sealed class ToshClassDefinition : IShellNamedType
             locals,
             method.CapturedScopes,
             $"{Name}.{method.Name}",
-            cancellationToken);
+            cancellationToken,
+            methodBindings);
 
         // Resolve the effective return-type annotation: prefer the un-erased
         // RawReturnTypeName when it names a bound class type-parameter,

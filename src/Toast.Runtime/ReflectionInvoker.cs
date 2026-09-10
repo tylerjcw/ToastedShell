@@ -425,13 +425,14 @@ public sealed class ReflectionInvoker : IObjectInvoker
         IShellStaticType type,
         string methodName,
         IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? typeArguments = null)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
         ArgumentNullException.ThrowIfNull(arguments);
 
-        return type.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+        return type.InvokeStaticMethodAsync(methodName, arguments, cancellationToken, typeArguments);
     }
 
     public object CreateInstance(IShellStaticType type, IReadOnlyList<object?> arguments)

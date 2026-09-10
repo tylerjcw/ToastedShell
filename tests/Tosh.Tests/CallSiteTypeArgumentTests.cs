@@ -265,6 +265,111 @@ public sealed class CallSiteTypeArgumentTests
         Assert.Equal("Box<int>", await RunAsync(source));
     }
 
+
+    // ── TOAST-0118: a generic *method's* own type parameter ───────────────────
+    //
+    // TOAST-0116 fixed the case where a class rebuilds itself and `T` is the class's.
+    // The same name written inside a generic method came from somewhere else and was
+    // still unbound: the call's bindings were computed for return-value conversion and
+    // never entered a scope the body could see. Static methods had it worse — their
+    // call-site type arguments were dropped before they got that far, so
+    // `A.WithArg<double>(1)` silently used whatever inference made of the argument.
+
+    private const string Factories =
+        "class A<T>(x: T) {\n"
+        + "    prop X: T = $x\n"
+        + "    shared func Make<U>(v: U) -> A<U> { return (new A<U>($v)) }\n"
+        + "    static func SMake<U>(v: U) -> A<U> { return (new A<U>($v)) }\n"
+        + "    static func NoArg<U>() -> A<U> { return (new A<U>(0)) }\n"
+        + "    static func SameName<T>() -> A<T> { return (new A<T>(0)) }\n"
+        + "}\n"
+        + "func FreeMake<T>(v: T) -> A<T> { return (new A<T>($v)) }\n";
+
+    [Theory]
+    [InlineData("A.Make<int>(1)", "A<Int32>")]
+    [InlineData("A.SMake<int>(1)", "A<Int32>")]
+    [InlineData("FreeMake<int>(7)", "A<Int32>")]
+    // No parameter to infer from: only the call-site type argument can say what U is.
+    [InlineData("A.NoArg<int>()", "A<Int32>")]
+    // The method reuses the class's spelling, and its own must win.
+    [InlineData("A.SameName<int>()", "A<Int32>")]
+    public async Task A_generic_call_binds_its_own_type_parameter(string expression, string expected)
+    {
+        // Bound to a variable first: `type-of Free<int>(7)` reads the call as two arguments,
+        // which is about how `<` parses after a bare name and nothing to do with this.
+        var source = $"{Factories}var made = {expression}\nvar t = (type-of $made)\n$t.Name";
+        Assert.Equal(expected, await RunAsync(source));
+    }
+
+    [Fact]
+    public async Task A_class_inside_a_module_binds_them_too()
+    {
+        // Reached through the module, the class arrives as its own definition and the call
+        // is a static one wearing member-access clothes. That path dropped the type
+        // arguments, which is where ToastLib's `Point2D.Empty<int>()` was losing them.
+        var source =
+            "module M {\n"
+            + "    export class A<T>(x: T) {\n"
+            + "        prop X: T = $x\n"
+            + "        static func NoArg<U>() -> A<U> { return (new A<U>(0)) }\n"
+            + "    }\n"
+            + "}\n"
+            + "var t = (type-of M.A.NoArg<int>())\n"
+            + "$t.Name";
+
+        Assert.Equal("A<Int32>", await RunAsync(source));
+    }
+
+    [Fact]
+    public async Task A_method_type_parameter_shadows_the_class_one()
+    {
+        // `func Shadowed<T>(v: T)` inside `class A<T>`: the parameter must be bound by the
+        // *method's* T. Reading the class's instead converted the argument to the instance's
+        // type and rejected what the caller actually passed.
+        var source =
+            "class A<T>(x: T) {\n"
+            + "    prop X: T = $x\n"
+            + "    func Shadowed<T>(v: T) { return (new A<T>($v)) }\n"
+            + "}\n"
+            + "var t = (type-of (new A<int>(1)).Shadowed<double>(2.5))\n"
+            + "$t.Name";
+
+        Assert.Equal("A<Double>", await RunAsync(source));
+    }
+
+    [Fact]
+    public async Task A_value_from_a_generic_method_enforces_its_constraint()
+    {
+        // The same soundness point as TOAST-0116, reached through the other door.
+        var source =
+            "class A<T>(x: T) where T: Numeric {\n"
+            + "    prop X: T = $x\n"
+            + "    shared func Make<U>(v: U) -> A<U> { return (new A<U>($v)) }\n"
+            + "}\n"
+            + "var made = A.Make<int>(1)\n"
+            + "$made.X = \"not a number\"";
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(source));
+        Assert.Contains("A.X", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_explicit_type_argument_beats_inference()
+    {
+        // It used to lose to it, silently: `A.WithArg<double>(1)` answered `A<Int32>`,
+        // because the call-site arguments never reached a static method and inference from
+        // the argument was doing all the work.
+        var source =
+            "class A<T>(x: T) {\n"
+            + "    prop X: T = $x\n"
+            + "    static func WithArg<U>(v: U) -> A<U> { return (new A<U>($v)) }\n"
+            + "}\n"
+            + "var t = (type-of A.WithArg<double>(1.5))\n"
+            + "$t.Name";
+
+        Assert.Equal("A<Double>", await RunAsync(source));
+    }
+
     [Theory]
     // The controls: inference, and the comparison that makes `<` ambiguous in the first place.
     [InlineData("class A { func m<U>(x: U) -> U { return $x } }\nvar a = new A()\n$a.m(11)", "11")]

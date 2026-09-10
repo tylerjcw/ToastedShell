@@ -4111,7 +4111,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             throw ConstructInsteadOfInvoking(path);
         }
 
-        var shellInvocation = await TryInvokeShellSymbolAsync(path, arguments, cancellationToken);
+        var shellInvocation = await TryInvokeShellSymbolAsync(path, arguments, cancellationToken, typeArguments);
 
         if (shellInvocation.Matched)
         {
@@ -4315,7 +4315,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     private async ValueTask<(bool Matched, object? Value)> TryInvokeShellSymbolAsync(
         string path,
         IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? typeArguments = null)
     {
         if (!TryPlanShellSymbol(path, out var plan))
         {
@@ -4330,7 +4331,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     plan.StaticType!,
                     plan.MethodName,
                     arguments,
-                    cancellationToken);
+                    cancellationToken,
+                    typeArguments);
                 return (true, staticInvocation.ReturnedVoid ? null : staticInvocation.Value);
             }
 
@@ -4339,11 +4341,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                                    plan.MemberPath,
                                    cancellationToken)
                                ?? throw CannotInvokeOnNull(plan.MethodName);
-            var chained = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
-                staticTarget,
-                plan.MethodName,
-                arguments,
-                cancellationToken);
+            var chained = await InvokeResolvedTargetAsync(
+                staticTarget, plan.MethodName, arguments, typeArguments, cancellationToken);
             return (true, chained.ReturnedVoid ? staticTarget : chained.Value);
         }
 
@@ -4358,12 +4357,36 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                      ?? throw CannotInvokeOnNull(plan.MethodName);
         }
 
-        var invocation = await LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
-            target,
-            plan.MethodName,
-            arguments,
-            cancellationToken);
+        var invocation = await InvokeResolvedTargetAsync(
+            target, plan.MethodName, arguments, typeArguments, cancellationToken);
         return (true, invocation.ReturnedVoid ? target : invocation.Value);
+    }
+
+    /// <summary>
+    /// Invokes a method on a target reached through a module or member path, carrying any
+    /// call-site type arguments — <c>TOAST-0118</c>.
+    /// </summary>
+    /// <remarks>
+    /// A class reached this way — <c>M.A.NoArg&lt;int&gt;()</c> — arrives as the class
+    /// *definition*, so the call is a static one even though the path looks like member
+    /// access. Routing it through the instance overload dropped the type arguments, which is
+    /// why a generic factory inside a module could not be closed over anything.
+    /// </remarks>
+    private ValueTask<InvocationResult> InvokeResolvedTargetAsync(
+        object target,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<Type>? typeArguments,
+        CancellationToken cancellationToken)
+    {
+        if (typeArguments is { Count: > 0 } && target is IShellStaticType staticType)
+        {
+            return LanguageRuntime.Invoker.InvokeStaticMethodAsync(
+                staticType, methodName, arguments, cancellationToken, typeArguments);
+        }
+
+        return LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
+            target, methodName, arguments, cancellationToken);
     }
 
     private bool TryResolveShellSymbolAccess(string path, out object? value)
@@ -5666,9 +5689,69 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     internal bool TryResolveReceiverTypeParameter(string name, out Type? bound) =>
         TryResolveTypeParameterFromReceiver(name, out bound);
 
+    /// <summary>
+    /// The type parameters of the call currently running, if it declared any —
+    /// <c>TOAST-0118</c>.
+    /// </summary>
+    private IReadOnlyDictionary<string, Type>? _currentTypeParameterBindings;
+
+    /// <summary>
+    /// Makes a generic call's own type arguments visible to its body.
+    /// </summary>
+    /// <remarks>
+    /// The bindings were already worked out — from the call site, the target annotation, or
+    /// inference — and then used for one thing, converting the return value. Nothing
+    /// evaluated *inside* the body could see them, so <c>new A&lt;T&gt;</c> in a
+    /// <c>func Make&lt;T&gt;</c> resolved <c>T</c> against the session's types, found
+    /// nothing, and bound null.
+    ///
+    /// Saved and restored rather than pushed on a stack, matching
+    /// <c>_currentReturnAnnotation</c> beside it: a call has at most one set, and a nested
+    /// call replaces it for its own duration.
+    /// </remarks>
+    internal IDisposable? EnterTypeParameterBindings(IReadOnlyDictionary<string, Type>? bindings)
+    {
+        if (bindings is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var frame = new TypeParameterBindingFrame(this, _currentTypeParameterBindings);
+        _currentTypeParameterBindings = bindings;
+        return frame;
+    }
+
+    private sealed class TypeParameterBindingFrame(
+        ToshEngine engine,
+        IReadOnlyDictionary<string, Type>? previous) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            engine._currentTypeParameterBindings = previous;
+        }
+    }
+
     private bool TryResolveTypeParameterFromReceiver(string name, out Type? bound)
     {
         bound = null;
+
+        // `TOAST-0118`. A method's own type parameter shadows the enclosing class's, as it
+        // does in C#, so the call's bindings are consulted first. A method that declares
+        // none has no bindings here and the receiver answers, which is `TOAST-0116`.
+        if (_currentTypeParameterBindings is { } fromCall &&
+            fromCall.TryGetValue(name, out var callBound))
+        {
+            bound = callBound;
+            return true;
+        }
 
         if (!TryGetVariableBinding("this", out var binding))
         {
@@ -6802,6 +6885,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         var previousReturnAnnotation = _currentReturnAnnotation;
         _currentReturnAnnotation = definition.RawReturnTypeName;
 
+        // `TOAST-0118`. The same bindings that convert the return value are what
+        // `new A<T>` inside the body needs to resolve `T`.
+        var previousTypeParameters = _currentTypeParameterBindings;
+        _currentTypeParameterBindings = typeBindings is { Count: > 0 }
+            ? typeBindings
+            : previousTypeParameters;
+
         // Generator functions stream values as they are produced.
         // C# does not allow yield inside try-with-catch, so we use a manual enumerator.
         var enumerator = ExecuteBlockAsync(
@@ -6875,6 +6965,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             _functionArgumentsStack.Pop();
             _functionCallStack.Pop();
             _currentReturnAnnotation = previousReturnAnnotation;
+            _currentTypeParameterBindings = previousTypeParameters;
         }
 
         if (pendingException is not null)

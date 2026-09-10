@@ -1172,9 +1172,13 @@ public sealed partial class ToshEngine
         IReadOnlyDictionary<string, object?> locals,
         IReadOnlyList<LexicalScope>? capturedScopes,
         string callName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, Type>? typeParameterBindings = null)
     {
         using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
+
+        // `TOAST-0118`. A generic method's own type arguments, for the body's duration.
+        using var typeParameters = EnterTypeParameterBindings(typeParameterBindings);
         cancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
             LanguageRuntime.Options.MaxRecursionDepth,
