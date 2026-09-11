@@ -990,7 +990,16 @@ public static partial class ToshParser
                     normalizedOperator = "==";
                 }
 
-                var right = ParseAdditiveExpression(operatorToken.Span.End, implicitCurrentItem: false);
+                // `TOAST-0125`. The right operand of a type test is a type name, so a glued
+                // `<…>` belongs to it rather than being a comparison. Without this
+                // `$x is Box<int>` read `Box` as the operand and `<` as less-than, then
+                // reported that an operator needed a value on both sides — about a `<` the
+                // reader had not written as one.
+                var right = normalizedOperator is "is" or "is-not"
+                    ? TryParseClosedTypeNameOperand()
+                        ?? ParseAdditiveExpression(operatorToken.Span.End, implicitCurrentItem: false)
+                    : ParseAdditiveExpression(operatorToken.Span.End, implicitCurrentItem: false);
+
                 var end = right?.Span.End ?? operatorToken.Span.End;
                 var leftOperand = left ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span);
                 var rightOperand = right ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span);
@@ -1751,6 +1760,44 @@ public static partial class ToshParser
                    (string.Equals(token.Text, "not", StringComparison.OrdinalIgnoreCase) ||
                     token.Text is "bnot" ||
                     token.Text is "-" or "+");
+        }
+
+        /// <summary>
+        /// Reads `Name&lt;args&gt;` as one type-name operand, or nothing — <c>TOAST-0125</c>.
+        /// </summary>
+        /// <remarks>
+        /// Only where a type test asked for it, and only when the angle bracket is glued to
+        /// the name and a closing one is found. Anything else rolls back untouched, so
+        /// `$a &lt; $b` keeps its comparison.
+        /// </remarks>
+        private ArgumentSyntax? TryParseClosedTypeNameOperand()
+        {
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                Peek(1).Kind != SyntaxTokenKind.LessThan ||
+                Peek(1).Span.Start != Current.Span.End)
+            {
+                return null;
+            }
+
+            var savedPosition = _position;
+            var savedDiagnosticCount = _diagnostics.Count;
+
+            var nameToken = NextToken();
+            var (rendered, parsedArgs, hasAngles) = ParseGenericTypeArgumentsStructured();
+
+            if (!hasAngles || parsedArgs.Count == 0)
+            {
+                _position = savedPosition;
+                if (_diagnostics.Count > savedDiagnosticCount)
+                {
+                    _diagnostics.RemoveRange(savedDiagnosticCount, _diagnostics.Count - savedDiagnosticCount);
+                }
+
+                return null;
+            }
+
+            var span = TextSpan.FromBounds(nameToken.Span.Start, Peek(-1).Span.End);
+            return new BarewordArgumentSyntax($"{nameToken.Text}{rendered}", span);
         }
 
         private static string NormalizeBinaryOperator(SyntaxToken token)

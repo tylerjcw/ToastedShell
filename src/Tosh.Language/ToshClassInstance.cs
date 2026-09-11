@@ -183,6 +183,74 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
     internal IReadOnlyDictionary<string, string>? GetNominalBindingsFor(ToshClassDefinition def) =>
         ReferenceEquals(def, Definition) ? NominalTypeArguments : null;
 
+    /// <summary>
+    /// Whether this instance is closed over exactly the arguments written — <c>TOAST-0125</c>.
+    /// </summary>
+    /// <remarks>
+    /// A CLR-bound parameter is compared by resolved type, so `int` and `System.Int32` are
+    /// the same answer and `int` and `long` are not. A nominally-bound one is compared by
+    /// name, which is all there is to compare.
+    /// </remarks>
+    private bool IsClosedOver(IReadOnlyList<string> written)
+    {
+        var names = Definition.TypeParameterNames;
+
+        if (written.Count != names.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < written.Count; index++)
+        {
+            var parameter = names[index];
+
+            if (TypeArguments is not null &&
+                TypeArguments.TryGetValue(parameter, out var bound) &&
+                bound is not null)
+            {
+                if (Definition.ResolveComparisonType(written[index]) != bound)
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (NominalTypeArguments is null ||
+                !NominalTypeArguments.TryGetValue(parameter, out var nominal) ||
+                !string.Equals(nominal, written[index], StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Splits a type-argument list on its top-level commas.</summary>
+    private static List<string> SplitTopLevelArguments(string inner)
+    {
+        var parts = new List<string>();
+        var depth = 0;
+        var start = 0;
+
+        for (var index = 0; index < inner.Length; index++)
+        {
+            switch (inner[index])
+            {
+                case '<': depth++; break;
+                case '>': depth--; break;
+                case ',' when depth == 0:
+                    parts.Add(inner[start..index].Trim());
+                    start = index + 1;
+                    break;
+            }
+        }
+
+        parts.Add(inner[start..].Trim());
+        return parts;
+    }
+
     internal bool IsInitializing { get; private set; } = true;
 
     internal object? ClrBaseObject { get; private set; }
@@ -505,6 +573,34 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     public bool IsInstanceOf(string typeName)
     {
+        // `TOAST-0125`. A closed spelling asks two questions — is this a `Box`, and is it
+        // closed over `int` — and the name walk below answers only the first. Comparing
+        // rendered names instead answers neither reliably: `Box<String>` happens to match
+        // `Box<string>` case-insensitively while `Box<Int32>` never matches `Box<int>`, so
+        // `is` was true for one closure and false for another with no difference between
+        // them.
+        var angle = typeName.IndexOf('<', StringComparison.Ordinal);
+        if (angle > 0 && typeName.EndsWith(">", StringComparison.Ordinal))
+        {
+            var openName = typeName[..angle];
+
+            if (!IsInstanceOf(openName))
+            {
+                return false;
+            }
+
+            // The closure is compared only when the name is this instance's own class. For
+            // an ancestor the written arguments belong to a different parameter list —
+            // `class IntBox extends Box<int>` has none of its own — and the open-name match
+            // is the honest answer there.
+            if (!string.Equals(Definition.Name, openName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return IsClosedOver(SplitTopLevelArguments(typeName[(angle + 1)..^1]));
+        }
+
         // Walk the Tosh class hierarchy
         var current = Definition;
         while (current is not null)

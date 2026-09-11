@@ -3689,6 +3689,12 @@ public sealed class ToshClassDefinition : IShellNamedType
     }
 
     /// <summary>
+    /// Resolves a written type name to the CLR type a bound argument would hold, for
+    /// comparison — <c>TOAST-0125</c>.
+    /// </summary>
+    internal Type? ResolveComparisonType(string typeName) => _engine.TryResolveTypeName(typeName);
+
+    /// <summary>
     /// Whether a named type is one the script declared, rather than a built-in or an alias.
     /// </summary>
     private static bool IsScriptDeclaredType(IShellNamedType named) =>

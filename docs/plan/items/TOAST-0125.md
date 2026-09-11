@@ -35,9 +35,9 @@ sound and should not be disturbed.
 - [x] **B2/B3** interface and base-class constraints are never enforced
 - [x] **F2** the contract check compares against the open parameter, so every closed generic
       interface implementation reports a false mismatch
-- [ ] **A4** a generic annotation accepts any closure
-- [ ] **F1** `Two<int, string>(1, "x")` reports a false arity error
-- [ ] **F3** `$x is Box<int>` does not parse
+- [x] **A4** a generic annotation accepts any closure
+- [x] **F1** `Two<int, string>(1, "x")` reports a false arity error
+- [x] **F3** `$x is Box<int>` does not parse
 - [ ] **F5** `prop V: T` with no initialiser is null rather than `default(T)`
 - [ ] **E1/E2** `trait<T>` and `struct<T>` are not recognised
 - [ ] **E3** `in`/`out` parse and mean nothing — implement variance or refuse the keywords

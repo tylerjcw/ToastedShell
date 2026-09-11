@@ -861,8 +861,18 @@ public static partial class ToshParser
             // Function-call syntax: command immediately followed by '(' with no space.
             // e.g. test_args(1, 2, 3) — parse the parenthesized list as individual arguments,
             // not as a tuple literal.
+            //
+            // `TOAST-0125`. When a type-argument list was consumed, the parenthesis follows
+            // *it* rather than the name, so anchoring on the name meant
+            // `Two<int, string>(1, "x")` never took this path at all: the parenthesised list
+            // was read as one tuple, and the arity check then reported one argument where two
+            // were declared — a message about counting, for a problem about parsing.
+            var callAnchor = explicitTypeArgs is not null && _position > 0
+                ? Peek(-1).Span.End
+                : nameToken.Span.End;
+
             if (Current.Kind == SyntaxTokenKind.OpenParen &&
-                Current.Span.Start == nameToken.Span.End)
+                Current.Span.Start == callAnchor)
             {
                 var invocationArgs = ParseInvocationArguments();
                 arguments = new List<ArgumentSyntax>(invocationArgs.arguments);

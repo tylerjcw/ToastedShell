@@ -771,16 +771,14 @@ public sealed partial class ToshEngine
         if (TryGetGenericClassAnnotation(normalizedTypeName, out var genericClass, out _) &&
             value is ToshClassInstance genericInstance)
         {
-            var current = genericInstance.Definition;
-            while (current is not null)
+            // `TOAST-0125`. The written arguments were read and thrown away, so the match
+            // was on the open name alone and `Box<int>` accepted a `Box<string>`.
+            // `IsInstanceOf` answers both halves — is it a `Box`, and is it closed over
+            // `int` — and still walks ancestors, interfaces and traits as this loop did.
+            if (genericInstance.IsInstanceOf(normalizedTypeName))
             {
-                if (ReferenceEquals(current, genericClass) ||
-                    string.Equals(current.Name, genericClass.Name, StringComparison.Ordinal))
-                {
-                    converted = value;
-                    return true;
-                }
-                current = current.BaseClass;
+                converted = value;
+                return true;
             }
 
             // Bare-name didn't match any ancestor; treat as a hard mismatch
