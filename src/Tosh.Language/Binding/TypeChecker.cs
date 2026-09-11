@@ -716,6 +716,12 @@ public static class TypeChecker
                     continue;
                 }
 
+                // `TOAST-0125`. Close the interface's type parameters over what the
+                // `fulfills` clause supplied. Without this every correct implementation of a
+                // closed generic interface was reported as a mismatch — `Co<int>` compared
+                // the class's `-> int` against its own undeclared `T`.
+                var substitutions = BuildContractSubstitutions(@interface.TypeParameters, declaredName);
+
                 foreach (var method in @interface.Methods)
                 {
                     CheckContractMethodType(
@@ -725,7 +731,8 @@ public static class TypeChecker
                         method.Name,
                         method.Parameters,
                         method.ReturnTypeName,
-                        ctx);
+                        ctx,
+                        substitutions);
                 }
             }
         }
@@ -791,7 +798,8 @@ public static class TypeChecker
         string memberName,
         IReadOnlyList<BoundParameter> contractParameters,
         string? contractReturnTypeName,
-        CheckContext ctx)
+        CheckContext ctx,
+        IReadOnlyDictionary<string, string>? substitutions = null)
     {
         var implementation = @class.Members
             .OfType<BoundClassMethodMember>()
@@ -804,15 +812,20 @@ public static class TypeChecker
             return;
         }
 
+        string? Close(string? typeName) =>
+            typeName is { Length: > 0 } && substitutions is { Count: > 0 } && substitutions.TryGetValue(typeName, out var closed)
+                ? closed
+                : typeName;
+
         var mismatch = ContractMemberTypeRules.FindMethodMismatch(
             implementation.Method.Parameters
                 .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
                 .ToArray(),
             implementation.Method.ReturnTypeName,
             contractParameters
-                .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
+                .Select(parameter => new ContractParameterType(parameter.Name, Close(parameter.TypeName)))
                 .ToArray(),
-            contractReturnTypeName,
+            Close(contractReturnTypeName),
             (actual, expected) => ContractReturnIsCovariant(actual, expected, ctx),
             (actual, expected) => ContractNamesSameType(actual, expected, ctx));
         AddContractMismatch(
@@ -882,6 +895,42 @@ public static class TypeChecker
             && !expected.IsDynamic
             && IsAssignable(actual, expected, out _)
             && IsAssignable(expected, actual, out _);
+    }
+
+    /// <summary>
+    /// Maps a contract's type parameters to what a `fulfills` clause closed them over —
+    /// <c>TOAST-0125</c>. Null when there are none, none were written, or the arity disagrees.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? BuildContractSubstitutions(
+        IReadOnlyList<string>? typeParameters,
+        string declaredName)
+    {
+        if (typeParameters is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var genericStart = declaredName.IndexOf('<');
+        if (genericStart < 0 || !declaredName.EndsWith(">", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var inner = declaredName.Substring(genericStart + 1, declaredName.Length - genericStart - 2);
+        var args = inner.Split(',').Select(part => part.Trim()).ToArray();
+
+        if (args.Length != typeParameters.Count)
+        {
+            return null;
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var index = 0; index < args.Length; index++)
+        {
+            map[typeParameters[index]] = args[index];
+        }
+
+        return map;
     }
 
     private static string StripContractTypeArguments(string name)

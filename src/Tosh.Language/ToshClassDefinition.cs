@@ -444,9 +444,16 @@ public sealed class ToshClassDefinition : IShellNamedType
                 if (satisfied) continue;
                 if (!known) continue; // unknown name — accept conservatively
 
+                // The CLR name is worth showing when there is one and worth omitting when
+                // there is not: a ToastScript class has no CLR type of its own, and saying
+                // `(CLR <unresolved>)` about it reads as a second failure.
+                var detail = bound is null
+                    ? $"'{argDisplay}'"
+                    : $"'{argDisplay}' (CLR {bound.FullName ?? bound.Name})";
+
                 throw new InvalidOperationException(
-                    $"Generic class '{Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', " +
-                    $"but '{argDisplay}' (CLR {bound?.FullName ?? bound?.Name ?? "<unresolved>"}) does not.");
+                    $"Generic class '{Name}' requires type parameter '{clause.TypeParameter}' to satisfy "
+                    + $"'{constraintName}', but {detail} does not.");
             }
         }
     }
@@ -510,16 +517,51 @@ public sealed class ToshClassDefinition : IShellNamedType
                     return string.Equals(argIface.Name, constraintIface.Name, StringComparison.OrdinalIgnoreCase);
                 }
             }
-            // Constraint is known, type-arg is not a recognised
-            // TōSh class — fall through to conservative accept so
-            // CLR-backed type args (e.g. `int`) do not trip the
-            // diagnostic.
+            // `TOAST-0125`. A CLR type cannot implement a ToastScript interface, so a bound
+            // argument here is a definite failure rather than something to be conservative
+            // about. `where T: Drawable` accepted `int` before this, which is the shape of
+            // constraint most likely to be written and the one least likely to be checked
+            // anywhere else.
+            if (bound is not null)
+            {
+                known = true;
+                return false;
+            }
+
+            // Genuinely unrecognised: neither a CLR type nor a declaration this session
+            // knows. Stay conservative — refusing what cannot be checked turns an
+            // unenforced constraint into a wrong error.
             known = false;
             return true;
         }
 
-        // Constraint name resolves to some other shell-named type
-        // (class, trait, etc.) — accept conservatively.
+        // `TOAST-0125`. A base-class constraint: `where T: Shape` is satisfied by `Shape`
+        // itself and by anything extending it, and by nothing else. It used to be accepted
+        // conservatively, which meant never checked at all.
+        if (_engine.TryGetNamedType(constraintName, out var namedConstraint)
+            && namedConstraint is ToshClassDefinition constraintClass)
+        {
+            var argLookup = StripGenericTypeArguments(argDisplay);
+
+            if (_engine.TryGetNamedType(argLookup, out var argNamed) &&
+                argNamed is ToshClassDefinition argumentClass)
+            {
+                known = true;
+                return ClassExtends(argumentClass, constraintClass.Name);
+            }
+
+            if (bound is not null)
+            {
+                // A CLR type cannot extend a ToastScript class.
+                known = true;
+                return false;
+            }
+
+            known = false;
+            return true;
+        }
+
+        // Constraint name resolves to some other shell-named type — accept conservatively.
         if (_engine.TryGetNamedType(constraintName, out _))
         {
             known = false;
@@ -563,6 +605,26 @@ public sealed class ToshClassDefinition : IShellNamedType
             }
 
             current = current.BaseClass;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="cls"/> is <paramref name="baseName"/> or extends it —
+    /// <c>TOAST-0125</c>.
+    /// </summary>
+    /// <remarks>
+    /// A class satisfies its own name, as it does in C#: `where T: Shape` takes a `Shape`.
+    /// </remarks>
+    private static bool ClassExtends(ToshClassDefinition cls, string baseName)
+    {
+        for (var current = cls; current is not null; current = current.BaseClass)
+        {
+            if (string.Equals(current.Name, baseName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         return false;

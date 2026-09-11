@@ -2584,7 +2584,8 @@ public static class Lowerer
             Name: ifaceDef.Name,
             Methods: methods,
             Modifier: ifaceDef.Modifier,
-            Span: ifaceDef.Span);
+            Span: ifaceDef.Span,
+            TypeParameters: ifaceDef.TypeParameters);
     }
 
     private static BoundUnionDefinition LowerUnionDefinition(

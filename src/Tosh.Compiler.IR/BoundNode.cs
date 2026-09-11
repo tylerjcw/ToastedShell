@@ -811,11 +811,16 @@ public sealed record BoundInterfaceMethodSignature(
     TextSpan Span)
     : BoundNode(Span);
 
+/// <param name="TypeParameters">
+/// The interface's own type parameters, carried so that a `fulfills Co&lt;int&gt;` can be
+/// checked against `Get() -> int` rather than against `Get() -> T` — <c>TOAST-0125</c>.
+/// </param>
 public sealed record BoundInterfaceDefinition(
     string Name,
     IReadOnlyList<BoundInterfaceMethodSignature> Methods,
     DeclarationModifier Modifier,
-    TextSpan Span)
+    TextSpan Span,
+    IReadOnlyList<string>? TypeParameters = null)
     : BoundStatement(Span);
 
 public sealed record BoundUnionVariant(

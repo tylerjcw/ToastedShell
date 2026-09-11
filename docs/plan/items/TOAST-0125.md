@@ -32,8 +32,8 @@ sound and should not be disturbed.
 - [x] **D1** `any` resolves to a JS-interop type and fails in every annotation position
 - [x] **C** widening at a type-parameter binding — `TOAST-0124`
 - [x] **A1–A3** a type argument naming a ToastScript type or alias binds null
-- [ ] **B2/B3** interface and base-class constraints are never enforced
-- [ ] **F2** the contract check compares against the open parameter, so every closed generic
+- [x] **B2/B3** interface and base-class constraints are never enforced
+- [x] **F2** the contract check compares against the open parameter, so every closed generic
       interface implementation reports a false mismatch
 - [ ] **A4** a generic annotation accepts any closure
 - [ ] **F1** `Two<int, string>(1, "x")` reports a false arity error

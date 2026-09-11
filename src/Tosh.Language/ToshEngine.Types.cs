@@ -374,11 +374,18 @@ public sealed partial class ToshEngine
                 // are methods-only, so this is the whole of it for them. They had the
                 // identical gap and sit one block away; leaving them out would have left two
                 // neighbouring constructs behaving differently for no stated reason.
+                // `TOAST-0125`. Close the interface's own type parameters over what the
+                // `fulfills` clause supplied, so `Co<int>.Get` is compared as returning
+                // `int` rather than as returning `T`.
+                var contractSubstitutions = BuildContractSubstitutions(ifaceDefinition, ifaceName);
+
                 foreach (var signature in ifaceDefinition.Methods)
                 {
                     ThrowOnContractTypeMismatch(
                         sourceName, sourceText, @class, ifaceName, "interface", signature.Name,
-                        ResolveMemberTypeMismatch(definition, signature.Name, signature.Parameters, signature.ReturnTypeName));
+                        ResolveMemberTypeMismatch(
+                            definition, signature.Name, signature.Parameters, signature.ReturnTypeName,
+                            contractSubstitutions));
                 }
 
                 var missing = ifaceDefinition.GetMissingMethods(definition);
@@ -997,6 +1004,38 @@ public sealed partial class ToshEngine
     /// class is instantiated). Concrete types are validated against
     /// the interface's where-clauses.
     /// </summary>
+    /// <summary>
+    /// Maps an interface's type parameters to what a `fulfills` clause closed them over —
+    /// <c>TOAST-0125</c>. Null when the reference carries no arguments or the arity is wrong,
+    /// both of which are reported by <see cref="ValidateInterfaceTypeArguments"/>.
+    /// </summary>
+    private IReadOnlyDictionary<string, string>? BuildContractSubstitutions(
+        ToshInterfaceDefinition ifaceDefinition,
+        string ifaceReference)
+    {
+        var lt = ifaceReference.IndexOf('<', StringComparison.Ordinal);
+        if (lt < 0 || !ifaceReference.EndsWith(">", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var inner = ifaceReference.Substring(lt + 1, ifaceReference.Length - lt - 2);
+        var args = SplitTopLevelTypeArguments(inner);
+
+        if (args.Count != ifaceDefinition.TypeParameterNames.Count)
+        {
+            return null;
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var index = 0; index < args.Count; index++)
+        {
+            map[ifaceDefinition.TypeParameterNames[index]] = args[index];
+        }
+
+        return map;
+    }
+
     private void ValidateInterfaceTypeArguments(
         string sourceName,
         string sourceText,
@@ -1334,11 +1373,18 @@ public sealed partial class ToshEngine
     /// the trait — it has only declined to repeat it.
     /// </para>
     /// </remarks>
+    /// <param name="substitutions">
+    /// What the contract's own type parameters were closed over at the `fulfills` site —
+    /// <c>TOAST-0125</c>. `interface Co&lt;T&gt; { func Get() -> T }` fulfilled as `Co&lt;int&gt;`
+    /// declares `Get` returning `int`, and comparing the class's `-> int` against the
+    /// unsubstituted `T` reported a mismatch on every correct implementation.
+    /// </param>
     private ContractMemberTypeMismatch? ResolveMemberTypeMismatch(
         ToshClassDefinition definition,
         string memberName,
         IReadOnlyList<FunctionParameterDefinition> contractParameters,
-        string? contractReturnTypeName)
+        string? contractReturnTypeName,
+        IReadOnlyDictionary<string, string>? substitutions = null)
     {
         var implementation = definition.Methods
             .FirstOrDefault(method => string.Equals(method.Name, memberName, StringComparison.OrdinalIgnoreCase));
@@ -1350,15 +1396,20 @@ public sealed partial class ToshEngine
             return null;
         }
 
+        string? Close(string? typeName) =>
+            typeName is { Length: > 0 } && substitutions is { Count: > 0 }
+                ? SubstituteTypeParametersInTypeName(typeName, substitutions)
+                : typeName;
+
         return ContractMemberTypeRules.FindMethodMismatch(
             implementation.Parameters
                 .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
                 .ToArray(),
             implementation.ReturnTypeName,
             contractParameters
-                .Select(parameter => new ContractParameterType(parameter.Name, parameter.TypeName))
+                .Select(parameter => new ContractParameterType(parameter.Name, Close(parameter.TypeName)))
                 .ToArray(),
-            contractReturnTypeName,
+            Close(contractReturnTypeName),
             IsCovariantWith,
             NamesSameType);
     }
