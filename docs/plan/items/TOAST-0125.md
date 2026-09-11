@@ -1,7 +1,7 @@
 ---
 id: TOAST-0125
 title: "Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced"
-status: in-progress
+status: partial
 area: toast
 priority: 1
 opened: 2026-09-10
@@ -38,7 +38,15 @@ sound and should not be disturbed.
 - [x] **A4** a generic annotation accepts any closure
 - [x] **F1** `Two<int, string>(1, "x")` reports a false arity error
 - [x] **F3** `$x is Box<int>` does not parse
-- [ ] **F5** `prop V: T` with no initialiser is null rather than `default(T)`
-- [ ] **E1/E2** `trait<T>` and `struct<T>` are not recognised
-- [ ] **E3** `in`/`out` parse and mean nothing — implement variance or refuse the keywords
-- [ ] **F4** statics are shared across every closure; C# gives each closed type its own
+- [x] **F5** *withdrawn* — `prop I: int` is null too, so this is uniform across the language
+      rather than a generics gap; fixing it for type parameters alone would make generics
+      inconsistent with everything else
+- [ ] **E1/E2** `trait<T>` and `struct<T>` are not recognised — *features, not defects*;
+      see the audit's "Left, as features". A trait injects default bodies, so its parameters
+      must substitute through them at application time; a struct has no type-argument
+      concept at all and needs the ground this audit covered for classes
+- [x] **E3** *withdrawn* — variance **is** implemented, in the type checker, with tests for
+      both directions. The audit probe looked at a runtime `fulfills`, which is not where
+      variance lives
+- [ ] **F4** statics are shared across every closure; C# gives each closed type its own —
+      *a decision*, not a defect: a real semantic change with a small payoff

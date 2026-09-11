@@ -107,9 +107,15 @@ Cheap to fix and documented-but-broken, which makes it the worst kind of gap.
 |---|---|---|
 | E1 | `trait G<T>` | not recognised as a declaration at all — falls through to a command |
 | E2 | `struct G<T>` | same |
-| E3 | `interface Co<out T>` / `<in T>` | **parses and means nothing** — no variance is implemented |
+| ~~E3~~ | ~~`interface Co<out T>` / `<in T>`~~ | **wrong — variance is implemented.** See below. |
 
-E3 is the dangerous one: accepting a keyword that has no effect is worse than rejecting it.
+**E3 was a mistake in this audit.** It was recorded as "parses and means nothing" on the
+strength of a probe that declared a variant interface and then looked at a runtime
+`fulfills`, which is not where variance lives. Variance is a static assignability rule and
+it is implemented in the type checker, with four tests covering covariance, contravariance,
+invariance, and the rejection direction of each. Confirmed from the outside as well:
+`IBox<out T>` accepts an `IBox<int>` in an `IBox<long>` slot, and the same code without
+`out` is refused with `tosh.type.mismatch`.
 
 ---
 
@@ -121,12 +127,18 @@ E3 is the dangerous one: accepting a keyword that has no effect is worse than re
 | F2 | `class Impl() fulfills Co<int> { func Get() -> int }` | `implements 'Co<int>.Get' with an incompatible return type — the interface declares T, the class declares int` | no diagnostic |
 | F3 | `$x is Box<int>` | does not parse | a closed type test |
 | F4 | `shared prop` on `Counter<T>` | one slot for every closure | C# gives each closed type its own |
-| F5 | `prop V: T` with no initialiser, `T` = `int` | `null` | `default(T)` — `0` |
+| ~~F5~~ | ~~`prop V: T` with no initialiser~~ | `null` | see below |
 
 F1 fires only for the parenthesised call form with more than one argument; the
 space-separated `Two<int, string> 1 "x"` works. F2 makes every closed generic interface
 implementation report a false mismatch — the contract check never substitutes the argument
 for the parameter.
+
+**F5 is not a generics finding.** `prop I: int` with no initialiser is null too, as is
+`bool`, `string` and `double`. The divergence from C#'s `default(T)` is uniform across every
+annotated property, not something generics does differently — so "fixing" it for a type
+parameter alone would make generics inconsistent with the rest of the language rather than
+closer to C#. Recorded as a language-wide question, not a gap in this area.
 
 ---
 
@@ -146,15 +158,44 @@ Recorded so it is not "fixed" later:
 
 ---
 
-## Suggested order
+## Outcome
 
-1. **D1** — `any`. One name, documented, broken everywhere, trivially fixed.
-2. **C / `TOAST-0124`** — widening. Unblocks `Vector2D<double>` and generic factories.
-3. **A1–A3** — make a type argument that names a ToastScript type or alias bind to
-   something the checker can use. This is the root of the soundness column.
-4. **B2/B3** — enforce interface and base-class constraints.
-5. **F2** — substitute type arguments in the contract check.
-6. **A4** — check the closure in annotations. Depends on 3.
-7. **F1**, **F3**, **F5**, **E1/E2** — bugs and surface, in whatever order suits.
-8. **E3** — either implement variance or refuse the keywords.
-9. **F4** — decide deliberately; per-closure statics is the C# rule and a real change.
+Every defect above is fixed. What is left are two features and one decision, which are
+listed here rather than half-built — a generic construct that parses and does not bind is
+the failure this audit named in E3, and building one deliberately would be worse than
+leaving the gap.
+
+| | done |
+|---|---|
+| **D1** | `any` is a synonym for dynamic again, in every position |
+| **C** | a type parameter widens like C#, converting rather than merely permitting |
+| **A1–A3** | a ToastScript type argument keeps its name and is checked nominally |
+| **A4** | an annotation checks the closure, in every position |
+| **B2/B3** | interface and base-class constraints are enforced |
+| **F2** | a closed contract is compared closed |
+| **F1** | a type-argument list no longer hides the call parenthesis |
+| **F3** | `$x is Box<int>` parses and compares the closure |
+| ~~F5~~ | withdrawn — uniform across the language, not a generics gap |
+| ~~E3~~ | withdrawn — variance is implemented and tested |
+
+### Left, as features
+
+**E1 · generic traits.** `trait Holder<T>` is not recognised. Worth having: ToastLib's
+`Componentwise` would be `Componentwise<T>`, and traits are the distinctive construct here.
+The work is not the parser — it is that a trait injects default method *bodies* into the
+using class, so its type parameters must be substituted through the injected members at
+application time, against a using class that has type parameters of its own.
+
+**E2 · generic structs.** `struct Pair<K, V>(k: K, v: V)` is not recognised. A struct is a
+value-type analogue of a class and C# has generic ones, so this is a real gap rather than a
+category error. `ToshStructDefinition` has no type-argument concept at all, so the work is
+to port binding storage, constraint validation, nominal names, strict binding and the bound
+descriptor — the same ground this audit covered for classes, which is most of what took the
+effort.
+
+### Left, as a decision
+
+**F4 · per-closure statics.** `shared prop` on `Counter<T>` is one slot for every closure;
+C# gives each closed type its own. Changing it is a real semantic change with a small
+practical payoff, and someone may be relying on the shared slot. Worth deciding on purpose
+rather than drifting into either answer.
