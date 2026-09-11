@@ -22,7 +22,8 @@ internal sealed class BoundGenericTypeDescriptor : IShellTypeDescriptor
 
     public BoundGenericTypeDescriptor(
         ToshClassDefinition definition,
-        IReadOnlyDictionary<string, Type?> bindings)
+        IReadOnlyDictionary<string, Type?> bindings,
+        IReadOnlyDictionary<string, string>? nominalBindings = null)
     {
         _definition = definition;
         var names = definition.TypeParameterNames;
@@ -36,7 +37,14 @@ internal sealed class BoundGenericTypeDescriptor : IShellTypeDescriptor
         var args = new string[ordered.Length];
         for (var i = 0; i < ordered.Length; i++)
         {
-            args[i] = ordered[i]?.Name ?? names[i];
+            // `TOAST-0125`. A ToastScript type argument has no CLR type, so it arrives null
+            // and used to fall back to the *parameter* name — `Holder<T>` for something the
+            // source wrote as `Holder<Circle>`. The nominal name is the answer when there is
+            // one; the parameter name remains the last resort.
+            args[i] = ordered[i]?.Name
+                ?? (nominalBindings is not null && nominalBindings.TryGetValue(names[i], out var nominal)
+                    ? nominal
+                    : names[i]);
         }
         _displayName = $"{definition.Name}<{string.Join(", ", args)}>";
     }

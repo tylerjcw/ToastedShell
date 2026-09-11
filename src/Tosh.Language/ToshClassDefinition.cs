@@ -382,14 +382,26 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var bindings = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
+
+        // `TOAST-0125`. The names as written, kept beside the resolved types. A ToastScript
+        // type argument resolves to null on purpose — see `ResolveTypeArgument` — and without
+        // the name the instance could neither say nor check what it was closed over.
+        var nominal = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         for (int i = 0; i < TypeParameterNames.Count; i++)
         {
             bindings[TypeParameterNames[i]] = resolvedTypeArguments[i];
+
+            if (resolvedTypeArguments[i] is null && i < typeArgumentDisplay.Count)
+            {
+                nominal[TypeParameterNames[i]] = typeArgumentDisplay[i];
+            }
         }
 
         ValidateTypeParameterConstraints(bindings, typeArgumentDisplay);
 
-        return await CreateInstanceCoreAsync(arguments, bindings, cancellationToken);
+        return await CreateInstanceCoreAsync(
+            arguments, bindings, cancellationToken, nominal.Count > 0 ? nominal : null);
     }
 
     private void ValidateTypeParameterConstraints(
@@ -576,7 +588,8 @@ public sealed class ToshClassDefinition : IShellNamedType
     private async Task<object> CreateInstanceCoreAsync(
         IReadOnlyList<object?> arguments,
         IReadOnlyDictionary<string, Type?>? typeArgumentBindings,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? nominalTypeArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -597,7 +610,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 $"'new {Name}<{string.Join(", ", TypeParameterNames)}>(…)'.");
         }
 
-        var instance = new ToshClassInstance(this, typeArgumentBindings);
+        var instance = new ToshClassInstance(this, typeArgumentBindings, nominalTypeArguments);
         await ConstructOnInstanceAsync(instance, arguments, cancellationToken);
         instance.CompleteInitialization();
 
@@ -2492,8 +2505,21 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (boundType is null)
         {
-            // Type parameter is recognised but the user did not supply a resolvable CLR type —
-            // accept any value (effectively nominal-only).
+            // `TOAST-0125`. Nominal-only used to mean "accept anything", which made
+            // `Holder<Circle>` unenforceable: a ToastScript type argument has no CLR type, so
+            // every one of them landed here. The name it was closed over is now kept, and a
+            // value is checked against *that* — nominally, against this instance's own
+            // declaration, rather than against whatever type the CLR happens to have loaded
+            // under the same name, which is what `TS-P2-39` was.
+            EnforceNominalBinding(
+                instance,
+                property.TypeName,
+                value,
+                property.Span,
+                SourceName,
+                SourceText,
+                $"{Name}.{property.Name}");
+
             return true;
         }
 
@@ -2693,7 +2719,24 @@ public sealed class ToshClassDefinition : IShellNamedType
                     // the *class's* T and rejected the argument the caller actually passed.
                     if (methodBindings is not null && methodBindings.TryGetValue(parameter.RawTypeName, out var mBound)) bound = mBound;
                     if (bound is null && bindings is not null && bindings.TryGetValue(parameter.RawTypeName, out var classBound)) bound = classBound;
-                    if (bound is null) continue;
+
+                    if (bound is null)
+                    {
+                        // Bound nominally rather than to a CLR type — `TOAST-0125`.
+                        if (boundLocals.TryGetValue(parameter.Name, out var nominalValue))
+                        {
+                            EnforceNominalBinding(
+                                instance,
+                                parameter.RawTypeName,
+                                nominalValue,
+                                parameter.Span,
+                                method.SourceName,
+                                method.SourceText,
+                                $"{Name}.{method.Name}.{parameter.Name}");
+                        }
+
+                        continue;
+                    }
                     if (!boundLocals.TryGetValue(parameter.Name, out var value)) continue;
 
                     if (parameter.IsRest && value is System.Collections.IList list)
@@ -3506,6 +3549,92 @@ public sealed class ToshClassDefinition : IShellNamedType
             Label: $"the value does not match '{typeName}'"));
     }
 
+
+    /// <summary>
+    /// Whether a value is an instance of the ToastScript type named <paramref name="typeName"/>
+    /// — <c>TOAST-0125</c>.
+    /// </summary>
+    /// <remarks>
+    /// Asks the value, through the same contract `is` uses, so a subclass and an implemented
+    /// interface both satisfy the name. A value that cannot answer is accepted: the binding is
+    /// nominal, and refusing what we cannot check would turn an unenforced annotation into a
+    /// wrong error.
+    /// </remarks>
+    private bool NominalValueMatches(object? value, string typeName)
+    {
+        if (value is null)
+        {
+            return true;
+        }
+
+        // A nested generic is checked by its open name: `Holder<int>` asks whether the value
+        // is a `Holder`. Checking the closure as well would mean matching `int` against
+        // `Int32` and recursing, which belongs with making annotations check closures
+        // generally rather than here.
+        var open = typeName;
+        var angle = open.IndexOf('<', StringComparison.Ordinal);
+        if (angle > 0)
+        {
+            open = open[..angle];
+        }
+
+        // Only a name the script itself *declared* is enforced. `array`, `list` and `dict`
+        // are named shell types too, but they name a CLR shape rather than a declaration, and
+        // whether a value has one is not a nominal question — refusing what cannot be checked
+        // that way would turn an unenforced annotation into a wrong error, which is worse
+        // than the hole it closes.
+        if (!_engine.TryGetNamedType(open, out var named) || !IsScriptDeclaredType(named))
+        {
+            return true;
+        }
+
+        return value is IShellTypeCheckable checkable && checkable.IsInstanceOf(open);
+    }
+
+    /// <summary>
+    /// Checks a value against a type parameter that was bound nominally — <c>TOAST-0125</c>.
+    /// </summary>
+    /// <remarks>
+    /// Does nothing when the parameter was bound to a CLR type, which the strict check
+    /// already covers, or when there is no instance to read the binding from — a static
+    /// method has no receiver and so no nominal argument to check against.
+    /// </remarks>
+    private void EnforceNominalBinding(
+        ToshClassInstance? instance,
+        string rawTypeName,
+        object? value,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner)
+    {
+        var nominal = instance?.GetNominalBindingsFor(this);
+
+        if (nominal is null ||
+            !nominal.TryGetValue(rawTypeName, out var nominalName) ||
+            NominalValueMatches(value, nominalName))
+        {
+            return;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.annotation_conversion_failed",
+            Title: $"'{owner}' produced a value that is not a '{nominalName}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: $"the value does not match '{nominalName}'"));
+    }
+
+    /// <summary>
+    /// Whether a named type is one the script declared, rather than a built-in or an alias.
+    /// </summary>
+    private static bool IsScriptDeclaredType(IShellNamedType named) =>
+        named is ToshClassDefinition
+            or ToshInterfaceDefinition
+            or ToshRecordDefinition
+            or ToshUnionDefinition
+            or ToshStructDefinition;
 
     /// <summary>
     /// C#'s implicit numeric conversions, by source type — <c>TOAST-0124</c>.

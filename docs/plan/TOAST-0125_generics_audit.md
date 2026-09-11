@@ -39,6 +39,15 @@ A null binding disables the check it was supposed to feed, so these accept anyth
 ToastScript-declared type and every collection alias. The value is kept nominally for
 display and the type system then knows nothing about it.
 
+**Fixed.** The null is deliberate and stays — resolving the name through the CLR resolver is
+what `TS-P2-39` was, and it reached every loaded assembly. What was missing is that the
+*name* was thrown away too. It is now carried on the instance, so `type-of` answers
+`Holder<Circle>`, and a value is checked against it nominally through the same contract `is`
+uses — which is why a subclass and an implemented interface both satisfy it. Only names the
+script declared are enforced: an alias names a CLR shape rather than a declaration, and
+refusing what cannot be checked that way would turn an unenforced annotation into a wrong
+error.
+
 **A4.** `func f(b: Box<int>)` accepts a `Box<string>`, and `var x: Box<int> = <a Box<string>>`
 binds. A generic annotation checks the open type only.
 

@@ -33,10 +33,14 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         Definition = definition;
     }
 
-    internal ToshClassInstance(ToshClassDefinition definition, IReadOnlyDictionary<string, Type?>? typeArguments)
+    internal ToshClassInstance(
+        ToshClassDefinition definition,
+        IReadOnlyDictionary<string, Type?>? typeArguments,
+        IReadOnlyDictionary<string, string>? nominalTypeArguments = null)
     {
         Definition = definition;
         TypeArguments = typeArguments;
+        NominalTypeArguments = nominalTypeArguments;
 
         // Build the binding chain whenever this class itself or any
         // ancestor declares type parameters; otherwise lookups never
@@ -151,6 +155,34 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
     /// </summary>
     public IReadOnlyDictionary<string, Type?>? TypeArguments { get; }
 
+    /// <summary>
+    /// What each type parameter was closed over, written as the source wrote it —
+    /// <c>TOAST-0125</c>.
+    /// </summary>
+    /// <remarks>
+    /// A ToastScript class has no CLR type of its own, so `Holder&lt;Circle&gt;` binds
+    /// nominally and <see cref="TypeArguments"/> holds null for it. That null was then read
+    /// as "accept anything", which made the annotation unenforceable — and losing the name
+    /// as well meant the instance could not even say what it had been closed over, so
+    /// `type-of` answered `Holder&lt;T&gt;`.
+    ///
+    /// Resolving the name to a CLR type instead is what `TS-P2-39` was: the search reached
+    /// every loaded assembly and found an unrelated type that merely shared the name. The
+    /// name is kept here precisely so it can be checked *nominally*, against this instance's
+    /// own declaration, rather than against whatever the CLR happens to have loaded.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string>? NominalTypeArguments { get; }
+
+    /// <summary>
+    /// The nominal type-argument names to use for members declared on <paramref name="def"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only the instance's own definition carries them. An inherited generic member resolves
+    /// through <see cref="GetBindingsFor"/> as before, which is unchanged.
+    /// </remarks>
+    internal IReadOnlyDictionary<string, string>? GetNominalBindingsFor(ToshClassDefinition def) =>
+        ReferenceEquals(def, Definition) ? NominalTypeArguments : null;
+
     internal bool IsInitializing { get; private set; } = true;
 
     internal object? ClrBaseObject { get; private set; }
@@ -185,7 +217,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
     internal void CompleteInitialization() => IsInitializing = false;
 
     public IShellTypeDescriptor ShellTypeDescriptor => TypeArguments is { Count: > 0 }
-        ? new BoundGenericTypeDescriptor(Definition, TypeArguments)
+        ? new BoundGenericTypeDescriptor(Definition, TypeArguments, NominalTypeArguments)
         : Definition;
 
     public string ShellTypeName => Definition.Name;
@@ -374,7 +406,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     public object Clone()
     {
-        var clone = new ToshClassInstance(Definition, TypeArguments);
+        var clone = new ToshClassInstance(Definition, TypeArguments, NominalTypeArguments);
 
         foreach (var (name, value) in _values)
         {
