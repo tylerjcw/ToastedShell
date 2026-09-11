@@ -1,7 +1,7 @@
 ---
 id: TOAST-0124
 title: "A value bound to a type parameter is checked for an exact type, so an integer literal cannot fill a double"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-10
@@ -67,10 +67,28 @@ fractional part stays an error.
 Worth checking at the same time whether the same asymmetry applies to a `where T: Numeric`
 constraint and to refinement types over a type parameter.
 
+## Fix
+
+`EnforceStrictBinding` became `CoerceStrictBinding` and returns the value to store, so the
+eight call sites — property, constructor parameter, method parameter, rest element, return
+value — write back what it approved rather than discarding it. Widening without converting
+would have swapped one lie for another: a `Vector2D<double>` holding an `Int32` in `X`.
+
+The permitted set is exactly C#'s implicit numeric conversions, written out as a table so
+that what is allowed can be read rather than derived. `TypeConversion.TryConvert` was
+deliberately *not* reused: it parses strings and truncates doubles, so it would take the
+3.5 this check exists to refuse.
+
+`int`→`float` and `long`→`double` lose precision and are implicit in C# regardless; this
+follows C# rather than inventing a stricter rule, so that a reader who knows one knows the
+other.
+
 ## Acceptance
 
-- [ ] `new Vector2D<double>(0, 0)` constructs, with `X` a `Double`
-- [ ] `new Point2D<int>(3.5, 0)` is still refused
-- [ ] `Vector2D.Zero<double>()` and `Point2D.Empty<double>()` work
-- [ ] A widened value is *converted*, not merely permitted — `$v.X` is a Double
-- [ ] The same holds for method parameters and rest parameters, which share the check
+- [x] `new Vector2D<double>(0, 0)` constructs, with `X` a `Double`
+- [x] `new Point2D<int>(3.5, 0)` is still refused, as are strings and `long`←`1.5`
+- [x] `Vector2D.Zero<double>()` and `Point2D.Empty<double>()` work
+- [x] A widened value is *converted*, not merely permitted — `$v.X` is a Double
+- [x] The same holds for method parameters and rest parameters, which share the check
+- [x] A generic factory — `static func Zero<U>() -> Box<U> => new Box<U>(0)` — can be
+      written and closes over both `int` and `double`

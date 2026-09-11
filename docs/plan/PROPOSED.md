@@ -51,4 +51,3 @@
 | [`TOAST-0099`](items/TOAST-0099.md) | P2 | proposed | 0/7 | A declared type cannot say where it lives, so nothing can write its qualified name back |
 | [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |
 | [`TS-P3-19`](items/TS-P3-19.md) | P3 | proposed | — | Annotated, fixed and refinement variable writes at Tier 1 |
-| [`TOAST-0124`](items/TOAST-0124.md) | P2 | proposed | 0/5 | A value bound to a type parameter is checked for an exact type, so an integer literal cannot fill a double |

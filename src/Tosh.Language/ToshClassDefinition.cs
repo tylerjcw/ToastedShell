@@ -1,3 +1,4 @@
+using System.Globalization;
 using Tosh.Runtime;
 using Tosh.Language.Parsing;
 
@@ -2496,7 +2497,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             return true;
         }
 
-        EnforceStrictBinding(
+        result = CoerceStrictBinding(
             boundType,
             value,
             property.Span,
@@ -2609,6 +2610,12 @@ public sealed class ToshClassDefinition : IShellNamedType
         // method-scoped binding table. These bindings are merged with
         // any class-level bindings carried by the instance so that
         // `class Box<T>` + `func map<U>(transform)` both resolve.
+        // `TOAST-0124`. A widening replaces the value, so the bound locals have to be
+        // writable from here on. The dictionary handed in is one; the cast keeps its
+        // comparer rather than guessing at a new one, and the copy is only a fallback.
+        var writableLocals = boundLocals as Dictionary<string, object?>
+            ?? new Dictionary<string, object?>(boundLocals);
+
         Dictionary<string, Type>? methodBindings = null;
         if (method.TypeParameters is { Count: > 0 })
         {
@@ -2693,7 +2700,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                     {
                         for (int i = 0; i < list.Count; i++)
                         {
-                            EnforceStrictBinding(
+                            list[i] = CoerceStrictBinding(
                                 bound,
                                 list[i],
                                 parameter.Span,
@@ -2704,7 +2711,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                     }
                     else
                     {
-                        EnforceStrictBinding(
+                        writableLocals[parameter.Name] = CoerceStrictBinding(
                             bound,
                             value,
                             parameter.Span,
@@ -2727,17 +2734,17 @@ public sealed class ToshClassDefinition : IShellNamedType
                 {
                     for (int i = 0; i < list.Count; i++)
                     {
-                        EnforceStrictBinding(bound, list[i], parameter.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}.{parameter.Name}");
+                        list[i] = CoerceStrictBinding(bound, list[i], parameter.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}.{parameter.Name}");
                     }
                 }
                 else
                 {
-                    EnforceStrictBinding(bound, value, parameter.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}.{parameter.Name}");
+                    writableLocals[parameter.Name] = CoerceStrictBinding(bound, value, parameter.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}.{parameter.Name}");
                 }
             }
         }
 
-        var locals = CreateLocals(instance, boundLocals);
+        var locals = CreateLocals(instance, writableLocals);
         var values = await _engine.ExecuteClassBlockAsync(
             this,
             method.SourceName,
@@ -2787,11 +2794,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         if (strictReturnBinding is not null)
         {
             var unwrapped = UnwrapValues(values).ToArray();
-            foreach (var value in unwrapped)
+            for (var i = 0; i < unwrapped.Length; i++)
             {
-                EnforceStrictBinding(
+                unwrapped[i] = CoerceStrictBinding(
                     strictReturnBinding,
-                    value,
+                    unwrapped[i],
                     method.Span,
                     method.SourceName,
                     method.SourceText,
@@ -3416,7 +3423,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             {
                 for (var i = 0; i < list.Count; i++)
                 {
-                    EnforceStrictBinding(
+                    list[i] = CoerceStrictBinding(
                         boundType,
                         list[i],
                         parameter.Span,
@@ -3427,7 +3434,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 continue;
             }
 
-            EnforceStrictBinding(
+            locals[parameter.Name] = CoerceStrictBinding(
                 boundType,
                 value,
                 parameter.Span,
@@ -3449,7 +3456,23 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// stringification (e.g. <c>4</c> → <c>"4"</c>) that would
     /// otherwise silently succeed for <c>new Box&lt;string&gt;(4)</c>.
     /// </summary>
-    private void EnforceStrictBinding(
+    /// <summary>
+    /// Checks a value against the type its parameter is bound to, widening it where C# would
+    /// — <c>TOAST-0124</c>. Returns the value to store.
+    /// </summary>
+    /// <remarks>
+    /// It used to only check, which made <c>new Vector2D&lt;double&gt;(0, 0)</c> impossible:
+    /// <c>0</c> is an <c>Int32</c>, the bound <c>T</c> is a <c>Double</c>, and nothing is
+    /// lost by widening it. A generic factory could not be written at all, because there is
+    /// no way to spell "zero of T" when the literal has to already be the right type.
+    ///
+    /// The strictness itself is right and is kept: it is what stops a <c>Point2D&lt;int&gt;</c>
+    /// taking 3.5. Only the *direction* was undistinguished. The permitted set is exactly
+    /// C#'s implicit numeric conversions, which is the set that cannot fail — deliberately
+    /// not <c>TypeConversion.TryConvert</c>, which also parses strings and truncates
+    /// doubles and would take the 3.5.
+    /// </remarks>
+    private object? CoerceStrictBinding(
         Type boundType,
         object? value,
         TextSpan span,
@@ -3461,12 +3484,16 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             if (!boundType.IsValueType || Nullable.GetUnderlyingType(boundType) is not null)
             {
-                return;
+                return null;
             }
         }
         else if (boundType.IsInstanceOfType(value))
         {
-            return;
+            return value;
+        }
+        else if (TryWidenImplicitly(value, boundType, out var widened))
+        {
+            return widened;
         }
 
         var typeName = boundType.FullName ?? boundType.Name;
@@ -3479,6 +3506,50 @@ public sealed class ToshClassDefinition : IShellNamedType
             Label: $"the value does not match '{typeName}'"));
     }
 
+
+    /// <summary>
+    /// C#'s implicit numeric conversions, by source type — <c>TOAST-0124</c>.
+    /// </summary>
+    /// <remarks>
+    /// Listed rather than computed so that what is permitted is readable and auditable.
+    /// <c>int</c>→<c>float</c> and <c>long</c>→<c>double</c> lose precision and are implicit
+    /// in C# all the same; this follows C# rather than inventing a stricter rule, so that a
+    /// reader who knows one knows the other.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<Type, Type[]> ImplicitNumericWidenings =
+        new Dictionary<Type, Type[]>
+        {
+            [typeof(sbyte)]  = [typeof(short), typeof(int), typeof(long), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(byte)]   = [typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(short)]  = [typeof(int), typeof(long), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(ushort)] = [typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(int)]    = [typeof(long), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(uint)]   = [typeof(long), typeof(ulong), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(long)]   = [typeof(float), typeof(double), typeof(decimal)],
+            [typeof(ulong)]  = [typeof(float), typeof(double), typeof(decimal)],
+            [typeof(char)]   = [typeof(ushort), typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double), typeof(decimal)],
+            [typeof(float)]  = [typeof(double)],
+        };
+
+    /// <summary>
+    /// Widens <paramref name="value"/> to <paramref name="target"/> when C# would do it
+    /// implicitly — <c>TOAST-0124</c>.
+    /// </summary>
+    private static bool TryWidenImplicitly(object value, Type target, out object? widened)
+    {
+        widened = null;
+
+        var effective = Nullable.GetUnderlyingType(target) ?? target;
+
+        if (!ImplicitNumericWidenings.TryGetValue(value.GetType(), out var permitted) ||
+            Array.IndexOf(permitted, effective) < 0)
+        {
+            return false;
+        }
+
+        widened = Convert.ChangeType(value, effective, CultureInfo.InvariantCulture);
+        return true;
+    }
 
     private async ValueTask<(
         ToshClassMethodDefinition Method,

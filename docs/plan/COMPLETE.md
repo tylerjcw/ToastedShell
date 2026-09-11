@@ -105,6 +105,7 @@
 | [`TS-P1-47`](items/TS-P1-47.md) | P1 | complete | — | A variable annotated with a base class rejects a subclass value when compiled |
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | complete | — | A lexical scope allocated ten collections it almost never used |
 | [`TOAST-0045`](items/TOAST-0045.md) | P2 | complete | 4/4 | A compiled function returning `record` cannot return a record literal |
+| [`TOAST-0124`](items/TOAST-0124.md) | P2 | complete | 6/6 | A value bound to a type parameter is checked for an exact type, so an integer literal cannot fill a double |
 | [`TOAST-0083`](items/TOAST-0083.md) | P2 | complete | 9/9 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).

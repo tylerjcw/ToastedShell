@@ -82,6 +82,12 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["angularvelocity"] = typeof(AngularVelocityQuantity),
         ["angularvelocityquantity"] = typeof(AngularVelocityQuantity),
         ["dynamic"] = typeof(object),
+        // `TOAST-0125`. The specification names `dynamic`, `any` and `object` as synonyms
+        // for explicit dynamic. `any` was the one with no entry here, so it fell through to
+        // a general CLR search and found `System.Runtime.InteropServices.JavaScript.JSType+Any`
+        // — a type nobody meant, which no value can convert to. `var x: any = 5` therefore
+        // failed, as did `any` in every other annotation position.
+        ["any"] = typeof(object),
         // `Error` is the recommended base class for user-defined
         // error types declared in tosh. Exposed case-insensitively
         // so `extends Error`, `error`, and `ERROR` all resolve.
