@@ -1,0 +1,1070 @@
+#!/usr/bin/env tosh
+## @summary Windows Notepad, as faithfully as GTK allows.
+## @remarks
+##   The whole program: five menus, the keyboard shortcuts, modeless Find and
+##   Replace, Go To, word wrap, a font picker, zoom, a status bar, multi-level
+##   undo, and the save prompt that catches you on the way out.
+##
+##   Structure follows the ToastLib GTK tutorial: the document lives in ordinary
+##   properties, the widgets live beside them, and `Refresh` is the only thing
+##   that writes to the chrome. Handlers change the document and call it.
+##
+##   Two deliberate departures from Windows, both because the platform differs
+##   rather than because they were awkward. Printing goes through `lp`, which is
+##   what a printer is on this system. And the Delete key is left to the text
+##   view rather than bound as an accelerator, so it still deletes the character
+##   under the cursor when nothing is selected — binding it would have broken
+##   ordinary typing to make a menu label look right.
+## @example tosh examples/notepad.tosh
+## @example tosh examples/notepad.tosh notes.txt
+require ToastLib.Gtk from "/home/komrad/.config/tosh/lib/ToastLib.Gtk.tosh" as Gtk
+
+using System.Drawing
+
+## @summary The Notepad application.
+class Notepad {
+    # ── the document ────────────────────────────────────────────────
+    shy prop path_ = null                      # null while the file is Untitled
+    shy prop saved_ = ""                       # the text as it was last saved
+    shy prop lineEnding_ = "CRLF"              # preserved from the file we opened
+    shy prop encoding_ = "UTF-8"
+
+    # ── undo ────────────────────────────────────────────────────────
+    shy prop undo_ = []
+    shy prop redo_ = []
+    shy prop previous_ = ""
+    shy prop lastEdit_ = null
+    shy prop replaying_ = false
+
+    # ── find and replace ────────────────────────────────────────────
+    shy prop findText_ = ""
+    shy prop replaceText_ = ""
+    shy prop matchCase_ = false
+    shy prop wrapAround_ = true
+    shy prop searchDown_ = true
+    shy prop findWindow_ = null
+    shy prop replaceWindow_ = null
+
+    # ── view ────────────────────────────────────────────────────────
+    shy prop wordWrap_ = false
+    shy prop zoom_ = 100
+    shy prop fontFamily_ = "Consolas"
+    shy prop fontSize_ = 11
+    shy prop fontStyle_ = ""
+    shy prop showStatus_ = true
+
+    # ── page setup ──────────────────────────────────────────────────
+    shy prop header_ = "&f"
+    shy prop footer_ = "Page &p"
+    shy prop landscape_ = false
+
+    # ── widgets ─────────────────────────────────────────────────────
+    shy prop window_ = null
+    shy prop editor_ = null
+    shy prop statusBox_ = null
+    shy prop position_ = null
+    shy prop zoomLabel_ = null
+    shy prop endingLabel_ = null
+    shy prop encodingLabel_ = null
+    shy prop fontCss_ = null
+
+    # ── menu items kept for enabling and ticking ────────────────────
+    shy prop undoItem_ = null
+    shy prop redoItem_ = null
+    shy prop cutItem_ = null
+    shy prop copyItem_ = null
+    shy prop pasteItem_ = null
+    shy prop deleteItem_ = null
+    shy prop findNextItem_ = null
+    shy prop findPrevItem_ = null
+    shy prop wrapItem_ = null
+    shy prop statusItem_ = null
+
+    ## The file name shown in the title bar and the save prompt.
+    prop DocumentName: string => (($this.path_ == null) ? "Untitled" : Sys.IO.Path.GetFileName($this.path_))
+
+    ## True when the text differs from what was last saved.
+    prop IsDirty: bool => ($this.editor_.Text != $this.saved_)
+
+    # ═══════════════════════════════════════════════════════════════
+    # Chrome
+    # ═══════════════════════════════════════════════════════════════
+
+    ## @summary Repaints everything that is not the text itself.
+    ## @remarks
+    ##   The one place that writes to the title bar, the status bar and the menu
+    ##   sensitivities. Every handler changes the document and calls this, so the
+    ##   chrome cannot drift out of step with the document.
+    func Refresh() {
+        var mark = (($this.IsDirty) ? "*" : "")
+        $this.window_.SetTitle($"{$mark}{$this.DocumentName} - Notepad")
+
+        $this.position_.SetText($"Ln {$this.editor_.CursorLine}, Col {$this.editor_.CursorColumn}")
+        $this.zoomLabel_.SetText($"{$this.zoom_}%")
+        $this.endingLabel_.SetText((($this.lineEnding_ == "CRLF") ? "Windows (CRLF)" : "Unix (LF)"))
+        $this.encodingLabel_.SetText($this.encoding_)
+
+        var selected = $this.editor_.HasSelection
+        $this.cutItem_.SetSensitive($selected)
+        $this.copyItem_.SetSensitive($selected)
+        $this.deleteItem_.SetSensitive($selected)
+
+        $this.undoItem_.SetSensitive((($this.undo_ | count) > 0))
+        $this.redoItem_.SetSensitive((($this.redo_ | count) > 0))
+
+        var searchable = ($this.findText_ != "")
+        $this.findNextItem_.SetSensitive($searchable)
+        $this.findPrevItem_.SetSensitive($searchable)
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Undo
+    # ═══════════════════════════════════════════════════════════════
+
+    ## @summary Records an edit, collapsing a burst of typing into one step.
+    ## @remarks
+    ##   GTK 3's text buffer has no undo of its own, so this keeps whole-document
+    ##   snapshots. Pushing one per keystroke would make Ctrl+Z undo a letter at
+    ##   a time; pushing one per second of typing is what Notepad does and what
+    ##   people expect. Six hundred milliseconds is the gap that separates
+    ##   "still typing" from "did something else".
+    func OnTextChanged(editor) {
+        if ($this.replaying_) { return }
+
+        var now = Sys.DateTime.Now
+        var fresh = (($this.lastEdit_ == null) or ((($now - $this.lastEdit_).TotalMilliseconds) > 600))
+
+        if ($fresh) {
+            $this.undo_ = [...$this.undo_, $this.previous_]
+
+            # A hundred steps is more than anyone reaches for and bounds the
+            # memory a very large document can hold on to.
+            if (($this.undo_ | count) > 100) {
+                $this.undo_ = ($this.undo_ | skip 1 | collect)
+            }
+
+            $this.redo_ = []
+        }
+
+        $this.lastEdit_ = $now
+        $this.previous_ = $this.editor_.Text
+        $this.Refresh()
+    }
+
+    ## @summary Puts `text` in the buffer without recording it as a fresh edit.
+    shy func Replay(text: string) {
+        $this.replaying_ = true
+        defer { $this.replaying_ = false }
+
+        var at = $this.editor_.CursorOffset
+        $this.editor_.SetText($text)
+        $this.previous_ = $text
+        $this.lastEdit_ = null
+
+        if ($at > $text.Length) { $at = $text.Length }
+        $this.editor_.SetCursor($at)
+        $this.editor_.ScrollToCursor()
+    }
+
+    func OnUndo(sender) {
+        var depth = ($this.undo_ | count)
+        if ($depth == 0) { return }
+
+        $this.redo_ = [...$this.redo_, $this.editor_.Text]
+        var restored = $this.undo_[$depth - 1]
+        $this.undo_ = ($this.undo_ | first ($depth - 1) | collect)
+
+        $this.Replay($restored)
+        $this.Refresh()
+    }
+
+    func OnRedo(sender) {
+        var depth = ($this.redo_ | count)
+        if ($depth == 0) { return }
+
+        $this.undo_ = [...$this.undo_, $this.editor_.Text]
+        var restored = $this.redo_[$depth - 1]
+        $this.redo_ = ($this.redo_ | first ($depth - 1) | collect)
+
+        $this.Replay($restored)
+        $this.Refresh()
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # File
+    # ═══════════════════════════════════════════════════════════════
+
+    ## @summary Offers to save when the document is dirty.
+    ## @returns True to carry on, false when the user chose Cancel.
+    shy func ConfirmDiscard() -> bool {
+        if (not $this.IsDirty) { return true }
+
+        var ask = new Gtk.MessageDialog(
+            $this.window_,
+            $"Do you want to save changes to {$this.DocumentName}?",
+            Gtk.MessageType.Warning,
+            Gtk.ButtonsType.None)
+        defer { $ask.Close() }
+
+        $ask.SetTitle("Notepad")
+        $ask.AddButton("Save", Gtk.ResponseType.Yes) | ignore
+        $ask.AddButton("Don't Save", Gtk.ResponseType.No) | ignore
+        $ask.AddButton("Cancel", Gtk.ResponseType.Cancel) | ignore
+        $ask.SetDefault(Gtk.ResponseType.Yes)
+
+        var answer = $ask.Run()
+
+        if ($answer == (Gtk.ResponseType.Yes as int)) { return $this.Save() }
+        return ($answer == (Gtk.ResponseType.No as int))
+    }
+
+    func OnNew(sender) {
+        if (not $this.ConfirmDiscard()) { return }
+
+        $this.replaying_ = true
+        $this.editor_.SetText("")
+        $this.replaying_ = false
+
+        $this.path_ = null
+        $this.saved_ = ""
+        $this.previous_ = ""
+        $this.lastEdit_ = null
+        $this.undo_ = []
+        $this.redo_ = []
+        $this.lineEnding_ = "CRLF"
+        $this.encoding_ = "UTF-8"
+        $this.Refresh()
+    }
+
+    ## @summary Opens a second Notepad, the way File ▸ New Window does.
+    ## @remarks
+    ##   A separate process rather than a second window in this one. That is what
+    ##   Windows does, and it means a crash in one document cannot take the other
+    ##   with it.
+    func OnNewWindow(sender) {
+        var args = Sys.Environment.GetCommandLineArgs()
+        var script = $args[(($args | count) - 1)]
+
+        try {
+            Sys.Diagnostics.Process.Start("tosh", (Sys.IO.Path.GetFullPath($script))) | ignore
+        } catch (e) {
+            Gtk.MessageDialog.Error($this.window_, $"Could not open a new window: {$e.Message}") | ignore
+        }
+    }
+
+    func OnOpen(sender) {
+        if (not $this.ConfirmDiscard()) { return }
+
+        var chosen = Gtk.FileChooser.OpenFile($this.window_, "Open")
+        if ($chosen == null) { return }
+
+        $this.Load($chosen)
+    }
+
+    ## @summary Reads a file into the editor.
+    ## @remarks
+    ##   The line ending is remembered rather than normalised away, so a file
+    ##   that arrived with CRLF is written back with CRLF. GTK's buffer only ever
+    ##   holds LF, which is why the conversion happens at both ends.
+    func Load(path: string) {
+        try {
+            # Read as bytes so the byte-order mark can be seen. `StartsWith`
+            # cannot be used to find one: .NET compares strings culture-first,
+            # and U+FEFF is ignorable under that comparison, so every file looks
+            # like it has a mark.
+            var bytes = (Sys.IO.File.ReadAllBytes($path))
+            var count = ($bytes | count)
+
+            var hasBom = (($count >= 3) and ($bytes[0] == 239) and ($bytes[1] == 187) and ($bytes[2] == 191))
+            var text = ((new Sys.Text.UTF8Encoding(false)).GetString($bytes))
+
+            if ($hasBom) { $text = $text.Substring(1) }
+
+            $this.lineEnding_ = (($text.Contains("\r\n")) ? "CRLF" : "LF")
+            $this.encoding_ = (($hasBom) ? "UTF-8 with BOM" : "UTF-8")
+
+            var body = $text.Replace("\r\n", "\n")
+
+            $this.replaying_ = true
+            $this.editor_.SetText($body)
+            $this.replaying_ = false
+
+            $this.path_ = $path
+            $this.saved_ = $body
+            $this.previous_ = $body
+            $this.lastEdit_ = null
+            $this.undo_ = []
+            $this.redo_ = []
+
+            $this.editor_.SetCursor(0)
+            $this.Refresh()
+        } catch (e) {
+            Gtk.MessageDialog.Error($this.window_, $"Cannot open {$path}.\n\n{$e.Message}") | ignore
+        }
+    }
+
+    ## @summary Saves, asking where if the document has never been saved.
+    ## @returns True when the file was written.
+    func Save() -> bool {
+        if ($this.path_ == null) { return $this.SaveAs() }
+        return $this.WriteTo($this.path_)
+    }
+
+    func SaveAs() -> bool {
+        var suggested = (($this.path_ == null) ? "Untitled.txt" : Sys.IO.Path.GetFileName($this.path_))
+        var chosen = Gtk.FileChooser.SaveFile($this.window_, "Save As", $suggested)
+
+        if ($chosen == null) { return false }
+        return $this.WriteTo($chosen)
+    }
+
+    shy func WriteTo(path: string) -> bool {
+        var body = $this.editor_.Text
+
+        try {
+            # Both of the things the file told us about itself are put back:
+            # the line ending it arrived with, and its byte-order mark.
+            var onDisk = (($this.lineEnding_ == "CRLF") ? $body.Replace("\n", "\r\n") : $body)
+            var encoding = (new Sys.Text.UTF8Encoding(($this.encoding_ == "UTF-8 with BOM")))
+
+            Sys.IO.File.WriteAllBytes($path, ($encoding.GetPreamble() + $encoding.GetBytes($onDisk)))
+
+            $this.path_ = $path
+            $this.saved_ = $body
+            $this.Refresh()
+
+            return true
+        } catch (e) {
+            Gtk.MessageDialog.Error($this.window_, $"Cannot save {$path}.\n\n{$e.Message}") | ignore
+            return false
+        }
+    }
+
+    func OnSave(sender) { $this.Save() | ignore }
+    func OnSaveAs(sender) { $this.SaveAs() | ignore }
+
+    func OnPageSetup(sender) {
+        var dialog = new Gtk.Dialog($this.window_, "Page Setup")
+        defer { $dialog.Close() }
+
+        var grid = new Gtk.Grid(6, 12)
+
+        var header = new Gtk.Entry("")
+        $header.SetText($this.header_)
+        var footer = new Gtk.Entry("")
+        $footer.SetText($this.footer_)
+        var landscape = new Gtk.CheckButton("Landscape")
+        $landscape.SetActive($this.landscape_)
+
+        $grid.Attach((new Gtk.TextLabel("Header:")), 0, 0)
+        $grid.Attach($header, 1, 0)
+        $grid.Attach((new Gtk.TextLabel("Footer:")), 0, 1)
+        $grid.Attach($footer, 1, 1)
+        $grid.Attach($landscape, 1, 2)
+
+        var hint = new Gtk.TextLabel("")
+        $hint.SetMarkup("<small>&amp;f file   &amp;p page   &amp;d date   &amp;t time</small>")
+        $grid.Attach($hint, 1, 3)
+
+        $dialog.Content.Append($grid)
+        $dialog.AddButton("Cancel", Gtk.ResponseType.Cancel) | ignore
+        $dialog.AddButton("OK", Gtk.ResponseType.Ok) | ignore
+        $dialog.SetDefault(Gtk.ResponseType.Ok)
+        $dialog.ShowAll()
+
+        if ($dialog.Run() == (Gtk.ResponseType.Ok as int)) {
+            $this.header_ = $header.GetText()
+            $this.footer_ = $footer.GetText()
+            $this.landscape_ = $landscape.IsActive()
+        }
+    }
+
+    ## @summary Prints through `lp`, which is what a printer is on this system.
+    func OnPrint(sender) {
+        var lp = (which lp)
+
+        if (($lp == null) or (($lp | count) == 0)) {
+            Gtk.MessageDialog.Error(
+                $this.window_,
+                "No printing system was found.\n\nInstall CUPS to print, or use Save As and print the file.") | ignore
+            return
+        }
+
+        var spool = Sys.IO.Path.GetTempFileName()
+
+        try {
+            Sys.IO.File.WriteAllText($spool, ($this.Paginate()))
+            var orientation = (($this.landscape_) ? 4 : 3)
+            var arguments = $"-o orientation-requested={$orientation} -t \"{$this.DocumentName}\" {$spool}"
+
+            var job = Sys.Diagnostics.Process.Start("lp", $arguments)
+            $job.WaitForExit()
+
+            if ($job.ExitCode != 0) {
+                throw new Error($"lp exited with {$job.ExitCode}")
+            }
+
+            Gtk.MessageDialog.Show($this.window_, $"Sent {$this.DocumentName} to the printer.") | ignore
+        } catch (e) {
+            Gtk.MessageDialog.Error($this.window_, $"Could not print.\n\n{$e.Message}") | ignore
+        }
+    }
+
+    ## @summary Lays the document out into pages with the header and footer.
+    shy func Paginate() -> string {
+        var lines = ($this.editor_.Text | lines | collect)
+        var perPage = 54
+        var page = 1
+        var out = []
+        var row = 0
+
+        for line in $lines {
+            if ($row == 0) {
+                if ($this.header_ != "") { $out = [...$out, $this.Expand($this.header_, $page), ""] }
+            }
+
+            $out = [...$out, $line]
+            $row = $row + 1
+
+            if ($row >= $perPage) {
+                if ($this.footer_ != "") { $out = [...$out, "", $this.Expand($this.footer_, $page)] }
+                $out = [...$out, "\f"]
+                $page = $page + 1
+                $row = 0
+            }
+        }
+
+        if (($row > 0) and ($this.footer_ != "")) {
+            $out = [...$out, "", $this.Expand($this.footer_, $page)]
+        }
+
+        return ($out | join "\n")
+    }
+
+    ## @summary Substitutes Notepad's header and footer codes.
+    shy func Expand(pattern: string, page: int) -> string {
+        var now = Sys.DateTime.Now
+
+        return $pattern
+            .Replace("&f", $this.DocumentName)
+            .Replace("&p", $"{$page}")
+            .Replace("&d", $now.ToString("d"))
+            .Replace("&t", $now.ToString("t"))
+    }
+
+    func OnExit(sender) {
+        if (not $this.ConfirmDiscard()) { return }
+        $this.window_.Close()
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Edit
+    # ═══════════════════════════════════════════════════════════════
+
+    func OnCut(sender) { $this.editor_.Cut() }
+    func OnCopy(sender) { $this.editor_.Copy() }
+    func OnPaste(sender) { $this.editor_.Paste() }
+    func OnDelete(sender) { $this.editor_.DeleteSelection() | ignore }
+    func OnSelectAll(sender) { $this.editor_.SelectAll() }
+
+    ## @summary Inserts the time and date, the way F5 does in Notepad.
+    func OnTimeDate(sender) {
+        var now = Sys.DateTime.Now
+        $this.editor_.InsertAtCursor($"{$now.ToString("t")} {$now.ToString("d")}")
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Find and replace
+    # ═══════════════════════════════════════════════════════════════
+
+    ## @summary Searches from the cursor, wrapping if asked to.
+    ## @returns True when something was found and selected.
+    func FindFrom(down: bool) -> bool {
+        if ($this.findText_ == "") { return false }
+
+        # Selecting a match leaves the cursor at its *start*, so searching down
+        # from the cursor would keep finding the same match. One character in is
+        # enough to move past it. Searching up wants the opposite — a backward
+        # search finds matches ending before the cursor, so the start of the
+        # current match is already the right place to begin.
+        var from = $this.editor_.CursorOffset
+
+        if ($down and $this.editor_.HasSelection) {
+            $from = ($from + 1)
+        }
+
+        var hit = $this.editor_.Find($this.findText_, $from, $this.matchCase_, (not $down))
+
+        if (($hit == null) and $this.wrapAround_) {
+            var edge = (($down) ? 0 : $this.editor_.Length)
+            $hit = $this.editor_.Find($this.findText_, $edge, $this.matchCase_, (not $down))
+        }
+
+        if ($hit == null) {
+            Gtk.MessageDialog.Show($this.window_, $"Cannot find \"{$this.findText_}\"") | ignore
+            return false
+        }
+
+        $this.editor_.SelectRange($hit.Start, $hit.End)
+        $this.editor_.ScrollToCursor()
+        $this.Refresh()
+
+        return true
+    }
+
+    func OnFindNext(sender) { $this.FindFrom($this.searchDown_) | ignore }
+    func OnFindPrevious(sender) { $this.FindFrom((not $this.searchDown_)) | ignore }
+
+    ## @summary The modeless Find box.
+    ## @remarks
+    ##   A window rather than a dialog, because Notepad's Find box does not stop
+    ##   you editing while it is open. The main event loop services it, so
+    ##   nothing here has to run a loop of its own.
+    func OnFind(sender) {
+        if (($this.findWindow_ != null) and $this.findWindow_.IsOpen) {
+            $this.findWindow_.Show()
+            return
+        }
+
+        var box = new Gtk.Window("Find", new Size(380, 150))
+        $box.SetTransientFor($this.window_)
+        $this.findWindow_ = $box
+
+        var grid = new Gtk.Grid(6, 8)
+
+        var needle = new Gtk.Entry("")
+        $needle.SetText($this.findText_)
+        Gtk.Widget.SetExpand($needle.Handle, true, false)
+
+        $grid.Attach((new Gtk.TextLabel("Find what:")), 0, 0)
+        $grid.Attach($needle, 1, 0)
+
+        var matchCase = new Gtk.CheckButton("Match case")
+        $matchCase.SetActive($this.matchCase_)
+        var wrap = new Gtk.CheckButton("Wrap around")
+        $wrap.SetActive($this.wrapAround_)
+
+        var options = new Gtk.Box(Gtk.Orientation.Vertical, 2)
+        $options.Append($matchCase)
+        $options.Append($wrap)
+        $grid.Attach($options, 0, 1, 2, 1)
+
+        var up = new Gtk.RadioButton("Up")
+        var down = new Gtk.RadioButton($up, "Down")
+        $down.SetActive($this.searchDown_)
+        $up.SetActive((not $this.searchDown_))
+
+        var direction = new Gtk.Box(Gtk.Orientation.Horizontal, 8)
+        $direction.Append((new Gtk.TextLabel("Direction:")))
+        $direction.Append($up)
+        $direction.Append($down)
+        $grid.Attach($direction, 0, 2, 2, 1)
+
+        # One place that copies the box's state into the document's, so every
+        # control can share it.
+        var adopt = func (sender) {
+            $this.findText_ = $needle.GetText()
+            $this.matchCase_ = $matchCase.IsActive()
+            $this.wrapAround_ = $wrap.IsActive()
+            $this.searchDown_ = $down.IsActive()
+            $this.Refresh()
+        }
+
+        $needle.OnChanged($adopt) | ignore
+        $matchCase.OnToggled($adopt) | ignore
+        $wrap.OnToggled($adopt) | ignore
+        $down.OnToggled($adopt) | ignore
+
+        var findNext = new Gtk.Button("Find Next")
+        $findNext.OnClick(func (b) {
+            invoke $adopt $b
+            $this.FindFrom($this.searchDown_) | ignore
+        }) | ignore
+
+        $needle.OnActivate(func (e) {
+            invoke $adopt $e
+            $this.FindFrom($this.searchDown_) | ignore
+        }) | ignore
+
+        var cancel = new Gtk.Button("Cancel")
+        $cancel.OnClick(func (b) { $box.Close() }) | ignore
+
+        var buttons = new Gtk.Box(Gtk.Orientation.Horizontal, 6)
+        Gtk.Widget.SetAlign($buttons.Handle, Gtk.Align.End, Gtk.Align.Center)
+        $buttons.Append($findNext)
+        $buttons.Append($cancel)
+
+        var root = new Gtk.Box(Gtk.Orientation.Vertical, 8)
+        $root.Append($grid)
+        $root.Append($buttons)
+
+        $box.SetChild($root)
+        $box.SetBorderWidth(10)
+        $box.Show()
+        $needle.Focus()
+    }
+
+    ## @summary The modeless Replace box.
+    func OnReplace(sender) {
+        if (($this.replaceWindow_ != null) and $this.replaceWindow_.IsOpen) {
+            $this.replaceWindow_.Show()
+            return
+        }
+
+        var box = new Gtk.Window("Replace", new Size(420, 180))
+        $box.SetTransientFor($this.window_)
+        $this.replaceWindow_ = $box
+
+        var grid = new Gtk.Grid(6, 8)
+
+        var needle = new Gtk.Entry("")
+        $needle.SetText($this.findText_)
+        Gtk.Widget.SetExpand($needle.Handle, true, false)
+
+        var replacement = new Gtk.Entry("")
+        $replacement.SetText($this.replaceText_)
+        Gtk.Widget.SetExpand($replacement.Handle, true, false)
+
+        $grid.Attach((new Gtk.TextLabel("Find what:")), 0, 0)
+        $grid.Attach($needle, 1, 0)
+        $grid.Attach((new Gtk.TextLabel("Replace with:")), 0, 1)
+        $grid.Attach($replacement, 1, 1)
+
+        var matchCase = new Gtk.CheckButton("Match case")
+        $matchCase.SetActive($this.matchCase_)
+        var wrap = new Gtk.CheckButton("Wrap around")
+        $wrap.SetActive($this.wrapAround_)
+
+        var options = new Gtk.Box(Gtk.Orientation.Vertical, 2)
+        $options.Append($matchCase)
+        $options.Append($wrap)
+        $grid.Attach($options, 0, 2, 2, 1)
+
+        var adopt = func (sender) {
+            $this.findText_ = $needle.GetText()
+            $this.replaceText_ = $replacement.GetText()
+            $this.matchCase_ = $matchCase.IsActive()
+            $this.wrapAround_ = $wrap.IsActive()
+            $this.Refresh()
+        }
+
+        $needle.OnChanged($adopt) | ignore
+        $replacement.OnChanged($adopt) | ignore
+        $matchCase.OnToggled($adopt) | ignore
+        $wrap.OnToggled($adopt) | ignore
+
+        var findNext = new Gtk.Button("Find Next")
+        $findNext.OnClick(func (b) { invoke $adopt $b; $this.FindFrom(true) | ignore }) | ignore
+
+        var replace = new Gtk.Button("Replace")
+        $replace.OnClick(func (b) { invoke $adopt $b; $this.ReplaceOnce() }) | ignore
+
+        var replaceAll = new Gtk.Button("Replace All")
+        $replaceAll.OnClick(func (b) { invoke $adopt $b; $this.ReplaceAll() }) | ignore
+
+        var cancel = new Gtk.Button("Cancel")
+        $cancel.OnClick(func (b) { $box.Close() }) | ignore
+
+        var buttons = new Gtk.Box(Gtk.Orientation.Horizontal, 6)
+        Gtk.Widget.SetAlign($buttons.Handle, Gtk.Align.End, Gtk.Align.Center)
+        $buttons.Append($findNext)
+        $buttons.Append($replace)
+        $buttons.Append($replaceAll)
+        $buttons.Append($cancel)
+
+        var root = new Gtk.Box(Gtk.Orientation.Vertical, 8)
+        $root.Append($grid)
+        $root.Append($buttons)
+
+        $box.SetChild($root)
+        $box.SetBorderWidth(10)
+        $box.Show()
+        $needle.Focus()
+    }
+
+    ## @summary Replaces the selection if it matches, then finds the next one.
+    ## @remarks
+    ##   Notepad's Replace button replaces what is already selected rather than
+    ##   the next match, which is what makes clicking it repeatedly walk the
+    ##   document instead of skipping every other occurrence.
+    func ReplaceOnce() {
+        if ($this.findText_ == "") { return }
+
+        var selection = $this.editor_.GetSelection()
+        var matches = (($this.matchCase_)
+            ? ($selection == $this.findText_)
+            : ($selection.ToLower() == $this.findText_.ToLower()))
+
+        if ($matches) {
+            $this.editor_.InsertAtCursor($this.replaceText_)
+        }
+
+        $this.FindFrom(true) | ignore
+    }
+
+    func ReplaceAll() {
+        if ($this.findText_ == "") { return }
+
+        var text = $this.editor_.Text
+        var replaced = 0
+        var out = ""
+        var at = 0
+        var needle = $this.findText_
+        var width = $needle.Length
+        var haystack = (($this.matchCase_) ? $text : $text.ToLower())
+        var probe = (($this.matchCase_) ? $needle : $needle.ToLower())
+
+        while (true) {
+            var found = $haystack.IndexOf($probe, $at)
+            if ($found < 0) { break }
+
+            $out = ($out + $text.Substring($at, ($found - $at)) + $this.replaceText_)
+            $at = ($found + $width)
+            $replaced = $replaced + 1
+        }
+
+        if ($replaced == 0) {
+            Gtk.MessageDialog.Show($this.window_, $"Cannot find \"{$needle}\"") | ignore
+            return
+        }
+
+        $out = ($out + $text.Substring($at))
+
+        $this.undo_ = [...$this.undo_, $text]
+        $this.redo_ = []
+        $this.Replay($out)
+        $this.Refresh()
+    }
+
+    ## @summary The Go To dialog, which is modal in Notepad and modal here.
+    func OnGoTo(sender) {
+        var dialog = new Gtk.Dialog($this.window_, "Go To Line")
+        defer { $dialog.Close() }
+
+        var entry = new Gtk.Entry("")
+        $entry.SetText($"{$this.editor_.CursorLine}")
+
+        var row = new Gtk.Box(Gtk.Orientation.Horizontal, 8)
+        $row.Append((new Gtk.TextLabel("Line number:")))
+        $row.Append($entry)
+
+        $dialog.Content.Append($row)
+        $dialog.AddButton("Cancel", Gtk.ResponseType.Cancel) | ignore
+        $dialog.AddButton("Go To", Gtk.ResponseType.Ok) | ignore
+        $dialog.SetDefault(Gtk.ResponseType.Ok)
+        $entry.OnActivate(func (e) { $dialog.Respond(Gtk.ResponseType.Ok) }) | ignore
+        $dialog.ShowAll()
+
+        if ($dialog.Run() != (Gtk.ResponseType.Ok as int)) { return }
+
+        var wanted = 0
+
+        try {
+            $wanted = (Sys.Int32.Parse($entry.GetText().Trim()))
+        } catch (e) {
+            Gtk.MessageDialog.Error($this.window_, "The line number is beyond the total number of lines.") | ignore
+            return
+        }
+
+        if (($wanted < 1) or ($wanted > $this.editor_.LineCount)) {
+            Gtk.MessageDialog.Error($this.window_, "The line number is beyond the total number of lines.") | ignore
+            return
+        }
+
+        $this.editor_.GoToLine($wanted)
+        $this.Refresh()
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Format and View
+    # ═══════════════════════════════════════════════════════════════
+
+    func OnWordWrap(item) {
+        $this.wordWrap_ = $item.IsChecked
+        $this.editor_.SetWrapMode((($this.wordWrap_) ? Gtk.WrapMode.Word : Gtk.WrapMode.None))
+    }
+
+    func OnFont(sender) {
+        var current = ($"{$this.fontFamily_} {$this.fontStyle_} {$this.fontSize_}").Replace("  ", " ")
+        var chosen = Gtk.FontChooser.Pick($this.window_, $current.Trim())
+
+        if ($chosen == null) { return }
+
+        $this.AdoptFont($chosen)
+        $this.ApplyFont()
+    }
+
+    ## @summary Splits a Pango description — "DejaVu Sans Mono Bold 12" — apart.
+    ## @remarks
+    ##   Pango puts the size last and the style words before it, with everything
+    ##   left over being the family. Taking it apart is what lets the size be
+    ##   scaled by the zoom independently of the family.
+    shy func AdoptFont(description: string) {
+        var words = (($description.Trim()) | split " " | collect)
+        var count = ($words | count)
+
+        if ($count == 0) { return }
+
+        var size = 0
+
+        try { $size = (Sys.Int32.Parse($words[$count - 1])) } catch (e) { $size = 0 }
+
+        if ($size > 0) {
+            $this.fontSize_ = $size
+            $count = ($count - 1)
+        }
+
+        var styles = []
+        var family = []
+
+        for index in 0..($count - 1) {
+            var word = $words[$index]
+            var lower = $word.ToLower()
+
+            if (($lower == "bold") or ($lower == "italic") or ($lower == "oblique")
+                or ($lower == "light") or ($lower == "condensed") or ($lower == "semi-bold")) {
+                $styles = [...$styles, $lower]
+            } else {
+                $family = [...$family, $word]
+            }
+        }
+
+        if (($family | count) > 0) { $this.fontFamily_ = ($family | join " ") }
+        $this.fontStyle_ = ($styles | join " ")
+    }
+
+    ## @summary Restyles the editor for the current font and zoom.
+    ## @remarks
+    ##   One provider, replaced each time. Applied to the editor alone rather
+    ##   than globally, so zooming the text does not also zoom the menus.
+    shy func ApplyFont() {
+        if ($this.fontCss_ != null) {
+            $this.fontCss_.RemoveFrom($this.editor_)
+            $this.fontCss_.Close()
+        }
+
+        var scaled = (($this.fontSize_ * $this.zoom_) / 100.0)
+        if ($scaled < 1.0) { $scaled = 1.0 }
+
+        var weight = (($this.fontStyle_.Contains("bold")) ? "bold" : "normal")
+        var slant = (($this.fontStyle_.Contains("italic") or $this.fontStyle_.Contains("oblique")) ? "italic" : "normal")
+
+        # A family GTK does not have falls through to the next one, which is why
+        # Consolas can be the default on a machine that has never seen it.
+        $this.fontCss_ = new Gtk.CssProvider()
+        $this.fontCss_.LoadFromData($"
+            textview {{
+                font-family: \"{$this.fontFamily_}\", \"DejaVu Sans Mono\", monospace;
+                font-size: {(Sys.Math.Round($scaled, 1))}pt;
+                font-weight: {$weight};
+                font-style: {$slant};
+            }}")
+        $this.fontCss_.ApplyTo($this.editor_)
+    }
+
+    shy func SetZoom(percent: int) {
+        var wanted = $percent
+        if ($wanted < 10) { $wanted = 10 }
+        if ($wanted > 500) { $wanted = 500 }
+
+        $this.zoom_ = $wanted
+        $this.ApplyFont()
+        $this.Refresh()
+    }
+
+    func OnZoomIn(sender) { $this.SetZoom(($this.zoom_ + 10)) }
+    func OnZoomOut(sender) { $this.SetZoom(($this.zoom_ - 10)) }
+    func OnZoomReset(sender) { $this.SetZoom(100) }
+
+    func OnStatusBar(item) {
+        $this.showStatus_ = $item.IsChecked
+        Gtk.Widget.SetVisible($this.statusBox_.Handle, $this.showStatus_)
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Help
+    # ═══════════════════════════════════════════════════════════════
+
+    func OnHelp(sender) {
+        Gtk.MessageDialog.Show(
+            $this.window_,
+            "Notepad displays and edits plain text.\n\nUse the File menu to open and save documents, Edit to find and replace, and Format to change the font and wrapping.") | ignore
+    }
+
+    func OnFeedback(sender) {
+        Gtk.MessageDialog.Show($this.window_, "Feedback would go to the author, if this were Windows.") | ignore
+    }
+
+    func OnAbout(sender) {
+        Gtk.AboutDialog.Show($this.window_, {|
+            Name = "Notepad",
+            Version = "1.0",
+            Comments = "A faithful clone of Windows Notepad, written in Tōast on ToastLib.Gtk.",
+            Copyright = "Public domain",
+            Authors = ["Written in TōSh"]
+        |}) | ignore
+    }
+
+    # ═══════════════════════════════════════════════════════════════
+    # Building
+    # ═══════════════════════════════════════════════════════════════
+
+    shy func BuildMenu(keys) -> Gtk.MenuBar {
+        var bar = new Gtk.MenuBar()
+
+        # ── File ───────────────────────────────────────────────────
+        var file = new Gtk.Menu()
+        $keys.Add($file.Add("New", &$this.OnNew), "<Control>n")
+        $keys.Add($file.Add("New Window", &$this.OnNewWindow), "<Control><Shift>n")
+        $keys.Add($file.Add("Open...", &$this.OnOpen), "<Control>o")
+        $keys.Add($file.Add("Save", &$this.OnSave), "<Control>s")
+        $keys.Add($file.Add("Save As...", &$this.OnSaveAs), "<Control><Shift>s")
+        $file.AddSeparator()
+        $file.Add("Page Setup...", &$this.OnPageSetup) | ignore
+        $keys.Add($file.Add("Print...", &$this.OnPrint), "<Control>p")
+        $file.AddSeparator()
+        $file.Add("Exit", &$this.OnExit) | ignore
+        $bar.AddMenu("File", $file) | ignore
+
+        # ── Edit ───────────────────────────────────────────────────
+        var edit = new Gtk.Menu()
+        $this.undoItem_ = $edit.Add("Undo", &$this.OnUndo)
+        $keys.Add($this.undoItem_, "<Control>z")
+        $this.redoItem_ = $edit.Add("Redo", &$this.OnRedo)
+        $keys.Add($this.redoItem_, "<Control>y")
+        $edit.AddSeparator()
+        $this.cutItem_ = $edit.Add("Cut", &$this.OnCut)
+        $keys.Add($this.cutItem_, "<Control>x")
+        $this.copyItem_ = $edit.Add("Copy", &$this.OnCopy)
+        $keys.Add($this.copyItem_, "<Control>c")
+        $this.pasteItem_ = $edit.Add("Paste", &$this.OnPaste)
+        $keys.Add($this.pasteItem_, "<Control>v")
+
+        # Delete is deliberately not an accelerator: the text view's own Del
+        # deletes the character ahead of the cursor when nothing is selected,
+        # and taking the key would have broken that to label a menu entry.
+        $this.deleteItem_ = $edit.Add("Delete", &$this.OnDelete)
+        $edit.AddSeparator()
+        $keys.Add($edit.Add("Find...", &$this.OnFind), "<Control>f")
+        $this.findNextItem_ = $edit.Add("Find Next", &$this.OnFindNext)
+        $keys.Add($this.findNextItem_, "F3")
+        $this.findPrevItem_ = $edit.Add("Find Previous", &$this.OnFindPrevious)
+        $keys.Add($this.findPrevItem_, "<Shift>F3")
+        $keys.Add($edit.Add("Replace...", &$this.OnReplace), "<Control>h")
+        $keys.Add($edit.Add("Go To...", &$this.OnGoTo), "<Control>g")
+        $edit.AddSeparator()
+        $keys.Add($edit.Add("Select All", &$this.OnSelectAll), "<Control>a")
+        $keys.Add($edit.Add("Time/Date", &$this.OnTimeDate), "F5")
+        $bar.AddMenu("Edit", $edit) | ignore
+
+        # ── Format ─────────────────────────────────────────────────
+        var format = new Gtk.Menu()
+        $this.wrapItem_ = $format.AddCheck("Word Wrap", $this.wordWrap_, &$this.OnWordWrap)
+        $format.Add("Font...", &$this.OnFont) | ignore
+        $bar.AddMenu("Format", $format) | ignore
+
+        # ── View ───────────────────────────────────────────────────
+        var view = new Gtk.Menu()
+        var zoom = new Gtk.Menu()
+        $keys.Add($zoom.Add("Zoom In", &$this.OnZoomIn), "<Control>plus")
+        $keys.Add($zoom.Add("Zoom Out", &$this.OnZoomOut), "<Control>minus")
+        $keys.Add($zoom.Add("Restore Default Zoom", &$this.OnZoomReset), "<Control>0")
+
+        var zoomItem = new Gtk.MenuItem("Zoom")
+        $zoomItem.SetSubmenu($zoom)
+        $view.Append($zoomItem)
+
+        $this.statusItem_ = $view.AddCheck("Status Bar", $this.showStatus_, &$this.OnStatusBar)
+        $bar.AddMenu("View", $view) | ignore
+
+        # ── Help ───────────────────────────────────────────────────
+        var help = new Gtk.Menu()
+        $help.Add("View Help", &$this.OnHelp) | ignore
+        $help.Add("Send Feedback", &$this.OnFeedback) | ignore
+        $help.AddSeparator()
+        $help.Add("About Notepad", &$this.OnAbout) | ignore
+        $bar.AddMenu("Help", $help) | ignore
+
+        return $bar
+    }
+
+    shy func BuildStatusBar() -> Gtk.Box {
+        var bar = new Gtk.Box(Gtk.Orientation.Horizontal, 0)
+
+        $this.position_ = new Gtk.TextLabel("Ln 1, Col 1")
+        $this.zoomLabel_ = new Gtk.TextLabel("100%")
+        $this.endingLabel_ = new Gtk.TextLabel("Windows (CRLF)")
+        $this.encodingLabel_ = new Gtk.TextLabel("UTF-8")
+
+        # Notepad's status bar is right-aligned cells of roughly equal width,
+        # with the caret position on the left of the group.
+        var cells = [$this.position_, $this.zoomLabel_, $this.endingLabel_, $this.encodingLabel_]
+        var filler = new Gtk.TextLabel("")
+        $bar.Pack($filler, true, true, 0)
+
+        for cell in $cells {
+            Gtk.Widget.SetSizeRequest($cell.Handle, 140, -1)
+            Gtk.Widget.SetAlign($cell.Handle, Gtk.Align.Start, Gtk.Align.Center)
+            Gtk.Widget.SetMargins($cell.Handle, 2, 6, 2, 6)
+            $bar.Append($cell)
+        }
+
+        return $bar
+    }
+
+    func Build(window) {
+        $this.window_ = $window
+
+        $this.editor_ = new Gtk.TextView()
+        $this.editor_.SetEditable(true)
+        $this.editor_.SetCursorVisible(true)
+        $this.editor_.SetWrapMode(Gtk.WrapMode.None)
+        $this.editor_.SetMargins(2, 2)
+
+        var scroller = new Gtk.ScrolledWindow()
+        $scroller.SetPolicy(Gtk.PolicyType.Automatic, Gtk.PolicyType.Automatic)
+        $scroller.Add($this.editor_)
+
+        var keys = new Gtk.AccelGroup($window)
+        var menu = $this.BuildMenu($keys)
+        $this.statusBox_ = $this.BuildStatusBar()
+
+        var root = new Gtk.Box(Gtk.Orientation.Vertical, 0)
+        $root.Append($menu)
+        $root.Pack($scroller, true, true, 0)
+        $root.Append($this.statusBox_)
+
+        $window.SetChild($root)
+        $window.SetBorderWidth(0)
+
+        $this.editor_.OnChanged(&$this.OnTextChanged) | ignore
+        $this.editor_.OnCursorMoved(func (e) { $this.Refresh() }) | ignore
+
+        # The close button asks the same question the Exit menu item does.
+        $window.OnDelete(func (w, e) { return (not $this.ConfirmDiscard()) }) | ignore
+
+        $this.ApplyFont()
+        $this.Refresh()
+    }
+
+    ## @summary Opens Notepad, optionally on a file, and runs until it is closed.
+    func Start(path = null, frames: int = -1) {
+        Gtk.Window.Open("Untitled - Notepad", new Size(800, 600), func (win) {
+            $this.Build($win)
+
+            if ($path != null) { $this.Load($path) }
+
+            $win.Show()
+            $this.editor_.Focus()
+            $win.Run($frames)
+        })
+    }
+}
+
+# A file named on the command line is opened at startup, the way
+# `notepad.exe notes.txt` does.
+var requested = null
+var passed = $tosh.Script.Args
+if (($passed | count) > 0) { $requested = $passed[0] }
+
+(new Notepad()).Start($requested)
