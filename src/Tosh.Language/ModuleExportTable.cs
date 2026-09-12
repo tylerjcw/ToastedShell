@@ -21,4 +21,17 @@ internal sealed class ModuleExportTable
     internal Dictionary<string, RefinementTypeDefinition> RefinementTypes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public Dictionary<string, object?> Modules { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The module's own dotted path — <c>ToastLib.Math</c> — as it was declared.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0122`. The keys in this table are bare names, so a declaration that
+    /// annotates its own types by their full path — which is good practice, and what
+    /// the author's library does — could not be resolved against it. Knowing the path
+    /// lets that prefix be recognised and stripped, and *only* that prefix: a name
+    /// that does not begin with this module's path is left alone rather than guessed at
+    /// by matching its last segment.
+    /// </remarks>
+    internal string? QualifiedName { get; set; }
 }

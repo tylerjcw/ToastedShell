@@ -3002,6 +3002,17 @@ public sealed class ToshClassDefinition : IShellNamedType
         CancellationToken cancellationToken)
     {
         var constructors = GetConstructorDefinitions();
+        // `TOAST-0122`. A parameter annotation is written inside the class body, so it
+        // resolves against the module that body lives in — not against wherever the call
+        // happens to be made from. The return annotation already did this; parameters did
+        // not, and overload *scoring* is where a parameter annotation is read.
+        //
+        // Under `require … as M` the caller's scope has no `ToastLib`, so
+        // `amount: ToastLib.Math.Vector2D<T>` resolved to nothing, every argument scored as
+        // a mismatch, and it surfaced as "no overload matched with 1 argument(s)" — a
+        // message about arity for a problem about names.
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
+
         var matches = await _engine.SelectBestCallableMatchesAsync(
             constructors,
             static candidate => candidate.Parameters,
@@ -3732,6 +3743,46 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// Widens <paramref name="value"/> to <paramref name="target"/> when C# would do it
     /// implicitly — <c>TOAST-0124</c>.
     /// </summary>
+    /// <summary>
+    /// The first parameter annotation among <paramref name="candidates"/> that names
+    /// nothing resolvable, described for a diagnostic — or null when every annotation
+    /// resolves and the mismatch really is about arity or values (`TOAST-0122`).
+    /// </summary>
+    /// <remarks>
+    /// Only candidates whose arity actually admits the call are examined. A three-
+    /// parameter overload is not evidence of anything when one argument was passed, and
+    /// naming its types would send the reader somewhere irrelevant.
+    /// </remarks>
+    private string? DescribeUnresolvableParameterType(
+        IReadOnlyList<ToshClassMethodDefinition> candidates,
+        int argumentCount)
+    {
+        foreach (var candidate in candidates)
+        {
+            var required = candidate.Parameters.Count(p => !p.IsOptional && !p.IsRest);
+            var accepts = argumentCount >= required &&
+                          (argumentCount <= candidate.Parameters.Count ||
+                           candidate.Parameters.Any(p => p.IsRest));
+
+            if (!accepts)
+            {
+                continue;
+            }
+
+            foreach (var parameter in candidate.Parameters)
+            {
+                if (parameter.TypeName is { Length: > 0 } annotated &&
+                    !_engine.IsAnnotatedTypeKnown(annotated))
+                {
+                    return $"parameter '{parameter.Name}' is annotated '{annotated}', "
+                        + "which does not name a type that is visible here.";
+                }
+            }
+        }
+
+        return null;
+    }
+
     private static bool TryWidenImplicitly(object value, Type target, out object? widened)
     {
         widened = null;
@@ -3756,6 +3807,10 @@ public sealed class ToshClassDefinition : IShellNamedType
         CancellationToken cancellationToken,
         ToshClassInstance? instance = null)
     {
+        // `TOAST-0122`, as in `SelectMethodAsync`: a parameter annotation resolves in the
+        // module its declaration was written in.
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
+
         var matches = await _engine.SelectBestCallableMatchesAsync(
             candidates,
             static candidate => candidate.Parameters,
@@ -3767,6 +3822,18 @@ public sealed class ToshClassDefinition : IShellNamedType
             var methodDisplayName = candidates.Count > 0
                 ? $"'{Name}.{candidates[0].Name}'"
                 : $"'{Name}'";
+
+            // `TOAST-0122`. Before blaming the arity, say so when it is a parameter's
+            // *type* that could not be resolved. The count may be perfectly right, and
+            // "no overload matched with 1 argument(s)" sends the reader to count
+            // arguments for a problem about names. The annotation scope entered above is
+            // still open, so this asks the same question the matcher just asked.
+            if (DescribeUnresolvableParameterType(candidates, arguments.Count) is { } unresolvable)
+            {
+                throw new InvalidOperationException(
+                    $"No overload matched {methodDisplayName}: {unresolvable}");
+            }
+
             throw new InvalidOperationException(
                 $"No overload matched {methodDisplayName} with {arguments.Count} argument(s).");
         }
@@ -3955,6 +4022,10 @@ public sealed class ToshClassDefinition : IShellNamedType
 
             return (false, null, null);
         }
+
+        // `TOAST-0122`, as in `SelectMethodAsync`: a parameter annotation resolves in the
+        // module its declaration was written in.
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
 
         var matches = await _engine.SelectBestCallableMatchesAsync(
             candidates,

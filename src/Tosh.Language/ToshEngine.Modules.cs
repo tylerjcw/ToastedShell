@@ -423,7 +423,18 @@ public sealed partial class ToshEngine
             new Dictionary<string, object?>(StringComparer.Ordinal),
             isModuleScope: true,
             exportDeclarationsByDefault: true,
-            exports: sharedExports);
+            exports: sharedExports)
+        {
+            ModuleName = module.Name,
+        };
+
+        // `TOAST-0122`. The dotted path this module is reached by, built from the module
+        // scopes already on the stack. A partial that merges into an existing module
+        // shares its table and so already has the path, which is the same string.
+        if (moduleScope.Exports is { QualifiedName: null } freshExports)
+        {
+            freshExports.QualifiedName = BuildModulePath(module.Name);
+        }
 
         if (sharedExports is not null)
         {
@@ -469,6 +480,34 @@ public sealed partial class ToshEngine
         moduleObject.IsPartial = module.IsPartial;
         DeclareModule(module.Name, moduleObject, effectiveModifier);
         yield break;
+    }
+
+    /// <summary>
+    /// The dotted path a module being declared will be reached by — <c>ToastLib.Math</c>
+    /// for a <c>Math</c> declared inside <c>ToastLib</c>. Built from the module scopes
+    /// already on the stack, outermost first (`TOAST-0122`).
+    /// </summary>
+    private string BuildModulePath(string name)
+    {
+        List<string>? enclosing = null;
+
+        // `_scopes` enumerates innermost-first, so the names come out reversed.
+        foreach (var scope in _scopes)
+        {
+            if (scope.IsModuleScope && scope.ModuleName is { Length: > 0 } enclosingName)
+            {
+                (enclosing ??= new List<string>()).Add(enclosingName);
+            }
+        }
+
+        if (enclosing is null)
+        {
+            return name;
+        }
+
+        enclosing.Reverse();
+        enclosing.Add(name);
+        return string.Join('.', enclosing);
     }
 
     private bool TryFindExistingModule(string name, out ToshModuleObject module)

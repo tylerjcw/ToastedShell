@@ -26,6 +26,14 @@ public sealed class LexicalScope
         Exports = isModuleScope ? (exports ?? new ModuleExportTable()) : null;
     }
 
+    /// <summary>
+    /// The module this scope was opened for, bare — <c>Math</c>, not
+    /// <c>ToastLib.Math</c>. Null for every scope that is not a module scope.
+    /// Joined with its enclosing scopes to build the path in
+    /// <see cref="ModuleExportTable.QualifiedName"/>.
+    /// </summary>
+    internal string? ModuleName { get; set; }
+
     public Dictionary<string, object?> Variables { get; }
 
     /// <summary>

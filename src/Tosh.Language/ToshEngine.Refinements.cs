@@ -1631,6 +1631,15 @@ public sealed partial class ToshEngine
         return true;
     }
 
+    /// <summary>
+    /// Whether an annotation names something resolvable from here. Non-throwing
+    /// counterpart of <see cref="ThrowIfUnknownAnnotatedType"/>, used by overload
+    /// selection to tell an unresolvable *parameter type* from a wrong arity
+    /// (`TOAST-0122`).
+    /// </summary>
+    internal bool IsAnnotatedTypeKnown(string typeName)
+        => IsKnownAnnotatedType(typeName, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
     private bool IsKnownAnnotatedType(string typeName, HashSet<string> activeRefinements)
     {
         // `TOAST-0090`. A type annotation is a type name, so it takes the path operator like any

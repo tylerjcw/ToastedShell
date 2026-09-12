@@ -1,7 +1,7 @@
 ---
 id: TOAST-0122
 title: "A library's own type annotations resolve in the caller's namespace, so an aliased require breaks its overloads"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-10
@@ -79,9 +79,42 @@ require ToastLib.Math.Geometry from "…/ToastLib.Math.tosh" as Geo
 
 ## Acceptance
 
-- [ ] `$p.Translate($v)` works after an aliased import alone
-- [ ] A selective import still does not bind names the caller did not ask for, or the
-      decision to change that is recorded with its reasoning
-- [ ] An unresolvable *parameter type* is reported as that, naming the type, rather than as
-      an overload-arity mismatch
-- [ ] The tutorials drop the workaround they currently explain
+- [x] `$p.Translate($v)` works after an aliased import alone
+- [x] A selective import still does not bind names the caller did not ask for — the caller
+      still cannot see `Mini` after `require Mini from "…" as M`, which is the clause that
+      rules out the cheap fix
+- [x] An unresolvable *parameter type* is reported as that, naming the type, rather than as
+      an overload-arity mismatch — and a genuine arity mismatch still reports arity
+- [x] The tutorials drop the workaround they currently explain
+
+## How it was fixed — 2026-09-12
+
+Two halves, because one alone is not enough.
+
+**The declaring scope was not entered for parameters.** A *return* annotation already
+resolved in its declaring module, with a comment saying exactly why; parameters did not,
+and overload **scoring** is where a parameter annotation is read. `AnnotationScope` now
+wraps all three scoring sites — `SelectMethodAsync`, `SelectConstructorAsync` and
+`TrySelectSpecialInstanceMethodAsync`.
+
+**And the export table did not know its own name.** Entering the scope was still not
+enough, because the table is keyed on *bare* names: `DeclaringExports` was added for
+unqualified annotations, and a library that annotates its own types by their full path —
+which is good practice, and what this library does — missed it entirely. A
+`ModuleExportTable` now carries its dotted `QualifiedName`, built from the module scopes
+on the stack at declaration, and `TryGetNamedType` recognises and strips exactly that
+prefix before looking the remainder up (walking nested modules for a dotted tail).
+
+**Only the module's own prefix is stripped.** Matching on the last segment instead would
+resolve `Other.Vec` to this module's `Vec` — a wrong answer where an error is the right
+one. That is asserted, and it is why the error message mattered enough to fix too:
+an unresolvable parameter type now says so and names itself, instead of sending the
+reader to count arguments.
+
+Verified by controlled revert: the two tests asserting the new behaviour fail without the
+fix, and the four controls — selectivity, the foreign prefix, the plain import, and a
+type-parameter annotation that must not be mistaken for an unknown type — pass either way.
+
+**The tutorials' workaround is retired.** Every example carried two `require` lines per
+module, and `geometry/09-traits.md` and `docs/README.md` explained why. The documented
+failure — `Bounds()` on a shape built through an alias — now returns `4 x 3`.

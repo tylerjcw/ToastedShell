@@ -5529,6 +5529,38 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </summary>
     internal ModuleExportTable? AnnotationResolutionExports { get; set; }
 
+    /// <summary>
+    /// Resolves a name relative to a module's export table, walking nested modules for a
+    /// dotted remainder — <c>Geometry.Rectangle</c> inside <c>ToastLib.Math</c>.
+    /// </summary>
+    private static bool TryResolveWithinExports(
+        ModuleExportTable exports,
+        string relativeName,
+        out IShellNamedType definition)
+    {
+        definition = null!;
+
+        while (true)
+        {
+            if (exports.Types.TryGetValue(relativeName, out var found))
+            {
+                definition = found;
+                return true;
+            }
+
+            var dot = relativeName.IndexOf('.');
+            if (dot <= 0 ||
+                !exports.Modules.TryGetValue(relativeName[..dot], out var nested) ||
+                nested is not ToshModuleObject nestedModule)
+            {
+                return false;
+            }
+
+            exports = nestedModule.ExportTable;
+            relativeName = relativeName[(dot + 1)..];
+        }
+    }
+
     public bool TryGetNamedType(string name, out IShellNamedType definition)
     {
         // `TOAST-0090`. The shell's own named types — classes, enums, unions, nested types — are
@@ -5540,6 +5572,28 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             declaringExports.Types.TryGetValue(name, out var declaredSibling))
         {
             definition = declaredSibling;
+            return true;
+        }
+
+        // `TOAST-0122`. The same lookup for a declaration that annotates its own types by
+        // their *full* path — `amount: ToastLib.Math.Vector2D<T>`, written inside
+        // `ToastLib.Math`, which is good practice and what the author's library does. The
+        // table above is keyed on bare names, so the qualified spelling missed it and fell
+        // through to the ambient scope; under `require … as M` the caller has no
+        // `ToastLib`, the parameter type resolved to nothing, and the failure surfaced as
+        // "no overload matched with 1 argument(s)" — a message about arity for a problem
+        // about names.
+        //
+        // Only this module's own prefix is stripped. Matching on the last segment instead
+        // would resolve `Other.Vector2D` to this module's `Vector2D`, which is a wrong
+        // answer where an error is the right one.
+        if (AnnotationResolutionExports is { QualifiedName: { Length: > 0 } declaringPath } ownExports &&
+            name.Length > declaringPath.Length + 1 &&
+            name[declaringPath.Length] == '.' &&
+            name.StartsWith(declaringPath, StringComparison.OrdinalIgnoreCase) &&
+            TryResolveWithinExports(ownExports, name[(declaringPath.Length + 1)..], out var selfQualified))
+        {
+            definition = selfQualified;
             return true;
         }
 
