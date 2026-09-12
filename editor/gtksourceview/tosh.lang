@@ -162,7 +162,7 @@
 
     <context id="type-definition">
       <match extended="true">
-        \b(?:(\%{modifiers})\s+)*(class|module|enum|record|struct|interface|trait|union|rune|event|type)\s+(\%{command-name})\b
+        \b(?:(\%{modifiers})\s+)*(class|module|enum|record|struct|interface|trait|union|rune|event|type|callback)\s+(\%{command-name})\b
       </match>
       <include>
         <context sub-pattern="1" style-ref="modifier"/>
@@ -236,6 +236,7 @@
       <keyword>struct</keyword>
       <keyword>interface</keyword>
       <keyword>trait</keyword>
+      <keyword>callback</keyword>
       <keyword>union</keyword>
       <keyword>rune</keyword>
       <keyword>event</keyword>

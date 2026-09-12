@@ -147,6 +147,13 @@ public static class LanguageSurface
             ["rune"] = TypeDecl,
             ["module"] = TypeDecl,
 
+            // `raw callback Name(…) -> ret`. The name is a type: it is what a
+            // `bind native` parameter is annotated with. `raw` is already a
+            // modifier, so only the second word was missing — and an editor that
+            // did not know it left every callback declaration in a native
+            // binding unhighlighted.
+            ["callback"] = TypeDecl,
+
             // ── Control flow ───────────────────────────────────────────────────
             ["if"] = Flow,
             ["else"] = Flow,

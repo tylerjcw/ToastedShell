@@ -54,6 +54,7 @@ public sealed class ToshLanguageFeatures
         ["leaky"] = "Modifier on `rune` definitions — allows the rune to be subclassed (non-sealed).",
         ["struct"] = "Define a value-type with positional fields, structural equality, and copy-on-assign semantics.",
         ["trait"] = "Define a trait with required and default method/property signatures that classes can adopt via 'uses'.",
+        ["callback"] = "Declare the shape of a C function pointer so native code can call back into ToastScript: `raw callback Comparator(a: ptr, b: ptr) -> int`. The name is then usable as a parameter type inside a `bind native` block.",
         ["fulfills"] = "Declare that a class conforms to one or more interfaces.",
         ["implements"] = "Declare interface conformance — alias for `fulfills`. Example: `class Circle implements IShape { ... }`.",
         ["extends"] = "Specify a base class for inheritance. Example: `class Dog extends Animal { ... }`.",

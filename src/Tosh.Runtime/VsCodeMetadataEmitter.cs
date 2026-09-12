@@ -120,6 +120,7 @@ public static class VsCodeMetadataEmitter
         ["fluid"] = "Mark a struct as mutable, allowing field reassignment after construction.",
         ["struct"] = "Define a value-type with positional fields, structural equality, and copy-on-assign semantics.",
         ["trait"] = "Define a trait with required and default method/property signatures that classes can adopt via 'uses'.",
+        ["callback"] = "Declare the C function-pointer shape a native library will call back into, as 'raw callback Name(args) -> return'.",
         ["fulfills"] = "Declare that a class conforms to one or more interfaces.",
         ["uses"] = "Declare that a class adopts one or more traits.",
         ["switch"] = "Legacy statement-style value matching with `case` blocks.",

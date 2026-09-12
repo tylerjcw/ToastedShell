@@ -52,6 +52,7 @@ public sealed class LanguageSurfaceParityTests
         ["prop"] = "class C { prop X = 1 }",
         ["bind"] = "bind Crypto {\n    func sha256(data: byte-ptr) -> byte-ptr\n}",
         ["native"] = "native func puts(s: string) -> int from \"libc.so.6\"",
+        ["callback"] = "raw callback Comparator(a: ptr, b: ptr) -> int",
         ["event"] = "class C { event Changed }",
 
         // Script inputs and subcommands. Added 2026-08-08: all three consumers that
