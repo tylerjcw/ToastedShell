@@ -111,8 +111,8 @@
             new,shy,global,export,static,shared,prop,defer,as,from,native,ref,
             out,sealed,hollow,hermit,strict,partial,fluid,leaky,fixed,lazy,flags,
             vital,guarded,overrule,fading,local,raw,proud,public,extends,
-            fulfills,implements,uses,nameof,name-of,quote,get,set,
-            abstract,private,protected,readonly,override,obsolete,fading},
+            fulfills,implements,uses,nameof,name-of,quote,get,set,callback,
+            abstract,private,protected,readonly,override,obsolete},
   sensitive=true,
   comment=[l]{\#},
   morestring=[b]",
@@ -663,6 +663,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{as}
   \item \code{bind}
   \item \code{break}
+  \item \code{callback}
   \item \code{callconv}
   \item \code{case}
   \item \code{catch}
@@ -4532,16 +4533,34 @@ func fibonacci() -> LazySequence {
 fibonacci | first 8             # 0, 1, 1, 2, 3, 5, 8, 13
 \end{lstlisting}
 
-\begin{warnbox}[Known Limitation]
-Generator functions with unbounded \code{while (true)} loops do not yet cooperate
-with early-termination commands such as \code{first}.  The pipeline will run
-indefinitely.  Use a finite upper bound in the loop condition, or reach for
-built-in lazy sources (\code{iterate}, \code{recur}, \code{cycle}, \code{repeat},
-infinite ranges \code{1..}) which do support early termination.
-\end{warnbox}
+\begin{tipbox}[Unbounded generators terminate early]
+A generator with an unbounded \code{while (true)} loop cooperates with
+early-termination commands: the loop is suspended at each \code{yield} and is
+never resumed once the consumer stops asking.  The \code{fibonacci} example
+above is exactly that shape, and it returns eight numbers rather than running
+forever.
+
+Termination is carried through intermediate stages as well, so a generator
+feeding \code{skip}, \code{where} or \code{map} still stops when the stage after
+them has enough:
+
+\begin{lstlisting}[language=tosh]
+func naturals() { var n = 0; while (true) { yield $n; $n = ($n + 1) } }
+
+naturals | first 5                          # 0, 1, 2, 3, 4
+naturals | skip 3 | first 3                 # 3, 4, 5
+naturals | where { ($_ % 2) == 0 } | first 4  # 0, 2, 4, 6
+naturals | map { ($_ * 10) } | first 3      # 0, 10, 20
+naturals | take-while { $_ < 5 }            # 0, 1, 2, 3, 4
+\end{lstlisting}
+
+A consumer that must see every element --- \code{collect} or \code{count} with
+nothing bounding it --- will of course still run forever against an unbounded
+source.  That is the generator doing what it was asked, not a limitation.
+\end{tipbox}
 
 \begin{tipbox}
-Finite generator functions integrate naturally with the full pipeline command set:
+Generator functions integrate naturally with the full pipeline command set:
 \code{first}, \code{skip}, \code{where}, \code{map}, \code{collect}, etc.
 \end{tipbox}
 
@@ -7470,14 +7489,40 @@ The help output is generated from the \code{flag} and \code{arg} declarations
 at the current and ancestor levels.  To opt out of automatic help, declare your
 own \code{flag help: bool = false}.
 
-\begin{warnbox}[Doc-comments not yet included in auto-help]
-Although \code{\#\#} doc-comments can be written above a \code{subcommand}
-block, the current runtime does not attach them to the auto-generated help
-output.  Only the structural information (flag names, types, and which
-subcommands exist) is shown.  If you need richer descriptions today, write
-them in the script body as \code{writeline} output guarded by
-\code{if (\$tosh.Script.Help)}.
-\end{warnbox}
+\begin{tipbox}[Doc-comments reach auto-help]
+Doc-comments are attached to the generated help.  A \code{\#\# @summary} above a
+\code{subcommand} block becomes that subcommand's description in the
+\emph{Subcommands} table, and a \code{\#\# @flag name - text} above a
+\code{flag} declaration becomes that flag's description in \emph{Options}.
+Both appear at every level: a flag declared at the top level is described in
+each subcommand's help as well as in the script's own.
+
+\begin{lstlisting}[language=tosh]
+## @flag name - who to greet
+flag name: string = "world"
+
+## @summary Say hello loudly.
+subcommand shout {
+    ## @flag times - how many times
+    flag times: int = 1
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+Subcommands
+shout  Say hello loudly.
+
+Options
+Flag              Description
+--name <string>   who to greet
+--times <int>     how many times
+\end{lstlisting}
+
+The one piece that is \emph{not} carried across is the \code{@summary} of the
+script itself, which the help header does not show.  Put anything the reader
+must see about the script as a whole in a subcommand summary, or write it in
+the body guarded by \code{if (\$tosh.Script.Help)}.
+\end{tipbox}
 
 \begin{lstlisting}[title={Invoking auto-help}]
 tosh myscript.tosh --help
@@ -8296,7 +8341,7 @@ The complete diagnostic-code reference for every namespace
 (\code{tosh.parser.*}, \code{tosh.runtime.*}, \code{tosh.compile.*},
 \code{tosh.bind.*}, \ldots) lives in \textbf{Part~\ref{part:diagnostics}}
 and is regenerated from source by
-\code{python3 scripts/extract\_diagnostic\_codes.py}.
+\code{scripts/extract-diagnostic-codes.tosh}.
 \end{tipbox}
 
 
@@ -8664,8 +8709,8 @@ func service-manager() {
 % #############################################################################
 
 % Auto-generated from `Code:` literals in the source tree.
-% Regenerate with: python3 scripts/extract_diagnostic_codes.py
-\InputIfFileExists{diagnostic-codes}{}{\textit{Diagnostic code reference not yet generated. Run \texttt{python3 scripts/extract\_diagnostic\_codes.py} to create it.}}
+% Regenerate with: scripts/extract-diagnostic-codes.tosh
+\InputIfFileExists{diagnostic-codes}{}{\textit{Diagnostic code reference not yet generated. Run \texttt{scripts/extract-diagnostic-codes.tosh} to create it.}}
 
 % ─────────────────────────────────────────────────────────────────────────────
 %  BACK MATTER

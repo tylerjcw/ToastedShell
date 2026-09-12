@@ -28,6 +28,45 @@ public sealed class SpecificationConformanceTests
     private static string Specification() =>
         File.ReadAllText(Path.Combine(RepositoryRoot(), "docs/spec/toastscript-spec.tex"));
 
+    /// <summary>
+    /// A tool the specification tells the reader to run has to exist.
+    /// </summary>
+    /// <remarks>
+    /// Found stale: three places told the reader to regenerate the diagnostic
+    /// reference with <c>python3 scripts/extract_diagnostic_codes.py</c>, long
+    /// after every Python script in the repository had been ported to
+    /// ToastScript and deleted (`TS-P2-10`). Nothing caught it, because the
+    /// existing guards check what the document *claims about the language* and
+    /// this is a claim about the repository.
+    ///
+    /// Only paths under <c>scripts/</c> are checked. They are the ones a reader
+    /// is invited to run, and they are the ones a port or a rename moves.
+    /// </remarks>
+    [Fact]
+    public void Every_script_the_specification_names_exists()
+    {
+        var root = RepositoryRoot();
+
+        // LaTeX escapes underscores, so `extract\_diagnostic\_codes` is on the
+        // page as `extract_diagnostic_codes`. Unescape before looking.
+        var named = Regex.Matches(Specification(), @"scripts/([A-Za-z0-9_\\.-]+\.(?:tosh|py|sh))")
+            .Select(m => m.Groups[1].Value.Replace("\\", string.Empty, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(named);
+
+        var missing = named
+            .Where(name => !File.Exists(Path.Combine(root, "scripts", name)))
+            .ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            "The specification tells the reader to run scripts that do not exist:\n  "
+            + string.Join("\n  ", missing));
+    }
+
     /// <summary>The document states what binds an implementation.</summary>
     [Theory]
     [InlineData(@"\section*{Conformance}")]
