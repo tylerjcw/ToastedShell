@@ -1959,6 +1959,16 @@ public sealed partial class ToshEngine
                         return cachedBinary.Value;
                     }
 
+                    // `TOAST-0131`. `T is double` asks what the type parameter `T` is bound
+                    // to. It has to be answered from the *syntax*, before the left operand is
+                    // evaluated: `T` is a bareword, so evaluating it yields the string "T",
+                    // which is indistinguishable from a genuine string of that name.
+                    if (operation.Operator is "is" or "is-not" &&
+                        TryEvaluateTypeParameterTest(operation, out var typeParameterAnswer))
+                    {
+                        return typeParameterAnswer;
+                    }
+
                     var left = await EvaluateArgumentAsync(sourceName, sourceText, operation.Left, cancellationToken);
 
                     // Short-circuit: do not evaluate the right side if unnecessary.
@@ -1990,6 +2000,71 @@ public sealed partial class ToshEngine
                         right,
                         cancellationToken);
     }
+    /// <summary>
+    /// <c>T is double</c> / <c>T is-not double</c> — a test on the type a type parameter is
+    /// bound to, rather than on a value (<c>TOAST-0131</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Answers false (declining, via the <c>out</c> flag) unless the left side is a bareword
+    /// that names a type parameter in scope *and* the right side names a resolvable type. A
+    /// bareword that is not a type parameter is left to the ordinary value test, so a genuine
+    /// string comparison is unaffected.
+    /// </para>
+    /// <para>
+    /// Assignability rather than identity, so <c>T is object</c> is true and a bound subclass
+    /// answers for its base — the same question <c>$value is Base</c> asks of a value.
+    /// </para>
+    /// </remarks>
+    private bool TryEvaluateTypeParameterTest(OperatorArgumentSyntax operation, out object? answer)
+    {
+        answer = null;
+
+        if (operation.Left is not BarewordArgumentSyntax { Value: { Length: > 0 } parameterName } ||
+            !TryResolveTypeParameterBinding(parameterName, out var bound, out var nominal))
+        {
+            return false;
+        }
+
+        var written = operation.Right switch
+        {
+            BarewordArgumentSyntax { Value: { Length: > 0 } name } => name,
+            LiteralArgumentSyntax { Value: string { Length: > 0 } text } => text,
+            _ => null,
+        };
+
+        if (written is null)
+        {
+            return false;
+        }
+
+        // Past this point the left side is known to name a type parameter, so the question
+        // is a type question and is answered here whatever the outcome. Falling through
+        // would compare the bareword string "T" against the type and return a confident,
+        // wrong `false`.
+        bool matches;
+
+        if (bound is not null && TryResolveTypeName(written) is { } target)
+        {
+            // Assignability rather than identity, so `T is object` is true and a bound
+            // subclass answers for its base — the question `$value is Base` also asks.
+            matches = target.IsAssignableFrom(bound);
+        }
+        else if (nominal is { Length: > 0 })
+        {
+            // A type argument naming a ToastScript class is recorded by name, because there
+            // is no CLR type to record. By name is all there is to compare.
+            matches = string.Equals(nominal, written, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            matches = false;
+        }
+
+        answer = operation.Operator == "is" ? matches : !matches;
+        return true;
+    }
+
     private async ValueTask<object?> EvaluateVariableReferenceAsync(
         string sourceName,
         string sourceText,

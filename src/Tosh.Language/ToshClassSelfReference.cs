@@ -46,6 +46,13 @@ internal sealed class ToshClassSelfReference : IShellRecordObject, IShellInvocab
     internal IReadOnlyDictionary<string, Type?>? TypeArgumentBindings =>
         _instance.GetBindingsFor(_accessor ?? _instance.Definition);
 
+    /// <summary>
+    /// The same bindings by name, for a type argument that names a ToastScript class and so
+    /// has no CLR type to bind (<c>TOAST-0131</c>).
+    /// </summary>
+    internal IReadOnlyDictionary<string, string>? NominalTypeArgumentBindings =>
+        _instance.GetNominalBindingsFor(_accessor ?? _instance.Definition);
+
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {
         return _instance.Definition.TryGetInstanceMember(_instance, name, includeHidden: true, _accessor, out value);

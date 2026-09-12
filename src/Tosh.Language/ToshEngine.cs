@@ -5744,6 +5744,53 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         TryResolveTypeParameterFromReceiver(name, out bound);
 
     /// <summary>
+    /// Whether <paramref name="name"/> names a type parameter in scope, and what it is
+    /// bound to — as a CLR <see cref="Type"/> where there is one, and otherwise by name
+    /// (<c>TOAST-0131</c>).
+    /// </summary>
+    /// <remarks>
+    /// A type argument that names a ToastScript class has no CLR type to bind, so it is
+    /// recorded nominally instead. `T is Thing` has to answer for that case: declining it
+    /// would send the question to the *value* comparison, where the left side is the
+    /// bareword string "T" and the answer comes back a confident, wrong `false`.
+    /// </remarks>
+    internal bool TryResolveTypeParameterBinding(string name, out Type? bound, out string? nominal)
+    {
+        bound = null;
+        nominal = null;
+
+        if (_currentTypeParameterBindings is { } fromCall && fromCall.TryGetValue(name, out var callBound))
+        {
+            bound = callBound;
+            return true;
+        }
+
+        if (!TryGetVariableBinding("this", out var binding))
+        {
+            return false;
+        }
+
+        var (arguments, nominals) = binding.Value switch
+        {
+            ToshClassSelfReference self => (self.TypeArgumentBindings, self.NominalTypeArgumentBindings),
+            ToshClassInstance instance => (instance.TypeArguments, instance.NominalTypeArguments),
+            _ => (null, null),
+        };
+
+        if (arguments is null || !arguments.TryGetValue(name, out bound))
+        {
+            return false;
+        }
+
+        if (bound is null && nominals is not null)
+        {
+            nominals.TryGetValue(name, out nominal);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// The type parameters of the call currently running, if it declared any —
     /// <c>TOAST-0118</c>.
     /// </summary>

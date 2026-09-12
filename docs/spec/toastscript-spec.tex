@@ -2669,6 +2669,36 @@ applies only to \emph{sequence} tests: \code{"abc" is string} and
 \code{"abc" is IComparable} are unaffected, because neither asks whether the value is a
 sequence.
 
+\paragraph{A type parameter asks about its binding, not about a value.}
+Where the left side names a type parameter that is in scope, \code{is} asks what that
+parameter is \emph{bound to}. This is the one form of \code{is} whose left side is not a
+value, and it is what lets a generic decide something from its own closure:
+
+\begin{lstlisting}
+class Point2D<T>(x: T, y: T) {
+    static func Describe<T>() {
+        if (T is double) { return "double precision" }
+        if (T is float)  { return "single precision" }
+        if (T is int)    { return "integral" }
+        return "something else"
+    }
+}
+
+Point2D.Describe<double>()     # double precision
+Point2D.Describe<int>()        # integral
+\end{lstlisting}
+
+It reads assignably, as a value test does --- \code{T is object} is true for every
+binding --- and \code{is-not} negates it. A type argument that names a ToastScript class
+has no host type to compare, so it is compared by name instead; the answer is the same.
+
+The question is decided from the name, not from its spelling: a bareword that is
+\emph{not} a type parameter in scope is an ordinary value, and \code{\$s is string}
+where \code{\$s} holds \code{"T"} is a value test like any other.
+
+A type parameter on the \emph{right} is unchanged: \code{\$value is T} compares the
+value against the name \code{T}, and is not a question about the binding.
+
 \subsection{Collection Shape}
 \label{sec:collection-shape}
 

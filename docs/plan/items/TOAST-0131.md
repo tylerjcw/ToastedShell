@@ -1,7 +1,7 @@
 ---
 id: TOAST-0131
 title: "A generic body cannot ask what its type parameter is bound to"
-status: proposed
+status: complete
 area: toast
 priority: 3
 opened: 2026-09-12
@@ -73,7 +73,35 @@ static func Empty<T>() => match (T) {
 
 B can be built over A's resolution if both are wanted.
 
-## Why this is not scheduled
+## Built — 2026-09-12, spelling A
+
+`T is <type>` / `T is-not <type>`, decided by the author. Answered from the **syntax**,
+before the left operand is evaluated: `T` is a bareword, so evaluating it yields the
+string `"T"`, which is indistinguishable from a genuine string of that name.
+
+The load-bearing decision is that **once the left side is known to name a type parameter,
+the question is answered there whatever the outcome.** Declining would hand it to the
+value comparison, where `"T" is Thing` comes back a confident, wrong `false` — which is
+exactly how the ToastScript-class case was caught. A type argument naming a ToastScript
+class has no CLR type to bind, so it is recorded nominally; `NominalTypeArgumentBindings`
+now reaches those through `$this`, and they are compared by name, which is all there is to
+compare.
+
+Assignability rather than identity, so `T is object` is true for every binding — the same
+question `$value is Base` asks. Both receivers answer: a function's own type parameters
+(`_currentTypeParameterBindings`) and a class's (`$this`), with the method's shadowing the
+class's as they already did.
+
+Only one evaluation path needed it: the synchronous fast path beside it is guarded by
+`IsSynchronousArithmeticOperator`, which `is` is not.
+
+**Unchanged deliberately:** a type parameter on the *right*. `$value is T` compares the
+value against the name `T` and was never the question this row asked; widening it is a
+separate decision.
+
+Documented in `§Type Tests`, which the specification-listing check parses on every run.
+
+## Why it was not scheduled before
 
 **The case that raised it does not need it.** `new Point2D<T>(0, 0)` already widens the
 literal to `T` — `Empty<double>()` stores a `Double`, `Empty<float>()` a `Single`,
