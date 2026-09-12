@@ -68,11 +68,11 @@ public static class ConstantFolder
             "/" => NumericDiv(left, right),
             "%" => NumericMod(left, right),
             "==" => NumericEq(left, right),
-            "!=" => !(bool)NumericEq(left, right)!,
-            "<" => NumericCmp(left, right) < 0,
-            "<=" => NumericCmp(left, right) <= 0,
-            ">" => NumericCmp(left, right) > 0,
-            ">=" => NumericCmp(left, right) >= 0,
+            "!=" => NumericEq(left, right) is bool eq ? !eq : Sentinel.NoFold,
+            "<" => Ordered(NumericCmp(left, right), c => c < 0),
+            "<=" => Ordered(NumericCmp(left, right), c => c <= 0),
+            ">" => Ordered(NumericCmp(left, right), c => c > 0),
+            ">=" => Ordered(NumericCmp(left, right), c => c >= 0),
             _ => Sentinel.NoFold,
         };
     }
@@ -131,21 +131,88 @@ public static class ConstantFolder
         catch (OverflowException) { return Sentinel.NoFold; }
     }
 
-    private static object NumericEq(object? a, object? b) =>
-        ToDecimalCompare(a!, b!) == 0;
-
-    private static int NumericCmp(object? a, object? b) =>
-        ToDecimalCompare(a!, b!);
-
-    private static int ToDecimalCompare(object a, object b)
+    /// <summary>
+    /// Folded comparisons must agree with the ones the evaluator makes, which
+    /// means comparing in the type the operands are actually in.
+    ///
+    /// This used to convert both sides to <c>decimal</c> first. That is lossy
+    /// for doubles — <c>Convert.ToDecimal(double)</c> keeps 15 significant
+    /// digits — so two distinct doubles collapsed onto one value and compared
+    /// equal. The observable result was that a comparison meant something
+    /// different depending on whether it happened to be foldable:
+    ///
+    /// <code>
+    /// 0.3 == 0.30000000000000004        # folded: true
+    /// $a == $b                          # same values, at runtime: false
+    /// </code>
+    ///
+    /// The arithmetic beside it was always right, because
+    /// <see cref="ToDecimalIfNeeded"/> picks the narrowest type that holds both
+    /// operands and only reaches decimal when one of them is a decimal. The
+    /// comparison now uses the same ladder.
+    /// </summary>
+    private static object? NumericEq(object? a, object? b)
     {
-        // decimal preserves int and long exactly; promotes double via
-        // its decimal converter. This matches the runtime's comparison
-        // semantics for numeric types we model.
-        var da = Convert.ToDecimal(a, System.Globalization.CultureInfo.InvariantCulture);
-        var db = Convert.ToDecimal(b, System.Globalization.CultureInfo.InvariantCulture);
-        return da.CompareTo(db);
+        if (a is decimal || b is decimal)
+        {
+            return Convert.ToDecimal(a!) == Convert.ToDecimal(b!);
+        }
+
+        if (a is double || b is double)
+        {
+            var da = Convert.ToDouble(a!);
+            var db = Convert.ToDouble(b!);
+
+            // NaN is not equal to itself, and `CompareTo` disagrees, so the
+            // ordering path below refuses it. Equality can answer directly.
+            return da == db;
+        }
+
+        if (a is long || b is long)
+        {
+            return Convert.ToInt64(a!) == Convert.ToInt64(b!);
+        }
+
+        return (int)a! == (int)b!;
     }
+
+    /// <summary>
+    /// Ordering, in the same type as <see cref="NumericEq"/>.
+    ///
+    /// Returns null rather than an ordering when either side is NaN: every
+    /// comparison against NaN is false at runtime, and no single integer
+    /// encodes that, so the fold is declined and the evaluator decides.
+    /// </summary>
+    private static int? NumericCmp(object? a, object? b)
+    {
+        if (a is decimal || b is decimal)
+        {
+            return Convert.ToDecimal(a!).CompareTo(Convert.ToDecimal(b!));
+        }
+
+        if (a is double || b is double)
+        {
+            var da = Convert.ToDouble(a!);
+            var db = Convert.ToDouble(b!);
+
+            if (double.IsNaN(da) || double.IsNaN(db)) { return null; }
+
+            return da.CompareTo(db);
+        }
+
+        if (a is long || b is long)
+        {
+            return Convert.ToInt64(a!).CompareTo(Convert.ToInt64(b!));
+        }
+
+        return ((int)a!).CompareTo((int)b!);
+    }
+
+    /// <summary>
+    /// Applies an ordering that <see cref="NumericCmp"/> may have declined.
+    /// </summary>
+    private static object? Ordered(int? comparison, Func<int, bool> decide) =>
+        comparison is { } c ? decide(c) : Sentinel.NoFold;
 
     /// <summary>
     /// Ladder of numeric op evaluators. We prefer the smallest CLR

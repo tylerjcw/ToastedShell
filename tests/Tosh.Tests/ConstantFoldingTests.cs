@@ -174,6 +174,91 @@ public sealed class ConstantFoldingTests : IClassFixture<ToshRuntimeFixture>
         Assert.Same(ConstantFolder.Sentinel.NoFold, folded);
     }
 
+    /// <summary>
+    /// A fold must not change what a comparison means.
+    ///
+    /// Comparisons used to be folded through <c>decimal</c>, which keeps 15
+    /// significant digits of a double — so two distinct doubles collapsed onto
+    /// one value and compared equal, while the evaluator compared them exactly
+    /// and disagreed. `0.3 == 0.30000000000000004` was true when it could be
+    /// folded and false when it could not.
+    /// </summary>
+    [Fact]
+    public void Two_distinct_doubles_do_not_fold_to_equal()
+    {
+        Assert.Equal(false, ConstantFolder.TryFoldBinary(
+            new BoundLiteral(0.3, default, BoundType.FromClr(typeof(double))),
+            "==",
+            new BoundLiteral(0.30000000000000004, default, BoundType.FromClr(typeof(double)))));
+    }
+
+    /// <summary>
+    /// The other half: a fold must still be a fold. Narrowing to the operand
+    /// type is what keeps int and mixed int/double comparisons answering as
+    /// they did.
+    /// </summary>
+    [Theory]
+    [InlineData(1, "==", 1, true)]
+    [InlineData(1, "==", 2, false)]
+    [InlineData(5, ">", 3, true)]
+    [InlineData(3, ">=", 3, true)]
+    [InlineData(2, "<", 3, true)]
+    public void Integer_comparisons_still_fold(int left, string op, int right, bool expected)
+    {
+        Assert.Equal(expected, ConstantFolder.TryFoldBinary(
+            new BoundLiteral(left, default, BoundType.FromClr(typeof(int))),
+            op,
+            new BoundLiteral(right, default, BoundType.FromClr(typeof(int)))));
+    }
+
+    /// <summary>
+    /// Every ordering against NaN is false at runtime, and no single integer
+    /// encodes that, so the ordering is declined rather than guessed.
+    /// </summary>
+    [Theory]
+    [InlineData("<")]
+    [InlineData("<=")]
+    [InlineData(">")]
+    [InlineData(">=")]
+    public void Refuses_to_order_nan(string op)
+    {
+        var folded = ConstantFolder.TryFoldBinary(
+            new BoundLiteral(double.NaN, default, BoundType.FromClr(typeof(double))),
+            op,
+            new BoundLiteral(1.0, default, BoundType.FromClr(typeof(double))));
+
+        Assert.Same(ConstantFolder.Sentinel.NoFold, folded);
+    }
+
+    /// <summary>
+    /// The property that matters, end to end and in the evaluator's own terms:
+    /// turning folding off must not change any answer. The doubles here are the
+    /// ones the old decimal conversion could not tell apart.
+    /// </summary>
+    [Theory]
+    [InlineData("echo (0.3 == 0.30000000000000004)")]
+    [InlineData("echo ((0.1 + 0.2) == 0.3)")]
+    [InlineData("echo (1 == 1.0)")]
+    [InlineData("echo (1.5 < 2.5)")]
+    [InlineData("echo (2.5 <= 2.5)")]
+    [InlineData("echo (((1.0 / 3.0) * 3.0) == 1.0)")]
+    [InlineData("echo (1000000000000 == 1000000000001)")]
+    public async Task A_comparison_means_the_same_folded_or_not(string source)
+    {
+        var folded = await new ToshEngine(_runtime.Language).ExecuteToListAsync(source);
+
+        Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
+        try
+        {
+            var noFold = await new ToshEngine(_runtime.Language).ExecuteToListAsync(source);
+            Assert.Equal(noFold, folded);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", null);
+        }
+    }
+
     [Fact]
     public async Task Evaluator_returns_same_result_for_folded_and_non_folded()
     {
