@@ -7769,6 +7769,24 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
+                // `PLAN-0003`. MSBuild keeps its worker nodes alive after a build so the
+                // next one starts faster, and nothing reclaims them: `dotnet build-server
+                // shutdown` reports success and leaves them running. One build of a
+                // moderate project leaves ~`nproc` of them behind, each a couple of
+                // hundred megabytes, for fifteen minutes.
+                //
+                // `scripts/build.tosh` already makes this trade and states the reason:
+                // TōSh is somebody's logon shell, and leaking gigabytes into their session
+                // to save a second is not a bargain. That argument is *stronger* here,
+                // because this is the shipped path — `require <project.csproj>` in a
+                // user's script — rather than a build script they ran deliberately.
+                //
+                // The environment variable rather than `-nr:false`: measured on a full
+                // solution build, the switch alone leaves four nodes behind and the
+                // variable leaves none, because the variable reaches the nested `dotnet`
+                // processes this one spawns and the switch only reaches the invocation it
+                // is written on.
+                Environment = { ["MSBUILDDISABLENODEREUSE"] = "1" },
             }
         };
 
@@ -7799,6 +7817,24 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
+                // `PLAN-0003`. MSBuild keeps its worker nodes alive after a build so the
+                // next one starts faster, and nothing reclaims them: `dotnet build-server
+                // shutdown` reports success and leaves them running. One build of a
+                // moderate project leaves ~`nproc` of them behind, each a couple of
+                // hundred megabytes, for fifteen minutes.
+                //
+                // `scripts/build.tosh` already makes this trade and states the reason:
+                // TōSh is somebody's logon shell, and leaking gigabytes into their session
+                // to save a second is not a bargain. That argument is *stronger* here,
+                // because this is the shipped path — `require <project.csproj>` in a
+                // user's script — rather than a build script they ran deliberately.
+                //
+                // The environment variable rather than `-nr:false`: measured on a full
+                // solution build, the switch alone leaves four nodes behind and the
+                // variable leaves none, because the variable reaches the nested `dotnet`
+                // processes this one spawns and the switch only reaches the invocation it
+                // is written on.
+                Environment = { ["MSBUILDDISABLENODEREUSE"] = "1" },
             }
         };
 

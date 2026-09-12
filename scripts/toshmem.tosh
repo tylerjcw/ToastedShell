@@ -199,6 +199,13 @@ subcommand build {
     var proj = $root | join -p "tools" "Tosh.DevCompanion" "Tosh.DevCompanion.csproj"
 
     sep "BUILD · Tosh.DevCompanion (debug)"
+
+    # `PLAN-0003`. MSBuild keeps its worker nodes alive after a build and nothing
+    # reclaims them — `dotnet build-server shutdown` reports success and leaves them
+    # running. `scripts/build.tosh` sets this for the same reason; this script spawns a
+    # build too and was the last one in the tree that did not.
+    $env.MSBUILDDISABLENODEREUSE = "1"
+
     dotnet build $proj -c Debug --nologo -q
     if ($tosh.Last.ExitCode != 0) { throw "Build failed." }
     ok "DevCompanion ready (debug build)."

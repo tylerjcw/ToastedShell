@@ -110,6 +110,7 @@
 | [`TOAST-0070`](items/TOAST-0070.md) | P3 | complete | 4/4 | Whether a rune is called is decided by a textual scan, so a name in a string disables compilation |
 | [`TOAST-0024`](items/TOAST-0024.md) | P3 | complete | 5/5 | A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails |
 | [`TOAST-0131`](items/TOAST-0131.md) | P3 | complete | — | A generic body cannot ask what its type parameter is bound to |
+| [`PLAN-0003`](items/PLAN-0003.md) | P2 | complete | 5/5 | MSBuild node accumulation is a candidate cause for the unexplained development-time memory exhaustion |
 | [`TS-P1-47`](items/TS-P1-47.md) | P1 | complete | — | A variable annotated with a base class rejects a subclass value when compiled |
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | complete | — | A lexical scope allocated ten collections it almost never used |
 | [`TOAST-0045`](items/TOAST-0045.md) | P2 | complete | 4/4 | A compiled function returning `record` cannot return a record literal |

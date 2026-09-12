@@ -18,4 +18,3 @@
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0035`](items/TOAST-0035.md) | P2 | partial | 1/5 | Source replay and implicit dynamic are how the compiler handles what it cannot emit |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
-| [`PLAN-0003`](items/PLAN-0003.md) | P2 | research | 0/5 | MSBuild node accumulation is a candidate cause for the unexplained development-time memory exhaustion |
