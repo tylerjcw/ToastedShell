@@ -4644,3 +4644,55 @@ alongside `SpinLock` and `FileStatus`. The control showed it passing against the
 the direct scan and the imports did disagree about it, but `Resolve` already reached
 `System.Numerics.BigInteger` by another route. It moved to the "unchanged" theory, where it is
 true, rather than staying where it looked like evidence.
+
+---
+
+## `TOAST-0126` — the callback guard was asking the wrong question (September 11)
+
+Found while writing a Notepad clone for the GTK examples, which is the first program in the
+tree that both registers a lot of callbacks and reads a file. Every menu item and button in it
+went dead the moment a document was opened, with nothing on screen to say so.
+
+**The symptom pointed at GTK and the cause was in the bridge.** `read-file` awaits real async
+I/O, and with no synchronization context the continuation resumes on a thread-pool thread — the
+engine then carries on there for the rest of the script. `NativeCallbackThunkFactory` had
+captured the thread that was current when each callback was *registered* and compared it
+literally on every invocation, so after the move every callback was refused as foreign.
+
+A short probe established the blast radius rather than guessing at it. Only `read-file` and
+`write-file` move the engine; `echo`, `which`, and every pipeline operator tried — `count`,
+`join`, `collect`, `split`, `lines`, `first`, `skip` — stay put, as do `System.IO`'s synchronous
+reads and writes. That is what made the workaround in the examples a one-line substitution while
+the real fix was being worked out.
+
+**The guard protects something real, which is why it could not simply be removed.** The engine's
+scope stack is a plain `Stack`, and SDL delivering an audio callback on its own thread while the
+engine runs elsewhere is a genuine data race. But the registration thread does not answer that
+question. The engine moving is not a fork — there is still exactly one thread in it — and what
+actually separates the two cases is whether *this* thread is currently inside a native call the
+engine made, because then the engine is below us on the same stack and re-entering it is the
+whole point of a signal handler.
+
+`NativeCallbackScope` already answered it. It is pushed around every native invocation and is
+`[ThreadStatic]`, so `IsActive` is true on the engine's thread-of-the-moment and false on a
+library's own thread. The change is one condition; the reasoning is the part worth keeping.
+
+**Both halves are tested, and the first one had to be made to fail before it could be trusted.**
+Thread ids vary per run, so a single green run proves nothing — the probe was repeated until the
+engine actually moved, and only the runs that moved count as evidence:
+
+```
+run 1: reg=4 after=6   changed=1 clicks=1 timer=1
+run 2: reg=8 after=4   changed=1 clicks=1 timer=1
+run 5: reg=7 after=4   changed=1 clicks=1 timer=1
+```
+
+The safety half uses libc's `pthread_create` to run a callback on a thread the engine has
+nothing to do with, and asserts the callback's assignment never happened — `reached=false`. That
+test is the one that would catch a future loosening of this guard, and it did not exist before.
+
+**Left alone deliberately.** Pinning the engine to one thread, so an awaited builtin posts its
+continuation back, is the larger fix and the better one. It changes how every await in the
+runtime behaves, which is not a thing to do on the way past a callback bug. The guard is now
+correct whether the engine moves or not, so the migration is a tidiness question rather than a
+correctness one.

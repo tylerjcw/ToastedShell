@@ -97,6 +97,96 @@ public class NativeCallbackTests
     }
 
     /// <summary>
+    /// The engine does not always stay on the thread it started on. An awaited
+    /// builtin — `read-file` is the one people meet — resumes the script on a
+    /// thread-pool thread, and the engine carries on there. It has moved, not
+    /// forked, so a callback arriving afterwards is still safe and must still run.
+    ///
+    /// Before this was understood, the thread recorded when the callback was
+    /// registered was compared literally, so reading a file anywhere in a
+    /// program stopped every later callback in it: in a GTK application, every
+    /// button went dead the first time a document was opened.
+    /// </summary>
+    [Fact]
+    public async Task A_callback_survives_the_engine_moving_threads()
+    {
+        if (SkipOffLinux) return;
+
+        var scratch = Path.GetTempFileName();
+        await File.WriteAllTextAsync(scratch, "provokes the await that moves us");
+
+        try
+        {
+            var results = await NewEngine().ExecuteToListAsync(
+                QsortPreamble +
+                """
+
+                func ascending(a, b) {
+                    return (native-read int32 $a) - (native-read int32 $b)
+                }
+
+                # The move happens here, before the callback is ever invoked.
+                var before = Sys.Threading.Thread.CurrentThread.ManagedThreadId
+                var text = (read-file "<<PATH>>")
+                var after = Sys.Threading.Thread.CurrentThread.ManagedThreadId
+
+                alloc buf = 16
+                fill($buf, [4, 2, 3, 1])
+                LibC.qsort($buf, 4, 4, &ascending)
+                var sorted = dump($buf, 4)
+                native-free $buf
+                $sorted | join ","
+                """.Replace("<<PATH>>", scratch));
+
+            Assert.Equal("1,2,3,4", Assert.IsType<string>(Assert.Single(results)));
+        }
+        finally
+        {
+            File.Delete(scratch);
+        }
+    }
+
+    /// <summary>
+    /// The other half of the same rule, and the reason it cannot simply be
+    /// dropped: a callback that arrives on a thread the engine is *not* on must
+    /// not run. Here libc starts the thread, so nothing about it belongs to the
+    /// engine — no native call of ours is in flight on it, and touching the
+    /// scope stack from there would be a data race rather than re-entrancy.
+    ///
+    /// The observable consequence is that the callback's assignment never
+    /// happens.
+    /// </summary>
+    [Fact]
+    public async Task A_callback_on_a_genuinely_foreign_thread_does_not_run()
+    {
+        if (SkipOffLinux) return;
+
+        var results = await NewEngine().ExecuteToListAsync(
+            """
+            raw callback ThreadBody(arg: ptr) -> ptr
+            bind native "libc.so.6" as Threads {
+                func pthread_create(thread: ptr, attr: ptr, start: ThreadBody, arg: ptr) -> int
+                func pthread_join(thread: nuint, result: ptr) -> int
+            }
+
+            var reached = false
+            func body(arg) {
+                $reached = true
+                return 0
+            }
+
+            alloc handle = 8
+            var started = Threads.pthread_create($handle, 0, &body, 0)
+            Threads.pthread_join((native-read uint64 $handle), 0) | ignore
+            native-free $handle
+
+            $"started={$started} reached={$reached}"
+            """);
+
+        Assert.Equal("started=0 reached=false", Assert.IsType<string>(Assert.Single(results)));
+    }
+
+    /// <summary>
     /// Several yielded values is an error, not a silent pick. `writeline` would
     /// not trigger this — it prints rather than yielding — so the body here
     /// uses bare expressions, which do.

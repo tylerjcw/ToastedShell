@@ -114,10 +114,12 @@ internal static class NativeCallbackThunkFactory
     /// Builds the delegate native code will call, wrapping <paramref name="callable"/>.
     /// </summary>
     /// <param name="ownerThreadId">
-    /// The managed thread the engine belongs to. Compared on every invocation:
-    /// ToSh's engine keeps its scopes in a plain stack and answers concurrency
-    /// by cloning per fork, so touching it from another thread is a data race
-    /// rather than a slow path.
+    /// The managed thread the engine was on when the callback was registered.
+    /// Checked on every invocation, but only as a fast path: ToSh's engine keeps
+    /// its scopes in a plain stack, so touching it from a genuinely foreign
+    /// thread is a data race rather than a slow path — while the engine merely
+    /// *moving* to another thread, which an awaited builtin makes it do, is not.
+    /// See <c>ThunkHandler.Dispatch</c> for the distinction.
     /// </param>
     public static Delegate Create(
         ToshNativeCallbackDefinition definition,
@@ -183,7 +185,22 @@ internal static class NativeCallbackThunkFactory
         {
             var currentThreadId = Environment.CurrentManagedThreadId;
 
-            if (currentThreadId != _ownerThreadId)
+            // The owner thread is the one that registered the callback, which is
+            // not always the one the engine is on when the callback arrives. An
+            // `await` inside a builtin — `read-file` is the common one — resumes
+            // the script on a thread-pool thread, and the engine simply carries
+            // on there. It is still single-threaded; it has moved, not forked.
+            //
+            // What actually distinguishes a safe callback from a dangerous one is
+            // whether *this* thread is currently inside a native call the engine
+            // made. If it is, the engine is here, below us on this very stack,
+            // and re-entering it is what a signal handler is meant to do. If it
+            // is not, the callback is arriving from a library's own thread while
+            // the engine runs elsewhere — SDL's audio thread — and touching the
+            // scope stack from there is a data race.
+            //
+            // The scope is [ThreadStatic], so this asks about this thread alone.
+            if (currentThreadId != _ownerThreadId && !NativeCallbackScope.IsActive)
             {
                 NativeCallbackScope.RecordFailure(
                     new NativeCallbackThreadViolationException(_definition.Name, _ownerThreadId, currentThreadId));
