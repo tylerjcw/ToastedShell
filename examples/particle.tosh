@@ -8,12 +8,16 @@ export class Particle<T>
     proud prop Symbol   : char = Char.MinValue
     proud prop Color    : ConsoleColor = Random.Shared.Next(9, 15) as ConsoleColor
 
+    # A Point2D and a Vector2D are immutable: every field is `fixed`, so there is
+    # nothing to assign into and the whole value is replaced instead. That is the
+    # library's design rather than an inconvenience — a position is a value, and
+    # two particles that happen to be in the same place are not the same particle.
     Particle<T>(x : T, y : T)
     {
-        $this.Position.X = $x
-        $this.Position.Y = $y
-        $this.Velocity.X = (Random.Shared.NextDouble() * 0.8 - 0.4)
-        $this.Velocity.Y = (Random.Shared.NextDouble() * 0.8 - 0.4)
+        $this.Position = (new ToastLib.Math.Point2D<double>(($x as double), ($y as double)))
+        $this.Velocity = (new ToastLib.Math.Vector2D<double>(
+            (Random.Shared.NextDouble() * 0.8 - 0.4),
+            (Random.Shared.NextDouble() * 0.8 - 0.4)))
         $this.Symbol     = "●★♦■◆▲"[Random.Shared.Next(6)];
         $this.Color      = Random.Shared.Next(9, 15) as ConsoleColor
     }
@@ -27,14 +31,15 @@ System.Console.CursorVisible = false
 func ApplyForces(p: Particle) {
     var centerX: double = $width  / 2
     var centerY: double = $height / 2
-    var dist: double = Math.sqrt(($p.Position.X ** 2) + ($p.Position.Y ** 2))
     var time: double = Environment.TickCount / 1000.0
     var oscillation: double = Math.Sin($time * 0.8)  # Oscillation over time
     var factor: double = $oscillation * 0.1  # Force factor oscillates between attraction and repulsion
-    $p.Velocity.X += ($centerX - $p.Position.X) * $factor
-    $p.Velocity.Y += ($centerY - $p.Position.Y) * $factor
-    $p.Velocity.X *= 0.97  # Moderate damping
-    $p.Velocity.Y *= 0.97
+
+    # Pull toward the centre, then damp — as one new vector rather than four
+    # assignments into the old one.
+    $p.Velocity = (new ToastLib.Math.Vector2D<double>(
+        ((($p.Velocity.X + (($centerX - $p.Position.X) * $factor)) * 0.97) as double),
+        ((($p.Velocity.Y + (($centerY - $p.Position.Y) * $factor)) * 0.97) as double)))
 }
 
 for i in 0..39 {
@@ -45,8 +50,12 @@ while (not(System.Console.KeyAvailable)) {
     clear
     for particle in $particles {
         ApplyForces($particle)
-        $particle.Position.X = ($particle.Position.X + $particle.Velocity.X + $width)  % $width
-        $particle.Position.Y = ($particle.Position.Y + $particle.Velocity.Y + $height) % $height
+        # `Translate` takes a vector and returns a new point; the modulo wraps it
+        # back into the terminal.
+        var moved = $particle.Position.Translate($particle.Velocity)
+        $particle.Position = (new ToastLib.Math.Point2D<double>(
+            ((($moved.X + $width)  % $width)  as double),
+            ((($moved.Y + $height) % $height) as double)))
         System.Console.SetCursorPosition(Math.Round($particle.Position.X, 0), Math.Round($particle.Position.Y, 0))
         System.Console.ForegroundColor = $particle.Color
         System.Console.Write($particle.Symbol)

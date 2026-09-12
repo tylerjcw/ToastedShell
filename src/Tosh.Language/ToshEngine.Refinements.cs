@@ -768,14 +768,26 @@ public sealed partial class ToshEngine
         // comma syntax can throw "given assembly name was invalid" inside
         // the CLR type loader (Type.GetType treats commas as
         // type/assembly separators).
-        if (TryGetGenericClassAnnotation(normalizedTypeName, out var genericClass, out _) &&
+        if (TryGetGenericClassAnnotation(normalizedTypeName, out var genericClass, out var genericArguments) &&
             value is ToshClassInstance genericInstance)
         {
+            // The name is re-spelled from the *resolved* definition before the match.
+            // `IsInstanceOf` compares names textually against the class and its ancestors,
+            // and a definition knows itself only by its bare name — so a module-qualified
+            // annotation matched nothing while the identical unqualified one matched, and
+            // every generic type declared in a module was unusable in an annotation:
+            // `var p: ToastLib.Math.Point2D<double> = (Point2D.Empty<double>())` rejected
+            // the value that expression had just produced. The non-generic path never had
+            // this, because it resolves the annotation to a definition and compares *that*.
+            var resolvedName = genericArguments.Count == 0
+                ? genericClass.Name
+                : $"{genericClass.Name}<{string.Join(", ", genericArguments)}>";
+
             // `TOAST-0125`. The written arguments were read and thrown away, so the match
             // was on the open name alone and `Box<int>` accepted a `Box<string>`.
             // `IsInstanceOf` answers both halves — is it a `Box`, and is it closed over
             // `int` — and still walks ancestors, interfaces and traits as this loop did.
-            if (genericInstance.IsInstanceOf(normalizedTypeName))
+            if (genericInstance.IsInstanceOf(resolvedName))
             {
                 converted = value;
                 return true;

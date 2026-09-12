@@ -16,6 +16,7 @@
 | [`TOAST-0090`](items/TOAST-0090.md) | P2 | complete | 8/8 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
 | [`TOAST-0089`](items/TOAST-0089.md) | P2 | complete | 4/4 | A declared record's collection fields vanish from a table, but an anonymous record's do not |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
+| [`TOAST-0130`](items/TOAST-0130.md) | P1 | complete | 6/6 | A module-qualified generic annotation never matched, so every generic type in a library was unusable in one |
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | complete | 5/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TOAST-0027`](items/TOAST-0027.md) | P2 | complete | 5/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
 | [`TOAST-0108`](items/TOAST-0108.md) | P1 | complete | 6/6 | A union whose variant names collide with the prelude's is checked against the prelude's union instead |
