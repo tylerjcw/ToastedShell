@@ -129,6 +129,11 @@ public sealed class EditorSurfaceParityTests
     // Collection literals are regions, so a key can be told from a defaulted parameter.
     [InlineData("record-literal")]
     [InlineData("collection-key")]
+    // `raw callback Name(...)` declares a type, so the name colours like `trait Name`.
+    [InlineData("callback-definition")]
+    // `catch (e)` binds a variable that no other rule can claim: the parameter rule
+    // requires a following colon, and a catch binding has none.
+    [InlineData("catch-binding")]
     public void The_structural_grammar_rules_are_present(string ruleName)
     {
         using var grammar = JsonDocument.Parse(File.ReadAllText(
@@ -139,6 +144,61 @@ public sealed class EditorSurfaceParityTests
             $"The grammar has no '{ruleName}' rule. If it was just regenerated, the fix was "
             + "written into the generated JSON rather than into "
             + "scripts/generate-vscode-grammar.tosh, and regenerating dropped it.");
+    }
+
+    /// <summary>
+    /// A sign glued to a digit belongs to the literal, which is the language's own
+    /// rule (`TOAST-0115`, `TOAST-0121`). Before this, the sign matched no rule at
+    /// all and rendered in the plain foreground while its digits were coloured:
+    /// `Cancel = -6` in two colours, 98 times in the user's libraries.
+    ///
+    /// The lookbehind is the load-bearing half. Without it the rule would claim the
+    /// `-5` of `$a-5` and `f()-5`, which are subtractions.
+    /// </summary>
+    [Fact]
+    public void A_signed_numeric_literal_keeps_its_sign()
+    {
+        using var grammar = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json")));
+
+        var patterns = grammar.RootElement
+            .GetProperty("repository").GetProperty("numeric").GetProperty("patterns")
+            .EnumerateArray()
+            .Select(rule => rule.TryGetProperty("match", out var m) ? m.GetString() ?? string.Empty : string.Empty)
+            .ToArray();
+
+        var signed = patterns.Where(match => match.Contains("[-+]", StringComparison.Ordinal)).ToArray();
+
+        Assert.True(signed.Length >= 2, "The numeric rules no longer match a signed literal.");
+        Assert.All(signed, match => Assert.Contains("(?<!", match, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A keyword must not eat the head of a hyphenated builtin. `native` is a
+    /// keyword and `native-free` is a command, and a word boundary sits happily
+    /// before a hyphen — so the keyword rule matched first and left `-free` scoped
+    /// as nothing.
+    ///
+    /// Both halves are checked because either one alone leaves it broken: the
+    /// keyword rule has to decline, and the command rules' keyword exclusion has to
+    /// stop excluding it.
+    /// </summary>
+    [Fact]
+    public void A_keyword_does_not_claim_the_head_of_a_hyphenated_builtin()
+    {
+        var grammarText = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json"));
+
+        using var grammar = JsonDocument.Parse(grammarText);
+
+        var controlFlow = grammar.RootElement
+            .GetProperty("repository").GetProperty("control-flow").GetProperty("match").GetString() ?? string.Empty;
+
+        Assert.Contains("(?<!-)", controlFlow, StringComparison.Ordinal);
+        Assert.Contains("(?!-[A-Za-z])", controlFlow, StringComparison.Ordinal);
+
+        // And the command rules' keyword exclusion lets the whole name through.
+        Assert.Contains(@"\b(?!-))", grammarText, StringComparison.Ordinal);
     }
 
     /// <summary>

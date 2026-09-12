@@ -166,7 +166,14 @@ var TYPE_REF = '[A-Za-z_][A-Za-z0-9_.<>?,\[\]-]*'
 
 ## Guard for command-position rules, whose matches start on the leading
 ## whitespace and would otherwise outrank a keyword match on the word itself.
-var NOT_KEYWORD = '(?!(?:' + $CONTROL + '|' + $MODIFIERS + '|flag|arg|true|false|null|_)\b)'
+## @remarks
+##   The trailing `(?!-)` is what lets a hyphenated builtin through. `native` is
+##   a keyword and `native-free` is a command; without it the exclusion matched
+##   `native\b` — a word boundary sits happily before a hyphen — and the command
+##   rules declined the whole name. Hyphenated keywords are unaffected, because
+##   the alternation is longest-first: `starts-with` matches whole and is then
+##   followed by a space, not a hyphen.
+var NOT_KEYWORD = '(?!(?:' + $CONTROL + '|' + $MODIFIERS + '|flag|arg|true|false|null|_)\b(?!-))'
 
 ## Escapes accepted inside double-quoted / interpolated strings. Triple-quoted
 ## because the class holds both a double and a single quote.
@@ -249,6 +256,7 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     "interpolated-string", "ansi-c-string", "double-quoted-string", "single-quoted-string",
     "command-substitution", "process-substitution",
     "class-definition", "interface-definition", "struct-definition", "trait-definition",
+    "callback-definition",
     "union-definition", "rune-definition", "event-definition", "module-definition",
     "enum-definition", "record-definition", "type-definition", "subcommand-definition",
     "operator-definition", "function-definition", "subcommand-member",
@@ -256,7 +264,7 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     # cast/new must precede control-flow: `new` and `is` are keywords too,
     # and control-flow would consume them and leave the type name bare.
     "unit-conversion", "cast-expression", "new-expression",
-    "storage-modifier", "control-flow", "constants",
+    "storage-modifier", "catch-binding", "control-flow", "constants",
     "generic-arguments", "type-annotations", "parameter-name", "member-declaration",
     "spread-operator", "caret-escape", "function-reference",
     "special-variable", "variable-reference", "pipeline-underscore",
@@ -352,6 +360,12 @@ $repository["class-definition"] = definition "class" "entity.name.type.class.tos
 $repository["interface-definition"] = definition "interface" "entity.name.type.interface.tosh"
 $repository["struct-definition"] = definition "struct" "entity.name.type.struct.tosh"
 $repository["trait-definition"] = definition "trait" "entity.name.type.trait.tosh"
+
+# `raw callback Name(a: ptr) -> int`. `raw` is already in MODIFIERS, so the
+# shared helper matches this unchanged. Without the rule the keyword coloured
+# and the name it declares did not, which is the half that matters: the name is
+# what a `bind native` parameter is annotated with.
+$repository["callback-definition"] = definition "callback" "entity.name.type.callback.tosh"
 $repository["union-definition"] = definition "union" "entity.name.type.union.tosh"
 $repository["rune-definition"] = definition "rune" "entity.name.type.rune.tosh"
 $repository["event-definition"] = definition "event" "entity.name.type.event.tosh"
@@ -556,9 +570,31 @@ $repository["type-clause"] = {%
         %}
     ]
 %}
+# The trailing `(?!-[A-Za-z])` keeps a keyword from eating the head of a
+# hyphenated builtin. `native` is a keyword and `native-free` is a command, and
+# because this rule runs before `builtin-commands` the keyword matched first and
+# left `-free` scoped as nothing — 33 times in the library, and the same for
+# `native-alloc`, `native-read`, `native-write`, `native-sizeof` and
+# `native-offsetof`. Hyphenated keywords are unaffected: `is-in` and
+# `starts-with` are whole entries in the alternation and it is ordered
+# longest-first, so they still match before their own prefixes.
 $repository["control-flow"] = {%
-    "match" => ('\b(' + $CONTROL + ')\b'),
+    "match" => ('(?<!-)\b(' + $CONTROL + ')\b(?!-[A-Za-z])'),
     "name" => "keyword.control.tosh"
+%}
+# `catch (e)` binds a variable, and nothing scoped it. The parameter rule
+# cannot: it requires a following colon, which is what stops it colouring a
+# command call inside parentheses. So the binding needs its own rule, and it
+# must come before `control-flow` or that would claim the `catch` and leave the
+# name behind — 70 of them in the library, one per error handler.
+$repository["catch-binding"] = {%
+    "match" => ('\b(catch)\s*(\()\s*(' + $IDENT + ')\s*(\))'),
+    "captures" => {%
+        "1" => {% "name" => "keyword.control.tosh" %},
+        "2" => {% "name" => "punctuation.section.parens.tosh" %},
+        "3" => {% "name" => "variable.parameter.tosh" %},
+        "4" => {% "name" => "punctuation.section.parens.tosh" %}
+    %}
 %}
 $repository["constants"] = {%
     "match" => '\b(true|false|null)\b',
@@ -858,6 +894,18 @@ $repository["numeric"] = {% "patterns" => [
     {% "match" => '\b0[xX][0-9a-fA-F][0-9a-fA-F_]*\b', "name" => "constant.numeric.hex.tosh" %},
     {% "match" => '\b0[bB][01][01_]*\b', "name" => "constant.numeric.binary.tosh" %},
     {% "match" => '\b0[oO][0-7][0-7_]*\b', "name" => "constant.numeric.octal.tosh" %},
+    # A sign glued to a digit is part of the literal, not an operator — the
+    # language's own rule (`TOAST-0115`, `TOAST-0121`). Without these the sign
+    # fell through every rule and rendered in the plain foreground colour while
+    # its digits were coloured: `Cancel = -6` in two colours, 98 times in the
+    # library alone.
+    #
+    # The lookbehind is what keeps a subtraction a subtraction. `$a-5`,
+    # `f()-5` and `xs[0]-5` are preceded by a name, a paren or a bracket and are
+    # left to the arithmetic rule; `= -5`, `(-5`, `, -5` are not. A short flag
+    # cannot collide: the flag rules require `-` followed by a letter.
+    {% "match" => '(?<![A-Za-z0-9_)\]])[-+][0-9][0-9_]*\.[0-9][0-9_]*\b', "name" => "constant.numeric.float.tosh" %},
+    {% "match" => '(?<![A-Za-z0-9_)\]])[-+][0-9][0-9_]*\b', "name" => "constant.numeric.integer.tosh" %},
     {% "match" => '\b[0-9][0-9_]*\.[0-9][0-9_]*\b', "name" => "constant.numeric.float.tosh" %},
     {% "match" => '\b[0-9][0-9_]*\b', "name" => "constant.numeric.integer.tosh" %}
 ] %}
