@@ -85,7 +85,9 @@ require ToastLib.Math.Geometry from "…/ToastLib.Math.tosh" as Geo
       rules out the cheap fix
 - [x] An unresolvable *parameter type* is reported as that, naming the type, rather than as
       an overload-arity mismatch — and a genuine arity mismatch still reports arity
-- [x] The tutorials drop the workaround they currently explain
+- [x] The tutorials drop the workaround they currently explain — in ten of the
+      eleven places it appeared; the eleventh is `TOAST-0132`, a trait *body*
+      rather than an annotation, and the tutorial now says so precisely
 
 ## How it was fixed — 2026-09-12
 
@@ -115,6 +117,16 @@ Verified by controlled revert: the two tests asserting the new behaviour fail wi
 fix, and the four controls — selectivity, the foreign prefix, the plain import, and a
 type-parameter annotation that must not be mistaken for an unknown type — pass either way.
 
-**The tutorials' workaround is retired.** Every example carried two `require` lines per
-module, and `geometry/09-traits.md` and `docs/README.md` explained why. The documented
-failure — `Bounds()` on a shape built through an alias — now returns `4 x 3`.
+**The tutorials' workaround is retired for every case but one**, and finding that one
+is why the examples were run rather than reasoned about. Ten redundant plain `require`
+lines came out of seven tutorials; the plain `require` of `ToastLib.Core` stays
+everywhere, because it is imported for its shell verbs and was never aliased.
+
+The exception is `geometry/09-traits.md`, and it is **not** this row: a class of *your
+own* that adopts a library trait still needs the plain line. A trait brings its body
+with it, and `Polygonal.Bounds()` builds its answer with
+`new ToastLib.Math.Geometry.Rectangle(…)` — a fully qualified name in a `new`
+expression, resolved where the body *runs*, which is the user's file. That is a
+different mechanism from an annotation and is filed as `TOAST-0132`. Using the
+library's own shapes through an alias works: `Geo.Rectangle` answers `Area 12`,
+`Bounds 4x3`, `Contains true` and `Center 3, 2.5` with no plain `require` at all.
