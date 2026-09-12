@@ -188,7 +188,7 @@ func type_ref_captures(name: string) {
         {% "match" => ('\b(?:' + $TYPE_ALIAS_RE + ')\b'), "name" => "support.type.builtin.tosh" %},
         {% "match" => '[A-Za-z_][A-Za-z0-9_.]*', "name" => $name %},
         {% "match" => '[<>]', "name" => "punctuation.definition.generic.tosh" %},
-        {% "match" => '\[\]', "name" => "punctuation.definition.array.tosh" %},
+        {% "match" => '\[[0-9]*\]', "name" => "punctuation.definition.array.tosh" %},
         {% "match" => '[,?]', "name" => "punctuation.separator.tosh" %}
     ] %}
 }
@@ -196,15 +196,40 @@ func type_ref_captures(name: string) {
 func type_ref() => type_ref_captures "entity.name.type.tosh"
 
 ## @summary A `<modifiers> <keyword> <Name>` declaration rule.
+## @remarks
+##   Two shapes, because a primary constructor is a parameter list and needs the
+##   same region a `func` signature does. `struct WorkspaceSnapshot(root, files,
+##   options, now)` left all four names bare: a match rule cannot tell a
+##   parameter from a call, and only a region knows which one it is standing in.
 func definition(keyword: string, scope: string) {
-    return {%
-        "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(' + $keyword + ')\s+(' + $IDENT + ')'),
-        "captures" => {%
-            "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
-            "2" => {% "name" => "keyword.control.tosh" %},
-            "3" => {% "name" => $scope %}
+    var head = ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(' + $keyword + ')\s+(' + $IDENT + ')')
+    return {% "patterns" => [
+        {%
+            "comment" => "`class Point(x: double, y: double)` — the declaration opens a signature region at its `(` and closes it at the matching `)`.",
+            # The generic clause is consumed here so `struct Pair<T>(a, b)`
+            # reaches the region rather than stopping at the `<`.
+            "begin" => ($head + '\s*((?:<[^<>()]*>)?)\s*(\()'),
+            "beginCaptures" => {%
+                "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+                "2" => {% "name" => "keyword.control.tosh" %},
+                "3" => {% "name" => $scope %},
+                "4" => {% "patterns" => [{% "include" => "#generic-arguments" %}] %},
+                "5" => {% "name" => "punctuation.section.parens.tosh" %}
+            %},
+            "end" => '\)',
+            "endCaptures" => {% "0" => {% "name" => "punctuation.section.parens.tosh" %} %},
+            "patterns" => [{% "include" => "#signature-body" %}]
+        %},
+        {%
+            "comment" => "A declaration with no parameter list: `enum Color`, `module Graphics`.",
+            "match" => $head,
+            "captures" => {%
+                "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+                "2" => {% "name" => "keyword.control.tosh" %},
+                "3" => {% "name" => $scope %}
+            %}
         %}
-    %}
+    ] %}
 }
 
 ## @summary The interpolation rules shared by every interpolating string form.
@@ -266,8 +291,8 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     "type-clause", "redirection", "variable-declaration",
     # cast/new must precede control-flow: `new` and `is` are keywords too,
     # and control-flow would consume them and leave the type name bare.
-    "unit-conversion", "cast-expression", "new-expression",
-    "storage-modifier", "catch-binding", "control-flow", "constants",
+    "unit-conversion", "cast-expression", "new-expression", "buffer-type-argument",
+    "storage-modifier", "catch-binding", "loop-variable", "control-flow", "constants",
     "generic-arguments", "type-annotations", "parameter-name", "member-declaration",
     "spread-operator", "caret-escape", "function-reference",
     "special-variable", "variable-reference", "pipeline-underscore",
@@ -421,7 +446,7 @@ $repository["subcommand-member"] = {%
 ##   the signature at its inner `)` and leak parameter colouring into the body.
 $repository["operator-definition"] = {%
     "comment" => "Operator overloads: func +(o), func ==(o), func !=(o). The name is punctuation, so #function-definition's identifier pattern never matches these.",
-    "begin" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s*(\*\*|==|!=|<=|>=|=~|!~|//|\+|-|\*|/|%|<|>)\s*(\()'),
+    "begin" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s*(\[\]|\*\*|==|!=|<=|>=|=~|!~|//|\+|-|\*|/|%|<|>)\s*(\()'),
     "beginCaptures" => {%
         "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
         "2" => {% "name" => "keyword.control.tosh" %},
@@ -459,8 +484,27 @@ var functionWithoutParameters = {%
     %}
 %}
 
+## A lambda: `func (win) { … }`, which is how every GTK and SDL callback in the
+## user's libraries is written. `functionWithParameters` wants a name after the
+## `func` and matched none of them, so the parameters stayed outside any region
+## and were scoped as calls or as nothing.
+##
+## `func +(o)` is unaffected: the operator sits between the keyword and the
+## paren, and `#operator-definition` is matched before this in any case.
+var anonymousFunction = {%
+    "begin" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s*(\()'),
+    "beginCaptures" => {%
+        "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "punctuation.section.parens.tosh" %}
+    %},
+    "end" => '\)',
+    "endCaptures" => {% "0" => {% "name" => "punctuation.section.parens.tosh" %} %},
+    "patterns" => [{% "include" => "#signature-body" %}]
+%}
+
 $repository["function-definition"] = {%
-    "patterns" => [$functionWithParameters, $functionWithoutParameters]
+    "patterns" => [$functionWithParameters, $anonymousFunction, $functionWithoutParameters]
 %}
 
 $repository["nested-parens"] = {%
@@ -524,7 +568,7 @@ $repository["generic-arguments"] = {%
 %}
 $repository["member-declaration"] = {%
     "comment" => "Field names in raw struct bodies and native bind signatures: `uptime: long`, `sysname: cstring[65]`.",
-    "match" => ('^\s*(' + $NOT_KEYWORD + $IDENT + ')\s*(?=:(?![:=]))'),
+    "match" => ('^\s*(' + $NOT_KEYWORD + $IDENT + ')(?=\s*:(?![:=]))'),
     "captures" => {% "1" => {% "name" => "variable.other.member.declaration.tosh" %} %}
 %}
 $repository["static-path"] = {%
@@ -625,6 +669,18 @@ $repository["control-flow"] = {%
 # command call inside parentheses. So the binding needs its own rule, and it
 # must come before `control-flow` or that would claim the `catch` and leave the
 # name behind — 70 of them in the library, one per error handler.
+# `for i in 0..3` binds a variable, and nothing claimed it: the parameter rule
+# wants a following colon and `control-flow` takes only the keyword. The same
+# class of gap as `catch (e)`, and the same fix — a rule of its own, ahead of
+# control-flow, which would otherwise consume the `for` and leave the name bare.
+$repository["loop-variable"] = {%
+    "comment" => "The binding of `for x in …`.",
+    "match" => ('\b(for)\s+(' + $NOT_KEYWORD + $IDENT + ')(?=\s+in\b)'),
+    "captures" => {%
+        "1" => {% "name" => "keyword.control.tosh" %},
+        "2" => {% "name" => "variable.parameter.tosh" %}
+    %}
+%}
 $repository["catch-binding"] = {%
     "match" => ('\b(catch)\s*(\()\s*(' + $IDENT + ')\s*(\))'),
     "captures" => {%
@@ -882,6 +938,26 @@ $repository["redirection"] = {%
         {% "match" => '<<<', "name" => "keyword.operator.redirect.here-string.tosh" %}
     ]
 %}
+# `read-buffer byte $pixel --at 0` — the first argument of the native memory
+# builtins is a *type*, not a bareword. 55 occurrences of `read-buffer <type>`
+# in the user's libraries left the type uncoloured while `cast byte` beside it
+# coloured, because only `cast`, `as`, `is` and `new` were treated as type
+# positions.
+#
+# A lookbehind rather than a capture, so each command keeps the builtin scope
+# the command rules already gave it. Every branch is a fixed width, which is
+# what a lookbehind requires.
+$repository["buffer-type-argument"] = {% "patterns" => [
+    {%
+        "match" => ('(?<=\bnative-alloc\s|\bread-buffer\s|\bwrite-buffer\s|\bnative-read\s|\bnative-write\s|\bsize-of\s|\bnative-sizeof\s|\boffset-of\s|\bnative-offsetof\s)(' + $TYPE_REF + ')'),
+        "captures" => {% "1" => (type_ref) %}
+    %},
+    {%
+        "comment" => "`write-buffer $slot 0 --as long`. Only the built-in aliases, because `--as` also names a *format* on other commands — `--as text`, `--as response` — and those are not types.",
+        "match" => ('(?<=--as\s)(?:' + $TYPE_ALIAS_RE + ')\b'),
+        "name" => "support.type.builtin.tosh"
+    %}
+] %}
 $repository["operators"] = {% "patterns" => [
     {% "match" => '=>', "name" => "keyword.operator.arrow.tosh" %},
     {%
@@ -905,6 +981,11 @@ $repository["operators"] = {% "patterns" => [
     {% "match" => '!~|=~|!=|>=|<=|==', "name" => "keyword.operator.comparison.tosh" %},
     {% "match" => '[<>]', "name" => "keyword.operator.comparison.tosh" %},
     {% "match" => '(?<=\s)[-+*/%](?=\s)', "name" => "keyword.operator.arithmetic.tosh" %},
+    {%
+        "comment" => "A sign glued to what it applies to: (-$npt), -$x, -(3+4). The lookahead is what keeps the flags -la, --at and -> out.",
+        "match" => '[-+](?=[\$\(])',
+        "name" => "keyword.operator.arithmetic.tosh"
+    %},
     {%
         "match" => '(?<=\s)\?(?=\s)|(?<=\s):(?=\s)',
         "name" => "keyword.operator.conditional.tosh"

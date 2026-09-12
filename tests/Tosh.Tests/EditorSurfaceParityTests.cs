@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Tosh.Runtime;
+using Tosh.Stdlib;
 
 namespace Tosh.Tests;
 
@@ -142,6 +143,10 @@ public sealed class EditorSurfaceParityTests
     [InlineData("parameter-direction")]
     // The name on the left of `=` is an argument, not a call.
     [InlineData("named-argument")]
+    // `for i in 0..3` binds a variable no other rule can claim.
+    [InlineData("loop-variable")]
+    // `read-buffer byte $p` — the first argument of the memory builtins is a type.
+    [InlineData("buffer-type-argument")]
     public void The_structural_grammar_rules_are_present(string ruleName)
     {
         using var grammar = JsonDocument.Parse(File.ReadAllText(
@@ -292,6 +297,18 @@ public sealed class EditorSurfaceParityTests
     [InlineData("member-access")]
     // `uses A, B, C` names a list, which one regex cannot take.
     [InlineData("inheritance-clause")]
+    // A parameter list is a region, so an untyped `func f(other)` can be told
+    // from a call `greet(name)` — which a regex cannot do.
+    [InlineData("signature-parameter")]
+    [InlineData("nested-parens")]
+    [InlineData("function-signature")]
+    [InlineData("anonymous-signature")]
+    [InlineData("declaration-signature")]
+    [InlineData("operator-signature")]
+    // `for p in $parts` binds a variable no other rule can claim.
+    [InlineData("loop-variable")]
+    // `read-buffer byte $p` — the first argument of the memory builtins is a type.
+    [InlineData("buffer-type-argument")]
     public void The_gtksourceview_grammar_has_its_structural_contexts(string contextId)
     {
         var grammar = File.ReadAllText(
@@ -478,6 +495,105 @@ public sealed class EditorSurfaceParityTests
 
         Assert.Contains("(?!&amp;)", reference, StringComparison.Ordinal);
         Assert.Contains("(?&lt;![A-Za-z0-9_&amp;])", reference, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// `tosh.lang` names the built-in commands in a hand-written list, and it had
+    /// drifted badly: 120 of the runtime's 281, with 161 missing. The measurement
+    /// could not see it, because a command in command position is styled as a
+    /// *call* by the generic rule whether or not the grammar knows it is a
+    /// built-in — a wrong colour, not a missing one.
+    ///
+    /// The VS Code grammar cannot drift this way: its alternation is generated
+    /// from `--export-command-metadata`. This is the equivalent guard for the
+    /// file that is maintained by hand.
+    /// </summary>
+    [Fact]
+    public void The_gtksourceview_grammar_names_every_built_in_command()
+    {
+        var commands = new ShellCommandRegistry();
+        BuiltInCommands.RegisterDefaults(commands);
+
+        var names = CommandMetadataExporter.BuildMetadata(commands)
+            .SelectMany(entry => new[] { entry.Name }.Concat(entry.Aliases ?? []))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        var listed = Regex.Matches(
+                grammar.Split("<context id=\"builtins\"", StringSplitOptions.None)[1]
+                       .Split("</context>", StringSplitOptions.None)[0],
+                @"<keyword>([^<]+)</keyword>")
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var missing = names.Except(listed).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            $"editor/gtksourceview/tosh.lang does not name these {missing.Length} built-in "
+            + "commands:\n  " + string.Join("\n  ", missing));
+
+        // Only this direction. `--export-command-metadata`, which is what the list
+        // was generated from, also reports the commands `CorePrelude` defines —
+        // `attempt`, `option-from`, `unless` and three more — and `RegisterDefaults`
+        // alone does not produce those. A name here the registry lacks is therefore
+        // not evidence of anything.
+    }
+
+    /// <summary>
+    /// A keyword must not claim the head of a hyphenated name. A word boundary sits
+    /// happily before a hyphen, so `type` matched inside `type-of` and `read` inside
+    /// `read-buffer`, leaving the tail unscoped and the hyphen coloured as
+    /// arithmetic — and `is` and `get` did the same to the user's own `is-excluded`
+    /// and `get-dir-size`.
+    ///
+    /// Two independent halves, and either alone leaves it broken: the keyword lists
+    /// need the hyphen to count as a word character, and `not-keyword` has to stop
+    /// declining a name it merely prefixes.
+    /// </summary>
+    [Fact]
+    public void The_gtksourceview_grammar_does_not_split_a_hyphenated_name()
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        Assert.Contains("<keyword-char-class>[A-Za-z0-9_-]</keyword-char-class>",
+                        grammar, StringComparison.Ordinal);
+        Assert.Contains(@"\b(?!-))</define-regex>", grammar, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The region that lets an untyped parameter be told from a call. GtkSourceView
+    /// offers each position to the contained contexts *before* it tries the
+    /// region's own end — the opposite of TextMate — so the general punctuation
+    /// rule, which matches `)`, consumed the closing paren and the signature never
+    /// closed. It ran to the end of the file and styled every declaration below it
+    /// as if it were a parameter list.
+    ///
+    /// Asserting the region exists would pass on exactly that. This asserts the
+    /// signature has punctuation of its own, which is what closes it.
+    /// </summary>
+    [Fact]
+    public void The_gtksourceview_signature_region_can_close()
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        var body = grammar
+            .Split("<context id=\"signature-body\">", StringSplitOptions.None)[1]
+            .Split("</context>", StringSplitOptions.None)[0];
+
+        Assert.DoesNotContain("<context ref=\"punctuation\"/>", body, StringComparison.Ordinal);
+        Assert.Contains("<context ref=\"signature-punctuation\"/>", body, StringComparison.Ordinal);
+
+        var punctuation = grammar
+            .Split("<context id=\"signature-punctuation\"", StringSplitOptions.None)[1]
+            .Split("</context>", StringSplitOptions.None)[0];
+
+        Assert.DoesNotContain(@"\(", punctuation, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"\)", punctuation, StringComparison.Ordinal);
     }
 
     private static string RepositoryRoot() =>

@@ -29,6 +29,12 @@
     <style id="punctuation"       name="Punctuation"         map-to="def:operator"/>
   </styles>
 
+  <!-- `-` counts as a word character when matching the keyword lists below.
+       Without it `type` matched inside `type-of` and `read` inside
+       `read-buffer`, leaving the tail of every hyphenated command unscoped and
+       its hyphen coloured as arithmetic. -->
+  <keyword-char-class>[A-Za-z0-9_-]</keyword-char-class>
+
   <definitions>
     <define-regex id="identifier">[A-Za-z_][A-Za-z0-9_]*</define-regex>
     <define-regex id="command-name">[A-Za-z_][A-Za-z0-9_-]*</define-regex>
@@ -45,7 +51,7 @@
          Longest-first, so `is-in` is declined whole rather than as `is`.
          Generated from the keyword and modifier lists below; keep in step
          with them. -->
-    <define-regex id="not-keyword">(?!(?:starts-with|implements|subcommand|ends-with|interface|is-not-in|protected|abstract|callback|callconv|contains|continue|fulfills|obsolete|override|overrule|priority|readonly|required|default|extends|finally|guarded|handles|name-of|partial|private|require|coerce|export|extend|fading|global|hermit|hollow|is-not|module|nameof|native|not-in|public|record|return|sealed|shared|static|strict|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|fixed|flags|fluid|is-in|leaky|local|match|proud|quote|throw|trait|union|until|using|vital|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|lazy|once|pick|prop|rune|type|uses|when|and|arg|bor|for|get|has|let|new|not|out|raw|ref|set|shl|shr|shy|try|var|as|if|in|is|or)\b)</define-regex>
+    <define-regex id="not-keyword">(?!(?:starts-with|implements|subcommand|ends-with|interface|is-not-in|protected|abstract|callback|callconv|contains|continue|fulfills|obsolete|override|overrule|priority|readonly|required|default|extends|finally|guarded|handles|name-of|partial|private|require|coerce|export|extend|fading|global|hermit|hollow|is-not|module|nameof|native|not-in|public|record|return|sealed|shared|static|strict|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|false|fixed|flags|fluid|is-in|leaky|local|match|proud|quote|throw|trait|union|until|using|vital|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|lazy|null|once|pick|prop|rune|true|type|uses|when|and|arg|bor|for|get|has|let|new|not|out|raw|ref|set|shl|shr|shy|try|var|as|if|in|is|or|_)\b(?!-))</define-regex>
     <define-regex id="type-name">[A-Za-z_][A-Za-z0-9_.&lt;&gt;?]*</define-regex>
 
     <!-- ##{ ... }## block comment. Must precede the doc-comment context,
@@ -136,21 +142,150 @@
       </include>
     </context>
 
-    <context id="operator-definition">
-      <!-- Operator overloads: func +(o), func ==(o). The name is punctuation,
-           so function-definition's identifier pattern never matches these. -->
-      <match extended="true">
-        \b(func)\s*(\*\*|==|!=|&lt;=|&gt;=|=~|!~|//|\+|-|\*|/|%|&lt;|&gt;)\s*(?=\()
-      </match>
+    <!-- ── Parameter lists, as regions ──────────────────────────────────────
+
+         Untyped parameters and loop variables were the whole of what this
+         grammar still left uncoloured: `func f(other)`, `struct Snapshot(root,
+         files, options, now)`, `func (win) { … }`. A regex cannot reach them,
+         because from a regex alone `(o)` in a signature and `(greet)` in an
+         expression are the same shape — which is exactly what `parameter-name`
+         says about itself, and why it demands a colon it can key on.
+
+         So the declarations open a region at their `(` and close it at the
+         matching `)`, and inside one every bareword is a parameter. The region
+         spans lines on purpose: a `record` with one field per line is the
+         common shape in the user's libraries.
+
+         `nested-parens` is what makes "matching" true. A parameter whose own
+         type is a function — `cb: func(int) -> int` — would otherwise close the
+         signature at its inner paren and leak parameter colouring into the
+         body. The comment and string contexts are included for the same
+         reason: a parenthesis inside either must not count.
+    -->
+    <context id="signature-parameter">
+      <match>(?:^|(?&lt;=\()|(?&lt;=,)|(?&lt;=\bout\s)|(?&lt;=\bref\s))(\s*)(\%{not-keyword}\%{command-name}\??)</match>
       <include>
-        <context sub-pattern="1" style-ref="keyword"/>
-        <context sub-pattern="2" style-ref="function"/>
+        <context sub-pattern="2" style-ref="variable"/>
       </include>
     </context>
 
+    <context id="nested-parens">
+      <start>\(</start>
+      <end>\)</end>
+      <include>
+        <context sub-pattern="0" where="start" style-ref="punctuation"/>
+        <context sub-pattern="0" where="end" style-ref="punctuation"/>
+        <context ref="signature-body"/>
+      </include>
+    </context>
+
+    <context id="signature-body">
+      <include>
+        <context ref="block-comment"/>
+        <context ref="doc-comment"/>
+        <context ref="line-comment"/>
+        <context ref="interpolated-string"/>
+        <context ref="ansi-c-string"/>
+        <context ref="double-quoted-string"/>
+        <context ref="single-quoted-string"/>
+        <context ref="nested-parens"/>
+        <context ref="type-annotation"/>
+        <context ref="parameter-name"/>
+        <context ref="signature-parameter"/>
+        <context ref="variable"/>
+        <context ref="constants"/>
+        <context ref="modifiers"/>
+        <context ref="keywords"/>
+        <context ref="quantities"/>
+        <context ref="numbers"/>
+        <context ref="collection-delimiters"/>
+        <context ref="operators"/>
+        <context ref="signature-punctuation"/>
+      </include>
+    </context>
+
+    <!-- The signature's own punctuation, which is the general rule minus the
+         parentheses. GtkSourceView offers a position to the contained contexts
+         before it tries the region's `end`, so the general rule — which matches
+         `)` — consumed the closing paren and the signature never closed. It ran
+         to the end of the file, and every declaration below it was styled as if
+         it were a parameter list.
+
+         `(` is left out for the same reason in reverse: it belongs to
+         `nested-parens`, which is what makes `cb: func(int) -> int` work. -->
+    <context id="signature-punctuation" style-ref="punctuation">
+      <match>[\{\}\[\],.;:]</match>
+    </context>
+
+    <!-- Operator overloads: func +(o), func ==(o), func [](i). The name is
+         punctuation, so function-definition's identifier pattern never matches
+         these. `[]` is the indexer, which the alternation used to omit. -->
+    <context id="operator-signature">
+      <start extended="true">
+        \b(func)\s*(\[\]|\*\*|==|!=|&lt;=|&gt;=|=~|!~|//|\+|-|\*|/|%|&lt;|&gt;)\s*(\()
+      </start>
+      <end>\)</end>
+      <include>
+        <context sub-pattern="1" where="start" style-ref="keyword"/>
+        <context sub-pattern="2" where="start" style-ref="function"/>
+        <context sub-pattern="3" where="start" style-ref="punctuation"/>
+        <context sub-pattern="0" where="end" style-ref="punctuation"/>
+        <context ref="signature-body"/>
+      </include>
+    </context>
+
+    <context id="function-signature">
+      <start extended="true">
+        \b(func)\s+(\%{command-name})\s*((?:&lt;[^&lt;&gt;()]*&gt;)?)\s*(\()
+      </start>
+      <end>\)</end>
+      <include>
+        <context sub-pattern="1" where="start" style-ref="keyword"/>
+        <context sub-pattern="2" where="start" style-ref="function"/>
+        <context sub-pattern="3" where="start" style-ref="type"/>
+        <context sub-pattern="4" where="start" style-ref="punctuation"/>
+        <context sub-pattern="0" where="end" style-ref="punctuation"/>
+        <context ref="signature-body"/>
+      </include>
+    </context>
+
+    <!-- A lambda: `func (win) { … }`, which is how every GTK and SDL callback in
+         the user's libraries is written. The named form wants an identifier
+         after the keyword and matched none of them. -->
+    <context id="anonymous-signature">
+      <start>\b(func)\s*(\()</start>
+      <end>\)</end>
+      <include>
+        <context sub-pattern="1" where="start" style-ref="keyword"/>
+        <context sub-pattern="2" where="start" style-ref="punctuation"/>
+        <context sub-pattern="0" where="end" style-ref="punctuation"/>
+        <context ref="signature-body"/>
+      </include>
+    </context>
+
+    <!-- A primary constructor is a parameter list too: `struct WorkspaceSnapshot
+         (root, files, options, now)`, `raw callback Comparator(a: ptr) -> int`. -->
+    <context id="declaration-signature">
+      <start extended="true">
+        \b(class|module|enum|record|struct|interface|trait|union|rune|event|type|callback)
+        \s+(\%{command-name})\s*((?:&lt;[^&lt;&gt;()]*&gt;)?)\s*(\()
+      </start>
+      <end>\)</end>
+      <include>
+        <context sub-pattern="1" where="start" style-ref="keyword"/>
+        <context sub-pattern="2" where="start" style-ref="type"/>
+        <context sub-pattern="3" where="start" style-ref="type"/>
+        <context sub-pattern="4" where="start" style-ref="punctuation"/>
+        <context sub-pattern="0" where="end" style-ref="punctuation"/>
+        <context ref="signature-body"/>
+      </include>
+    </context>
+
+    <!-- The paren-less forms, after the regions above: `func f => 1`, a name at
+         end of line, `enum Color`, `module Graphics`. -->
     <context id="function-definition">
       <match extended="true">
-        \b(func)\s+(\%{command-name})\s*(?=&lt;|\(|=&gt;|$)
+        \b(func)\s+(\%{command-name})\s*(?=&lt;|=&gt;|$)
       </match>
       <include>
         <context sub-pattern="1" style-ref="keyword"/>
@@ -226,6 +361,17 @@
       <include>
         <context sub-pattern="1" style-ref="operator"/>
         <context sub-pattern="2" style-ref="function"/>
+      </include>
+    </context>
+
+    <!-- `for p in $parts` binds a variable, and nothing claimed it: the
+         parameter rule wants a following colon and the keyword list takes only
+         the `for`. The same gap as `catch (e)`, and the same fix. -->
+    <context id="loop-variable">
+      <match>\b(for)\s+(\%{not-keyword}\%{command-name})(?=\s+in\b)</match>
+      <include>
+        <context sub-pattern="1" style-ref="keyword"/>
+        <context sub-pattern="2" style-ref="variable"/>
       </include>
     </context>
 
@@ -407,31 +553,73 @@
     </context>
 
     <context id="builtins" style-ref="builtin">
+      <keyword>all</keyword>
+      <keyword>alloc</keyword>
+      <keyword>any</keyword>
       <keyword>append-file</keyword>
       <keyword>apropos</keyword>
+      <keyword>as-file</keyword>
       <keyword>assert</keyword>
+      <keyword>async</keyword>
+      <keyword>attempt</keyword>
+      <keyword>average</keyword>
+      <keyword>avg</keyword>
+      <keyword>await</keyword>
+      <keyword>back</keyword>
       <keyword>basename</keyword>
+      <keyword>benchmark</keyword>
       <keyword>bg</keyword>
       <keyword>call</keyword>
+      <keyword>call-method</keyword>
+      <keyword>cartesian-product</keyword>
+      <keyword>cast</keyword>
       <keyword>cat</keyword>
       <keyword>cd</keyword>
+      <keyword>chain</keyword>
+      <keyword>channel</keyword>
+      <keyword>channel-close</keyword>
+      <keyword>channel-recv</keyword>
+      <keyword>channel-select</keyword>
+      <keyword>channel-send</keyword>
       <keyword>chmod</keyword>
       <keyword>chown</keyword>
+      <keyword>chunk</keyword>
       <keyword>clear</keyword>
+      <keyword>clone</keyword>
+      <keyword>close</keyword>
       <keyword>collect</keyword>
+      <keyword>combinations</keyword>
+      <keyword>complex</keyword>
+      <keyword>compose</keyword>
       <keyword>config</keyword>
       <keyword>constructors</keyword>
+      <keyword>converge</keyword>
+      <keyword>copy-to</keyword>
       <keyword>count</keyword>
       <keyword>cp</keyword>
+      <keyword>curry</keyword>
+      <keyword>cut</keyword>
+      <keyword>cycle</keyword>
       <keyword>date</keyword>
+      <keyword>dbg</keyword>
+      <keyword>debug</keyword>
+      <keyword>dedup</keyword>
+      <keyword>del-prop</keyword>
+      <keyword>describe</keyword>
       <keyword>describe-type</keyword>
       <keyword>df</keyword>
       <keyword>dirname</keyword>
+      <keyword>dirs</keyword>
+      <keyword>disk-usage</keyword>
       <keyword>distinct</keyword>
       <keyword>du</keyword>
       <keyword>each</keyword>
       <keyword>echo</keyword>
+      <keyword>edit</keyword>
+      <keyword>enumerate</keyword>
       <keyword>env</keyword>
+      <keyword>eval</keyword>
+      <keyword>events</keyword>
       <keyword>exec</keyword>
       <keyword>exists</keyword>
       <keyword>exit</keyword>
@@ -439,91 +627,210 @@
       <keyword>fg</keyword>
       <keyword>filter</keyword>
       <keyword>find</keyword>
+      <keyword>find-index</keyword>
       <keyword>findmnt</keyword>
       <keyword>first</keyword>
       <keyword>flat-map</keyword>
       <keyword>flatten</keyword>
+      <keyword>flush</keyword>
+      <keyword>foreach</keyword>
+      <keyword>forget</keyword>
+      <keyword>format</keyword>
+      <keyword>forward</keyword>
       <keyword>free</keyword>
+      <keyword>frequencies</keyword>
       <keyword>from</keyword>
+      <keyword>funcs</keyword>
       <keyword>get</keyword>
       <keyword>get-methods</keyword>
+      <keyword>get-prop</keyword>
+      <keyword>get-props</keyword>
       <keyword>glob</keyword>
       <keyword>grep</keyword>
       <keyword>group-by</keyword>
+      <keyword>group-while</keyword>
+      <keyword>guid</keyword>
+      <keyword>has-method</keyword>
+      <keyword>has-prop</keyword>
+      <keyword>hash</keyword>
       <keyword>head</keyword>
       <keyword>help</keyword>
       <keyword>history</keyword>
+      <keyword>history-search</keyword>
       <keyword>hostname</keyword>
+      <keyword>hostnamectl</keyword>
       <keyword>http</keyword>
+      <keyword>hush</keyword>
       <keyword>id</keyword>
       <keyword>ignore</keyword>
       <keyword>inspect</keyword>
+      <keyword>interleave</keyword>
+      <keyword>intersperse</keyword>
+      <keyword>invoke</keyword>
       <keyword>ip</keyword>
       <keyword>is-dir</keyword>
       <keyword>is-file</keyword>
       <keyword>is-link</keyword>
+      <keyword>iterate</keyword>
       <keyword>jobs</keyword>
+      <keyword>join</keyword>
       <keyword>join-lines</keyword>
       <keyword>journalctl</keyword>
       <keyword>kill</keyword>
       <keyword>last</keyword>
+      <keyword>length</keyword>
       <keyword>lines</keyword>
       <keyword>ln</keyword>
+      <keyword>load-assembly</keyword>
+      <keyword>loginctl</keyword>
+      <keyword>logout</keyword>
       <keyword>ls</keyword>
       <keyword>lsblk</keyword>
       <keyword>lscpu</keyword>
+      <keyword>lsfd</keyword>
+      <keyword>lsipc</keyword>
       <keyword>map</keyword>
+      <keyword>mat</keyword>
+      <keyword>match</keyword>
       <keyword>max</keyword>
+      <keyword>median</keyword>
       <keyword>members</keyword>
       <keyword>methods</keyword>
       <keyword>min</keyword>
       <keyword>mkdir</keyword>
+      <keyword>mkdir-temp</keyword>
+      <keyword>mounts</keyword>
       <keyword>mv</keyword>
+      <keyword>native-alloc</keyword>
+      <keyword>native-free</keyword>
+      <keyword>native-offsetof</keyword>
+      <keyword>native-read</keyword>
+      <keyword>native-sizeof</keyword>
+      <keyword>native-write</keyword>
+      <keyword>networkctl</keyword>
+      <keyword>new</keyword>
+      <keyword>none</keyword>
+      <keyword>offset-of</keyword>
       <keyword>open-file</keyword>
+      <keyword>option-from</keyword>
+      <keyword>parallel</keyword>
       <keyword>parse</keyword>
+      <keyword>partial</keyword>
       <keyword>partition</keyword>
+      <keyword>percentile</keyword>
+      <keyword>permutations</keyword>
+      <keyword>pick</keyword>
       <keyword>ping</keyword>
+      <keyword>position</keyword>
+      <keyword>prompt</keyword>
+      <keyword>prompt-dir</keyword>
+      <keyword>prompt-duration</keyword>
+      <keyword>prompt-exit</keyword>
+      <keyword>prompt-git</keyword>
+      <keyword>prompt-history</keyword>
+      <keyword>prompt-jobs</keyword>
+      <keyword>prompt-newline</keyword>
+      <keyword>prompt-text</keyword>
+      <keyword>prompt-time</keyword>
+      <keyword>prompt-userhost</keyword>
+      <keyword>props</keyword>
       <keyword>ps</keyword>
       <keyword>pwd</keyword>
+      <keyword>race</keyword>
+      <keyword>raise</keyword>
+      <keyword>raw</keyword>
+      <keyword>read-buffer</keyword>
+      <keyword>read-bytes</keyword>
       <keyword>read-file</keyword>
+      <keyword>read-from</keyword>
+      <keyword>read-line</keyword>
+      <keyword>read-line-from</keyword>
       <keyword>read-lines</keyword>
+      <keyword>read-to-end</keyword>
       <keyword>readlink</keyword>
       <keyword>realpath</keyword>
+      <keyword>recur</keyword>
       <keyword>reduce</keyword>
       <keyword>rename</keyword>
+      <keyword>repeat</keyword>
+      <keyword>repeatedly</keyword>
       <keyword>replace</keyword>
       <keyword>reverse</keyword>
       <keyword>rm</keyword>
+      <keyword>round</keyword>
+      <keyword>row</keyword>
       <keyword>scan</keyword>
+      <keyword>scope</keyword>
+      <keyword>seek</keyword>
+      <keyword>select</keyword>
+      <keyword>seq</keyword>
+      <keyword>set-prop</keyword>
+      <keyword>settle</keyword>
       <keyword>signal</keyword>
+      <keyword>size-of</keyword>
+      <keyword>skip</keyword>
+      <keyword>skip-until</keyword>
+      <keyword>skip-while</keyword>
       <keyword>sleep</keyword>
       <keyword>sort</keyword>
+      <keyword>sort-by</keyword>
+      <keyword>source</keyword>
+      <keyword>spawn</keyword>
       <keyword>split</keyword>
       <keyword>stat</keyword>
+      <keyword>stddev</keyword>
+      <keyword>stdev</keyword>
+      <keyword>step-by</keyword>
+      <keyword>styled</keyword>
       <keyword>sum</keyword>
+      <keyword>summarize</keyword>
+      <keyword>summary</keyword>
       <keyword>systemctl</keyword>
       <keyword>tail</keyword>
+      <keyword>take-until</keyword>
+      <keyword>take-while</keyword>
       <keyword>tee</keyword>
+      <keyword>tempfile</keyword>
+      <keyword>template</keyword>
       <keyword>time</keyword>
+      <keyword>timeout</keyword>
       <keyword>timespan</keyword>
       <keyword>to</keyword>
       <keyword>touch</keyword>
       <keyword>tr</keyword>
+      <keyword>transpose</keyword>
       <keyword>tree</keyword>
+      <keyword>tui</keyword>
       <keyword>type-of</keyword>
       <keyword>types</keyword>
+      <keyword>ulimit</keyword>
+      <keyword>umask</keyword>
       <keyword>uname</keyword>
+      <keyword>undef</keyword>
+      <keyword>unfold</keyword>
       <keyword>uniq</keyword>
+      <keyword>unless</keyword>
       <keyword>unset</keyword>
       <keyword>uptime</keyword>
+      <keyword>usage</keyword>
+      <keyword>variance</keyword>
       <keyword>vars</keyword>
+      <keyword>vec</keyword>
       <keyword>view</keyword>
       <keyword>wait-for</keyword>
       <keyword>wc</keyword>
+      <keyword>whence</keyword>
       <keyword>where</keyword>
       <keyword>which</keyword>
       <keyword>whoami</keyword>
+      <keyword>window</keyword>
+      <keyword>with-retry</keyword>
+      <keyword>write</keyword>
+      <keyword>write-buffer</keyword>
+      <keyword>write-bytes</keyword>
       <keyword>write-file</keyword>
+      <keyword>write-line-to</keyword>
+      <keyword>write-to</keyword>
       <keyword>writeline</keyword>
       <keyword>xargs</keyword>
       <keyword>zip</keyword>
@@ -590,6 +897,17 @@
          Included before `qualified-segment`: both start at the same character
          for a dotted name, and GtkSourceView breaks that tie by include order.
     -->
+    <!-- `read-buffer byte $pixel` — the first argument of the native
+         memory builtins is a type, not a bareword, 55 times in the user's
+         libraries. A lookbehind rather than a capture, so each command keeps
+         the builtin colour the command rules already gave it. -->
+    <context id="buffer-type-argument">
+      <match>(?&lt;=\bnative-alloc |\bread-buffer |\bwrite-buffer |\bnative-read |\bnative-write |\bsize-of |\bnative-sizeof |\boffset-of |\bnative-offsetof )(\%{type-name})</match>
+      <include>
+        <context sub-pattern="1" style-ref="type"/>
+      </include>
+    </context>
+
     <context id="type-position">
       <match>(?&lt;=\bnew |\bis |\bas |\bcast )(\%{type-name})</match>
       <include>
@@ -607,7 +925,7 @@
          leave the command it qualifies unstyled — which is what happened to
          every call in the test suite. -->
     <context id="qualified-command">
-      <match>(?:^|(?&lt;=[\|;\{\(])(?&lt;!\{\|))\s*\%{not-keyword}((?:\%{identifier}\.)+)(\%{command-name})(?=\s|$|\()</match>
+      <match>(?:^|(?&lt;=[\|;\{\(])(?&lt;!\{\|)|(?&lt;=\s=))\s*\%{not-keyword}((?:\%{identifier}\.)+)(\%{command-name})(?=\s|$|\()</match>
       <include>
         <context sub-pattern="1" style-ref="type"/>
         <context sub-pattern="2" style-ref="function"/>
@@ -703,7 +1021,7 @@
            matched nothing and was styled as nothing. Builtins hid the bug:
            their context is a keyword list that matches anywhere, so `writeline`
            looked right while `CheckNear` beside it did not. -->
-      <match>(?:^|(?&lt;=[\|;\{\(])(?&lt;!\{\|))\s*\%{not-keyword}(\%{command-name})(?=\s|$|\()</match>
+      <match>(?:^|(?&lt;=[\|;\{\(])(?&lt;!\{\|)|(?&lt;=\s=))\s*\%{not-keyword}(\%{command-name})(?=\s|$|\()</match>
       <include>
         <context sub-pattern="1" style-ref="function"/>
       </include>
@@ -720,13 +1038,17 @@
         <context ref="double-quoted-string"/>
         <context ref="single-quoted-string"/>
         <context ref="command-substitution"/>
-        <context ref="operator-definition"/>
+        <context ref="operator-signature"/>
+        <context ref="function-signature"/>
+        <context ref="anonymous-signature"/>
+        <context ref="declaration-signature"/>
         <context ref="function-definition"/>
         <context ref="subcommand-definition"/>
         <context ref="type-definition"/>
         <context ref="variable-declaration"/>
         <context ref="bare-require-path"/>
         <context ref="function-reference"/>
+        <context ref="loop-variable"/>
         <context ref="catch-binding"/>
         <context ref="collection-key"/>
         <context ref="parameter-name"/>
@@ -737,6 +1059,7 @@
         <context ref="unit-conversion-target"/>
         <context ref="static-path"/>
         <context ref="static-path-segment"/>
+        <context ref="buffer-type-argument"/>
         <context ref="type-position"/>
         <context ref="qualified-command"/>
         <context ref="qualified-segment"/>
