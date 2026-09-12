@@ -48,6 +48,7 @@
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
+| [`TOAST-0131`](items/TOAST-0131.md) | P3 | proposed | — | A generic body cannot ask what its type parameter is bound to |
 | [`TOAST-0099`](items/TOAST-0099.md) | P2 | proposed | 0/7 | A declared type cannot say where it lives, so nothing can write its qualified name back |
 | [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |
 | [`TS-P3-19`](items/TS-P3-19.md) | P3 | proposed | — | Annotated, fixed and refinement variable writes at Tier 1 |
