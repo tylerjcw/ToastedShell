@@ -35,6 +35,17 @@
     <!-- Full modifier run that may precede a declaration keyword. Kept in step
          with MODIFIERS in the VS Code grammar generator. -->
     <define-regex id="modifiers">shy|private|proud|public|guarded|protected|local|global|export|sealed|hollow|abstract|partial|overrule|override|static|shared|hermit|strict|fluid|leaky|lazy|fixed|readonly|vital|required|fading|obsolete|raw|eager|hidden</define-regex>
+    <!-- The words a command position must decline. Without it, widening
+         `command-position` to allow indentation made it start at the line
+         beginning, which is earlier than `variable-declaration` starts at
+         its keyword — and GtkSourceView resolves a tie by earliest start,
+         not by include order. So an indented `var x = 1` styled `var` as a
+         function call and left `x` bare.
+
+         Longest-first, so `is-in` is declined whole rather than as `is`.
+         Generated from the keyword and modifier lists below; keep in step
+         with them. -->
+    <define-regex id="not-keyword">(?!(?:starts-with|implements|subcommand|ends-with|interface|is-not-in|protected|abstract|callback|callconv|contains|continue|fulfills|obsolete|override|overrule|priority|readonly|required|default|extends|finally|guarded|handles|name-of|partial|private|require|coerce|export|extend|fading|global|hermit|hollow|is-not|module|nameof|native|not-in|public|record|return|sealed|shared|static|strict|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|fixed|flags|fluid|is-in|leaky|local|match|proud|quote|throw|trait|union|until|using|vital|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|lazy|once|pick|prop|rune|type|uses|when|and|arg|bor|for|get|has|let|new|not|out|raw|ref|set|shl|shr|shy|try|var|as|if|in|is|or)\b)</define-regex>
     <define-regex id="type-name">[A-Za-z_][A-Za-z0-9_.&lt;&gt;?]*</define-regex>
 
     <!-- ##{ ... }## block comment. Must precede the doc-comment context,
@@ -129,23 +140,21 @@
       <!-- Operator overloads: func +(o), func ==(o). The name is punctuation,
            so function-definition's identifier pattern never matches these. -->
       <match extended="true">
-        \b(?:(\%{modifiers})\s+)*(func)\s*(\*\*|==|!=|&lt;=|&gt;=|=~|!~|//|\+|-|\*|/|%|&lt;|&gt;)\s*(?=\()
+        \b(func)\s*(\*\*|==|!=|&lt;=|&gt;=|=~|!~|//|\+|-|\*|/|%|&lt;|&gt;)\s*(?=\()
       </match>
       <include>
-        <context sub-pattern="1" style-ref="modifier"/>
-        <context sub-pattern="2" style-ref="keyword"/>
-        <context sub-pattern="3" style-ref="function"/>
+        <context sub-pattern="1" style-ref="keyword"/>
+        <context sub-pattern="2" style-ref="function"/>
       </include>
     </context>
 
     <context id="function-definition">
       <match extended="true">
-        \b(?:(\%{modifiers})\s+)*(func)\s+(\%{command-name})\s*(?=&lt;|\(|=&gt;|$)
+        \b(func)\s+(\%{command-name})\s*(?=&lt;|\(|=&gt;|$)
       </match>
       <include>
-        <context sub-pattern="1" style-ref="modifier"/>
-        <context sub-pattern="2" style-ref="keyword"/>
-        <context sub-pattern="3" style-ref="function"/>
+        <context sub-pattern="1" style-ref="keyword"/>
+        <context sub-pattern="2" style-ref="function"/>
       </include>
     </context>
 
@@ -162,23 +171,21 @@
 
     <context id="type-definition">
       <match extended="true">
-        \b(?:(\%{modifiers})\s+)*(class|module|enum|record|struct|interface|trait|union|rune|event|type|callback)\s+(\%{command-name})\b
+        \b(class|module|enum|record|struct|interface|trait|union|rune|event|type|callback)\s+(\%{command-name})\b
       </match>
       <include>
-        <context sub-pattern="1" style-ref="modifier"/>
-        <context sub-pattern="2" style-ref="keyword"/>
-        <context sub-pattern="3" style-ref="type"/>
+        <context sub-pattern="1" style-ref="keyword"/>
+        <context sub-pattern="2" style-ref="type"/>
       </include>
     </context>
 
     <context id="variable-declaration">
       <match extended="true">
-        \b(?:(\%{modifiers})\s+)*(var|const|alloc|prop)\s+(\%{identifier})\b
+        \b(var|const|alloc|prop)\s+(\%{identifier})\b
       </match>
       <include>
-        <context sub-pattern="1" style-ref="modifier"/>
-        <context sub-pattern="2" style-ref="keyword"/>
-        <context sub-pattern="3" style-ref="variable"/>
+        <context sub-pattern="1" style-ref="keyword"/>
+        <context sub-pattern="2" style-ref="variable"/>
       </include>
     </context>
 
@@ -473,8 +480,17 @@
       <match>\b(?:0[xX][0-9A-Fa-f][0-9A-Fa-f_]*|0[bB][01][01_]*|0[oO][0-7][0-7_]*|[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:ns|us|ms|s|m|h|d|w|mo|y|b|kb|mb|gb|tb|pb)?|[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:Z|[+-][0-9]{2}:[0-9]{2})?)?)\b</match>
     </context>
 
+    <!-- Longest-first, and that ordering is load-bearing twice over: `...`
+         before `..` or the spread operator is read as a range followed by a
+         dot, and `**` before `*` or a power is read as two multiplications.
+
+         The bare arithmetic operators were absent entirely, so `+`, `-`, `*`
+         and `/` were scoped by nothing — 1,298 of them in the user's
+         libraries. This context sits after `builtins`, `flags` and `numbers`
+         in the main include list, so a hyphen inside `read-file` or a long
+         flag has already been consumed by the time it is reached. -->
     <context id="operators" style-ref="operator">
-      <match>=&gt;|\.\.|\.\.\.|\|{1,2}|!~|=~|not-in|!=|&gt;=|&lt;=|==|&gt;&gt;|&lt;&lt;&lt;|\+=|-=|\*=|/=|%=|[%&gt;&lt;]=?|=(?!=)|\?</match>
+      <match>=&gt;|\.\.\.|\.\.|\*\*=|//=|\?\?=|\|{1,2}|!~|=~|not-in|!=|&gt;=|&lt;=|==|&gt;&gt;|&lt;&lt;&lt;|\+=|-=|\*=|/=|%=|\*\*|//|\?\?|\?\.|[-+*/%&gt;&lt;]=?|=(?!=)|\?</match>
     </context>
 
     <!-- The `::` path operator (TOAST-0090): a name reached inside a type — enum
@@ -486,6 +502,41 @@
         <context sub-pattern="1" style-ref="type"/>
         <context sub-pattern="2" style-ref="operator"/>
         <context sub-pattern="3" style-ref="constant"/>
+      </include>
+    </context>
+
+    <!-- A command reached through a dotted path: `ToastLib.Tests.CheckNear $r`.
+         The qualifier is a namespace and the final name is the command, so the
+         two are styled differently.
+
+         It has to be included *before* `qualified-segment`, not after. Both
+         start at the same character, GtkSourceView breaks that tie by include
+         order, and the segment rule would otherwise take `ToastLib` alone and
+         leave the command it qualifies unstyled — which is what happened to
+         every call in the test suite. -->
+    <context id="qualified-command">
+      <match>(?:^|(?&lt;=[\|;\{\(]))\s*\%{not-keyword}((?:\%{identifier}\.)+)(\%{command-name})(?=\s|$|\()</match>
+      <include>
+        <context sub-pattern="1" style-ref="type"/>
+        <context sub-pattern="2" style-ref="function"/>
+      </include>
+    </context>
+
+    <!-- A segment of a dotted qualified name: the `ToastLib`, `Math` and
+         `Geometry` of `ToastLib.Math.Geometry.Rectangle`, and the `System` of
+         `System.Math.Round`. Every one of them was scoped by nothing, 1,900
+         times in the user's libraries, while the `.` between them was already
+         punctuation.
+
+         Only a segment that is *followed* by a dot is claimed, so the final
+         name in the chain is left to the contexts that know whether it is a
+         call. A variable is unaffected: `variable` is included earlier and
+         consumes the `$` with its name, so the `this` of `$this.Name` is never
+         offered here. -->
+    <context id="qualified-segment">
+      <match>\b(\%{identifier})(?=\.)</match>
+      <include>
+        <context sub-pattern="1" style-ref="type"/>
       </include>
     </context>
 
@@ -506,9 +557,15 @@
     </context>
 
     <context id="command-position">
-      <match>(^|[\|;\{]\s*)(\%{command-name})(?=\s|$|\()</match>
+      <!-- The `\s*` belongs outside the alternation. Inside it, only the
+           `| ; {` branch allowed leading space and `^` demanded column zero, so
+           a user-defined command on an indented line — which is most of them —
+           matched nothing and was styled as nothing. Builtins hid the bug:
+           their context is a keyword list that matches anywhere, so `writeline`
+           looked right while `CheckNear` beside it did not. -->
+      <match>(?:^|(?&lt;=[\|;\{\(]))\s*\%{not-keyword}(\%{command-name})(?=\s|$|\()</match>
       <include>
-        <context sub-pattern="2" style-ref="function"/>
+        <context sub-pattern="1" style-ref="function"/>
       </include>
     </context>
 
@@ -535,6 +592,8 @@
         <context ref="unit-conversion-target"/>
         <context ref="static-path"/>
         <context ref="static-path-segment"/>
+        <context ref="qualified-command"/>
+        <context ref="qualified-segment"/>
         <context ref="modifiers"/>
         <context ref="keywords"/>
         <context ref="builtins"/>

@@ -202,6 +202,103 @@ public sealed class EditorSurfaceParityTests
     }
 
     /// <summary>
+    /// `tosh.lang` had no arithmetic operators at all. Its `operators` context
+    /// listed the compound assignments and the comparisons and never the bare
+    /// <c>+ - * /</c>, so 1,298 of them in the user's libraries were scoped by
+    /// nothing while `+=` beside them was an operator.
+    /// </summary>
+    [Theory]
+    [InlineData("+")]
+    [InlineData("-")]
+    [InlineData("*")]
+    [InlineData("/")]
+    public void The_gtksourceview_grammar_scopes_arithmetic(string op)
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        var start = grammar.IndexOf("<context id=\"operators\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, "tosh.lang has no 'operators' context");
+
+        var end = grammar.IndexOf("</context>", start, StringComparison.Ordinal);
+        var context = grammar[start..end];
+
+        // The class that carries them, rather than each spelling: writing them
+        // as alternatives would pass on a rule that had lost the class.
+        Assert.Contains("[-+*/%", context, StringComparison.Ordinal);
+        Assert.Contains(op, context, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A command position may be indented. The rule used to anchor at <c>^</c>
+    /// with the optional whitespace inside the other branch, so only a command at
+    /// column zero was styled — which is almost none of them, and builtins hid it
+    /// because their context is a keyword list that matches anywhere.
+    ///
+    /// The `not-keyword` guard is checked with it, because widening the position
+    /// without it makes an indented `var x = 1` style `var` as a function call:
+    /// the rule then starts at the line beginning, earlier than the declaration
+    /// rule starts at its keyword, and GtkSourceView breaks that tie by earliest
+    /// start rather than by include order.
+    /// </summary>
+    [Fact]
+    public void The_gtksourceview_command_position_allows_indentation()
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        var start = grammar.IndexOf("<context id=\"command-position\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, "tosh.lang has no 'command-position' context");
+
+        var end = grammar.IndexOf("</context>", start, StringComparison.Ordinal);
+        var context = grammar[start..end];
+
+        Assert.Contains("not-keyword", context, StringComparison.Ordinal);
+        Assert.DoesNotContain("(^|[\\|;\\{])\\s*(\\%{command-name})", context, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// `not-keyword` is written out of the keyword and modifier lists that sit
+    /// below it in the same file, so it can drift from them silently — and a
+    /// missing word there means that word gets styled as a command call wherever
+    /// it opens a line.
+    /// </summary>
+    [Fact]
+    public void The_gtksourceview_not_keyword_guard_lists_every_declared_keyword()
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        var guardStart = grammar.IndexOf("id=\"not-keyword\"", StringComparison.Ordinal);
+        Assert.True(guardStart >= 0, "tosh.lang has no 'not-keyword' define");
+
+        var guardEnd = grammar.IndexOf("</define-regex>", guardStart, StringComparison.Ordinal);
+        var guard = grammar[guardStart..guardEnd];
+
+        var declared = new[] { "keywords", "modifiers" }
+            .SelectMany(contextId =>
+            {
+                var start = grammar.IndexOf($"<context id=\"{contextId}\"", StringComparison.Ordinal);
+                var end = grammar.IndexOf("</context>", start, StringComparison.Ordinal);
+                return Regex.Matches(grammar[start..end], @"<keyword>([^<]+)</keyword>")
+                    .Select(m => m.Groups[1].Value);
+            })
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(word => word, StringComparer.Ordinal)
+            .ToArray();
+
+        var missing = declared
+            .Where(word => !Regex.IsMatch(guard, $@"(?:\(\?:|\|){Regex.Escape(word)}(?:\||\)\\b)"))
+            .ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            "tosh.lang's not-keyword guard does not list these words it declares "
+            + "as keywords, so each is styled as a command call at the head of a "
+            + "line:\n  " + string.Join("\n  ", missing));
+    }
+
+    /// <summary>
     /// The specific regression that made the parameter rule useless: it demanded a
     /// following <c>:</c>, so every untyped parameter stayed uncoloured — 243 tokens
     /// in the user's own libraries. Asserting the rule merely *exists* would pass on
