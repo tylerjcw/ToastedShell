@@ -42,6 +42,7 @@
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
+| [`TOAST-0132`](items/TOAST-0132.md) | P2 | proposed | 0/3 | A trait's default body runs in the adopting class's scope, so a library trait cannot name its own types |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | proposed | — | Reverse/static operator hooks |
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
