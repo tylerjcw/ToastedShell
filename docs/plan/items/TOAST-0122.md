@@ -85,9 +85,9 @@ require ToastLib.Math.Geometry from "…/ToastLib.Math.tosh" as Geo
       rules out the cheap fix
 - [x] An unresolvable *parameter type* is reported as that, naming the type, rather than as
       an overload-arity mismatch — and a genuine arity mismatch still reports arity
-- [x] The tutorials drop the workaround they currently explain — in ten of the
-      eleven places it appeared; the eleventh is `TOAST-0132`, a trait *body*
-      rather than an annotation, and the tutorial now says so precisely
+- [x] The tutorials drop the workaround they currently explain — ten of the eleven
+      places here, and the eleventh once `TOAST-0132` fixed the trait *body* case
+      the same day. No plain `require` of an aliased module remains.
 
 ## How it was fixed — 2026-09-12
 
@@ -127,6 +127,7 @@ own* that adopts a library trait still needs the plain line. A trait brings its 
 with it, and `Polygonal.Bounds()` builds its answer with
 `new ToastLib.Math.Geometry.Rectangle(…)` — a fully qualified name in a `new`
 expression, resolved where the body *runs*, which is the user's file. That is a
-different mechanism from an annotation and is filed as `TOAST-0132`. Using the
+different mechanism from an annotation; it was filed as `TOAST-0132` and fixed
+immediately afterwards, and the tutorial's last plain `require` went with it. Using the
 library's own shapes through an alias works: `Geo.Rectangle` answers `Area 12`,
 `Bounds 4x3`, `Contains true` and `Center 3, 2.5` with no plain `require` at all.

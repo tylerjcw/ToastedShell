@@ -1,7 +1,7 @@
 ---
 id: TOAST-0132
 title: "A trait's default body runs in the adopting class's scope, so a library trait cannot name its own types"
-status: proposed
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-12
@@ -70,7 +70,24 @@ trait. `docs/geometry/09-traits.md` explains this at the one place it is needed.
 
 ## Acceptance
 
-- [ ] A class using a library trait resolves the types that trait's bodies name,
+- [x] A class using a library trait resolves the types that trait's bodies name,
       after an aliased import alone
-- [ ] A selective import still binds only what was asked for
-- [ ] `geometry/09-traits.md` drops the last plain `require` and its note
+- [x] A selective import still binds only what was asked for
+- [x] `geometry/09-traits.md` drops the last plain `require` and its note
+
+## How it was fixed — 2026-09-12
+
+Smaller than the shape sketched above, and in a different place. The parent-link on
+`ModuleExportTable` was not needed: the injected default **already carried captured
+scopes** — it just captured the wrong ones. `CapturedScopes: CaptureVisibleScopes()`
+runs while the *adopting* class is being declared, so a trait's body was given the
+user's file to resolve in.
+
+A trait now records the scopes visible where it was declared, and the injected default
+uses those. A body belongs to the trait and resolves where the trait was written, as a
+closure does.
+
+Verified by controlled revert: the behavioural test fails without it, and the two
+controls — that an adopting class still resolves its *own* names, and that a class
+defining the member itself still wins — pass either way. ToastLib's own suite, which
+is built on these traits, stays at 431/431.

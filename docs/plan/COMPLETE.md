@@ -102,6 +102,7 @@
 | [`TOAST-0044`](items/TOAST-0044.md) | P1 | complete | 5/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
 | [`TOAST-0050`](items/TOAST-0050.md) | P2 | complete | 8/8 | A tuple type resolves but cannot be written in an annotation |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | complete | 8/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
+| [`TOAST-0132`](items/TOAST-0132.md) | P2 | complete | 3/3 | A trait's default body runs in the adopting class's scope, so a library trait cannot name its own types |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TOAST-0065`](items/TOAST-0065.md) | P2 | complete | 5/5 | An emitted class inherited object.ToString, so it converted to its CLR name and a match value arm missed |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |

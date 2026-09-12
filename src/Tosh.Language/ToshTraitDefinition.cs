@@ -8,6 +8,19 @@ public sealed class ToshTraitDefinition : IShellNamedType
     /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
     public DocComment? Documentation { get; internal set; }
 
+    /// <summary>
+    /// The scopes visible where this trait was declared (<c>TOAST-0132</c>).
+    /// </summary>
+    /// <remarks>
+    /// A trait's default bodies are copied into every class that adopts it, and they used
+    /// to capture the scopes of the *adopting* site. A body that names a type — and
+    /// `Polygonal.Bounds()` builds its answer with
+    /// <c>new ToastLib.Math.Geometry.Rectangle(…)</c> — then looked that name up in the
+    /// user's file, where an aliased import has not put it. A trait's body belongs to the
+    /// trait, so it resolves where the trait was written, as a closure does.
+    /// </remarks>
+    internal IReadOnlyList<LexicalScope>? DeclaringScopes { get; set; }
+
     /// <inheritdoc />
     public string? ShellDocumentation => Documentation?.Description is { Length: > 0 } summary
         ? summary

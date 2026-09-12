@@ -462,7 +462,10 @@ public sealed partial class ToshEngine
                             sourceName,
                             sourceText,
                             @class.Span,
-                            CapturedScopes: CaptureVisibleScopes()));
+                            // `TOAST-0132`. The trait's own declaration site, not this
+                            // one. The body being copied is the trait's code, and it
+                            // names the trait's types.
+                            CapturedScopes: traitDefinition.DeclaringScopes ?? CaptureVisibleScopes()));
                     }
                 }
 
@@ -812,6 +815,10 @@ public sealed partial class ToshEngine
             sourceName,
             sourceText,
             trait.Span);
+
+        // `TOAST-0132`. Where the trait was written, so its default bodies can resolve the
+        // types they name after being copied into a class in some other file.
+        definition.DeclaringScopes = CaptureVisibleScopes();
 
         definition.Documentation = trait.DocComment;
         DeclareType(trait.Name, definition, trait.Modifier, sourceName, sourceText, trait.Span);
