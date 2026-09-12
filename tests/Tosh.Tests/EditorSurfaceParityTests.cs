@@ -134,6 +134,14 @@ public sealed class EditorSurfaceParityTests
     // `catch (e)` binds a variable that no other rule can claim: the parameter rule
     // requires a following colon, and a catch binding has none.
     [InlineData("catch-binding")]
+    // `require ./Graphics.tosh` takes an unquoted path, which the member rules
+    // otherwise take apart into a type, an accessor and a member.
+    [InlineData("require-path")]
+    // `out value: int` in a native signature: inside a signature region the
+    // keyword rules do not reach the direction word.
+    [InlineData("parameter-direction")]
+    // The name on the left of `=` is an argument, not a call.
+    [InlineData("named-argument")]
     public void The_structural_grammar_rules_are_present(string ruleName)
     {
         using var grammar = JsonDocument.Parse(File.ReadAllText(
@@ -278,6 +286,12 @@ public sealed class EditorSurfaceParityTests
     [InlineData("catch-binding")]
     // `require ./Graphics/Sdl.tosh` takes an unquoted path.
     [InlineData("bare-require-path")]
+    // `&greet` and `&$this.OnSave`: the grammar had no rule for `&` in any form.
+    [InlineData("function-reference")]
+    // The last name in a dotted chain, which `qualified-segment` leaves alone.
+    [InlineData("member-access")]
+    // `uses A, B, C` names a list, which one regex cannot take.
+    [InlineData("inheritance-clause")]
     public void The_gtksourceview_grammar_has_its_structural_contexts(string contextId)
     {
         var grammar = File.ReadAllText(
@@ -353,6 +367,117 @@ public sealed class EditorSurfaceParityTests
         Assert.DoesNotContain("(?=:", match);
         // And the optional marker is part of the name, or `path?` goes unscoped.
         Assert.Contains(@"\??", match);
+    }
+
+    /// <summary>
+    /// `&` takes two forms and the rule only knew one. `&greet` wants a bareword
+    /// after it and matched; `&$this.OnSave` — which is how every handler in the
+    /// user's libraries is passed — did not, so the operator was uncoloured 37
+    /// times. Asserting the rule exists would pass on the half-rule.
+    /// </summary>
+    [Fact]
+    public void A_function_reference_covers_a_method_as_well_as_a_function()
+    {
+        using var grammar = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json")));
+
+        var matches = grammar.RootElement
+            .GetProperty("repository").GetProperty("function-reference").GetProperty("patterns")
+            .EnumerateArray()
+            .Select(rule => rule.TryGetProperty("match", out var m) ? m.GetString() ?? string.Empty : string.Empty)
+            .ToArray();
+
+        Assert.Contains(matches, match => match.Contains(@"(?=\$)", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A command is in command position on the right of an assignment too. The
+    /// opener alternation knew the start of a line, `;{(`, a pipe and `=>`, and not
+    /// a plain `=` — so `var package = read-file $p` left `read-file` bare.
+    ///
+    /// The leading whitespace in the lookbehind is the load-bearing half: it is
+    /// what separates an assignment from `==`, `!=`, `>=`, `+=` and `--flag=value`,
+    /// each of which would otherwise scope the word after it as a call.
+    /// </summary>
+    [Theory]
+    [InlineData("builtin-commands")]
+    [InlineData("command-position")]
+    public void A_command_on_the_right_of_an_assignment_is_in_command_position(string ruleName)
+    {
+        using var grammar = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json")));
+
+        var rule = grammar.RootElement.GetProperty("repository").GetProperty(ruleName);
+        if (rule.TryGetProperty("patterns", out var patterns))
+        {
+            rule = patterns.EnumerateArray().First();
+        }
+
+        var match = rule.GetProperty("match").GetString() ?? string.Empty;
+
+        Assert.Contains(@"(?<=\s=)", match, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// `uses Polygonal, Shape2D, Enclosing, Transformable` names a *list*, and one
+    /// regex can take only the first of it. Worse, the type reference it used
+    /// carries a comma for generic arguments, so the old rule read the separator
+    /// into the first name and left the other three scoped by nothing.
+    ///
+    /// The end condition is checked as well as the region, because all three
+    /// clauses appear on one line: `fulfills IPoint&lt;T&gt; uses Componentwise
+    /// where T: Numeric`. A region that does not stop at the next clause keyword
+    /// swallows it as a type name.
+    /// </summary>
+    [Fact]
+    public void An_inheritance_clause_is_a_region_so_it_can_hold_a_list()
+    {
+        using var grammar = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json")));
+
+        var clause = grammar.RootElement
+            .GetProperty("repository").GetProperty("type-clause").GetProperty("patterns")
+            .EnumerateArray().First();
+
+        Assert.True(
+            clause.TryGetProperty("begin", out var begin),
+            "The inheritance clause is a single match again, which can only take the first name in a list.");
+        Assert.Contains("uses", begin.GetString() ?? string.Empty, StringComparison.Ordinal);
+
+        var end = clause.GetProperty("end").GetString() ?? string.Empty;
+        foreach (var closer in new[] { "where", "extends", "fulfills", "implements", "uses" })
+        {
+            Assert.Contains(closer, end, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// `tosh.lang` had no rule for `&` in any of its forms — not the function
+    /// reference, not the background operator, and not `&&`, which was missing
+    /// from the operator alternation entirely.
+    ///
+    /// Both halves are checked because either alone leaves it broken: the
+    /// alternation has to claim the pair, and the single-`&` rule has to decline
+    /// it, or `$a &amp;&amp; $b` gets the function-reference colour on one half.
+    /// </summary>
+    [Fact]
+    public void The_gtksourceview_grammar_scopes_both_forms_of_ampersand()
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        var operators = grammar
+            .Split("<context id=\"operators\"", StringSplitOptions.None)[1]
+            .Split("</context>", StringSplitOptions.None)[0];
+
+        Assert.Contains("&amp;&amp;", operators, StringComparison.Ordinal);
+
+        var reference = grammar
+            .Split("<context id=\"function-reference\"", StringSplitOptions.None)[1]
+            .Split("</context>", StringSplitOptions.None)[0];
+
+        Assert.Contains("(?!&amp;)", reference, StringComparison.Ordinal);
+        Assert.Contains("(?&lt;![A-Za-z0-9_&amp;])", reference, StringComparison.Ordinal);
     }
 
     private static string RepositoryRoot() =>

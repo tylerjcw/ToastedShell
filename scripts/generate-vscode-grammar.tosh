@@ -255,6 +255,9 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     "raw-triple-string", "ansi-triple-string",
     "interpolated-string", "ansi-c-string", "double-quoted-string", "single-quoted-string",
     "command-substitution", "process-substitution",
+    # Before the member rules, which would otherwise take a bare path apart
+    # into a type, an accessor and a member.
+    "require-path",
     "class-definition", "interface-definition", "struct-definition", "trait-definition",
     "callback-definition",
     "union-definition", "rune-definition", "event-definition", "module-definition",
@@ -271,6 +274,9 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     # `static-path` before the command rules: `Level::Novice` at the head of a
     # line is a path, not a command named `Level` (`TOAST-0090`).
     "static-path",
+    # Before the command rules: the name on the left of `=` is an argument,
+    # not a call, and `command-position` was scoping it as one.
+    "named-argument",
     "builtin-commands", "command-position",
     # The literal regions come before the bare delimiter match, which is now only
     # a fallback for a stray delimiter that opened no region.
@@ -472,6 +478,13 @@ $repository["signature-parameter"] = {%
     "captures" => {% "2" => {% "name" => "variable.parameter.tosh" %} %}
 %}
 
+# `out value: int` in a native signature. `out` and `ref` are parameter
+# directions, and inside a signature region the keyword rules do not reach them,
+# so they were left uncoloured in every `bind native` block that has one.
+$repository["parameter-direction"] = {%
+    "match" => '\b(out|ref)\b(?=\s)',
+    "captures" => {% "1" => {% "name" => "storage.modifier.direction.tosh" %} %}
+%}
 $repository["signature-body"] = {% "patterns" => [
     {% "include" => "#nested-parens" %},
     {% "include" => "#comment" %},
@@ -482,6 +495,9 @@ $repository["signature-body"] = {% "patterns" => [
     {% "include" => "#generic-arguments" %},
     {% "include" => "#constants" %},
     {% "include" => "#storage-modifier" %},
+    # Before `signature-parameter`, or `out` is read as the name of a parameter
+    # rather than as the direction of the one after it.
+    {% "include" => "#parameter-direction" %},
     {% "include" => "#signature-parameter" %},
     {% "include" => "#spread-operator" %},
     {% "include" => "#special-variable" %},
@@ -554,11 +570,33 @@ $repository["type-clause"] = {%
     "comment" => "extends, fulfills, implements, uses, where",
     "patterns" => [
         {%
-            "match" => ('\b(extends|fulfills|implements|uses)\b\s*(' + $TYPE_REF + ')?'),
-            "captures" => {%
-                "1" => {% "name" => "keyword.control.inheritance.tosh" %},
-                "2" => {% "name" => "entity.other.inherited-class.tosh" %}
-            %}
+            # A region rather than one match, because `uses A, B, C` names a
+            # *list* and one regex can only take the first of it. `TYPE_REF`
+            # carries a comma for generic arguments, so the old rule read the
+            # separator as part of the first name — `uses Polygonal, Shape2D,
+            # Enclosing, Transformable` styled `Polygonal,` and left the other
+            # three bare.
+            "begin" => '\b(extends|fulfills|implements|uses)\b',
+            "beginCaptures" => {% "1" => {% "name" => "keyword.control.inheritance.tosh" %} %},
+            # `where` opens the constraint clause and `{` the body, and another
+            # inheritance keyword opens a clause of its own: `fulfills IPoint<T>
+            # uses Componentwise where T: Numeric` is all three on one line. The
+            # `$` keeps a region that meets none of them inside its own line.
+            "end" => '(?=\{|\b(?:where|extends|fulfills|implements|uses)\b|$)',
+            "patterns" => [
+                # A base constructor takes arguments: `extends Error($message)`,
+                # `extends Error($"Bluetooth command failed: {$code}")`.
+                {% "include" => "#interpolated-string" %},
+                {% "include" => "#double-quoted-string" %},
+                {% "include" => "#single-quoted-string" %},
+                {% "include" => "#variable-reference" %},
+                {%
+                    "comment" => "One name in the list. Generic arguments are part of the name, which is where the comma belongs.",
+                    "match" => '[A-Za-z_][A-Za-z0-9_.-]*(?:<[^<>]*>)?',
+                    "name" => "entity.other.inherited-class.tosh"
+                %},
+                {% "include" => "#punctuation" %}
+            ]
         %},
         {%
             "comment" => "Generic constraint: where T: Numeric. The optional group keeps a bare `where` (pipeline filter, refinement clause) matching too.",
@@ -685,6 +723,14 @@ $repository["caret-escape"] = {%
     "match" => '(\^)(?=[a-zA-Z_$/])',
     "captures" => {% "1" => {% "name" => "keyword.operator.caret-escape.tosh" %} %}
 %}
+# `require ./Graphics.tosh` takes an unquoted path. Left to the general rules it
+# came apart into `.` as an accessor, `/` as nothing, `Graphics` as a type and
+# `tosh` as a member — four scopes for one literal. A module name is unaffected:
+# `require ToastLib.Gtk from "…"` does not begin with a path character.
+$repository["require-path"] = {%
+    "match" => '(?<=\brequire\s)([.~/][^\s"\x27]*)',
+    "captures" => {% "1" => {% "name" => "string.unquoted.path.tosh" %} %}
+%}
 $repository["function-reference"] = {%
     "comment" => "&name is a function reference at the start of an expression; a trailing & backgrounds the pipeline.",
     "patterns" => [
@@ -694,6 +740,14 @@ $repository["function-reference"] = {%
                 "1" => {% "name" => "keyword.operator.function-reference.tosh" %},
                 "2" => {% "name" => "entity.name.function.tosh" %}
             %}
+        %},
+        # `&$this.OnSave` — a reference to a *method*, which is the form every
+        # handler in the library uses. The rule above wants a bareword after the
+        # `&` and so matched none of them, leaving the operator uncoloured. Only
+        # the `&` is claimed here; the variable rules already know what follows.
+        {%
+            "match" => '(?<![A-Za-z0-9_])(&)(?=\$)',
+            "captures" => {% "1" => {% "name" => "keyword.operator.function-reference.tosh" %} %}
         %},
         {% "match" => '&\s*$', "name" => "keyword.operator.background.tosh" %}
     ]
@@ -744,16 +798,28 @@ $repository["pipeline-underscore"] = {% "patterns" => [
 
 # Commands ------------------------------------------------------------------
 $repository["builtin-commands"] = {%
-    "comment" => "Built-in commands, highlighted in command position. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
-    "match" => ('(?:^|(?<=[;{(])|(?<=\|)(?<!\{\|)|(?<==>))\s*' + $NOT_KEYWORD + '\b(' + $BUILTINS + ')\b'),
+    "comment" => "Built-in commands, highlighted in command position: start of line, after ; { ( or =>, after a pipe that is not a {| record opener, or on the right of an assignment. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
+    "match" => ('(?:^|(?<=[;{(])|(?<=\|)(?<!\{\|)|(?<==>)|(?<=\s=))\s*' + $NOT_KEYWORD + '\b(' + $BUILTINS + ')\b'),
     "captures" => {% "1" => {% "name" => "support.function.builtin.tosh" %} %}
+%}
+# `new Facility(Name = $soname, Kind = "library")` and the default value of a
+# parameter, `func f(x = 5)`. This was not a gap but a wrong colour, which a
+# coverage count cannot see: the first name after `(` took the *function call*
+# scope from `command-position`, and the names after each comma took nothing.
+#
+# The lookahead declines `==`, `=>` and `=~`, and a compound assignment ends in
+# `=` but has its operator character in the way.
+$repository["named-argument"] = {%
+    "comment" => "The name on the left of `=`: a named argument, a record field, a default parameter value.",
+    "match" => ('\b(' + $NOT_KEYWORD + $IDENT + ')\s*(?==(?![=>~]))'),
+    "captures" => {% "1" => {% "name" => "variable.parameter.tosh" %} %}
 %}
 $repository["command-position"] = {%
     "comment" => "These matches begin at the whitespace before the word, so they start earlier than a keyword match on the word itself and would otherwise win the tie. NOT_KEYWORD keeps `{ return ...` and `for x in ...` from being scoped as command calls.",
     "patterns" => [
         {%
-            "comment" => "Command position: start of line, after ; { ( or =>, or after a pipe that is not a {| record opener.",
-            "match" => ('(?:^|(?<=[;{(])|(?<=\|)(?<!\{\|)|(?<==>))\s*(' + $NOT_KEYWORD + $IDENT + ')(?=\s|$|\()'),
+            "comment" => "Command position: start of line, after ; { ( or =>, after a pipe that is not a {| record opener, or on the right of an assignment.",
+            "match" => ('(?:^|(?<=[;{(])|(?<=\|)(?<!\{\|)|(?<==>)|(?<=\s=))\s*(' + $NOT_KEYWORD + $IDENT + ')(?=\s|$|\()'),
             "captures" => {% "1" => {% "name" => "entity.name.function.call.tosh" %} %}
         %}
     ]

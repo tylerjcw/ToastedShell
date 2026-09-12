@@ -212,6 +212,23 @@
       </include>
     </context>
 
+    <!-- `&greet`, `&$this.OnSave`, and the trailing `&` that backgrounds a
+         pipeline. The grammar had no rule for `&` in any of its forms, so the
+         operator was uncoloured in every handler the library passes.
+
+         The name is optional: the parser requires it to be adjacent (a space
+         makes the `&` a background operator instead), and after `&$this.OnSave`
+         the variable rules already know what follows. The lookarounds keep the
+         two halves of `&&` out of it, which the operator alternation above now
+         claims as one token. -->
+    <context id="function-reference">
+      <match>(?&lt;![A-Za-z0-9_&amp;])(&amp;)(?!&amp;)(\%{command-name})?</match>
+      <include>
+        <context sub-pattern="1" style-ref="operator"/>
+        <context sub-pattern="2" style-ref="function"/>
+      </include>
+    </context>
+
     <context id="catch-binding">
       <match>\b(catch)\s*(\()\s*(\%{identifier})\s*(\))</match>
       <include>
@@ -545,7 +562,7 @@
          in the main include list, so a hyphen inside `read-file` or a long
          flag has already been consumed by the time it is reached. -->
     <context id="operators" style-ref="operator">
-      <match>=&gt;|\.\.\.|\.\.|\*\*=|//=|\?\?=|\|{1,2}|!~|=~|not-in|!=|&gt;=|&lt;=|==|&gt;&gt;|&lt;&lt;&lt;|\+=|-=|\*=|/=|%=|\*\*|//|\?\?|\?\.|[-+*/%&gt;&lt;]=?|=(?!=)|\?</match>
+      <match>=&gt;|\.\.\.|\.\.|\*\*=|//=|\?\?=|&amp;&amp;|\|{1,2}|!~|=~|not-in|!=|&gt;=|&lt;=|==|&gt;&gt;|&lt;&lt;&lt;|\+=|-=|\*=|/=|%=|\*\*|//|\?\?|\?\.|[-+*/%&gt;&lt;]=?|=(?!=)|\?</match>
     </context>
 
     <!-- The `::` path operator (TOAST-0090): a name reached inside a type — enum
@@ -615,6 +632,54 @@
       </include>
     </context>
 
+    <!-- The name on the *right* of a dot, which `qualified-segment` beside this
+         deliberately leaves alone: it claims only a segment with a dot after it,
+         so the last name in every chain was scoped by nothing. That is the
+         `Drawing` of `using System.Drawing`, the `GeometryEpsilon` of
+         `ToastLib.Math.GeometryEpsilon`, and the second and later calls of
+         `$body.Replace(…).Replace(…)` — `variable` consumes `$body.Replace`
+         whole, and the chain continues past a closing paren it cannot span.
+
+         Included after `qualified-segment`, which starts at the same character
+         for a mid-chain name: GtkSourceView breaks that tie by include order,
+         so a name with a dot after it stays a type and only the final one
+         becomes a member. -->
+    <!-- `extends Error`, `uses Polygonal, Shape2D, Enclosing, Transformable`.
+         A region rather than a match, because the clause names a *list* and one
+         regex can take only the first of it — every base type and trait in the
+         corpus was uncoloured.
+
+         The end declines `where`, `{`, and another clause keyword, because all
+         three appear on one line: `fulfills IPoint<T> uses Componentwise where
+         T: Numeric`. `end-at-line-end` is the backstop, so a clause that meets
+         none of them cannot run away down the file.
+
+         Included before `keywords`, which matches `extends` at the same
+         character and would otherwise win the tie and leave the region shut. -->
+    <context id="inheritance-clause" end-at-line-end="true">
+      <start>\b(extends|fulfills|implements|uses)\b</start>
+      <end>(?=\{|\b(?:where|extends|fulfills|implements|uses)\b)</end>
+      <include>
+        <context sub-pattern="1" where="start" style-ref="keyword"/>
+        <!-- A base constructor takes arguments: `extends Error($message)`. -->
+        <context ref="interpolated-string"/>
+        <context ref="double-quoted-string"/>
+        <context ref="single-quoted-string"/>
+        <context ref="variable"/>
+        <context style-ref="type">
+          <match>[A-Za-z_][A-Za-z0-9_.-]*(?:&lt;[^&lt;&gt;]*&gt;)?</match>
+        </context>
+        <context ref="punctuation"/>
+      </include>
+    </context>
+
+    <context id="member-access">
+      <match>(?&lt;=\.)(\%{identifier})\b</match>
+      <include>
+        <context sub-pattern="1" style-ref="variable"/>
+      </include>
+    </context>
+
     <context id="static-path-segment">
       <match>(::)(\%{identifier})?</match>
       <include>
@@ -661,6 +726,7 @@
         <context ref="type-definition"/>
         <context ref="variable-declaration"/>
         <context ref="bare-require-path"/>
+        <context ref="function-reference"/>
         <context ref="catch-binding"/>
         <context ref="collection-key"/>
         <context ref="parameter-name"/>
@@ -674,6 +740,8 @@
         <context ref="type-position"/>
         <context ref="qualified-command"/>
         <context ref="qualified-segment"/>
+        <context ref="member-access"/>
+        <context ref="inheritance-clause"/>
         <context ref="modifiers"/>
         <context ref="keywords"/>
         <context ref="builtins"/>

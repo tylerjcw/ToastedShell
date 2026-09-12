@@ -46,6 +46,9 @@
       "include": "#process-substitution"
     },
     {
+      "include": "#require-path"
+    },
+    {
       "include": "#class-definition"
     },
     {
@@ -155,6 +158,9 @@
     },
     {
       "include": "#static-path"
+    },
+    {
+      "include": "#named-argument"
     },
     {
       "include": "#builtin-commands"
@@ -1020,6 +1026,14 @@
         }
       }
     },
+    "parameter-direction": {
+      "match": "\\b(out|ref)\\b(?=\\s)",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.direction.tosh"
+        }
+      }
+    },
     "signature-body": {
       "patterns": [
         {
@@ -1048,6 +1062,9 @@
         },
         {
           "include": "#storage-modifier"
+        },
+        {
+          "include": "#parameter-direction"
         },
         {
           "include": "#signature-parameter"
@@ -1182,15 +1199,35 @@
       "comment": "extends, fulfills, implements, uses, where",
       "patterns": [
         {
-          "match": "\\b(extends|fulfills|implements|uses)\\b\\s*([A-Za-z_][A-Za-z0-9_.<>?,\\[\\]-]*)?",
-          "captures": {
+          "begin": "\\b(extends|fulfills|implements|uses)\\b",
+          "beginCaptures": {
             "1": {
               "name": "keyword.control.inheritance.tosh"
-            },
-            "2": {
-              "name": "entity.other.inherited-class.tosh"
             }
-          }
+          },
+          "end": "(?=\\{|\\b(?:where|extends|fulfills|implements|uses)\\b|$)",
+          "patterns": [
+            {
+              "include": "#interpolated-string"
+            },
+            {
+              "include": "#double-quoted-string"
+            },
+            {
+              "include": "#single-quoted-string"
+            },
+            {
+              "include": "#variable-reference"
+            },
+            {
+              "comment": "One name in the list. Generic arguments are part of the name, which is where the comma belongs.",
+              "match": "[A-Za-z_][A-Za-z0-9_.-]*(?:<[^<>]*>)?",
+              "name": "entity.other.inherited-class.tosh"
+            },
+            {
+              "include": "#punctuation"
+            }
+          ]
         },
         {
           "comment": "Generic constraint: where T: Numeric. The optional group keeps a bare `where` (pipeline filter, refinement clause) matching too.",
@@ -1450,6 +1487,14 @@
         }
       }
     },
+    "require-path": {
+      "match": "(?<=\\brequire\\s)([.~/][^\\s\"\\x27]*)",
+      "captures": {
+        "1": {
+          "name": "string.unquoted.path.tosh"
+        }
+      }
+    },
     "function-reference": {
       "comment": "&name is a function reference at the start of an expression; a trailing & backgrounds the pipeline.",
       "patterns": [
@@ -1461,6 +1506,14 @@
             },
             "2": {
               "name": "entity.name.function.tosh"
+            }
+          }
+        },
+        {
+          "match": "(?<![A-Za-z0-9_])(&)(?=\\$)",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.function-reference.tosh"
             }
           }
         },
@@ -1536,11 +1589,20 @@
       ]
     },
     "builtin-commands": {
-      "comment": "Built-in commands, highlighted in command position. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
-      "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>))\\s*(?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callback|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b(?!-))\\b(cartesian-product|native-offsetof|prompt-duration|prompt-userhost|channel-select|history-search|prompt-history|prompt-newline|read-line-from|channel-close|describe-type|load-assembly|native-sizeof|write-line-to|channel-recv|channel-send|combinations|constructors|native-alloc|native-write|permutations|write-buffer|append-file|call-method|frequencies|get-methods|group-while|hostnamectl|intersperse|native-free|native-read|option-from|prompt-exit|prompt-jobs|prompt-text|prompt-time|read-buffer|read-to-end|write-bytes|disk-usage|find-index|has-method|interleave|join-lines|journalctl|mkdir-temp|networkctl|percentile|prompt-dir|prompt-git|read-bytes|read-lines|repeatedly|skip-until|skip-while|take-until|take-while|with-retry|write-file|benchmark|enumerate|get-props|offset-of|open-file|partition|read-file|read-from|read-line|summarize|systemctl|transpose|writeline|basename|converge|del-prop|describe|distinct|flat-map|get-prop|group-by|has-prop|hostname|loginctl|parallel|position|readlink|realpath|set-prop|tempfile|template|timespan|variance|wait-for|write-to|apropos|as-file|attempt|average|channel|collect|complex|compose|copy-to|dirname|findmnt|flatten|foreach|forward|history|inspect|is-file|is-link|iterate|members|methods|partial|replace|reverse|size-of|sort-by|step-by|summary|timeout|type-of|assert|config|events|exists|export|filter|forget|format|ignore|invoke|is-dir|length|logout|median|mounts|prompt|reduce|rename|repeat|select|settle|signal|source|stddev|styled|ulimit|unfold|unless|uptime|whence|whoami|window|alloc|async|await|chain|chmod|chown|chunk|clear|clone|close|count|curry|cycle|debug|dedup|first|flush|funcs|lines|lsblk|lscpu|lsipc|match|mkdir|parse|props|raise|recur|round|scope|sleep|spawn|split|stdev|touch|types|umask|uname|undef|unset|usage|where|which|write|xargs|back|call|cast|date|dirs|each|echo|edit|eval|exec|exit|find|free|from|glob|grep|guid|hash|head|help|http|hush|jobs|join|kill|last|lsfd|none|pick|ping|race|scan|seek|skip|sort|stat|tail|time|tree|uniq|vars|view|all|any|avg|cat|cut|dbg|env|get|map|mat|max|min|new|pwd|raw|row|seq|sum|tee|tui|vec|zip|bg|cd|cp|df|du|fg|id|ip|ln|ls|mv|ps|rm|to|tr|wc)\\b",
+      "comment": "Built-in commands, highlighted in command position: start of line, after ; { ( or =>, after a pipe that is not a {| record opener, or on the right of an assignment. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
+      "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>)|(?<=\\s=))\\s*(?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callback|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b(?!-))\\b(cartesian-product|native-offsetof|prompt-duration|prompt-userhost|channel-select|history-search|prompt-history|prompt-newline|read-line-from|channel-close|describe-type|load-assembly|native-sizeof|write-line-to|channel-recv|channel-send|combinations|constructors|native-alloc|native-write|permutations|write-buffer|append-file|call-method|frequencies|get-methods|group-while|hostnamectl|intersperse|native-free|native-read|option-from|prompt-exit|prompt-jobs|prompt-text|prompt-time|read-buffer|read-to-end|write-bytes|disk-usage|find-index|has-method|interleave|join-lines|journalctl|mkdir-temp|networkctl|percentile|prompt-dir|prompt-git|read-bytes|read-lines|repeatedly|skip-until|skip-while|take-until|take-while|with-retry|write-file|benchmark|enumerate|get-props|offset-of|open-file|partition|read-file|read-from|read-line|summarize|systemctl|transpose|writeline|basename|converge|del-prop|describe|distinct|flat-map|get-prop|group-by|has-prop|hostname|loginctl|parallel|position|readlink|realpath|set-prop|tempfile|template|timespan|variance|wait-for|write-to|apropos|as-file|attempt|average|channel|collect|complex|compose|copy-to|dirname|findmnt|flatten|foreach|forward|history|inspect|is-file|is-link|iterate|members|methods|partial|replace|reverse|size-of|sort-by|step-by|summary|timeout|type-of|assert|config|events|exists|export|filter|forget|format|ignore|invoke|is-dir|length|logout|median|mounts|prompt|reduce|rename|repeat|select|settle|signal|source|stddev|styled|ulimit|unfold|unless|uptime|whence|whoami|window|alloc|async|await|chain|chmod|chown|chunk|clear|clone|close|count|curry|cycle|debug|dedup|first|flush|funcs|lines|lsblk|lscpu|lsipc|match|mkdir|parse|props|raise|recur|round|scope|sleep|spawn|split|stdev|touch|types|umask|uname|undef|unset|usage|where|which|write|xargs|back|call|cast|date|dirs|each|echo|edit|eval|exec|exit|find|free|from|glob|grep|guid|hash|head|help|http|hush|jobs|join|kill|last|lsfd|none|pick|ping|race|scan|seek|skip|sort|stat|tail|time|tree|uniq|vars|view|all|any|avg|cat|cut|dbg|env|get|map|mat|max|min|new|pwd|raw|row|seq|sum|tee|tui|vec|zip|bg|cd|cp|df|du|fg|id|ip|ln|ls|mv|ps|rm|to|tr|wc)\\b",
       "captures": {
         "1": {
           "name": "support.function.builtin.tosh"
+        }
+      }
+    },
+    "named-argument": {
+      "comment": "The name on the left of `=`: a named argument, a record field, a default parameter value.",
+      "match": "\\b((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callback|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b(?!-))[A-Za-z_][A-Za-z0-9_-]*)\\s*(?==(?![=>~]))",
+      "captures": {
+        "1": {
+          "name": "variable.parameter.tosh"
         }
       }
     },
@@ -1548,8 +1610,8 @@
       "comment": "These matches begin at the whitespace before the word, so they start earlier than a keyword match on the word itself and would otherwise win the tie. NOT_KEYWORD keeps `{ return ...` and `for x in ...` from being scoped as command calls.",
       "patterns": [
         {
-          "comment": "Command position: start of line, after ; { ( or =>, or after a pipe that is not a {| record opener.",
-          "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>))\\s*((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callback|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b(?!-))[A-Za-z_][A-Za-z0-9_-]*)(?=\\s|$|\\()",
+          "comment": "Command position: start of line, after ; { ( or =>, after a pipe that is not a {| record opener, or on the right of an assignment.",
+          "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>)|(?<=\\s=))\\s*((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callback|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|extend|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b(?!-))[A-Za-z_][A-Za-z0-9_-]*)(?=\\s|$|\\()",
           "captures": {
             "1": {
               "name": "entity.name.function.call.tosh"
