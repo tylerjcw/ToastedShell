@@ -5,8 +5,8 @@ namespace Tosh.Stdlib.Functional;
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial state passed to the callable.")]
 [CommandArgument("callable|block", "A function that receives state and returns [value, next-state] or null to stop.")]
-[CommandExample("unfold 1 func(n) => if ($n <= 5) { [$n ($n + 1)] } else { null }", Title = "Generate 1 through 5")]
-[CommandExample("unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]", Title = "Fibonacci sequence")]
+[CommandExample("unfold 1 func(n) => (($n <= 5) ? [$n, ($n + 1)] : null)", Title = "Generate 1 through 5")]
+[CommandExample("unfold [0, 1] func(s) => [($s[0]), [($s[1]), ($s[0] + $s[1])]]", Title = "Fibonacci sequence")]
 [CommandOutput("A sequence of values produced by the callable until it returns null.")]
 public sealed class UnfoldCommand : ShellCommand
 {
@@ -37,7 +37,11 @@ public sealed class UnfoldCommand : ShellCommand
                 new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
                     ["_"] = state,
-                });
+                },
+                // `null` is how this command is documented to stop, and an arrow body
+                // or block whose value is `null` produces no pipeline value — so the
+                // documented spelling raised instead of stopping.
+                noResultIsNull: true);
 
             if (result is null)
             {

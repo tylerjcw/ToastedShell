@@ -52,6 +52,7 @@
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0046`](items/TOAST-0046.md) | P2 | complete | 4/4 | `-> void` is unspecified, and disagrees with `-> nothing` for the same declared type |
+| [`TOAST-0129`](items/TOAST-0129.md) | P2 | complete | 5/5 | Eighteen of the 609 built-in command examples were not valid ToastScript, and one of them was the command's fault |
 | [`TOAST-0026`](items/TOAST-0026.md) | P3 | complete | 5/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
 | [`TOAST-0069`](items/TOAST-0069.md) | P2 | complete | 7/7 | A rune call site forces whole-script source replay, so a program using a macro is not compiled at all |
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |

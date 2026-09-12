@@ -4,9 +4,9 @@ namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
 [CommandArgument("sequences", "One or more arrays, lists, or ranges to concatenate after the pipeline.")]
-[CommandExample("echo 1 2 | chain [3 4] [5 6]", Title = "Concatenate multiple sequences")]
-[CommandExample("echo a b c | chain [d e f]", Title = "Append to pipeline")]
-[CommandExample("chain [1 2] [3 4] [5 6]", Title = "Concatenate without pipeline input")]
+[CommandExample("echo 1 2 | chain [3, 4] [5, 6]", Title = "Concatenate multiple sequences")]
+[CommandExample("echo a b c | chain [d, e, f]", Title = "Append to pipeline")]
+[CommandExample("chain [1, 2] [3, 4] [5, 6]", Title = "Concatenate without pipeline input")]
 [CommandOutput("All items from the pipeline (if any) followed by all items from each argument sequence.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Pipeline items are yielded first, followed by each argument sequence.")]
 [CommandStreaming(StreamingBehavior.Lazy)]

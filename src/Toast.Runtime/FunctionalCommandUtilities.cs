@@ -135,17 +135,34 @@ internal static class FunctionalCommandUtilities
         }
     }
 
+    /// <param name="noResultIsNull">
+    /// Collapse an empty result to <c>null</c> instead of raising, for a command whose
+    /// contract gives <c>null</c> a meaning of its own. `unfold` is the case: it stops
+    /// when the callable returns <c>null</c>, and an arrow body or a block whose value
+    /// *is* <c>null</c> produces no pipeline value at all — only an explicit
+    /// <c>return null</c> produces one — so the documented way to stop it raised
+    /// "produced no values" instead. This is the canonical value-context collapse
+    /// (`TS-P1-20`: none to <c>null</c>, one to the item, several a diagnostic); it is
+    /// off by default because for `map`, `sort` and `get` a lambda that produces
+    /// nothing is a mistake worth naming rather than a null to carry forward.
+    /// </param>
     public static async Task<object?> RequireSingleResultAsync(
         CommandContext context,
         object operation,
         IReadOnlyList<object?> callableArguments,
-        IReadOnlyDictionary<string, object?>? blockLocals = null)
+        IReadOnlyDictionary<string, object?>? blockLocals = null,
+        bool noResultIsNull = false)
     {
         var results = await ExecuteAsync(context, operation, callableArguments, blockLocals);
 
         if (results.Count == 1)
         {
             return results[0];
+        }
+
+        if (results.Count == 0 && noResultIsNull)
+        {
+            return null;
         }
 
         throw context.CreateDiagnostic(

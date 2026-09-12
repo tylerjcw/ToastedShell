@@ -11,7 +11,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("--at", "Byte offset from the buffer or pointer before writing.", Required = false, TypeName = "int")]
 [CommandArgument("--as", "Native interop type to write the value as, fixing the width. Without it the width comes from the value\u2019s own type, which is `Int32` for an integer only while it fits.", Required = false, TypeName = "string")]
 [CommandExample("native-write $buffer \"hello\"", Title = "Write a C string")]
-[CommandExample("native-write $buffer [72 105 0]", Title = "Write explicit bytes")]
+[CommandExample("native-write $buffer [72, 105, 0]", Title = "Write explicit bytes")]
 [CommandExample("native-write $buffer 42 --at 8", Title = "Write at an offset")]
 [CommandExample("native-write $buffer $n --as int32 --at 8", Title = "Write four bytes whatever $n is")]
 [CommandOutput("Emits nothing; writes the supplied value(s) into the native buffer as a side effect.")]

@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
 [CommandArgument("k", "The number of elements in each combination.")]
-[CommandExample("[1 2 3] | combinations 2", Title = "All 2-element subsets")]
+[CommandExample("[1, 2, 3] | combinations 2", Title = "All 2-element subsets")]
 [CommandExample("echo a b c d | combinations 3", Title = "All 3-element subsets")]
 [CommandOutput("Arrays of k elements from the pipeline in lexicographic order.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Items to select combinations from.")]

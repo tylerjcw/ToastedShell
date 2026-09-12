@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
 [CommandArgument("other-sequence", "An array or list to alternate with the pipeline items.")]
-[CommandExample("echo 1 2 3 | interleave [a b c]", Title = "Alternate numbers and letters")]
+[CommandExample("echo 1 2 3 | interleave [a, b, c]", Title = "Alternate numbers and letters")]
 [CommandOutput("Items from the pipeline and the other sequence in alternating order.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Alternates items from the pipeline with the other sequence.")]
 [CommandStreaming(StreamingBehavior.Lazy)]

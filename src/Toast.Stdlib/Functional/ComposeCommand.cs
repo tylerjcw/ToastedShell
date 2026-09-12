@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Functional;
 [CommandArgument("callable2", "The second callable in the chain.")]
 [CommandArgument("callable", "Additional callables to chain.", Required = false)]
 [CommandExample("compose func(x) => ($x + 1) func(x) => ($x * 2)", Title = "Compose increment and double")]
-[CommandExample("$f = compose $parse $validate $transform; $f $input", Title = "Build a processing pipeline")]
+[CommandExample("$f = compose $parse $validate $transform; $f($input)", Title = "Build a processing pipeline")]
 [CommandOutput("A single callable that applies all given callables in left-to-right order.")]
 public sealed class ComposeCommand : ShellCommand
 {

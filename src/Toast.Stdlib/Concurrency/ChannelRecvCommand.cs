@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Concurrency;
 
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to receive from. Omit to read from pipeline input.")]
-[CommandExample("channel-recv $ch | each { |v| echo $v }", Title = "Stream all values from a channel")]
+[CommandExample("channel-recv $ch | each { echo $_ }", Title = "Stream all values from a channel")]
 [CommandOutput("Streams every value from the channel until it is closed.")]
 [CommandNote("Blocks until a value is available. Returns when the channel is closed and drained.")]
 [CommandNote("A null payload is emitted as one value; a closed and drained channel emits no value.")]

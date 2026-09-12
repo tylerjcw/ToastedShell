@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Functional;
 
 [CommandCategory("Functional")]
 [CommandExample("echo 1 2 3 | cycle | first 9", Title = "Cycle a sequence")]
-[CommandExample("[a b c] | cycle | first 7", Title = "Cycle an array")]
+[CommandExample("[a, b, c] | cycle | first 7", Title = "Cycle an array")]
 [CommandNote("Produces an infinite sequence. Always pair with `first`, `take-while`, or `take-until` to bound the output.")]
 [CommandOutput("The pipeline items repeated in order, infinitely.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Items to repeat cyclically.")]

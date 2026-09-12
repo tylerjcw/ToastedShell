@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
 [CommandArgument("k", "The number of elements in each permutation. Defaults to the full length if omitted.", Required = false)]
-[CommandExample("[1 2 3] | permutations", Title = "All 6 permutations of 3 elements")]
+[CommandExample("[1, 2, 3] | permutations", Title = "All 6 permutations of 3 elements")]
 [CommandExample("echo a b c | permutations 2", Title = "All 2-element orderings")]
 [CommandOutput("Arrays of k elements representing each permutation.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Items to permute.")]
