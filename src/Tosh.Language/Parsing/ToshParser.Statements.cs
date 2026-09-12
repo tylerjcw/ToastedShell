@@ -1676,39 +1676,54 @@ public static partial class ToshParser
                 var eventNameToken = ExpectVariableName();
                 handlesEvent = eventNameToken.Text;
 
-                if (MatchesKeyword(Current, "when"))
+                // The three modifier clauses, in any order. They were a fixed
+                // sequence — `when`, then `priority`, then `once` — so the
+                // specification's own `handles CommandCompleted priority 10 when
+                // { … }` did not parse, and neither did `once when`. Nothing about
+                // these three implies an order, and the error a wrong one produced
+                // named the block rather than the clause.
+                while (true)
                 {
-                    NextToken(); // when
-                    whenGuard = ParseRequiredBlock("when");
-                }
-
-                if (MatchesKeyword(Current, "priority"))
-                {
-                    NextToken(); // priority
-                    var priorityToken = NextToken();
-
-                    if (priorityToken.Kind == SyntaxTokenKind.Number && priorityToken.Value is int priorityValue)
+                    if (MatchesKeyword(Current, "when") && whenGuard is null)
                     {
-                        handlerPriority = priorityValue;
+                        NextToken(); // when
+                        whenGuard = ParseRequiredBlock("when");
+                        continue;
                     }
-                    else if (priorityToken.Kind == SyntaxTokenKind.Number && priorityToken.Value is long priorityLong)
-                    {
-                        handlerPriority = (int)priorityLong;
-                    }
-                    else
-                    {
-                        _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh.parser.expected_priority_value",
-                            Title: "Expected an integer priority value.",
-                            Span: priorityToken.Span,
-                            Label: "expected an integer"));
-                    }
-                }
 
-                if (MatchesKeyword(Current, "once"))
-                {
-                    NextToken(); // once
-                    isOnceHandler = true;
+                    if (MatchesKeyword(Current, "priority") && handlerPriority is null)
+                    {
+                        NextToken(); // priority
+                        var priorityToken = NextToken();
+
+                        if (priorityToken.Kind == SyntaxTokenKind.Number && priorityToken.Value is int priorityValue)
+                        {
+                            handlerPriority = priorityValue;
+                        }
+                        else if (priorityToken.Kind == SyntaxTokenKind.Number && priorityToken.Value is long priorityLong)
+                        {
+                            handlerPriority = (int)priorityLong;
+                        }
+                        else
+                        {
+                            _diagnostics.Add(new SyntaxDiagnostic(
+                                Code: "tosh.parser.expected_priority_value",
+                                Title: "Expected an integer priority value.",
+                                Span: priorityToken.Span,
+                                Label: "expected an integer"));
+                        }
+
+                        continue;
+                    }
+
+                    if (MatchesKeyword(Current, "once") && !isOnceHandler)
+                    {
+                        NextToken(); // once
+                        isOnceHandler = true;
+                        continue;
+                    }
+
+                    break;
                 }
             }
 

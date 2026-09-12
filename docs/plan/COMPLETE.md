@@ -60,6 +60,7 @@
 | [`TOAST-0102`](items/TOAST-0102.md) | P2 | complete | 4/4 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0114`](items/TOAST-0114.md) | P3 | complete | 7/7 | A struct is invisible to the editor: no outline entry, no hover, no completion |
+| [`TOAST-0128`](items/TOAST-0128.md) | P2 | complete | 8/8 | The specification's own code listings did not parse, in four places where the parser was narrower than the language it documents |
 | [`TOAST-0074`](items/TOAST-0074.md) | P3 | complete | 5/5 | The two backends refuse the same return conversion in different words |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
 | [`TOAST-0018`](items/TOAST-0018.md) | P2 | complete | 10/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |

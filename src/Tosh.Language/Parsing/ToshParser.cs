@@ -1209,7 +1209,10 @@ public static partial class ToshParser
 
             while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
             {
-                if (Current.Kind == SyntaxTokenKind.Semicolon)
+                // Three separators, because the specification writes all three:
+                // a semicolon, a line break, and a comma for the single-line form
+                // `event E { Message = "", Code = 0 }`.
+                if (Current.Kind == SyntaxTokenKind.Semicolon || Current.Kind == SyntaxTokenKind.Comma)
                 {
                     NextToken();
                     continue;
@@ -1235,11 +1238,23 @@ public static partial class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "=")
                 {
                     NextToken();
+                    // A field default ends where the next field begins. Without
+                    // saying so the pipeline ran on and read the *next* field as a
+                    // second stage, so an event body could only be written with its
+                    // fields separated by semicolons — while the specification, and
+                    // every other block in the language, puts one per line, and the
+                    // single-line form in the same listing uses commas.
+                    //
+                    // `untilFieldBoundary` rather than `singleExpressionBody`: the
+                    // latter also ends the pipeline at a `|`, which is right for a
+                    // lambda body and wrong here, where `Count = $items | count` is
+                    // a perfectly good default.
                     defaultValue = ParsePipeline(
                         untilCloseParen: false,
                         untilCloseBrace: true,
                         untilSemicolon: true,
-                        allowExpressionStart: true);
+                        allowExpressionStart: true,
+                        untilFieldBoundary: true);
                 }
 
                 var fieldEnd = Current.Span.Start;
@@ -1249,7 +1264,7 @@ public static partial class ToshParser
                     defaultValue,
                     TextSpan.FromBounds(fieldStart, fieldEnd)));
 
-                if (Current.Kind == SyntaxTokenKind.Semicolon)
+                if (Current.Kind == SyntaxTokenKind.Semicolon || Current.Kind == SyntaxTokenKind.Comma)
                 {
                     NextToken();
                 }
@@ -2714,34 +2729,44 @@ public static partial class ToshParser
                 TextSpan.FromBounds(expression.Span.Start, closeBracket.Span.End));
         }
 
-        // A ternary branch accepts either a normal expression or a `throw <expr>`
-        // expression-form (like C# 7+ throw-expressions).
-        private ArgumentSyntax? ParseTernaryBranch(int startPosition, bool implicitCurrentItem)
+        /// <summary>
+        /// A <c>throw &lt;expr&gt;</c> in expression position, as in
+        /// <c>$cond ? $value : throw "…"</c> and <c>$value ?? throw "…"</c>
+        /// (like C# 7+ throw-expressions). Returns <c>null</c> when the current
+        /// token is not <c>throw</c>, so a caller falls through to its ordinary
+        /// operand parser.
+        /// </summary>
+        private ThrowArgumentSyntax? TryParseThrowExpression(int startPosition, bool implicitCurrentItem)
         {
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                string.Equals(Current.Text, "throw", StringComparison.Ordinal))
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                !string.Equals(Current.Text, "throw", StringComparison.Ordinal))
             {
-                var throwToken = NextToken();
-                // A throw-expression's argument is parsed like any other primary expression
-                // (ternaries can nest arbitrarily inside). Stop before the `:` so the parent
-                // ternary still gets its colon.
-                ArgumentSyntax? value = null;
-                if (!IsTernaryColonToken(Current) && Current.Kind != SyntaxTokenKind.CloseParen &&
-                    Current.Kind != SyntaxTokenKind.CloseBrace && Current.Kind != SyntaxTokenKind.CloseBracket &&
-                    Current.Kind != SyntaxTokenKind.ColonCloseBrace &&
-                    Current.Kind != SyntaxTokenKind.PipeCloseBrace &&
-                    Current.Kind != SyntaxTokenKind.PercentCloseBrace &&
-                    Current.Kind != SyntaxTokenKind.Semicolon && Current.Kind != SyntaxTokenKind.EndOfFile &&
-                    Current.Kind != SyntaxTokenKind.Pipe)
-                {
-                    value = ParseTernaryExpression(throwToken.Span.End, implicitCurrentItem);
-                }
-                var end = value?.Span.End ?? throwToken.Span.End;
-                return new ThrowArgumentSyntax(value, TextSpan.FromBounds(startPosition, end));
+                return null;
             }
 
-            return ParseTernaryExpression(startPosition, implicitCurrentItem);
+            var throwToken = NextToken();
+            // A throw-expression's argument is parsed like any other primary expression
+            // (ternaries can nest arbitrarily inside). Stop before the `:` so the parent
+            // ternary still gets its colon.
+            ArgumentSyntax? value = null;
+            if (!IsTernaryColonToken(Current) && Current.Kind != SyntaxTokenKind.CloseParen &&
+                Current.Kind != SyntaxTokenKind.CloseBrace && Current.Kind != SyntaxTokenKind.CloseBracket &&
+                Current.Kind != SyntaxTokenKind.ColonCloseBrace &&
+                Current.Kind != SyntaxTokenKind.PipeCloseBrace &&
+                Current.Kind != SyntaxTokenKind.PercentCloseBrace &&
+                Current.Kind != SyntaxTokenKind.Semicolon && Current.Kind != SyntaxTokenKind.EndOfFile &&
+                Current.Kind != SyntaxTokenKind.Pipe)
+            {
+                value = ParseTernaryExpression(throwToken.Span.End, implicitCurrentItem);
+            }
+            var end = value?.Span.End ?? throwToken.Span.End;
+            return new ThrowArgumentSyntax(value, TextSpan.FromBounds(startPosition, end));
         }
+
+        // A ternary branch accepts either a normal expression or a `throw <expr>`.
+        private ArgumentSyntax? ParseTernaryBranch(int startPosition, bool implicitCurrentItem)
+            => TryParseThrowExpression(startPosition, implicitCurrentItem)
+               ?? ParseTernaryExpression(startPosition, implicitCurrentItem);
 
         /// <summary>
         /// If <c>_tokens[startIndex]</c> is a bareword adjacent (no

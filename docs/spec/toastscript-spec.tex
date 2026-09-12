@@ -3750,7 +3750,7 @@ explicit block:
 
 \begin{lstlisting}
 func emit-codes(events) {
-    for $e in $events {
+    for e in $events {
         match ($e.kind) {
             "ack" => yield $e
             "fatal" => throw $e.message
@@ -5142,6 +5142,7 @@ failure goes undetected. Whether that happens depends on what the callee left in
 the upper half of the return register, so it varies by library. State the width
 when the C function does not return \code{ssize\_t}:
 
+% spec-check: fragment --- signature lines excerpted from a bind native block
 \begin{lstlisting}
 func read(fd: int, buf: ptr, n: long) -> count        # ssize_t
 func open(path: cstring, flags: int)  -> int count    # int32_t, -1 detected
@@ -5376,6 +5377,7 @@ Utilities.banner("Report")
 
 Modules can contain nested types:
 
+% spec-check: fragment --- the `{ ... }` bodies are elided for the example
 \begin{lstlisting}
 module Inventory {
     enum StockState { Healthy, Low, Out }
@@ -5554,6 +5556,7 @@ The innermost module owns the body; the wrappers around it are implicitly
 
 A module declared with \emph{no body} takes the rest of the file:
 
+% spec-check: fragment --- the `{ ... }` bodies are elided for the example
 \begin{lstlisting}
 # geometry.tosh
 using System.Math
@@ -8442,6 +8445,7 @@ read-lines /var/log/app.log
 arrive ready to compare rather than as text.  Inference is deliberately
 narrow---integers, decimals, and \code{true}/\code{false}:
 
+% spec-check: fragment --- CSV input data, not ToastScript
 \begin{lstlisting}
 Id,Name,Amount,Ratio,Active
 001,Alice,150,2.5,true

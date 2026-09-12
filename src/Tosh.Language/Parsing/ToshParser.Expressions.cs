@@ -852,7 +852,12 @@ public static partial class ToshParser
             while (Current.Kind == SyntaxTokenKind.QuestionQuestion)
             {
                 var operatorToken = NextToken();
-                var right = ParseLogicalOrExpression(startPosition, implicitCurrentItem);
+                // `$value ?? throw "…"` is the second place a throw-expression belongs
+                // and the specification documents it beside the ternary — but only the
+                // ternary parsed one, so the right operand fell through to the command
+                // parser and `throw` was read as a command name.
+                var right = (ArgumentSyntax?)TryParseThrowExpression(operatorToken.Span.End, implicitCurrentItem)
+                            ?? ParseLogicalOrExpression(startPosition, implicitCurrentItem);
                 var end = right?.Span.End ?? operatorToken.Span.End;
 
                 left = new OperatorArgumentSyntax(

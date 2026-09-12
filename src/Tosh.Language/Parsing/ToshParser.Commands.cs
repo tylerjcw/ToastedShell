@@ -1178,13 +1178,34 @@ public static partial class ToshParser
         /// argument — belongs to the enclosing command, not to the body
         /// (<c>TS-P2-26</c>).
         /// </param>
+        /// <summary>
+        /// Whether a line break separates the current token from the one before it.
+        /// The narrow half of <see cref="CurrentBeginsLineAsWordOperator"/>, which
+        /// also requires a bareword and weighs bracket depth.
+        /// </summary>
+        private bool CurrentFollowsALineBreak()
+        {
+            if (_position <= 0)
+            {
+                return false;
+            }
+
+            var previous = _tokens[_position - 1];
+            var gapStart = Math.Min(previous.Span.End, _sourceText.Length);
+            var gapEnd = Math.Min(Current.Span.Start, _sourceText.Length);
+
+            return gapEnd > gapStart &&
+                   _sourceText.AsSpan(gapStart, gapEnd - gapStart).IndexOf('\n') >= 0;
+        }
+
         private PipelineSyntax ParsePipeline(
             bool untilCloseParen,
             bool untilCloseBrace,
             bool untilSemicolon,
             bool allowExpressionStart,
             bool untilOpenBrace = false,
-            bool singleExpressionBody = false)
+            bool singleExpressionBody = false,
+            bool untilFieldBoundary = false)
         {
             var stages = new List<PipelineStageSyntax>();
             List<RedirectionSyntax>? redirections = null;
@@ -1384,6 +1405,19 @@ public static partial class ToshParser
                         ? PendingPipelineSeparator.PipeForward
                         : PendingPipelineSeparator.Pipe;
                     continue;
+                }
+
+                // A pipeline the caller says is one field's value in a brace-
+                // delimited field list, so it ends where the next field begins: at
+                // a line break, or at a comma that is not inside a literal — the
+                // argument parser has already consumed those with their brackets.
+                //
+                // Placed after the `|` branch above, so a continuation written with
+                // a leading pipe still joins this pipeline rather than ending it.
+                if (untilFieldBoundary && stage is not null &&
+                    (Current.Kind == SyntaxTokenKind.Comma || CurrentFollowsALineBreak()))
+                {
+                    break;
                 }
 
                 if (stage is not null && IsAtElementBoundary())
