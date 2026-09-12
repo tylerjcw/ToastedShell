@@ -258,6 +258,39 @@ public sealed class EditorSurfaceParityTests
     }
 
     /// <summary>
+    /// The contexts `tosh.lang` gained when it was first measured against the
+    /// same corpus the VS Code grammar is measured against. It is hand-written,
+    /// so nothing regenerates these back; a rule removed here is removed for
+    /// good, and the coverage it bought goes with it.
+    /// </summary>
+    [Theory]
+    // A type is not always behind a `:` or `->`: it follows `new`, `cast`, `is` and `as` too.
+    [InlineData("type-position")]
+    // `ToastLib.Tests.CheckNear $r` — the qualifier and the command are different things.
+    [InlineData("qualified-command")]
+    // The segments of a dotted name, which were scoped by nothing at all.
+    [InlineData("qualified-segment")]
+    // The name in front of a `:` — every typed parameter and every record key.
+    [InlineData("parameter-name")]
+    // The name in front of a lone `=`.
+    [InlineData("collection-key")]
+    // `catch (e)` binds a variable no other rule can claim.
+    [InlineData("catch-binding")]
+    // `require ./Graphics/Sdl.tosh` takes an unquoted path.
+    [InlineData("bare-require-path")]
+    public void The_gtksourceview_grammar_has_its_structural_contexts(string contextId)
+    {
+        var grammar = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/gtksourceview/tosh.lang"));
+
+        Assert.Contains($"<context id=\"{contextId}\"", grammar, StringComparison.Ordinal);
+
+        // Defining it and forgetting to include it is the failure that looks
+        // exactly like never having written it.
+        Assert.Contains($"<context ref=\"{contextId}\"/>", grammar, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// `not-keyword` is written out of the keyword and modifier lists that sit
     /// below it in the same file, so it can drift from them silently — and a
     /// missing word there means that word gets styled as a command call wherever

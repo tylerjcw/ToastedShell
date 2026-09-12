@@ -189,6 +189,61 @@
       </include>
     </context>
 
+    <!-- The name on the left of a `:` — a parameter that declares its type, and
+         a record or dict key, which have the same shape. `type-annotation`
+         beside this styles what is on the *right* of the colon and left every
+         name in front of one uncoloured: in a `bind native` block, the whole
+         signature was types and punctuation with the parameter names bare.
+
+         The lookahead declines `::`, which is the static-path operator, and
+         `:=`. Untyped parameters are not reached — `func f(other)` has no colon
+         to key on, and telling that from a call needs a signature region rather
+         than a wider regex, which is deliberately left for that work. -->
+    <!-- `catch (e)` binds a variable. `parameter-name` cannot claim it — there
+         is no colon — and the general identifier rules do not reach inside the
+         parentheses, so every error handler had its binding uncoloured. -->
+    <!-- `require ./Graphics/Sdl.tosh` takes an unquoted path. It is a literal
+         in every sense the quoted form is, and the `.tosh` at the end of it was
+         the largest unscoped token left in the corpus. -->
+    <context id="bare-require-path">
+      <match>(?&lt;=\brequire )([.~/][^\s&quot;&apos;]*)</match>
+      <include>
+        <context sub-pattern="1" style-ref="string"/>
+      </include>
+    </context>
+
+    <context id="catch-binding">
+      <match>\b(catch)\s*(\()\s*(\%{identifier})\s*(\))</match>
+      <include>
+        <context sub-pattern="1" style-ref="keyword"/>
+        <context sub-pattern="2" style-ref="punctuation"/>
+        <context sub-pattern="3" style-ref="variable"/>
+        <context sub-pattern="4" style-ref="punctuation"/>
+      </include>
+    </context>
+
+    <!-- A record, dict or named-argument key: the name on the left of a single
+         `=`. Until the `{|` guard above, the first key in a literal was styled
+         as a command call, which is how three keys of one kind ended up three
+         colours; now they are all keys.
+
+         A bare name cannot be assigned to in TōSh — an assignment target needs
+         its `$`, and the `variable` context claims that earlier — so an
+         identifier in front of a lone `=` is a key or a named argument. -->
+    <context id="collection-key">
+      <match>\b(\%{identifier})\s*(?==(?!=))</match>
+      <include>
+        <context sub-pattern="1" style-ref="variable"/>
+      </include>
+    </context>
+
+    <context id="parameter-name">
+      <match>\b(\%{identifier})\s*(?=:(?![:=]))</match>
+      <include>
+        <context sub-pattern="1" style-ref="variable"/>
+      </include>
+    </context>
+
     <context id="type-annotation">
       <match>(:|-&gt;)\s*(\%{type-name})</match>
       <include>
@@ -505,6 +560,26 @@
       </include>
     </context>
 
+    <!-- The places a bare type name appears without a `:` or `->` in front of
+         it, which is all `type-annotation` knew: after `new`, after a `cast`,
+         and on the right of `is` and `as`. `%{type-name}` already spans dots
+         and angle brackets, so `new list&lt;ToastLib.Math.Point2D&lt;double&gt;&gt;()`
+         is one name rather than five unscoped pieces.
+
+         A lookbehind rather than a capture, so `new` keeps the keyword colour
+         and `cast` keeps the builtin one instead of both being restyled here.
+         Each alternative is a fixed width, which is what a lookbehind requires.
+
+         Included before `qualified-segment`: both start at the same character
+         for a dotted name, and GtkSourceView breaks that tie by include order.
+    -->
+    <context id="type-position">
+      <match>(?&lt;=\bnew |\bis |\bas |\bcast )(\%{type-name})</match>
+      <include>
+        <context sub-pattern="1" style-ref="type"/>
+      </include>
+    </context>
+
     <!-- A command reached through a dotted path: `ToastLib.Tests.CheckNear $r`.
          The qualifier is a namespace and the final name is the command, so the
          two are styled differently.
@@ -515,7 +590,7 @@
          leave the command it qualifies unstyled — which is what happened to
          every call in the test suite. -->
     <context id="qualified-command">
-      <match>(?:^|(?&lt;=[\|;\{\(]))\s*\%{not-keyword}((?:\%{identifier}\.)+)(\%{command-name})(?=\s|$|\()</match>
+      <match>(?:^|(?&lt;=[\|;\{\(])(?&lt;!\{\|))\s*\%{not-keyword}((?:\%{identifier}\.)+)(\%{command-name})(?=\s|$|\()</match>
       <include>
         <context sub-pattern="1" style-ref="type"/>
         <context sub-pattern="2" style-ref="function"/>
@@ -563,7 +638,7 @@
            matched nothing and was styled as nothing. Builtins hid the bug:
            their context is a keyword list that matches anywhere, so `writeline`
            looked right while `CheckNear` beside it did not. -->
-      <match>(?:^|(?&lt;=[\|;\{\(]))\s*\%{not-keyword}(\%{command-name})(?=\s|$|\()</match>
+      <match>(?:^|(?&lt;=[\|;\{\(])(?&lt;!\{\|))\s*\%{not-keyword}(\%{command-name})(?=\s|$|\()</match>
       <include>
         <context sub-pattern="1" style-ref="function"/>
       </include>
@@ -585,6 +660,10 @@
         <context ref="subcommand-definition"/>
         <context ref="type-definition"/>
         <context ref="variable-declaration"/>
+        <context ref="bare-require-path"/>
+        <context ref="catch-binding"/>
+        <context ref="collection-key"/>
+        <context ref="parameter-name"/>
         <context ref="type-annotation"/>
         <context ref="variable"/>
         <context ref="pipeline-variable"/>
@@ -592,6 +671,7 @@
         <context ref="unit-conversion-target"/>
         <context ref="static-path"/>
         <context ref="static-path-segment"/>
+        <context ref="type-position"/>
         <context ref="qualified-command"/>
         <context ref="qualified-segment"/>
         <context ref="modifiers"/>
