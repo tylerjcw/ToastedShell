@@ -85,40 +85,11 @@ public sealed record StyledText(
             return Text;
         }
 
-        var codes = new List<string>();
+        var introducer = BuildSgrIntroducer(Foreground, Background, Bold, Italic, Underline, Dim);
 
-        if (Bold) codes.Add("1");
-        if (Dim) codes.Add("2");
-        if (Italic) codes.Add("3");
-        if (Underline) codes.Add("4");
-
-        if (Foreground is not null)
-        {
-            if (ForegroundCodes.TryGetValue(Foreground, out var fgCode))
-            {
-                codes.Add(fgCode);
-            }
-            else if (TryParseHexColor(Foreground, out var r, out var g, out var b))
-            {
-                codes.Add($"38;2;{r};{g};{b}");
-            }
-        }
-
-        if (Background is not null)
-        {
-            if (BackgroundCodes.TryGetValue(Background, out var bgCode))
-            {
-                codes.Add(bgCode);
-            }
-            else if (TryParseHexColor(Background, out var r, out var g, out var b))
-            {
-                codes.Add($"48;2;{r};{g};{b}");
-            }
-        }
-
-        var renderedText = codes.Count == 0
+        var renderedText = introducer.Length == 0
             ? Text
-            : $"\x1b[{string.Join(';', codes)}m{Text}\x1b[0m";
+            : $"{introducer}{Text}\x1b[0m";
 
         if (string.IsNullOrWhiteSpace(Link))
         {
@@ -126,6 +97,59 @@ public sealed record StyledText(
         }
 
         return $"\x1b]8;;{Link}\x1b\\{renderedText}\x1b]8;;\x1b\\";
+    }
+
+    /// <summary>
+    /// The SGR sequence that switches these attributes on, with no text and no reset.
+    /// </summary>
+    /// <remarks>
+    /// Split out of <see cref="ToAnsi"/> for the TUI's cell renderer, which emits styling
+    /// per run of cells rather than per string and so needs the introducer on its own.
+    /// Keeping one implementation keeps one colour table: the named-colour and hex
+    /// handling below is the only place either is understood.
+    /// </remarks>
+    public static string BuildSgrIntroducer(
+        string? foreground,
+        string? background,
+        bool bold = false,
+        bool italic = false,
+        bool underline = false,
+        bool dim = false,
+        bool reverse = false)
+    {
+        var codes = new List<string>();
+
+        if (bold) codes.Add("1");
+        if (dim) codes.Add("2");
+        if (italic) codes.Add("3");
+        if (underline) codes.Add("4");
+        if (reverse) codes.Add("7");
+
+        if (foreground is not null)
+        {
+            if (ForegroundCodes.TryGetValue(foreground, out var foregroundCode))
+            {
+                codes.Add(foregroundCode);
+            }
+            else if (TryParseHexColor(foreground, out var r, out var g, out var b))
+            {
+                codes.Add($"38;2;{r};{g};{b}");
+            }
+        }
+
+        if (background is not null)
+        {
+            if (BackgroundCodes.TryGetValue(background, out var backgroundCode))
+            {
+                codes.Add(backgroundCode);
+            }
+            else if (TryParseHexColor(background, out var r, out var g, out var b))
+            {
+                codes.Add($"48;2;{r};{g};{b}");
+            }
+        }
+
+        return codes.Count == 0 ? string.Empty : $"\x1b[{string.Join(';', codes)}m";
     }
 
     public static bool IsSupportedColor(string? value)
