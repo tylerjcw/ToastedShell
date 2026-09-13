@@ -51,6 +51,17 @@ public sealed class TuiWidgetRegistry
             // Read here rather than in each factory, because these belong to every widget.
             // A key a factory has to remember is a key half the widgets will not have.
             widget.Id = spec.Text("id");
+
+            // Set here as well as read by a parent stack, because `Size` is a property of
+            // the widget and a node that carries one means it wherever it sits. Read only
+            // by the parent, a size written on a root or on a box's only child was quietly
+            // ignored. A stack still overrides it, which is how a child with no opinion
+            // ends up sharing the leftovers.
+            if (spec.Has("size"))
+            {
+                widget.Size = spec.Length("size", TuiLength.Auto);
+            }
+
             widget.Padding = spec.Thickness("padding");
             widget.Align = spec.Alignment("align");
             widget.VerticalAlign = spec.VerticalAlignment("valign");

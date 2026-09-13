@@ -144,6 +144,30 @@ public sealed class TuiTreeBuilderTests
         Assert.Equal(["made in code", "declared"], Render(widget, 12, 2));
     }
 
+    /// <summary>
+    /// The key that names the widget need not be the first one written.
+    /// </summary>
+    /// <remarks>
+    /// A nested tree reads better with the properties above the children — the title and
+    /// the size of a pane before the pane's contents, rather than after a block of them.
+    /// The builder looks for the first key it *recognises*, not the first key, and this is
+    /// what keeps that true.
+    /// </remarks>
+    [Fact]
+    public void The_widget_key_can_come_after_the_properties()
+    {
+        var widget = TuiTreeBuilder.Build(Node(
+            ("Title", "Inputs"),
+            ("Size", "2*"),
+            ("Box", new object?[] { Node(("Text", "inside")) })));
+
+        var border = Assert.IsType<TuiBorder>(widget);
+
+        Assert.Equal("Inputs", border.Title);
+        Assert.Equal(TuiLength.Star(2), border.Size);
+        Assert.Equal(["╭ Inputs ─╮", "│inside   │", "╰─────────╯"], Render(border, 11, 3));
+    }
+
     [Fact]
     public void A_node_naming_nothing_says_what_it_could_have_named()
     {
