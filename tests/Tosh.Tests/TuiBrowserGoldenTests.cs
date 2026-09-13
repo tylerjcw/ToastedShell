@@ -4,6 +4,7 @@ using Tosh.Cli.Tui;
 using Tosh.Runtime;
 using Tosh.Tui.Requests;
 using Tosh.Tui;
+using Tosh.Tui.Rendering;
 
 namespace Tosh.Tests;
 
@@ -133,7 +134,7 @@ public sealed class TuiBrowserGoldenTests : IDisposable
 
         if (captureAfter == 0)
         {
-            sb.Append("─── initial ───\n").Append(Normalize(screen.Render(Size).Content)).Append('\n');
+            sb.Append("─── initial ───\n").Append(Normalize(Paint(screen))).Append('\n');
         }
 
         foreach (var (label, input) in script)
@@ -146,7 +147,7 @@ public sealed class TuiBrowserGoldenTests : IDisposable
 
             var result = screen.HandleInput(input);
             sb.Append($"─── after {label} → {result} ───\n");
-            sb.Append(Normalize(screen.Render(Size).Content)).Append('\n');
+            sb.Append(Normalize(Paint(screen))).Append('\n');
             if (result == TuiScreenResult.Exit) break;
         }
 
@@ -222,10 +223,49 @@ public sealed class TuiBrowserGoldenTests : IDisposable
             line => line.Length > detailColumn ? line[detailColumn..].TrimEnd() : line.TrimEnd()));
     }
 
+    /// <summary>
+    /// A frame as text, whichever form the screen produced it in.
+    /// </summary>
+    /// <remarks>
+    /// A screen that has moved onto widgets answers with a grid of cells and an empty
+    /// <c>Content</c>; one that has not answers with a string it built itself. Painting
+    /// the grid in full — no diff against a previous frame — is what makes the two
+    /// comparable at all, and is what the terminal does for the first frame anyway.
+    /// </remarks>
+    private static string Paint(ITuiScreen screen)
+    {
+        var frame = screen.Render(Size);
+
+        return frame.Buffer is { } buffer ? TuiTerminalWriter.Present(buffer) : frame.Content;
+    }
+
+    /// <summary>
+    /// The same frame with every escape sequence removed: what the reader actually sees.
+    /// </summary>
+    /// <remarks>
+    /// Recorded beside the styled snapshot because the two answer different questions. The
+    /// styled one catches a colour that moved; this one catches a character that moved, and
+    /// it survives a change in <em>how</em> the escape codes are emitted — which is exactly
+    /// what porting a screen from string building to cell painting changes. Without it, a
+    /// port has to re-record everything and the net is spent on the one change it was
+    /// recorded to watch.
+    /// </remarks>
+    private static string Plain(string painted)
+        => string.Join('\n', Regex
+            .Replace(painted, @"\x1b\[[0-9;?]*[a-zA-Z]", string.Empty)
+            .Split('\n')
+            .Select(line => line.TrimEnd()));
+
     private void Verify(string name, string actual)
     {
+        VerifyAgainst(Path.Combine("Snapshots", "plain"), name, Plain(actual));
+        VerifyAgainst("Snapshots", name, actual);
+    }
+
+    private void VerifyAgainst(string folder, string name, string actual)
+    {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
-        var directory = Path.Combine(root, "tests", "Tosh.Tests", "Snapshots");
+        var directory = Path.Combine(root, "tests", "Tosh.Tests", folder);
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, name + ".txt");
 
@@ -245,7 +285,7 @@ public sealed class TuiBrowserGoldenTests : IDisposable
         while (at < e.Length && at < a.Length && e[at] == a[at]) at++;
 
         Assert.Fail(
-            $"{name} rendered differently at line {at + 1}.\n"
+            $"{name} rendered differently at line {at + 1} ({folder}).\n"
             + $"  expected: {Escape(at < e.Length ? e[at] : "<end of frame>")}\n"
             + $"  actual:   {Escape(at < a.Length ? a[at] : "<end of frame>")}\n"
             + $"Snapshot: {path}\n"

@@ -1,0 +1,390 @@
+─── initial ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Shell              │ │Section                                                                      │
+│    apropos                           │ │                                                                             │
+│    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
+│    config                            │ │                                                                             │
+│    debug                             │ │                                                                             │
+│    edit                              │ │                                                                             │
+│    eval                              │ │                                                                             │
+│    events                            │ │                                                                             │
+│    exec                              │ │                                                                             │
+│    exit                              │ │                                                                             │
+│    help                              │ │                                                                             │
+│    history                           │ │                                                                             │
+│    history-search                    │ │                                                                             │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │                                                                             │
+│    source                            │ │                                                                             │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+│  ▾ ToastedShell / Shell              │ │Select a topic to view its full help page.                                   │
+│›   apropos                           │ │                                                                             │
+│    clear                             │ │                                                                             │
+│    config                            │ │                                                                             │
+│    debug                             │ │                                                                             │
+│    edit                              │ │                                                                             │
+│    eval                              │ │                                                                             │
+│    events                            │ │                                                                             │
+│    exec                              │ │                                                                             │
+│    exit                              │ │                                                                             │
+│    help                              │ │                                                                             │
+│    history                           │ │                                                                             │
+│    history-search                    │ │                                                                             │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │                                                                             │
+│    source                            │ │                                                                             │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+│  ▾ ToastedShell / Shell              │ │Select a topic to view its full help page.                                   │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │                                                                             │
+│    config                            │ │                                                                             │
+│    debug                             │ │                                                                             │
+│    edit                              │ │                                                                             │
+│    eval                              │ │                                                                             │
+│    events                            │ │                                                                             │
+│    exec                              │ │                                                                             │
+│    exit                              │ │                                                                             │
+│    help                              │ │                                                                             │
+│    history                           │ │                                                                             │
+│    history-search                    │ │                                                                             │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │                                                                             │
+│    source                            │ │                                                                             │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after right, opening the entry → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after down in the detail pane → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after tab → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*:                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after end → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*:                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after home → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*:                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after page down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*:                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after shift+tab → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+│  ▾ Shell                             │ │BuiltIn • Shell                                                              │
+│    apropos                           │ │                                                                             │
+│›   clear                             │ │Clears the terminal display.                                                 │
+│    config                            │ │                                                                             │
+│    debug                             │ │Usage                                                                        │
+│    edit                              │ │  clear                                                                      │
+│    eval                              │ │                                                                             │
+│    events                            │ │Output                                                                       │
+│    exec                              │ │  Emits nothing; clears the terminal display as a side effect.               │
+│    exit                              │ │                                                                             │
+│    help                              │ │Examples                                                                     │
+│    history                           │ │  Clear the terminal                                                         │
+│    history-search                    │ │    clear                                                                    │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │Related                                                                      │
+│    source                            │ │  [1] history                                                                │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ Filesystem                        │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit

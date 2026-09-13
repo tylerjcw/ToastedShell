@@ -1,0 +1,360 @@
+─── initial ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │Status: default                                                              │
+│  ▸ Paging                            │ │                                                                             │
+│  ▸ Profiles                          │ │Current Value                                                                │
+│▾ Repl                                │ │true                                                                         │
+│  • Continuation Prompt               │ │                                                                             │
+│  • Syntax Highlighting Enabled       │ │Default Value                                                                │
+│  • Ghost Text Enabled                │ │true                                                                         │
+│  • Completion Max Visible            │ │                                                                             │
+│  • Shift Enter Executes              │ │Control                                                                      │
+│  • Continuation Gutter Right Border  │ │[x] enabled                                                                  │
+│  • Continuation Line Numbers         │ │                                                                             │
+│▾ Prompt                              │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Time Enabled                      │ │or Shift+R to stage the default value.                                       │
+│  • Header Left Layout                │ │                                                                             │
+│  • Header Right Layout               │ │                                                                             │
+│  • Prompt Left Layout                │ │                                                                             │
+│  • Time Format                       │ │                                                                             │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │                                                                             │
+│  • Directory Color                   │ │                                                                             │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+─── after space, toggling the boolean → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │Staged Changes: 1                                                            │
+│  ▸ Paging                            │ │                                                                             │
+│  ▸ Profiles                          │ │Status Message                                                               │
+│▾ Repl *                              │ │Staged Syntax Highlighting Enabled = false.                                  │
+│  • Continuation Prompt               │ │Status: default  Pending: yes                                                │
+│  • Syntax Highlighting Enabled *     │ │                                                                             │
+│  • Ghost Text Enabled                │ │Staged Value                                                                 │
+│  • Completion Max Visible            │ │false                                                                        │
+│  • Shift Enter Executes              │ │                                                                             │
+│  • Continuation Gutter Right Border  │ │Current Value                                                                │
+│  • Continuation Line Numbers         │ │true                                                                         │
+│▾ Prompt                              │ │                                                                             │
+│  • Time Enabled                      │ │Default Value                                                                │
+│  • Header Left Layout                │ │true                                                                         │
+│  • Header Right Layout               │ │                                                                             │
+│  • Prompt Left Layout                │ │Control                                                                      │
+│  • Time Format                       │ │[ ] enabled                                                                  │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Directory Color                   │ │or Shift+R to stage the default value.                                       │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after space, toggling it back → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │                                                                             │
+│  ▸ Paging                            │ │Status Message                                                               │
+│  ▸ Profiles                          │ │Staged Syntax Highlighting Enabled = true.                                   │
+│▾ Repl                                │ │Status: default                                                              │
+│  • Continuation Prompt               │ │                                                                             │
+│  • Syntax Highlighting Enabled       │ │Current Value                                                                │
+│  • Ghost Text Enabled                │ │true                                                                         │
+│  • Completion Max Visible            │ │                                                                             │
+│  • Shift Enter Executes              │ │Default Value                                                                │
+│  • Continuation Gutter Right Border  │ │true                                                                         │
+│  • Continuation Line Numbers         │ │                                                                             │
+│▾ Prompt                              │ │Control                                                                      │
+│  • Time Enabled                      │ │[x] enabled                                                                  │
+│  • Header Left Layout                │ │                                                                             │
+│  • Header Right Layout               │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Prompt Left Layout                │ │or Shift+R to stage the default value.                                       │
+│  • Time Format                       │ │                                                                             │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │                                                                             │
+│  • Directory Color                   │ │                                                                             │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after down to the next leaf → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │                                                                             │
+│  ▸ Paging                            │ │Status Message                                                               │
+│  ▸ Profiles                          │ │Staged Syntax Highlighting Enabled = true.                                   │
+│▾ Repl                                │ │Status: default                                                              │
+│  • Continuation Prompt               │ │                                                                             │
+│  • Syntax Highlighting Enabled       │ │Current Value                                                                │
+│  • Ghost Text Enabled                │ │true                                                                         │
+│  • Completion Max Visible            │ │                                                                             │
+│  • Shift Enter Executes              │ │Default Value                                                                │
+│  • Continuation Gutter Right Border  │ │true                                                                         │
+│  • Continuation Line Numbers         │ │                                                                             │
+│▾ Prompt                              │ │Control                                                                      │
+│  • Time Enabled                      │ │[x] enabled                                                                  │
+│  • Header Left Layout                │ │                                                                             │
+│  • Header Right Layout               │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Prompt Left Layout                │ │or Shift+R to stage the default value.                                       │
+│  • Time Format                       │ │                                                                             │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │                                                                             │
+│  • Directory Color                   │ │                                                                             │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after e, opening the editor → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │Staged Changes: 1                                                            │
+│  ▸ Paging                            │ │                                                                             │
+│  ▸ Profiles                          │ │Status Message                                                               │
+│▾ Repl *                              │ │Staged Syntax Highlighting Enabled = false.                                  │
+│  • Continuation Prompt               │ │Status: default  Pending: yes                                                │
+│  • Syntax Highlighting Enabled *     │ │                                                                             │
+│  • Ghost Text Enabled                │ │Staged Value                                                                 │
+│  • Completion Max Visible            │ │false                                                                        │
+│  • Shift Enter Executes              │ │                                                                             │
+│  • Continuation Gutter Right Border  │ │Current Value                                                                │
+│  • Continuation Line Numbers         │ │true                                                                         │
+│▾ Prompt                              │ │                                                                             │
+│  • Time Enabled                      │ │Default Value                                                                │
+│  • Header Left Layout                │ │true                                                                         │
+│  • Header Right Layout               │ │                                                                             │
+│  • Prompt Left Layout                │ │Control                                                                      │
+│  • Time Format                       │ │[ ] enabled                                                                  │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Directory Color                   │ │or Shift+R to stage the default value.                                       │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after escape, cancelling the edit → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │Staged Changes: 1                                                            │
+│  ▸ Paging                            │ │                                                                             │
+│  ▸ Profiles                          │ │Status Message                                                               │
+│▾ Repl *                              │ │Staged Syntax Highlighting Enabled = false.                                  │
+│  • Continuation Prompt               │ │Status: default  Pending: yes                                                │
+│  • Syntax Highlighting Enabled *     │ │                                                                             │
+│  • Ghost Text Enabled                │ │Staged Value                                                                 │
+│  • Completion Max Visible            │ │false                                                                        │
+│  • Shift Enter Executes              │ │                                                                             │
+│  • Continuation Gutter Right Border  │ │Current Value                                                                │
+│  • Continuation Line Numbers         │ │true                                                                         │
+│▾ Prompt                              │ │                                                                             │
+│  • Time Enabled                      │ │Default Value                                                                │
+│  • Header Left Layout                │ │true                                                                         │
+│  • Header Right Layout               │ │                                                                             │
+│  • Prompt Left Layout                │ │Control                                                                      │
+│  • Time Format                       │ │[ ] enabled                                                                  │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Directory Color                   │ │or Shift+R to stage the default value.                                       │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after t, opening the raw editor → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │Staged Changes: 1                                                            │
+│  ▸ Paging                            │ │                                                                             │
+│  ▸ Profiles                          │ │Status Message                                                               │
+│▾ Repl *                              │ │Staged Syntax Highlighting Enabled = false.                                  │
+│  • Continuation Prompt               │ │Status: default  Pending: yes                                                │
+│  • Syntax Highlighting Enabled *     │ │                                                                             │
+│  • Ghost Text Enabled                │ │Staged Value                                                                 │
+│  • Completion Max Visible            │ │false                                                                        │
+│  • Shift Enter Executes              │ │                                                                             │
+│  • Continuation Gutter Right Border  │ │Current Value                                                                │
+│  • Continuation Line Numbers         │ │true                                                                         │
+│▾ Prompt                              │ │                                                                             │
+│  • Time Enabled                      │ │Default Value                                                                │
+│  • Header Left Layout                │ │true                                                                         │
+│  • Header Right Layout               │ │                                                                             │
+│  • Prompt Left Layout                │ │Control                                                                      │
+│  • Time Format                       │ │[ ] enabled                                                                  │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Directory Color                   │ │or Shift+R to stage the default value.                                       │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after escape, cancelling the raw edit → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │Staged Changes: 1                                                            │
+│  ▸ Paging                            │ │                                                                             │
+│  ▸ Profiles                          │ │Status Message                                                               │
+│▾ Repl *                              │ │Staged Syntax Highlighting Enabled = false.                                  │
+│  • Continuation Prompt               │ │Status: default  Pending: yes                                                │
+│  • Syntax Highlighting Enabled *     │ │                                                                             │
+│  • Ghost Text Enabled                │ │Staged Value                                                                 │
+│  • Completion Max Visible            │ │false                                                                        │
+│  • Shift Enter Executes              │ │                                                                             │
+│  • Continuation Gutter Right Border  │ │Current Value                                                                │
+│  • Continuation Line Numbers         │ │true                                                                         │
+│▾ Prompt                              │ │                                                                             │
+│  • Time Enabled                      │ │Default Value                                                                │
+│  • Header Left Layout                │ │true                                                                         │
+│  • Header Right Layout               │ │                                                                             │
+│  • Prompt Left Layout                │ │Control                                                                      │
+│  • Time Format                       │ │[ ] enabled                                                                  │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Directory Color                   │ │or Shift+R to stage the default value.                                       │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+─── after r, reverting the node → Continue ───
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ───────────────────────╮ ╭ Syntax Highlighting Enabled ────────────────────────────────────────────────╮
+│  ▸ Date Time Offset                  │ │Config Value                                                                 │
+│  ▸ Date Only                         │ │                                                                             │
+│  ▸ Time Only                         │ │Path: $tosh.Config.Repl.SyntaxHighlightingEnabled                            │
+│  ▸ Time Span                         │ │Type: Boolean                                                                │
+│  ▸ Storage Size                      │ │Kind: Boolean                                                                │
+│  ▸ Permissions                       │ │Nullable: no  Editable: yes  Resettable: no                                  │
+│  ▸ File Attributes                   │ │                                                                             │
+│  ▸ Paging                            │ │Status Message                                                               │
+│  ▸ Profiles                          │ │Reverted 1 staged change.                                                    │
+│▾ Repl                                │ │Status: default                                                              │
+│  • Continuation Prompt               │ │                                                                             │
+│  • Syntax Highlighting Enabled       │ │Current Value                                                                │
+│  • Ghost Text Enabled                │ │true                                                                         │
+│  • Completion Max Visible            │ │                                                                             │
+│  • Shift Enter Executes              │ │Default Value                                                                │
+│  • Continuation Gutter Right Border  │ │true                                                                         │
+│  • Continuation Line Numbers         │ │                                                                             │
+│▾ Prompt                              │ │Control                                                                      │
+│  • Time Enabled                      │ │[x] enabled                                                                  │
+│  • Header Left Layout                │ │                                                                             │
+│  • Header Right Layout               │ │Press Space to toggle this value, a to apply it, r to drop the staged change,│
+│  • Prompt Left Layout                │ │or Shift+R to stage the default value.                                       │
+│  • Time Format                       │ │                                                                             │
+│  • Time Color                        │ │                                                                             │
+│  • Time Bold                         │ │                                                                             │
+│  • Directory Color                   │ │                                                                             │
+│  • Directory Bold                    │ │                                                                             │
+│  • Directory Depth                   │ │                                                                             │
+│  • Git Enabled                       │ │                                                                             │
+│  • Git Foreground                    │ │                                                                             │
+│  • Git Bold                          │ │                                                                             │
+│  • User Host Enabled                 │ │                                                                             │
+│  • User Host Color                   │ │                                                                             │
+│  • User Host Bold                    │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …

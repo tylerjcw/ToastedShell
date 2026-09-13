@@ -1,0 +1,351 @@
+─── initial ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search:                                                                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Shell              │ │Section                                                                      │
+│    apropos                           │ │                                                                             │
+│    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
+│    config                            │ │                                                                             │
+│    debug                             │ │                                                                             │
+│    edit                              │ │                                                                             │
+│    eval                              │ │                                                                             │
+│    events                            │ │                                                                             │
+│    exec                              │ │                                                                             │
+│    exit                              │ │                                                                             │
+│    help                              │ │                                                                             │
+│    history                           │ │                                                                             │
+│    history-search                    │ │                                                                             │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │                                                                             │
+│    source                            │ │                                                                             │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after / opens search → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*:                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Shell              │ │Section                                                                      │
+│    apropos                           │ │                                                                             │
+│    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
+│    config                            │ │                                                                             │
+│    debug                             │ │                                                                             │
+│    edit                              │ │                                                                             │
+│    eval                              │ │                                                                             │
+│    events                            │ │                                                                             │
+│    exec                              │ │                                                                             │
+│    exit                              │ │                                                                             │
+│    help                              │ │                                                                             │
+│    history                           │ │                                                                             │
+│    history-search                    │ │                                                                             │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │                                                                             │
+│    source                            │ │                                                                             │
+│    time                              │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│    which                             │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    close                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after type 'p' → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*: p                                                                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Shell              │ │Section                                                                      │
+│    apropos                           │ │                                                                             │
+│    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
+│    config                            │ │                                                                             │
+│    debug                             │ │                                                                             │
+│    edit                              │ │                                                                             │
+│    eval                              │ │                                                                             │
+│    events                            │ │                                                                             │
+│    exec                              │ │                                                                             │
+│    help                              │ │                                                                             │
+│    history                           │ │                                                                             │
+│    hush                              │ │                                                                             │
+│    read-line                         │ │                                                                             │
+│    source                            │ │                                                                             │
+│    tui                               │ │                                                                             │
+│    ulimit                            │ │                                                                             │
+│    umask                             │ │                                                                             │
+│    view                              │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    append-file                       │ │                                                                             │
+│    back                              │ │                                                                             │
+│    basename                          │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    cd                                │ │                                                                             │
+│    chmod                             │ │                                                                             │
+│    chown                             │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+│    df                                │ │                                                                             │
+│    dirname                           │ │                                                                             │
+│    du                                │ │                                                                             │
+│    exists                            │ │                                                                             │
+│    find                              │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after type 'i' → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*: pi                                                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Shell              │ │Section                                                                      │
+│    apropos                           │ │                                                                             │
+│    help                              │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
+│    tui                               │ │                                                                             │
+│  ▾ ToastedShell / Filesystem         │ │                                                                             │
+│    cat                               │ │                                                                             │
+│    copy-to                           │ │                                                                             │
+│    cp                                │ │                                                                             │
+│    seek                              │ │                                                                             │
+│  ▾ ToastedShell / Text               │ │                                                                             │
+│    echo                              │ │                                                                             │
+│    template                          │ │                                                                             │
+│  ▾ ToastedShell / Process            │ │                                                                             │
+│    kill                              │ │                                                                             │
+│    lsfd                              │ │                                                                             │
+│    ps                                │ │                                                                             │
+│    signal                            │ │                                                                             │
+│  ▾ ToastedShell / Data               │ │                                                                             │
+│    complex                           │ │                                                                             │
+│    mat                               │ │                                                                             │
+│    vec                               │ │                                                                             │
+│  ▾ ToastedShell / Pipeline           │ │                                                                             │
+│    all                               │ │                                                                             │
+│    any                               │ │                                                                             │
+│    average                           │ │                                                                             │
+│    cartesian-product                 │ │                                                                             │
+│    chain                             │ │                                                                             │
+│    chunk                             │ │                                                                             │
+│    collect                           │ │                                                                             │
+│    combinations                      │ │                                                                             │
+│    count                             │ │                                                                             │
+│    dedup                             │ │                                                                             │
+│    describe                          │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after type 'n' → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*: pin                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Filesystem         │ │Section                                                                      │
+│    seek                              │ │                                                                             │
+│  ▾ ToastedShell / Network            │ │ToastedShell / Filesystem is currently expanded. Press Enter to toggle it.   │
+│    ping                              │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after type 'g' → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search*: ping                                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Filesystem         │ │Section                                                                      │
+│    seek                              │ │                                                                             │
+│  ▾ ToastedShell / Network            │ │ToastedShell / Filesystem is currently expanded. Press Enter to toggle it.   │
+│    ping                              │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after enter → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: ping                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
+│› ▾ ToastedShell / Filesystem         │ │Section                                                                      │
+│    seek                              │ │                                                                             │
+│  ▾ ToastedShell / Network            │ │ToastedShell / Filesystem is currently expanded. Press Enter to toggle it.   │
+│    ping                              │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: ping                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+│  ▾ ToastedShell / Filesystem         │ │Select a topic to view its full help page.                                   │
+│›   seek                              │ │                                                                             │
+│  ▾ ToastedShell / Network            │ │                                                                             │
+│    ping                              │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+│                                      │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after right, opening the entry → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: ping                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ seek [BuiltIn] ─────────────────────────────────────────────────────────────╮
+│  ▾ Filesystem                        │ │BuiltIn • Filesystem                                                         │
+│›   seek                              │ │                                                                             │
+│  ▾ Network                           │ │Moves an open managed file handle to a new position and returns the handle   │
+│    ping                              │ │for continued piping.                                                        │
+│                                      │ │                                                                             │
+│                                      │ │Usage                                                                        │
+│                                      │ │  seek [handle] <offset> [begin|current|end]                                 │
+│                                      │ │                                                                             │
+│                                      │ │Arguments                                                                    │
+│                                      │ │  handle (optional)                                                          │
+│                                      │ │    The managed file handle to reposition.                                   │
+│                                      │ │  offset : long                                                              │
+│                                      │ │    The byte offset to seek to or by.                                        │
+│                                      │ │  origin (optional)                                                          │
+│                                      │ │    The seek origin: begin, current, or end. Defaults to begin.              │
+│                                      │ │                                                                             │
+│                                      │ │Pipeline Input                                                               │
+│                                      │ │  object: yes  scalar: no  path-like: no  collection: no                     │
+│                                      │ │    Consumes a piped file handle when no explicit handle argument is         │
+│                                      │ │    supplied.                                                                │
+│                                      │ │                                                                             │
+│                                      │ │Output                                                                       │
+│                                      │ │  Moves the handle and returns it so you can continue piping into            │
+│                                      │ │    `read-from`, `read-line-from`, `read-to-end`, or `copy-to`.              │
+│                                      │ │                                                                             │
+│                                      │ │Examples                                                                     │
+│                                      │ │    seek $handle 0 begin                                                     │
+│                                      │ │    $handle | seek 128 current                                               │
+│                                      │ │                                                                             │
+│                                      │ │Notes                                                                        │
+│                                      │ │  These commands work with managed file handles returned by `open-file` or by│
+│                                      │ │    `FileSystemEntry` methods like `OpenText()` and `OpenRead()`. `seek`     │
+│                                      │ │    returns the handle so you can keep piping through the stream workflow,   │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit

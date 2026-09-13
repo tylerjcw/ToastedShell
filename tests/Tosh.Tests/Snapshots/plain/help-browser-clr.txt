@@ -1,0 +1,312 @@
+─── after down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Namespace: System ──────────────────────────────────────────────────────────╮
+│  ▾ Namespaces                        │ │CLR Namespace                                                                │
+│› ▾ System [306T/1N]                  │ │                                                                             │
+│    └▾ Text [36T/4N]                  │ │Path: CLR / .NET / System                                                    │
+│      ├▾ Encodings [0T/1N]            │ │Namespace: System                                                            │
+│      │ └▾ Web [8T/0N]                │ │Assembly Scope: merged tree across all discoverable CLR assemblies           │
+│        │   ├─ AllowedBmpCodePointsBit│ │Assemblies Contributing: 91                                                  │
+│        │   ├─ AsciiByteMap+<Buffer>e_│ │Direct Types: 306                                                            │
+│        │   ├─ HtmlEncoder            │ │Subtree Types: 4090                                                          │
+│        │   ├─ JavaScriptEncoder      │ │Child Namespaces: 22  Descendants: yes                                       │
+│        │   ├─ OptimizedInboxTextEncod│ │                                                                             │
+│        │   ├─ TextEncoder            │ │Press Enter to collapse or expand this namespace branch. Press RightArrow or │
+│        │   ├─ TextEncoderSettings    │ │Tab to move into the detail pane.                                            │
+│        │   └─ UrlEncoder             │ │                                                                             │
+│      ├▾ Json [20T/3N]                │ │Sample Types                                                                 │
+│      │ ├▾ Nodes [5T/0N]              │ │  System.Number+BigInteger+<_blocks>e__FixedBuffer                           │
+│        │ │ ├─ JsonArray              │ │  System.AccessViolationException                                            │
+│        │ │ ├─ JsonNode               │ │  System.Action                                                              │
+│        │ │ ├─ JsonNodeOptions        │ │  System.Action<T>                                                           │
+│        │ │ ├─ JsonObject             │ │  System.Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>                     │
+│        │ │ └─ JsonValue              │ │  System.Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>                │
+│      │ ├▾ Schema [3T/0N]             │ │  System.Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>           │
+│        │ │ ├─ JsonSchemaExporter     │ │  System.Action<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>      │
+│        │ │ ├─ JsonSchemaExporterConte│ │  … 298 more                                                                 │
+│        │ │ └─ JsonSchemaExporterOptio│ │                                                                             │
+│      │ ├▾ Serialization [40T/1N]     │ │                                                                             │
+│      │ │ ├▾ Metadata [17T/0N]        │ │                                                                             │
+│        │ │ │ ├─ DefaultJsonTypeInfoRe│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ IJsonTypeInfoResolver│ │                                                                             │
+│        │ │ │ ├─ JsonCollectionInfoVal│ │                                                                             │
+│        │ │ │ ├─ JsonDerivedType      │ │                                                                             │
+│        │ │ │ ├─ JsonMetadataServices │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Namespace: System.Text ─────────────────────────────────────────────────────╮
+│  ▾ Namespaces                        │ │CLR Namespace                                                                │
+│  ▾ System [306T/1N]                  │ │                                                                             │
+│›   └▾ Text [36T/4N]                  │ │Path: CLR / .NET / System.Text                                               │
+│      ├▾ Encodings [0T/1N]            │ │Namespace: System.Text                                                       │
+│      │ └▾ Web [8T/0N]                │ │Assembly Scope: merged tree across all discoverable CLR assemblies           │
+│        │   ├─ AllowedBmpCodePointsBit│ │Assemblies Contributing: 6                                                   │
+│        │   ├─ AsciiByteMap+<Buffer>e_│ │Direct Types: 36                                                             │
+│        │   ├─ HtmlEncoder            │ │Subtree Types: 154                                                           │
+│        │   ├─ JavaScriptEncoder      │ │Child Namespaces: 3  Descendants: yes                                        │
+│        │   ├─ OptimizedInboxTextEncod│ │                                                                             │
+│        │   ├─ TextEncoder            │ │Press Enter to collapse or expand this namespace branch. Press RightArrow or │
+│        │   ├─ TextEncoderSettings    │ │Tab to move into the detail pane.                                            │
+│        │   └─ UrlEncoder             │ │                                                                             │
+│      ├▾ Json [20T/3N]                │ │Sample Types                                                                 │
+│      │ ├▾ Nodes [5T/0N]              │ │  System.Text.StringBuilder+AppendInterpolatedStringHandler                  │
+│        │ │ ├─ JsonArray              │ │  System.Text.Ascii                                                          │
+│        │ │ ├─ JsonNode               │ │  System.Text.ASCIIEncoding                                                  │
+│        │ │ ├─ JsonNodeOptions        │ │  System.Text.StringBuilder+ChunkEnumerator                                  │
+│        │ │ ├─ JsonObject             │ │  System.Text.CodePagesEncodingProvider                                      │
+│        │ │ └─ JsonValue              │ │  System.Text.CompositeFormat                                                │
+│      │ ├▾ Schema [3T/0N]             │ │  System.Text.Decoder                                                        │
+│        │ │ ├─ JsonSchemaExporter     │ │  System.Text.DecoderExceptionFallback                                       │
+│        │ │ ├─ JsonSchemaExporterConte│ │  … 28 more                                                                  │
+│        │ │ └─ JsonSchemaExporterOptio│ │                                                                             │
+│      │ ├▾ Serialization [40T/1N]     │ │                                                                             │
+│      │ │ ├▾ Metadata [17T/0N]        │ │                                                                             │
+│        │ │ │ ├─ DefaultJsonTypeInfoRe│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ IJsonTypeInfoResolver│ │                                                                             │
+│        │ │ │ ├─ JsonCollectionInfoVal│ │                                                                             │
+│        │ │ │ ├─ JsonDerivedType      │ │                                                                             │
+│        │ │ │ ├─ JsonMetadataServices │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after enter, opening the entry → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Namespace: System.Text ─────────────────────────────────────────────────────╮
+│  ▾ Namespaces                        │ │CLR Namespace                                                                │
+│  ▾ System [306T/1N]                  │ │                                                                             │
+│›   └▾ Text [36T/4N]                  │ │Path: CLR / .NET / System.Text                                               │
+│      ├▾ Encodings [0T/1N]            │ │Namespace: System.Text                                                       │
+│      │ └▾ Web [8T/0N]                │ │Assembly Scope: merged tree across all discoverable CLR assemblies           │
+│        │   ├─ AllowedBmpCodePointsBit│ │Assemblies Contributing: 6                                                   │
+│        │   ├─ AsciiByteMap+<Buffer>e_│ │Direct Types: 36                                                             │
+│        │   ├─ HtmlEncoder            │ │Subtree Types: 154                                                           │
+│        │   ├─ JavaScriptEncoder      │ │Child Namespaces: 3  Descendants: yes                                        │
+│        │   ├─ OptimizedInboxTextEncod│ │                                                                             │
+│        │   ├─ TextEncoder            │ │Press Enter to collapse or expand this namespace branch. Press RightArrow or │
+│        │   ├─ TextEncoderSettings    │ │Tab to move into the detail pane.                                            │
+│        │   └─ UrlEncoder             │ │                                                                             │
+│      ├▾ Json [20T/3N]                │ │Sample Types                                                                 │
+│      │ ├▾ Nodes [5T/0N]              │ │  System.Text.StringBuilder+AppendInterpolatedStringHandler                  │
+│        │ │ ├─ JsonArray              │ │  System.Text.Ascii                                                          │
+│        │ │ ├─ JsonNode               │ │  System.Text.ASCIIEncoding                                                  │
+│        │ │ ├─ JsonNodeOptions        │ │  System.Text.StringBuilder+ChunkEnumerator                                  │
+│        │ │ ├─ JsonObject             │ │  System.Text.CodePagesEncodingProvider                                      │
+│        │ │ └─ JsonValue              │ │  System.Text.CompositeFormat                                                │
+│      │ ├▾ Schema [3T/0N]             │ │  System.Text.Decoder                                                        │
+│        │ │ ├─ JsonSchemaExporter     │ │  System.Text.DecoderExceptionFallback                                       │
+│        │ │ ├─ JsonSchemaExporterConte│ │  … 28 more                                                                  │
+│        │ │ └─ JsonSchemaExporterOptio│ │                                                                             │
+│      │ ├▾ Serialization [40T/1N]     │ │                                                                             │
+│      │ │ ├▾ Metadata [17T/0N]        │ │                                                                             │
+│        │ │ │ ├─ DefaultJsonTypeInfoRe│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ IJsonTypeInfoResolver│ │                                                                             │
+│        │ │ │ ├─ JsonCollectionInfoVal│ │                                                                             │
+│        │ │ │ ├─ JsonDerivedType      │ │                                                                             │
+│        │ │ │ ├─ JsonMetadataServices │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Namespace: System.Text.Encodings ───────────────────────────────────────────╮
+│  ▾ Namespaces                        │ │CLR Namespace                                                                │
+│  ▾ System [306T/1N]                  │ │                                                                             │
+│    └▾ Text [36T/4N]                  │ │Path: CLR / .NET / System.Text.Encodings                                     │
+│›     ├▾ Encodings [0T/1N]            │ │Namespace: System.Text.Encodings                                             │
+│      │ └▾ Web [8T/0N]                │ │Assembly Scope: merged tree across all discoverable CLR assemblies           │
+│        │   ├─ AllowedBmpCodePointsBit│ │Assemblies Contributing: 1                                                   │
+│        │   ├─ AsciiByteMap+<Buffer>e_│ │Direct Types: 0                                                              │
+│        │   ├─ HtmlEncoder            │ │Subtree Types: 8                                                             │
+│        │   ├─ JavaScriptEncoder      │ │Child Namespaces: 1  Descendants: yes                                        │
+│        │   ├─ OptimizedInboxTextEncod│ │                                                                             │
+│        │   ├─ TextEncoder            │ │Press Enter to collapse or expand this namespace branch. Press RightArrow or │
+│        │   ├─ TextEncoderSettings    │ │Tab to move into the detail pane.                                            │
+│        │   └─ UrlEncoder             │ │                                                                             │
+│      ├▾ Json [20T/3N]                │ │                                                                             │
+│      │ ├▾ Nodes [5T/0N]              │ │                                                                             │
+│        │ │ ├─ JsonArray              │ │                                                                             │
+│        │ │ ├─ JsonNode               │ │                                                                             │
+│        │ │ ├─ JsonNodeOptions        │ │                                                                             │
+│        │ │ ├─ JsonObject             │ │                                                                             │
+│        │ │ └─ JsonValue              │ │                                                                             │
+│      │ ├▾ Schema [3T/0N]             │ │                                                                             │
+│        │ │ ├─ JsonSchemaExporter     │ │                                                                             │
+│        │ │ ├─ JsonSchemaExporterConte│ │                                                                             │
+│        │ │ └─ JsonSchemaExporterOptio│ │                                                                             │
+│      │ ├▾ Serialization [40T/1N]     │ │                                                                             │
+│      │ │ ├▾ Metadata [17T/0N]        │ │                                                                             │
+│        │ │ │ ├─ DefaultJsonTypeInfoRe│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ IJsonTypeInfoResolver│ │                                                                             │
+│        │ │ │ ├─ JsonCollectionInfoVal│ │                                                                             │
+│        │ │ │ ├─ JsonDerivedType      │ │                                                                             │
+│        │ │ │ ├─ JsonMetadataServices │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after enter → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Namespace: System.Text.Encodings ───────────────────────────────────────────╮
+│  ▾ Namespaces                        │ │CLR Namespace                                                                │
+│  ▾ System [306T/1N]                  │ │                                                                             │
+│    └▾ Text [36T/4N]                  │ │Path: CLR / .NET / System.Text.Encodings                                     │
+│›     ├▾ Encodings [0T/1N]            │ │Namespace: System.Text.Encodings                                             │
+│      │ └▾ Web [8T/0N]                │ │Assembly Scope: merged tree across all discoverable CLR assemblies           │
+│        │   ├─ AllowedBmpCodePointsBit│ │Assemblies Contributing: 1                                                   │
+│        │   ├─ AsciiByteMap+<Buffer>e_│ │Direct Types: 0                                                              │
+│        │   ├─ HtmlEncoder            │ │Subtree Types: 8                                                             │
+│        │   ├─ JavaScriptEncoder      │ │Child Namespaces: 1  Descendants: yes                                        │
+│        │   ├─ OptimizedInboxTextEncod│ │                                                                             │
+│        │   ├─ TextEncoder            │ │Press Enter to collapse or expand this namespace branch. Press RightArrow or │
+│        │   ├─ TextEncoderSettings    │ │Tab to move into the detail pane.                                            │
+│        │   └─ UrlEncoder             │ │                                                                             │
+│      ├▾ Json [20T/3N]                │ │                                                                             │
+│      │ ├▾ Nodes [5T/0N]              │ │                                                                             │
+│        │ │ ├─ JsonArray              │ │                                                                             │
+│        │ │ ├─ JsonNode               │ │                                                                             │
+│        │ │ ├─ JsonNodeOptions        │ │                                                                             │
+│        │ │ ├─ JsonObject             │ │                                                                             │
+│        │ │ └─ JsonValue              │ │                                                                             │
+│      │ ├▾ Schema [3T/0N]             │ │                                                                             │
+│        │ │ ├─ JsonSchemaExporter     │ │                                                                             │
+│        │ │ ├─ JsonSchemaExporterConte│ │                                                                             │
+│        │ │ └─ JsonSchemaExporterOptio│ │                                                                             │
+│      │ ├▾ Serialization [40T/1N]     │ │                                                                             │
+│      │ │ ├▾ Metadata [17T/0N]        │ │                                                                             │
+│        │ │ │ ├─ DefaultJsonTypeInfoRe│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ FSharpCoreReflectionP│ │                                                                             │
+│        │ │ │ ├─ IJsonTypeInfoResolver│ │                                                                             │
+│        │ │ │ ├─ JsonCollectionInfoVal│ │                                                                             │
+│        │ │ │ ├─ JsonDerivedType      │ │                                                                             │
+│        │ │ │ ├─ JsonMetadataServices │ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after page down → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+│        │ │ │ ├─ JsonObjectInfoValues<│ │Select a topic to view its full help page.                                   │
+│        │ │ │ ├─ JsonParameterInfo    │ │                                                                             │
+│        │ │ │ ├─ JsonParameterInfoValu│ │                                                                             │
+│›       │ │ │ ├─ JsonPolymorphismOptio│ │                                                                             │
+│        │ │ │ ├─ JsonPropertyInfo     │ │                                                                             │
+│        │ │ │ ├─ JsonPropertyInfoValue│ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfo         │ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfo<T>      │ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfoKind     │ │                                                                             │
+│        │ │ │ └─ JsonTypeInfoResolver │ │                                                                             │
+│        │ │ ├─ IJsonOnDeserialized    │ │                                                                             │
+│        │ │ ├─ IJsonOnDeserializing   │ │                                                                             │
+│        │ │ ├─ IJsonOnSerialized      │ │                                                                             │
+│        │ │ ├─ IJsonOnSerializing     │ │                                                                             │
+│        │ │ ├─ JsonAttribute          │ │                                                                             │
+│        │ │ ├─ JsonConstructorAttribut│ │                                                                             │
+│        │ │ ├─ JsonConverter          │ │                                                                             │
+│        │ │ ├─ JsonConverter<T>       │ │                                                                             │
+│        │ │ ├─ JsonConverterAttribute │ │                                                                             │
+│        │ │ ├─ JsonConverterFactory   │ │                                                                             │
+│        │ │ ├─ JsonDerivedTypeAttribut│ │                                                                             │
+│        │ │ ├─ JsonExtensionDataAttrib│ │                                                                             │
+│        │ │ ├─ JsonIgnoreAttribute    │ │                                                                             │
+│        │ │ ├─ JsonIgnoreCondition    │ │                                                                             │
+│        │ │ ├─ JsonIncludeAttribute   │ │                                                                             │
+│        │ │ ├─ JsonKnownNamingPolicy  │ │                                                                             │
+│        │ │ ├─ JsonKnownReferenceHandl│ │                                                                             │
+│        │ │ ├─ JsonNumberEnumConverter│ │                                                                             │
+│        │ │ ├─ JsonNumberHandling     │ │                                                                             │
+│        │ │ ├─ JsonNumberHandlingAttri│ │                                                                             │
+│        │ │ ├─ JsonObjectCreationHandl│ │                                                                             │
+│        │ │ ├─ JsonObjectCreationHandl│ │                                                                             │
+│        │ │ ├─ JsonPolymorphicAttribut│ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after left, back up a level → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+│        │ │ │ ├─ JsonObjectInfoValues<│ │Select a topic to view its full help page.                                   │
+│        │ │ │ ├─ JsonParameterInfo    │ │                                                                             │
+│        │ │ │ ├─ JsonParameterInfoValu│ │                                                                             │
+│›       │ │ │ ├─ JsonPolymorphismOptio│ │                                                                             │
+│        │ │ │ ├─ JsonPropertyInfo     │ │                                                                             │
+│        │ │ │ ├─ JsonPropertyInfoValue│ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfo         │ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfo<T>      │ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfoKind     │ │                                                                             │
+│        │ │ │ └─ JsonTypeInfoResolver │ │                                                                             │
+│        │ │ ├─ IJsonOnDeserialized    │ │                                                                             │
+│        │ │ ├─ IJsonOnDeserializing   │ │                                                                             │
+│        │ │ ├─ IJsonOnSerialized      │ │                                                                             │
+│        │ │ ├─ IJsonOnSerializing     │ │                                                                             │
+│        │ │ ├─ JsonAttribute          │ │                                                                             │
+│        │ │ ├─ JsonConstructorAttribut│ │                                                                             │
+│        │ │ ├─ JsonConverter          │ │                                                                             │
+│        │ │ ├─ JsonConverter<T>       │ │                                                                             │
+│        │ │ ├─ JsonConverterAttribute │ │                                                                             │
+│        │ │ ├─ JsonConverterFactory   │ │                                                                             │
+│        │ │ ├─ JsonDerivedTypeAttribut│ │                                                                             │
+│        │ │ ├─ JsonExtensionDataAttrib│ │                                                                             │
+│        │ │ ├─ JsonIgnoreAttribute    │ │                                                                             │
+│        │ │ ├─ JsonIgnoreCondition    │ │                                                                             │
+│        │ │ ├─ JsonIncludeAttribute   │ │                                                                             │
+│        │ │ ├─ JsonKnownNamingPolicy  │ │                                                                             │
+│        │ │ ├─ JsonKnownReferenceHandl│ │                                                                             │
+│        │ │ ├─ JsonNumberEnumConverter│ │                                                                             │
+│        │ │ ├─ JsonNumberHandling     │ │                                                                             │
+│        │ │ ├─ JsonNumberHandlingAttri│ │                                                                             │
+│        │ │ ├─ JsonObjectCreationHandl│ │                                                                             │
+│        │ │ ├─ JsonObjectCreationHandl│ │                                                                             │
+│        │ │ ├─ JsonPolymorphicAttribut│ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after tab, into the detail pane → Continue ───
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+│Search: System.Text                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+│        │ │ │ ├─ JsonObjectInfoValues<│ │Select a topic to view its full help page.                                   │
+│        │ │ │ ├─ JsonParameterInfo    │ │                                                                             │
+│        │ │ │ ├─ JsonParameterInfoValu│ │                                                                             │
+│›       │ │ │ ├─ JsonPolymorphismOptio│ │                                                                             │
+│        │ │ │ ├─ JsonPropertyInfo     │ │                                                                             │
+│        │ │ │ ├─ JsonPropertyInfoValue│ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfo         │ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfo<T>      │ │                                                                             │
+│        │ │ │ ├─ JsonTypeInfoKind     │ │                                                                             │
+│        │ │ │ └─ JsonTypeInfoResolver │ │                                                                             │
+│        │ │ ├─ IJsonOnDeserialized    │ │                                                                             │
+│        │ │ ├─ IJsonOnDeserializing   │ │                                                                             │
+│        │ │ ├─ IJsonOnSerialized      │ │                                                                             │
+│        │ │ ├─ IJsonOnSerializing     │ │                                                                             │
+│        │ │ ├─ JsonAttribute          │ │                                                                             │
+│        │ │ ├─ JsonConstructorAttribut│ │                                                                             │
+│        │ │ ├─ JsonConverter          │ │                                                                             │
+│        │ │ ├─ JsonConverter<T>       │ │                                                                             │
+│        │ │ ├─ JsonConverterAttribute │ │                                                                             │
+│        │ │ ├─ JsonConverterFactory   │ │                                                                             │
+│        │ │ ├─ JsonDerivedTypeAttribut│ │                                                                             │
+│        │ │ ├─ JsonExtensionDataAttrib│ │                                                                             │
+│        │ │ ├─ JsonIgnoreAttribute    │ │                                                                             │
+│        │ │ ├─ JsonIgnoreCondition    │ │                                                                             │
+│        │ │ ├─ JsonIncludeAttribute   │ │                                                                             │
+│        │ │ ├─ JsonKnownNamingPolicy  │ │                                                                             │
+│        │ │ ├─ JsonKnownReferenceHandl│ │                                                                             │
+│        │ │ ├─ JsonNumberEnumConverter│ │                                                                             │
+│        │ │ ├─ JsonNumberHandling     │ │                                                                             │
+│        │ │ ├─ JsonNumberHandlingAttri│ │                                                                             │
+│        │ │ ├─ JsonObjectCreationHandl│ │                                                                             │
+│        │ │ ├─ JsonObjectCreationHandl│ │                                                                             │
+│        │ │ ├─ JsonPolymorphicAttribut│ │                                                                             │
+╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
