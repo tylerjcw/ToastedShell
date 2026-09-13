@@ -4,6 +4,19 @@ using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui.Widgets;
 
+/// <summary>How much of a grid a table draws.</summary>
+public enum TuiTableBorders
+{
+    /// <summary>Columns separated by blanks, and nothing else drawn.</summary>
+    None,
+
+    /// <summary>A rule under the header, so the headings do not read as a first row.</summary>
+    Header,
+
+    /// <summary>An outline, a rule under the header, and a line between each column.</summary>
+    All,
+}
+
 /// <summary>Where a cell's text sits when it is narrower than its column.</summary>
 public enum TuiAlignment
 {
@@ -144,6 +157,23 @@ public sealed class TuiTable : TuiWidget
     /// <summary>Whether the header row is drawn.</summary>
     public bool ShowHeader { get; set; } = true;
 
+    /// <summary>
+    /// How much of a grid is drawn around and between the cells.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TuiTableBorders.None"/> by default, because a table inside a
+    /// <see cref="TuiBorder"/> already has an outline and a second one around it is a
+    /// double rule. <see cref="TuiTableBorders.All"/> is what the shell prints at the
+    /// prompt, and what a table standing on its own wants.
+    /// </remarks>
+    public TuiTableBorders Borders { get; set; }
+
+    /// <summary>Which characters the grid is drawn with.</summary>
+    public TuiBorderGlyphs Glyphs { get; set; } = TuiBorderGlyphs.Rounded;
+
+    /// <summary>How the grid is drawn.</summary>
+    public TuiStyle BorderStyle { get; set; } = new(Attributes: TuiTextAttributes.Dim);
+
     /// <summary>How the header row is drawn.</summary>
     public TuiStyle HeaderStyle { get; set; } = new(Attributes: TuiTextAttributes.Bold);
 
@@ -151,7 +181,24 @@ public sealed class TuiTable : TuiWidget
     public TuiStyle SelectedStyle { get; set; } = new(Attributes: TuiTextAttributes.Reverse);
 
     /// <summary>Blank columns between one column and the next.</summary>
+    /// <remarks>
+    /// A grid pads each cell by one on both sides and puts a rule between, so a bordered
+    /// table spends three columns where a plain one spends this.
+    /// </remarks>
     public int Gap { get; set; } = 1;
+
+    /// <summary>Columns spent between one column and the next, grid included.</summary>
+    private int Separator => Borders == TuiTableBorders.All ? 3 : Gap;
+
+    /// <summary>Rows and columns the frame takes before any cell is drawn.</summary>
+    private int FrameRows => Borders switch
+    {
+        TuiTableBorders.All => ShowHeader ? 3 : 2,
+        TuiTableBorders.Header => ShowHeader ? 1 : 0,
+        _ => 0,
+    };
+
+    private int FrameColumns => Borders == TuiTableBorders.All ? 4 : 0;
 
     /// <summary>Which row is selected.</summary>
     public int SelectedIndex
@@ -194,16 +241,19 @@ public sealed class TuiTable : TuiWidget
     /// <inheritdoc />
     public override object? Value => SelectedRow;
 
-    /// <summary>How many rows are visible, once the header has taken its row.</summary>
-    private int PageSize => Math.Max(1, Bounds.Height - (ShowHeader ? 1 : 0));
+    /// <summary>How many rows are visible, once the header and any frame have taken theirs.</summary>
+    private int PageSize => Math.Max(1, Bounds.Height - (ShowHeader ? 1 : 0) - FrameRows);
 
     /// <inheritdoc />
     public override TuiSize Measure(TuiConstraints constraints)
     {
         var columns = Columns;
-        var width = columns.Sum(column => NaturalWidth(column)) + (Gap * Math.Max(0, columns.Count - 1));
 
-        return constraints.Constrain(new TuiSize(width, _rows.Count + (ShowHeader ? 1 : 0)));
+        var width = columns.Sum(NaturalWidth)
+            + (Separator * Math.Max(0, columns.Count - 1))
+            + FrameColumns;
+
+        return constraints.Constrain(new TuiSize(width, _rows.Count + (ShowHeader ? 1 : 0) + FrameRows));
     }
 
     /// <inheritdoc />
@@ -222,15 +272,34 @@ public sealed class TuiTable : TuiWidget
 
         var columns = Columns;
         var widths = Distribute(columns, surface.Width);
+
+        // Cells are drawn inside whatever the grid left them; with no grid that is
+        // everything, which is why the two cases are the same code with different insets.
+        // Only the outline is taken out of the cells' area. The rule under the header is
+        // drawn inside it, and skipped over when the rows start — which is why `top` below
+        // counts it rather than this clip.
+        var framed = Borders == TuiTableBorders.All;
+        var inset = framed ? 2 : 0;
+
+        var cells = surface.Clip(new TuiRect(
+            inset,
+            framed ? 1 : 0,
+            Math.Max(0, surface.Width - (inset * 2)),
+            Math.Max(0, surface.Height - (framed ? 2 : 0))));
+
+        DrawGrid(surface, widths);
+
         var top = 0;
 
         if (ShowHeader)
         {
-            Row(surface, 0, columns, widths, (column, _) => column.Header, HeaderStyle, (_, _) => HeaderStyle);
-            top = 1;
+            Row(cells, 0, columns, widths, (column, _) => column.Header, HeaderStyle, (_, _) => HeaderStyle);
+
+            // One row for the header, and another for the rule under it when there is one.
+            top = Borders == TuiTableBorders.None ? 1 : 2;
         }
 
-        for (var row = top; row < surface.Height; row += 1)
+        for (var row = top; row < cells.Height; row += 1)
         {
             var index = _offset + row - top;
 
@@ -243,7 +312,7 @@ public sealed class TuiTable : TuiWidget
             var item = _rows[index];
 
             Row(
-                surface,
+                cells,
                 row,
                 columns,
                 widths,
@@ -262,6 +331,85 @@ public sealed class TuiTable : TuiWidget
                 _rows.Count,
                 new TuiStyle(Attributes: TuiTextAttributes.Dim),
                 new TuiStyle(Attributes: TuiTextAttributes.Dim));
+        }
+    }
+
+    /// <summary>Draws whatever grid <see cref="Borders"/> asked for.</summary>
+    private void DrawGrid(TuiSurface surface, int[] widths)
+    {
+        if (Borders == TuiTableBorders.None || surface.Width <= 0 || surface.Height <= 0)
+        {
+            return;
+        }
+
+        // Where a column boundary falls, measured from the first cell column.
+        var stops = new List<int>();
+        var at = 0;
+
+        for (var index = 0; index < widths.Length - 1; index += 1)
+        {
+            at += widths[index];
+            stops.Add(at + (Separator / 2));
+            at += Separator;
+        }
+
+        if (Borders == TuiTableBorders.Header)
+        {
+            // Just the rule under the header: the least a table needs to stop its headings
+            // reading as a first row of data.
+            if (ShowHeader && surface.Height > 1)
+            {
+                Rule(surface, 1, 0, surface.Width, stops, Glyphs.Horizontal, Glyphs.Junction);
+            }
+
+            return;
+        }
+
+        var right = surface.Width - 1;
+        var bottom = surface.Height - 1;
+
+        Rule(surface, 0, 1, right, stops.Select(stop => stop + 2), Glyphs.Horizontal, Glyphs.Down);
+        Rule(surface, bottom, 1, right, stops.Select(stop => stop + 2), Glyphs.Horizontal, Glyphs.Up);
+
+        surface.DrawText(0, 0, Glyphs.TopLeft, BorderStyle);
+        surface.DrawText(right, 0, Glyphs.TopRight, BorderStyle);
+        surface.DrawText(0, bottom, Glyphs.BottomLeft, BorderStyle);
+        surface.DrawText(right, bottom, Glyphs.BottomRight, BorderStyle);
+
+        for (var row = 1; row < bottom; row += 1)
+        {
+            surface.DrawText(0, row, Glyphs.Vertical, BorderStyle);
+            surface.DrawText(right, row, Glyphs.Vertical, BorderStyle);
+
+            foreach (var stop in stops)
+            {
+                surface.DrawText(stop + 2, row, Glyphs.Vertical, BorderStyle);
+            }
+        }
+
+        if (ShowHeader && bottom > 2)
+        {
+            Rule(surface, 2, 1, right, stops.Select(stop => stop + 2), Glyphs.Horizontal, Glyphs.Junction);
+            surface.DrawText(0, 2, Glyphs.Right, BorderStyle);
+            surface.DrawText(right, 2, Glyphs.Left, BorderStyle);
+        }
+    }
+
+    /// <summary>Draws one horizontal rule, broken by a junction at each column boundary.</summary>
+    private void Rule(
+        TuiSurface surface,
+        int row,
+        int from,
+        int to,
+        IEnumerable<int> stops,
+        string line,
+        string junction)
+    {
+        var boundaries = stops.ToHashSet();
+
+        for (var column = from; column < to; column += 1)
+        {
+            surface.DrawText(column, row, boundaries.Contains(column) ? junction : line, BorderStyle);
         }
     }
 
@@ -320,7 +468,10 @@ public sealed class TuiTable : TuiWidget
             return false;
         }
 
-        var row = mouse.Row - Bounds.Top - (ShowHeader ? 1 : 0);
+        var row = mouse.Row
+            - Bounds.Top
+            - (ShowHeader ? 1 : 0)
+            - (Borders == TuiTableBorders.All ? (ShowHeader ? 2 : 1) : Borders == TuiTableBorders.Header && ShowHeader ? 1 : 0);
 
         // The header is not a row to land on.
         if (row < 0)
@@ -356,7 +507,7 @@ public sealed class TuiTable : TuiWidget
                 surface.DrawText(column, row, cell, cellStyle.IsDefault ? fallback : cellStyle, width);
             }
 
-            column += width + Gap;
+            column += width + Separator;
         }
     }
 
@@ -368,7 +519,7 @@ public sealed class TuiTable : TuiWidget
     private int[] Distribute(IReadOnlyList<TuiColumn> columns, int available)
     {
         var widths = new int[columns.Count];
-        var remaining = Math.Max(0, available - (Gap * Math.Max(0, columns.Count - 1)));
+        var remaining = Math.Max(0, available - (Separator * Math.Max(0, columns.Count - 1)) - FrameColumns);
         var total = remaining;
         var weight = 0;
 

@@ -104,6 +104,20 @@ public sealed class TuiWidgetRegistry
                 Scrollbar = spec.Flag("scrollbar"),
             };
 
+            // `Borders = "all"`, `"header"` or `"none"` — and a bare `true` means the grid,
+            // because that is what someone writing `Borders = true` is asking for.
+            if (spec.TryGet("borders", out var borders) && borders is not null)
+            {
+                table.Borders = borders switch
+                {
+                    bool on => on ? TuiTableBorders.All : TuiTableBorders.None,
+                    TuiTableBorders already => already,
+                    _ => Enum.TryParse<TuiTableBorders>(borders.ToString(), ignoreCase: true, out var parsed)
+                        ? parsed
+                        : TuiTableBorders.None,
+                };
+            }
+
             // `Columns = ["Name", "Length"]` names them; a record per column says more.
             if (spec.TryGet("columns", out var declared) && declared is IEnumerable<object?> columns)
             {

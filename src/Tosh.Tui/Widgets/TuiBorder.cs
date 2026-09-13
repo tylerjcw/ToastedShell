@@ -139,20 +139,44 @@ public readonly record struct TuiBorderGlyphs(
     string BottomLeft,
     string BottomRight,
     string Horizontal,
-    string Vertical)
+    string Vertical,
+    string TeeDown = "",
+    string TeeUp = "",
+    string TeeRight = "",
+    string TeeLeft = "",
+    string Cross = "")
 {
+    /// <summary>
+    /// The junctions, for a grid rather than a plain box.
+    /// </summary>
+    /// <remarks>
+    /// A box needs four corners and two lines; a table also needs to join them where a
+    /// column meets an edge or another rule. Defaulted from the line characters when a set
+    /// does not name them, so an ASCII border stays drawable without listing five more
+    /// pieces of punctuation.
+    /// </remarks>
+    public string Down => TeeDown.Length > 0 ? TeeDown : Horizontal;
+
+    public string Up => TeeUp.Length > 0 ? TeeUp : Horizontal;
+
+    public string Right => TeeRight.Length > 0 ? TeeRight : Vertical;
+
+    public string Left => TeeLeft.Length > 0 ? TeeLeft : Vertical;
+
+    public string Junction => Cross.Length > 0 ? Cross : Horizontal;
+
     /// <summary>Rounded corners, as both browsers draw today.</summary>
-    public static TuiBorderGlyphs Rounded => new("╭", "╮", "╰", "╯", "─", "│");
+    public static TuiBorderGlyphs Rounded => new("╭", "╮", "╰", "╯", "─", "│", "┬", "┴", "├", "┤", "┼");
 
     /// <summary>Square corners.</summary>
-    public static TuiBorderGlyphs Square => new("┌", "┐", "└", "┘", "─", "│");
+    public static TuiBorderGlyphs Square => new("┌", "┐", "└", "┘", "─", "│", "┬", "┴", "├", "┤", "┼");
 
     /// <summary>Heavier lines, for a focused pane.</summary>
-    public static TuiBorderGlyphs Heavy => new("┏", "┓", "┗", "┛", "━", "┃");
+    public static TuiBorderGlyphs Heavy => new("┏", "┓", "┗", "┛", "━", "┃", "┳", "┻", "┣", "┫", "╋");
 
     /// <summary>Double lines.</summary>
-    public static TuiBorderGlyphs Double => new("╔", "╗", "╚", "╝", "═", "║");
+    public static TuiBorderGlyphs Double => new("╔", "╗", "╚", "╝", "═", "║", "╦", "╩", "╠", "╣", "╬");
 
     /// <summary>Plain characters, for a terminal that cannot draw the rest.</summary>
-    public static TuiBorderGlyphs Ascii => new("+", "+", "+", "+", "-", "|");
+    public static TuiBorderGlyphs Ascii => new("+", "+", "+", "+", "-", "|", "+", "+", "+", "+", "+");
 }

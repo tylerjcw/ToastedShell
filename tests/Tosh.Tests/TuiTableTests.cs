@@ -229,6 +229,72 @@ public sealed class TuiTableTests
     }
 
     [Fact]
+    public void By_default_a_table_draws_no_grid()
+    {
+        // A table inside a TuiBorder already has an outline, and a second one around it is
+        // a double rule.
+        Assert.Equal(TuiTableBorders.None, new TuiTable().Borders);
+    }
+
+    [Fact]
+    public void A_header_rule_stops_the_headings_reading_as_a_first_row()
+    {
+        var table = Processes();
+        table.Borders = TuiTableBorders.Header;
+
+        // The rule spans the pane, as a rule does; the junction sits where the columns meet.
+        var rows = Render(table, 11, 5);
+
+        Assert.Equal("Name Memory", rows[0]);
+        Assert.Equal("────┼──────", rows[1]);
+        Assert.Equal("bash 12", rows[2]);
+    }
+
+    [Fact]
+    public void A_full_grid_is_what_the_shell_prints_at_the_prompt()
+    {
+        var table = Processes();
+        table.Borders = TuiTableBorders.All;
+
+        // Measured, so the grid is exactly as wide as the table wants to be. Given more
+        // room it fills it, as every widget does.
+        var natural = table.Measure(TuiConstraints.Unbounded);
+        var rows = Render(table, natural.Width, natural.Height);
+
+        Assert.Equal(17, natural.Width);
+        Assert.Equal("╭──────┬────────╮", rows[0]);
+        Assert.Equal("│ Name │ Memory │", rows[1]);
+        Assert.Equal("├──────┼────────┤", rows[2]);
+        Assert.Equal("│ bash │ 12     │", rows[3]);
+        Assert.Equal("│ tosh │ 340    │", rows[4]);
+        Assert.Equal("│ code │ 1024   │", rows[5]);
+        Assert.Equal("╰──────┴────────╯", rows[6]);
+    }
+
+    [Fact]
+    public void A_grid_follows_the_glyphs_it_is_given()
+    {
+        var table = Processes();
+        table.Borders = TuiTableBorders.All;
+        table.Glyphs = TuiBorderGlyphs.Ascii;
+
+        Assert.Equal("+------+--------+", Render(table, 17, 7)[0]);
+    }
+
+    [Fact]
+    public void A_click_lands_on_the_row_it_looks_like_through_a_grid()
+    {
+        var table = Processes();
+        table.Borders = TuiTableBorders.All;
+        table.Arrange(new TuiRect(0, 0, 20, 7));
+
+        table.OnInput(TuiInputEvent.FromMouse(
+            new TuiMouseEvent(TuiMouseAction.Press, TuiMouseButton.Left, 3, 4, false, false, false)));
+
+        Assert.Equal(1, table.SelectedIndex);
+    }
+
+    [Fact]
     public void A_table_with_no_rows_draws_nothing_and_answers_nothing()
     {
         var table = new TuiTable();
