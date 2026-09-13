@@ -449,77 +449,27 @@ static void PrintStartupProfile(Tosh.Runtime.StartupProfileData profile)
     Console.Error.WriteLine();
 }
 
+// `tosh --help` is drawn by the same renderer `help <name>` uses, from the topic in
+// `ToshHelp`. It was fifty hand-aligned writes before: the shell that renders every
+// other command's help as a panel printed its own as flat text, which is the one place
+// the inconsistency shows most.
 static async Task PrintUsageAsync()
 {
-    await Console.Out.WriteLineAsync("Usage:");
-    await Console.Out.WriteLineAsync("  tosh");
-    await Console.Out.WriteLineAsync("  tosh -c 'echo hello | type-of'");
-    await Console.Out.WriteLineAsync("  tosh --no-startup");
-    await Console.Out.WriteLineAsync("  tosh script.tosh [args...]");
-    await Console.Out.WriteLineAsync("  tosh ./script-with-shebang [args...]");
-    await Console.Out.WriteLineAsync("  tosh -- <command-or-script-starting-with-dash> [args...]");
-    await Console.Out.WriteLineAsync(string.Empty);
-    await Console.Out.WriteLineAsync("Flags:");
-    await Console.Out.WriteLineAsync("  -h, --help            Show usage");
-    await Console.Out.WriteLineAsync("  -V, --version         Print version and exit");
-    await Console.Out.WriteLineAsync("  -c, --command         Run one ToSh command string and exit");
-    await Console.Out.WriteLineAsync("  -l, --login           Start as a login shell");
-    await Console.Out.WriteLineAsync("  --no-startup          Skip config.tosh, profile.tosh, and autoload startup files");
-    await Console.Out.WriteLineAsync("  --no-profile          Skip profile.tosh (config.tosh and autoload still load)");
-    await Console.Out.WriteLineAsync("  --safe                Start in safe mode (skip all startup, guaranteed recovery)");
-    await Console.Out.WriteLineAsync("  --profile-startup     Show startup phase timing breakdown");
-    await Console.Out.WriteLineAsync("  --diagnostics=MODE    Override diagnostic output mode (text|plain|json)");
-    await Console.Out.WriteLineAsync("  --               Stop flag parsing for the next argument");
-    await Console.Out.WriteLineAsync(string.Empty);
-    // `TOAST-0003`. These modes existed and were undiscoverable: the build uses
-    // `--export-command-metadata --latex` to generate part of the specification, and
-    // nothing in `--help` said so.
-    await Console.Out.WriteLineAsync("Compilation:");
-    await Console.Out.WriteLineAsync("  --compile FILE...     Compile scripts to an assembly. The output path is");
-    await Console.Out.WriteLineAsync("                        derived from the first input unless -o is given");
-    await Console.Out.WriteLineAsync("  -o, --output PATH     Write the compiled assembly here");
-    await Console.Out.WriteLineAsync("  --no-apphost          Emit only the assembly, without a native launcher");
-    await Console.Out.WriteLineAsync("  --publish-single-file Emit a self-contained single-file executable");
-    await Console.Out.WriteLineAsync("  --emit-refasm         Emit a reference assembly beside the output");
-    await Console.Out.WriteLineAsync("  --compile-allow-dynamic  Permit dynamic fallbacks the compiler would refuse");
-    await Console.Out.WriteLineAsync(string.Empty);
-    await Console.Out.WriteLineAsync("Metadata export:");
-    await Console.Out.WriteLineAsync("  --export-command-metadata  Write command metadata and exit");
-    await Console.Out.WriteLineAsync("  --json | --latex | --vscode  Format for the export (default: json)");
-    await Console.Out.WriteLineAsync("  --surface             Export the language surface registry");
-    await Console.Out.WriteLineAsync("  --dump-builtins       List built-in commands and exit");
-    await Console.Out.WriteLineAsync(string.Empty);
-    await Console.Out.WriteLineAsync("Examples:");
-    await Console.Out.WriteLineAsync("  tosh 'help'");
-    await Console.Out.WriteLineAsync("  tosh -c 'help search json'");
-    await Console.Out.WriteLineAsync("  tosh 'help search json'");
-    await Console.Out.WriteLineAsync("  tosh 'config'");
-    await Console.Out.WriteLineAsync("  tosh 'config reload'");
-    await Console.Out.WriteLineAsync("  tosh 'config set prompt.name-text toast'");
-    await Console.Out.WriteLineAsync("  tosh ./examples/library_demo.tosh");
-    await Console.Out.WriteLineAsync("  tosh ./script-with-foreign-shebang");
-    await Console.Out.WriteLineAsync("  tosh 'help where'");
-    await Console.Out.WriteLineAsync("  tosh 'view detail'");
-    await Console.Out.WriteLineAsync("  tosh 'ls -la'");
-    await Console.Out.WriteLineAsync("  tosh 'echo \"Hello\".ToLower()'");
-    await Console.Out.WriteLineAsync("  tosh 'echo String.Join(\" \", [\"Hello\", \"World\"])'");
-    await Console.Out.WriteLineAsync("  tosh 'writeline \"hello\"'");
-    await Console.Out.WriteLineAsync("  tosh 'mkdir -p scratch | get FullName'");
-    await Console.Out.WriteLineAsync("  tosh 'func ll => ls -la'");
-    await Console.Out.WriteLineAsync("  tosh 'require ./common.tosh'");
-    await Console.Out.WriteLineAsync("  tosh 'func llf => ls -la | where _.Type == file'");
-    await Console.Out.WriteLineAsync("  tosh 'func recent(days: TimeSpan) { ls -la | where _.Modified > ((date now) - $days) }'");
+    await Console.Out.WriteLineAsync(
+        Tosh.Runtime.HelpTopicSummaryRenderer.Render(Tosh.Cli.ToshHelp.Topic(ToshVersion())));
 }
 
-static async Task PrintVersionAsync()
+static string ToshVersion()
 {
     var attr = (System.Reflection.AssemblyInformationalVersionAttribute?)
         Attribute.GetCustomAttribute(
             typeof(CliInvocationResolver).Assembly,
             typeof(System.Reflection.AssemblyInformationalVersionAttribute));
-    var version = attr?.InformationalVersion ?? "unknown";
-    await Console.Out.WriteLineAsync($"tosh {version}");
+    return attr?.InformationalVersion ?? "unknown";
 }
+
+static async Task PrintVersionAsync()
+    => await Console.Out.WriteLineAsync($"tosh {ToshVersion()}");
 
 static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
 {
@@ -690,7 +640,7 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
         return 1;
     }
 
-    var unit = Lowerer.Lower(parseResult, runtime.Commands);
+    var unit = Lowerer.Lower(parseResult, runtime.Commands, resolveRequiredTypes: true);
 
     // Compile-mode annotation audit. Errors here are always fatal:
     // missing param/return annotations, and (unless
@@ -789,11 +739,20 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
 
     // Stage the runtime DLLs the emitted assembly depends on next
     // to the output so `dotnet <out>.dll` runs without the caller
-    // pre-populating its directory. Copies are best-effort: a
-    // missing source dll just means the user will see a load
-    // failure at runtime, same as before the staging existed.
+    // pre-populating its directory. Published composite ReadyToRun
+    // components are staged as independent IL dependencies; a copy
+    // or normalization failure must not be advertised as runnable.
     var runtimeDependencies = ToshPublisher.GetRuntimeDependencyFileNames(compileProfile);
-    StageCompilerRuntime(outputPath, runtimeDependencies);
+    try
+    {
+        StageCompilerRuntime(outputPath, runtimeDependencies);
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+        or NotSupportedException or BadImageFormatException)
+    {
+        await Console.Error.WriteLineAsync($"toshc: could not stage compiler runtime: {exception.Message}");
+        return 1;
+    }
     var depsJsonPath = ToshPublisher.WriteDepsJson(outputPath, runtimeDependencies);
 
     // `TOAST-0042`. The runnable artifact is named **last**, and named as runnable.
@@ -864,17 +823,6 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
 }
 
 /// <summary>
-/// Copies the compiler-runtime DLLs (and their transitive shell
-/// dependencies — language, runtime, stdlib, tui, core) next to a
-/// freshly emitted compiled-tosh assembly so it can be launched
-/// with <c>dotnet &lt;out&gt;.dll</c> directly.
-///
-/// Source directory is the directory holding the running
-/// <c>tosh</c> binary (a self-contained publish or the dev-build
-/// <c>bin/Debug/net10.0</c>). Files only get overwritten when the
-/// source is strictly newer to keep repeated compiles cheap.
-/// </summary>
-/// <summary>
 /// How a reader would actually type the path — `TOAST-0042`.
 /// </summary>
 /// <remarks>
@@ -892,6 +840,10 @@ static string FormatRunHint(string path)
         : $"'{full}'";
 }
 
+/// <summary>
+/// Stages independent compiler runtime dependencies next to an emitted application.
+/// Source files may come from a development build or a published compiler bundle.
+/// </summary>
 static void StageCompilerRuntime(string outputPath, IReadOnlyList<string> required)
 {
     var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
@@ -902,19 +854,7 @@ static void StageCompilerRuntime(string outputPath, IReadOnlyList<string> requir
     {
         if (!sources.TryGetValue(name, out var src)) continue;
         var dst = Path.Combine(outDir, name);
-        try
-        {
-            if (File.Exists(dst) && File.GetLastWriteTimeUtc(dst) >= File.GetLastWriteTimeUtc(src))
-            {
-                continue;
-            }
-            File.Copy(src, dst, overwrite: true);
-        }
-        catch
-        {
-            // Best-effort: leave the user with the load error if
-            // the copy fails (sandbox, read-only fs, etc.).
-        }
+        ToshPublisher.StageRuntimeDependency(src, dst);
     }
 }
 
