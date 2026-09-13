@@ -1,6 +1,7 @@
 using Tosh.Tui;
 using Tosh.Tui.Rendering;
 using Tosh.Tui.Requests;
+using Tosh.Tui.Widgets;
 
 namespace Tosh.Cli.Tui;
 
@@ -8,40 +9,59 @@ namespace Tosh.Cli.Tui;
 /// The confirmation dialog behind <c>tui confirm</c>.
 /// </summary>
 /// <remarks>
-/// The first screen drawn into a <see cref="TuiBuffer"/> rather than concatenated into a
-/// string (<c>TUI-0001</c>). Two things changed as a consequence, and both were defects
-/// of the string model rather than of this screen:
-/// <list type="bullet">
-///   <item>
-///     It used to find its own buttons by searching the text it had just rendered for
-///     <c>[Confirm]</c>, then cache five integers describing where they were. Drawing
-///     into cells means the rectangles are known while drawing, so they are recorded
-///     rather than recovered.
-///   </item>
-///   <item>
-///     The dialog is now drawn onto a cleared background, so it is a dialog rather than
-///     a screenful of text with blank lines above it.
-///   </item>
-/// </list>
+/// <para>
+/// The first screen built from widgets rather than drawn by hand (<c>TUI-0002</c>), and
+/// the third shape it has had. It began by concatenating lines into a string and finding
+/// its own buttons by searching that string for <c>[Confirm]</c>; then it drew into a
+/// cell buffer and recorded the button rectangles while drawing; now it declares a
+/// layout and the buttons answer for themselves.
+/// </para>
+/// <para>
+/// Nothing here computes a coordinate. The dialog is sized to its message because the
+/// border asks its child how big it is, the buttons are found by hit testing the
+/// arrangement, and a click is handled by the button that was clicked.
+/// </para>
 /// </remarks>
 internal sealed class TuiConfirmScreen : ITuiScreen
 {
     private const int MaxDialogWidth = 60;
 
     private readonly TuiConfirmRequest _request;
-    private readonly TuiConfirmationDialogState _dialog = new();
-    private TuiRect _confirmButton;
-    private TuiRect _cancelButton;
+    private readonly TuiButton _confirm;
+    private readonly TuiButton _cancel;
+    private readonly TuiBorder _dialog;
 
     public TuiConfirmScreen(TuiConfirmRequest request)
     {
         _request = request;
-        _dialog.Open(
-            title: "Confirmation",
-            message: request.Message,
-            confirmLabel: request.ConfirmLabel,
-            cancelLabel: request.CancelLabel,
-            confirmSelected: request.DefaultConfirm);
+
+        _confirm = new TuiButton(request.ConfirmLabel, () => Decide(confirmed: true))
+        {
+            IsSelected = request.DefaultConfirm,
+        };
+
+        _cancel = new TuiButton(request.CancelLabel, () => Decide(confirmed: false))
+        {
+            IsSelected = !request.DefaultConfirm,
+        };
+
+        var buttons = new TuiStack(TuiOrientation.Horizontal) { Gap = 4 }
+            .Add(_confirm, TuiLength.Auto)
+            .Add(_cancel, TuiLength.Auto);
+
+        var body = new TuiStack(TuiOrientation.Vertical)
+            .Add(new TuiTextWidget(request.Message), TuiLength.Auto)
+            .Add(new TuiTextWidget(string.Empty), TuiLength.Fixed(1))
+            .Add(buttons, TuiLength.Fixed(1))
+            .Add(new TuiTextWidget(string.Empty), TuiLength.Fixed(1))
+            .Add(
+                new TuiTextWidget("Left/Right or Tab switches the selection. Enter confirms. Esc cancels.")
+                {
+                    Style = new TuiStyle(Attributes: TuiTextAttributes.Dim),
+                },
+                TuiLength.Auto);
+
+        _dialog = new TuiBorder(body, "Confirmation");
     }
 
     public TuiScreenOutcome? Outcome { get; private set; }
@@ -50,58 +70,21 @@ internal sealed class TuiConfirmScreen : ITuiScreen
     {
         var buffer = new TuiBuffer(size);
 
-        var dialogWidth = Math.Min(size.Width, MaxDialogWidth);
-        var entries = _dialog.BuildEntries(dialogWidth);
-        var top = Math.Max(0, (size.Height - entries.Count) / 2);
-        var left = Math.Max(0, (size.Width - dialogWidth) / 2);
+        // Measured, then centred at whatever size it asked for. Nothing here knows how
+        // tall a wrapped message is; the widgets do.
+        var width = Math.Min(size.Width, MaxDialogWidth);
+        var desired = _dialog.Measure(new TuiConstraints(width, size.Height));
 
-        var surface = new TuiSurface(buffer, new TuiRect(left, top, dialogWidth, entries.Count));
+        var bounds = new TuiRect(
+            Math.Max(0, (size.Width - desired.Width) / 2),
+            Math.Max(0, (size.Height - desired.Height) / 2),
+            desired.Width,
+            desired.Height);
 
-        for (var row = 0; row < entries.Count; row += 1)
-        {
-            surface.DrawText(0, row, entries[row], TuiStyle.Default);
-        }
-
-        RecordButtonPositions(entries, left, top);
+        _dialog.Arrange(bounds);
+        _dialog.Draw(new TuiSurface(buffer, bounds));
 
         return new TuiFrame(buffer);
-    }
-
-    /// <summary>
-    /// Notes where the buttons were drawn, so a click can be matched against them.
-    /// </summary>
-    /// <remarks>
-    /// The offsets are computed from the same pieces the label row is built from rather
-    /// than by searching the rendered line, which is what this screen used to do. The
-    /// row is <c>"&gt; [Confirm]    &gt; [Cancel]"</c>: a marker, a space, then each
-    /// bracketed label, separated by four spaces.
-    /// </remarks>
-    private void RecordButtonPositions(IReadOnlyList<string> entries, int left, int top)
-    {
-        var buttonRow = -1;
-
-        for (var row = 0; row < entries.Count; row += 1)
-        {
-            if (entries[row].Contains($"[{_dialog.ConfirmLabel}]", StringComparison.Ordinal))
-            {
-                buttonRow = row;
-                break;
-            }
-        }
-
-        if (buttonRow < 0)
-        {
-            _confirmButton = default;
-            _cancelButton = default;
-            return;
-        }
-
-        var confirmWidth = _dialog.ConfirmLabel.Length + 2;
-        var confirmLeft = left + 2;
-        var cancelLeft = confirmLeft + confirmWidth + 4 + 2;
-
-        _confirmButton = new TuiRect(confirmLeft, top + buttonRow, confirmWidth, 1);
-        _cancelButton = new TuiRect(cancelLeft, top + buttonRow, _dialog.CancelLabel.Length + 2, 1);
     }
 
     public TuiScreenResult HandleInput(TuiInputEvent input)
@@ -113,21 +96,15 @@ internal sealed class TuiConfirmScreen : ITuiScreen
 
         var mouse = input.Mouse;
 
-        if (mouse.Action != TuiMouseAction.Press || mouse.Button != TuiMouseButton.Left)
+        // The widget under the pointer handles its own click. No stored rectangles.
+        if (mouse.Action == TuiMouseAction.Press &&
+            mouse.Button == TuiMouseButton.Left &&
+            _dialog.HitTest(mouse.Column, mouse.Row) is { } hit)
         {
-            return TuiScreenResult.Continue;
-        }
-
-        if (_confirmButton.Contains(mouse.Column, mouse.Row))
-        {
-            _dialog.ConfirmSelected = true;
-            return Decide(confirmed: true);
-        }
-
-        if (_cancelButton.Contains(mouse.Column, mouse.Row))
-        {
-            _dialog.ConfirmSelected = false;
-            return Decide(confirmed: false);
+            if (hit.OnInput(input) && Outcome is not null)
+            {
+                return TuiScreenResult.Exit;
+            }
         }
 
         return TuiScreenResult.Continue;
@@ -135,14 +112,38 @@ internal sealed class TuiConfirmScreen : ITuiScreen
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
     {
-        var result = _dialog.HandleKey(key);
-
-        return result.Kind switch
+        switch (key.Key)
         {
-            TuiConfirmationDialogResultKind.Confirmed => Decide(confirmed: true),
-            TuiConfirmationDialogResultKind.Cancelled => Decide(confirmed: false),
-            _ => TuiScreenResult.Continue,
-        };
+            case ConsoleKey.LeftArrow:
+            case ConsoleKey.RightArrow:
+            case ConsoleKey.Tab:
+                Select(!_confirm.IsSelected);
+                return TuiScreenResult.Continue;
+
+            case ConsoleKey.Y:
+                Select(confirm: true);
+                return Decide(confirmed: true);
+
+            case ConsoleKey.N:
+                Select(confirm: false);
+                return Decide(confirmed: false);
+
+            case ConsoleKey.Escape:
+                return Decide(confirmed: false);
+
+            case ConsoleKey.Enter:
+            case ConsoleKey.Spacebar:
+                return Decide(confirmed: _confirm.IsSelected);
+
+            default:
+                return TuiScreenResult.Continue;
+        }
+    }
+
+    private void Select(bool confirm)
+    {
+        _confirm.IsSelected = confirm;
+        _cancel.IsSelected = !confirm;
     }
 
     private TuiScreenResult Decide(bool confirmed)
