@@ -23,7 +23,6 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     private int _stagedVersion;
     private readonly ConfigBrowserSchema _schema;
     private readonly TuiListState<ConfigBrowserListEntry> _tree = new();
-    private readonly TuiScrollState _detailScroll = new();
     private readonly TuiConfirmationDialogState _confirmDialog = new();
     private readonly TuiPathEditorState _pathEditor = new();
     private readonly TuiGroupEditorState<ConfigBrowserNode> _groupEditor = new();
@@ -43,9 +42,6 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     private string? _editingPath;
     private string? _groupEditingPath;
     private string? _statusMessage;
-    private TuiRect _lastSearchRect;
-    private TuiRect _lastTreeRect;
-    private TuiRect _lastDetailRect;
 
     public ConfigBrowserScreen(ToshRuntime runtime, ConfigBrowseRequest request)
     {
@@ -76,107 +72,65 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             _selectedPath = normalized;
         }
 
+        BuildTree();
         SyncTree(pageSize: 12);
-    }
-
-    public TuiFrame Render(TuiSize size)
-    {
-        var root = new TuiRect(0, 0, Math.Max(20, size.Width), Math.Max(8, size.Height));
-        var (searchRect, restRows) = TuiSplitLayout.SplitRows(root, SearchBoxHeight, gap: 0);
-        var (contentRows, footerRow) = TuiSplitLayout.SplitRows(restRows, Math.Max(4, restRows.Height - 1), gap: 0);
-        var sidebarWidth = Math.Clamp(contentRows.Width / 3, 28, Math.Max(28, contentRows.Width - 24));
-        var (treeRect, detailRect) = TuiSplitLayout.SplitColumns(contentRows, sidebarWidth, gap: 1);
-
-        _lastSearchRect = searchRect;
-        _lastTreeRect = treeRect;
-        _lastDetailRect = detailRect;
-
-        SyncTree(Math.Max(1, treeRect.Height - 2));
-        var detailLines = BuildDetailEntries(Math.Max(1, detailRect.Width - 2));
-        _detailScroll.SetDimensions(detailLines.Count, Math.Max(1, detailRect.Height - 2));
-
-        var builder = new StringBuilder();
-        builder.Append(RenderSearchBox(searchRect.Width));
-        builder.AppendLine();
-        builder.Append(RenderContentRows(treeRect, detailRect, detailLines));
-        builder.Append(RenderFooter(footerRow.Width));
-        return new TuiFrame(builder.ToString());
     }
 
     public TuiScreenResult HandleInput(TuiInputEvent input)
     {
         if (input.IsKey)
+        {
             return HandleKey(input.Key);
+        }
 
         var mouse = input.Mouse;
 
-        // Scroll wheel in detail pane
-        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastDetailRect))
+        // Asked of the arrangement rather than of rectangles saved during the last render.
+        if (_headerFrame.Bounds.Contains(mouse.Column, mouse.Row))
         {
-            if (mouse.Button == TuiMouseButton.ScrollUp)
-                _detailScroll.LineUp();
-            else if (mouse.Button == TuiMouseButton.ScrollDown)
-                _detailScroll.LineDown();
-
-            return TuiScreenResult.Continue;
-        }
-
-        // Scroll wheel in tree pane
-        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastTreeRect))
-        {
-            if (mouse.Button == TuiMouseButton.ScrollUp)
-                _tree.MovePrevious();
-            else if (mouse.Button == TuiMouseButton.ScrollDown)
-                _tree.MoveNext();
-
-            if (_tree.TryGetSelected(out var scrollSelected))
-            {
-                _selectedPath = scrollSelected.Node.Path;
-                _detailScroll.Home();
-            }
-
-            return TuiScreenResult.Continue;
-        }
-
-        // Click to switch focus between panes
-        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
-        {
-            if (mouse.HitsRect(_lastSearchRect))
+            if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
             {
                 _focus = ConfigBrowserFocus.Search;
-                return TuiScreenResult.Continue;
             }
 
-            if (mouse.HitsRect(_lastTreeRect))
+            return TuiScreenResult.Continue;
+        }
+
+        if (_treeFrame.Bounds.Contains(mouse.Column, mouse.Row))
+        {
+            // The wheel moves the choice rather than the view: the point of the tree is to
+            // land on a setting, and the list keeps whatever it lands on in sight itself.
+            if (mouse.Action == TuiMouseAction.Scroll)
             {
-                _focus = ConfigBrowserFocus.Tree;
-
-                // Click on a specific tree item
-                var treeRow = mouse.Row - _lastTreeRect.Top - 1; // -1 for border
-                if (treeRow >= 0)
+                if (mouse.Button == TuiMouseButton.ScrollUp)
                 {
-                    var range = _tree.Scroll.GetVisibleRange();
-
-                    if (treeRow < range.Length)
-                    {
-                        _tree.SelectIndex(range.Start + treeRow);
-
-                        if (_tree.TryGetSelected(out var clickSelected))
-                        {
-                            _selectedPath = clickSelected.Node.Path;
-                            _detailScroll.Home();
-                        }
-                    }
+                    _tree.MovePrevious();
+                }
+                else
+                {
+                    _tree.MoveNext();
                 }
 
                 return TuiScreenResult.Continue;
             }
 
-            if (mouse.HitsRect(_lastDetailRect))
+            if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+            {
+                _focus = ConfigBrowserFocus.Tree;
+                _treeList.OnInput(input);
+            }
+
+            return TuiScreenResult.Continue;
+        }
+
+        if (_detailFrame.Bounds.Contains(mouse.Column, mouse.Row))
+        {
+            if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
             {
                 _focus = ConfigBrowserFocus.Detail;
-                return TuiScreenResult.Continue;
             }
+
+            _detailLines.OnInput(input);
         }
 
         return TuiScreenResult.Continue;
@@ -390,7 +344,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
                 if (_query.Length > 0)
                 {
                     _query = _query[..^1];
-                    _detailScroll.Home();
+                    _detailLines.Offset = 0;
                     SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
                 }
 
@@ -403,7 +357,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         }
 
         _query += key.KeyChar;
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
 
         return true;
@@ -425,7 +379,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         if (handled && _tree.TryGetSelected(out var selected))
         {
             _selectedPath = selected.Node.Path;
-            _detailScroll.Home();
+            _detailLines.Offset = 0;
         }
 
         return TuiScreenResult.Continue;
@@ -435,23 +389,10 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     {
         switch (key.Key)
         {
-            case ConsoleKey.UpArrow:
-                _detailScroll.LineUp();
-                break;
-            case ConsoleKey.DownArrow:
-                _detailScroll.LineDown();
-                break;
-            case ConsoleKey.PageUp:
-                _detailScroll.PageUp();
-                break;
-            case ConsoleKey.PageDown:
-                _detailScroll.PageDown();
-                break;
-            case ConsoleKey.Home:
-                _detailScroll.Home();
-                break;
-            case ConsoleKey.End:
-                _detailScroll.End();
+            default:
+                // The pane keeps its own offset, so scrolling is asking it to move rather
+                // than driving a scroll state alongside it (`TUI-0007`).
+                _detailLines.OnInput(TuiInputEvent.FromKey(key));
                 break;
         }
 
@@ -668,7 +609,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
                 .GetResult();
 
             SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
-            _detailScroll.Home();
+            _detailLines.Offset = 0;
             _statusMessage = $"Reloaded {reload.LoadedPaths.Count} startup file{(reload.LoadedPaths.Count == 1 ? string.Empty : "s")} from {reload.RootDirectory}.";
         }
         catch (InvalidOperationException)
@@ -701,7 +642,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         try
         {
             var init = ConfigStartupUtilities.InitializeConfigDirectory(_runtime.Config.Startup.RootDirectory);
-            _detailScroll.Home();
+            _detailLines.Offset = 0;
             _statusMessage = init.CreatedPaths.Count == 0
                 ? $"Startup layout is already initialized at {init.RootDirectory}."
                 : $"Initialized {init.CreatedPaths.Count} startup path{(init.CreatedPaths.Count == 1 ? string.Empty : "s")} at {init.RootDirectory}.";
@@ -738,7 +679,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             }
 
             SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
-            _detailScroll.Home();
+            _detailLines.Offset = 0;
             _statusMessage = appliedCount > 0
                 ? $"Applied {appliedCount} staged change{(appliedCount == 1 ? string.Empty : "s")} and saved them to {configPath}."
                 : $"Saved configuration to {configPath}.";
@@ -812,7 +753,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         }
 
         SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         _statusMessage = removedKeys.Length == 0
             ? "No staged changes to revert for the selected node."
             : $"Reverted {removedKeys.Length} staged change{(removedKeys.Length == 1 ? string.Empty : "s")}.";
@@ -858,7 +799,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         }
 
         SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         _statusMessage = $"Staged default values for {editableLeaves.Length} setting{(editableLeaves.Length == 1 ? string.Empty : "s")}.";
         return true;
     }
@@ -919,7 +860,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     {
         SetStagedValue(path, value);
         SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
     }
 
     private static bool IsPathWithinNode(string candidatePath, string nodePath)
@@ -1022,67 +963,9 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             };
     }
 
-    private string RenderSearchBox(int width)
-    {
-        var label = _focus == ConfigBrowserFocus.Search ? "Search*" : "Search";
-        var theme = _runtime.Config.Theme.Tui;
-        var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
-        var builder = new StringBuilder();
-        builder.Append(TuiRenderHelpers.RenderTopBorder(width, "Config Browser", theme, box));
-        builder.AppendLine(TuiRenderHelpers.RenderSearchRow(label, _query, width, theme, box));
-        builder.Append(TuiRenderHelpers.RenderBottomBorder(width, theme, box));
-        return builder.ToString();
-    }
-
-    private string RenderContentRows(TuiRect treeRect, TuiRect detailRect, IReadOnlyList<ConfigDetailEntry> detailEntries)
-    {
-        var theme = _runtime.Config.Theme.Tui;
-        var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
-        var detailTitle = _confirmDialog.IsOpen
-            ? _confirmDialog.Title
-            : _pathEditor.IsBrowsing
-                ? "Filesystem Picker"
-                : _tree.TryGetSelected(out var selected)
-                    ? selected.Node.DisplayName
-                    : "Details";
-
-        return TuiRenderHelpers.RenderDualPaneContent(
-            treeRect,
-            detailRect,
-            "Configuration",
-            detailTitle,
-            _tree.Scroll.GetVisibleRange(),
-            _detailScroll.GetVisibleRange(),
-            _tree.SelectedIndex,
-            (itemIndex, isSelected) => RenderTreeLine(_tree.Items[itemIndex], isSelected, treeRect.Width, theme, box),
-            entryIndex =>
-            {
-                var entry = detailEntries[entryIndex];
-                return TuiRenderHelpers.RenderBoxContentLine(entry.Text, detailRect.Width, GetDetailStyle(entry.Kind, theme), theme, box);
-            },
-            theme,
-            box);
-    }
-
-    private string RenderTreeLine(
-        ConfigBrowserListEntry item,
-        bool isSelected,
-        int width,
-        ToshTuiThemeConfig theme,
-        TuiBoxCharacters box)
-    {
-        var label = item.Label;
-        var style = item.Node.Kind == ConfigBrowserNodeKind.Group
-            ? TuiRenderHelpers.MergeListStyles(theme.SectionHeading, theme.SelectedItem, isSelected, preserveForeground: true)
-            : TuiRenderHelpers.MergeListStyles(theme.ListItem, theme.SelectedItem, isSelected, preserveForeground: false);
-
-        return TuiRenderHelpers.RenderBoxContentLine(label, width, style, theme, box);
-    }
-
-    private string RenderFooter(int width)
+    private string FooterText()
     {
         var focus = _focus.ToString().ToLowerInvariant();
-        var theme = _runtime.Config.Theme.Tui;
         var dirtyCount = _stagedValues.Count;
         var selectedNode = GetSelectedNode();
         var validationSummary = TuiValidationFormatter.BuildSummary(
@@ -1108,7 +991,8 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
                 ConfigBrowserEditMode.Group => $"focus:{focus}  dirty:{dirtyCount}  editing group  Up/Down select  Enter edit  Space toggle  Esc close",
                 _ => $"focus:{focus}  dirty:{dirtyCount}  {validationSummary}  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space toggle  a apply  s save  r revert  R reset{startupHint}  q quit"
             };
-        return TuiRenderHelpers.RenderFooterLine(text, width, theme);
+
+        return text;
     }
 
     private string BuildManagedConfigBlockText()

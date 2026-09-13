@@ -1,440 +1,451 @@
 ─── initial ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▸ Syntax                            │ │Path: $tosh.Config.Theme                                                     │
-│  ▸ Completion                        │ │Type: ToshThemeConfig                                                        │
-│  ▸ Diagnostics                       │ │Kind: Group                                                                  │
-│  ▸ Tables                            │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│  ▸ Tui                               │ │Children: 6                                                                  │
-│▾ Display                             │ │                                                                             │
-│  • Style                             │ │Members                                                                      │
-│  ▸ Date Time                         │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│  ▸ Date Time Offset                  │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│  ▸ Date Only                         │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│  ▸ Time Only                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│  ▸ Time Span                         │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│  ▸ Storage Size                      │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│  ▸ Permissions                       │ │                                                                             │
-│  ▸ File Attributes                   │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│  ▸ Paging                            │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│  ▸ Profiles                          │ │to apply all staged changes.                                                 │
-│▾ Repl                                │ │                                                                             │
-│  • Continuation Prompt               │ │                                                                             │
-│  • Syntax Highlighting Enabled       │ │                                                                             │
-│  • Ghost Text Enabled                │ │                                                                             │
-│  • Completion Max Visible            │ │                                                                             │
-│  • Shift Enter Executes              │ │                                                                             │
-│  • Continuation Gutter Right Border  │ │                                                                             │
-│  • Continuation Line Numbers         │ │                                                                             │
-│▾ Prompt                              │ │                                                                             │
-│  • Time Enabled                      │ │                                                                             │
-│  • Header Left Layout                │ │                                                                             │
-│  • Header Right Layout               │ │                                                                             │
-│  • Prompt Left Layout                │ │                                                                             │
-│  • Time Format                       │ │                                                                             │
-│  • Time Color                        │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▸ Syntax                           │ │Path: $tosh.Config.Theme                                                      │
+│  ▸ Completion                       │ │Type: ToshThemeConfig                                                         │
+│  ▸ Diagnostics                      │ │Kind: Group                                                                   │
+│  ▸ Tables                           │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│  ▸ Tui                              │ │Children: 6                                                                   │
+│▾ Display                            │ │                                                                              │
+│  • Style                            │ │Members                                                                       │
+│  ▸ Date Time                        │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│  ▸ Date Time Offset                 │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│  ▸ Date Only                        │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│  ▸ Time Only                        │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│  ▸ Time Span                        │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│  ▸ Storage Size                     │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│  ▸ Permissions                      │ │                                                                              │
+│  ▸ File Attributes                  │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│  ▸ Paging                           │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│  ▸ Profiles                         │ │to apply all staged changes.                                                  │
+│▾ Repl                               │ │                                                                              │
+│  • Continuation Prompt              │ │                                                                              │
+│  • Syntax Highlighting Enabled      │ │                                                                              │
+│  • Ghost Text Enabled               │ │                                                                              │
+│  • Completion Max Visible           │ │                                                                              │
+│  • Shift Enter Executes             │ │                                                                              │
+│  • Continuation Gutter Right Border │ │                                                                              │
+│  • Continuation Line Numbers        │ │                                                                              │
+│▾ Prompt                             │ │                                                                              │
+│  • Time Enabled                     │ │                                                                              │
+│  • Header Left Layout               │ │                                                                              │
+│  • Header Right Layout              │ │                                                                              │
+│  • Prompt Left Layout               │ │                                                                              │
+│  • Time Format                      │ │                                                                              │
+│  • Time Color                       │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after down → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Prompt ─────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▸ Syntax                            │ │Path: $tosh.Config.Theme.Prompt                                              │
-│  ▸ Completion                        │ │Type: ToshPromptThemeConfig                                                  │
-│  ▸ Diagnostics                       │ │Kind: Group                                                                  │
-│  ▸ Tables                            │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│  ▸ Tui                               │ │Children: 10                                                                 │
-│▾ Display                             │ │                                                                             │
-│  • Style                             │ │Prompt Preview                                                               │
-│  ▸ Date Time                         │ │Layout: two-line prompt                                                      │
-│  ▸ Date Time Offset                  │ │Header Left: Directory, Git                                                  │
-│  ▸ Date Only                         │ │Header Right: UserHost, Jobs, Duration                                       │
-│  ▸ Time Only                         │ │Prompt Left: ExitCode, Name, Indicator                                       │
-│  ▸ Time Span                         │ │                                                                             │
-│  ▸ Storage Size                      │ │Sample Success Preview                                                       │
-│  ▸ Permissions                       │ │<prompt preview>
-│  ▸ File Attributes                   │ │tosh  ❯                                                                      │
-│  ▸ Paging                            │ │                                                                             │
-│  ▸ Profiles                          │ │Sample Failure Preview                                                       │
-│▾ Repl                                │ │<prompt preview>
-│  • Continuation Prompt               │ │✘ 7 tosh  ❯                                                                  │
-│  • Syntax Highlighting Enabled       │ │                                                                             │
-│  • Ghost Text Enabled                │ │Members                                                                      │
-│  • Completion Max Visible            │ │  Time [Group] (ToshTextStyleConfig)                                         │
-│  • Shift Enter Executes              │ │  Directory [Group] (ToshTextStyleConfig)                                    │
-│  • Continuation Gutter Right Border  │ │  Git [Group] (ToshTextStyleConfig)                                          │
-│  • Continuation Line Numbers         │ │  User Host [Group] (ToshTextStyleConfig)                                    │
-│▾ Prompt                              │ │  History Id [Group] (ToshTextStyleConfig)                                   │
-│  • Time Enabled                      │ │  Jobs [Group] (ToshTextStyleConfig)                                         │
-│  • Header Left Layout                │ │  Duration [Group] (ToshTextStyleConfig)                                     │
-│  • Header Right Layout               │ │  Exit Code [Group] (ToshTextStyleConfig)                                    │
-│  • Prompt Left Layout                │ │  Name [Group] (ToshTextStyleConfig)                                         │
-│  • Time Format                       │ │  Indicator [Group] (ToshTextStyleConfig)                                    │
-│  • Time Color                        │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Prompt ──────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▸ Syntax                           │ │Path: $tosh.Config.Theme.Prompt                                               │
+│  ▸ Completion                       │ │Type: ToshPromptThemeConfig                                                   │
+│  ▸ Diagnostics                      │ │Kind: Group                                                                   │
+│  ▸ Tables                           │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│  ▸ Tui                              │ │Children: 10                                                                  │
+│▾ Display                            │ │                                                                              │
+│  • Style                            │ │Prompt Preview                                                                │
+│  ▸ Date Time                        │ │Layout: two-line prompt                                                       │
+│  ▸ Date Time Offset                 │ │Header Left: Directory, Git                                                   │
+│  ▸ Date Only                        │ │Header Right: UserHost, Jobs, Duration                                        │
+│  ▸ Time Only                        │ │Prompt Left: ExitCode, Name, Indicator                                        │
+│  ▸ Time Span                        │ │                                                                              │
+│  ▸ Storage Size                     │ │Sample Success Preview                                                        │
+│  ▸ Permissions                      │ │[1;34m<prompt preview>
+│  ▸ File Attributes                  │ │[1;36mtosh[0m [96m ❯ [0m                                                      │
+│  ▸ Paging                           │ │                                                                              │
+│  ▸ Profiles                         │ │Sample Failure Preview                                                        │
+│▾ Repl                               │ │[1;34m<prompt preview>
+│  • Continuation Prompt              │ │[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                         │
+│  • Syntax Highlighting Enabled      │ │                                                                              │
+│  • Ghost Text Enabled               │ │Members                                                                       │
+│  • Completion Max Visible           │ │  Time [Group] (ToshTextStyleConfig)                                          │
+│  • Shift Enter Executes             │ │  Directory [Group] (ToshTextStyleConfig)                                     │
+│  • Continuation Gutter Right Border │ │  Git [Group] (ToshTextStyleConfig)                                           │
+│  • Continuation Line Numbers        │ │  User Host [Group] (ToshTextStyleConfig)                                     │
+│▾ Prompt                             │ │  History Id [Group] (ToshTextStyleConfig)                                    │
+│  • Time Enabled                     │ │  Jobs [Group] (ToshTextStyleConfig)                                          │
+│  • Header Left Layout               │ │  Duration [Group] (ToshTextStyleConfig)                                      │
+│  • Header Right Layout              │ │  Exit Code [Group] (ToshTextStyleConfig)                                     │
+│  • Prompt Left Layout               │ │  Name [Group] (ToshTextStyleConfig)                                          │
+│  • Time Format                      │ │  Indicator [Group] (ToshTextStyleConfig)                                     │
+│  • Time Color                       │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after down → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Syntax ─────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▸ Syntax                            │ │Path: $tosh.Config.Theme.Syntax                                              │
-│  ▸ Completion                        │ │Type: ToshSyntaxThemeConfig                                                  │
-│  ▸ Diagnostics                       │ │Kind: Group                                                                  │
-│  ▸ Tables                            │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│  ▸ Tui                               │ │Children: 23                                                                 │
-│▾ Display                             │ │                                                                             │
-│  • Style                             │ │Theme Preview                                                                │
-│  ▸ Date Time                         │ │Sample Command                                                               │
-│  ▸ Date Time Offset                  │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│  ▸ Date Only                         │ │                                                                             │
-│  ▸ Time Only                         │ │Members                                                                      │
-│  ▸ Time Span                         │ │  Keyword [Group] (ToshTextStyleConfig)                                      │
-│  ▸ Storage Size                      │ │  Control Flow [Group] (ToshTextStyleConfig)                                 │
-│  ▸ Permissions                       │ │  Language Form [Group] (ToshTextStyleConfig)                                │
-│  ▸ File Attributes                   │ │  Operator [Group] (ToshTextStyleConfig)                                     │
-│  ▸ Paging                            │ │  String [Group] (ToshTextStyleConfig)                                       │
-│  ▸ Profiles                          │ │  Escaped String [Group] (ToshTextStyleConfig)                               │
-│▾ Repl                                │ │  Interpolated String [Group] (ToshTextStyleConfig)                          │
-│  • Continuation Prompt               │ │  Number [Group] (ToshTextStyleConfig)                                       │
-│  • Syntax Highlighting Enabled       │ │  Float Number [Group] (ToshTextStyleConfig)                                 │
-│  • Ghost Text Enabled                │ │  Hex Number [Group] (ToshTextStyleConfig)                                   │
-│  • Completion Max Visible            │ │  Unit Literal [Group] (ToshTextStyleConfig)                                 │
-│  • Shift Enter Executes              │ │  Constant [Group] (ToshTextStyleConfig)                                     │
-│  • Continuation Gutter Right Border  │ │  Variable [Group] (ToshTextStyleConfig)                                     │
-│  • Continuation Line Numbers         │ │  Flag [Group] (ToshTextStyleConfig)                                         │
-│▾ Prompt                              │ │  Comment [Group] (ToshTextStyleConfig)                                      │
-│  • Time Enabled                      │ │  Type [Group] (ToshTextStyleConfig)                                         │
-│  • Header Left Layout                │ │  Namespace [Group] (ToshTextStyleConfig)                                    │
-│  • Header Right Layout               │ │  Punctuation [Group] (ToshTextStyleConfig)                                  │
-│  • Prompt Left Layout                │ │  Subexpression [Group] (ToshTextStyleConfig)                                │
-│  • Time Format                       │ │  Valid Command [Group] (ToshTextStyleConfig)                                │
-│  • Time Color                        │ │  Invalid Command [Group] (ToshTextStyleConfig)                              │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Syntax ──────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▸ Syntax                           │ │Path: $tosh.Config.Theme.Syntax                                               │
+│  ▸ Completion                       │ │Type: ToshSyntaxThemeConfig                                                   │
+│  ▸ Diagnostics                      │ │Kind: Group                                                                   │
+│  ▸ Tables                           │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│  ▸ Tui                              │ │Children: 23                                                                  │
+│▾ Display                            │ │                                                                              │
+│  • Style                            │ │Theme Preview                                                                 │
+│  ▸ Date Time                        │ │Sample Command                                                                │
+│  ▸ Date Time Offset                 │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│  ▸ Date Only                        │ │                                                                              │
+│  ▸ Time Only                        │ │Members                                                                       │
+│  ▸ Time Span                        │ │  Keyword [Group] (ToshTextStyleConfig)                                       │
+│  ▸ Storage Size                     │ │  Control Flow [Group] (ToshTextStyleConfig)                                  │
+│  ▸ Permissions                      │ │  Language Form [Group] (ToshTextStyleConfig)                                 │
+│  ▸ File Attributes                  │ │  Operator [Group] (ToshTextStyleConfig)                                      │
+│  ▸ Paging                           │ │  String [Group] (ToshTextStyleConfig)                                        │
+│  ▸ Profiles                         │ │  Escaped String [Group] (ToshTextStyleConfig)                                │
+│▾ Repl                               │ │  Interpolated String [Group] (ToshTextStyleConfig)                           │
+│  • Continuation Prompt              │ │  Number [Group] (ToshTextStyleConfig)                                        │
+│  • Syntax Highlighting Enabled      │ │  Float Number [Group] (ToshTextStyleConfig)                                  │
+│  • Ghost Text Enabled               │ │  Hex Number [Group] (ToshTextStyleConfig)                                    │
+│  • Completion Max Visible           │ │  Unit Literal [Group] (ToshTextStyleConfig)                                  │
+│  • Shift Enter Executes             │ │  Constant [Group] (ToshTextStyleConfig)                                      │
+│  • Continuation Gutter Right Border │ │  Variable [Group] (ToshTextStyleConfig)                                      │
+│  • Continuation Line Numbers        │ │  Flag [Group] (ToshTextStyleConfig)                                          │
+│▾ Prompt                             │ │  Comment [Group] (ToshTextStyleConfig)                                       │
+│  • Time Enabled                     │ │  Type [Group] (ToshTextStyleConfig)                                          │
+│  • Header Left Layout               │ │  Namespace [Group] (ToshTextStyleConfig)                                     │
+│  • Header Right Layout              │ │  Punctuation [Group] (ToshTextStyleConfig)                                   │
+│  • Prompt Left Layout               │ │  Subexpression [Group] (ToshTextStyleConfig)                                 │
+│  • Time Format                      │ │  Valid Command [Group] (ToshTextStyleConfig)                                 │
+│  • Time Color                       │ │  Invalid Command [Group] (ToshTextStyleConfig)                               │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after enter, expanding the group → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Syntax ─────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Path: $tosh.Config.Theme.Syntax                                              │
-│    ▸ Keyword                         │ │Type: ToshSyntaxThemeConfig                                                  │
-│    ▸ Control Flow                    │ │Kind: Group                                                                  │
-│    ▸ Language Form                   │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│    ▸ Operator                        │ │Children: 23                                                                 │
-│    ▸ String                          │ │                                                                             │
-│    ▸ Escaped String                  │ │Theme Preview                                                                │
-│    ▸ Interpolated String             │ │Sample Command                                                               │
-│    ▸ Number                          │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ Float Number                    │ │                                                                             │
-│    ▸ Hex Number                      │ │Members                                                                      │
-│    ▸ Unit Literal                    │ │  Keyword [Group] (ToshTextStyleConfig)                                      │
-│    ▸ Constant                        │ │  Control Flow [Group] (ToshTextStyleConfig)                                 │
-│    ▸ Variable                        │ │  Language Form [Group] (ToshTextStyleConfig)                                │
-│    ▸ Flag                            │ │  Operator [Group] (ToshTextStyleConfig)                                     │
-│    ▸ Comment                         │ │  String [Group] (ToshTextStyleConfig)                                       │
-│    ▸ Type                            │ │  Escaped String [Group] (ToshTextStyleConfig)                               │
-│    ▸ Namespace                       │ │  Interpolated String [Group] (ToshTextStyleConfig)                          │
-│    ▸ Punctuation                     │ │  Number [Group] (ToshTextStyleConfig)                                       │
-│    ▸ Subexpression                   │ │  Float Number [Group] (ToshTextStyleConfig)                                 │
-│    ▸ Valid Command                   │ │  Hex Number [Group] (ToshTextStyleConfig)                                   │
-│    ▸ Invalid Command                 │ │  Unit Literal [Group] (ToshTextStyleConfig)                                 │
-│    ▸ Path                            │ │  Constant [Group] (ToshTextStyleConfig)                                     │
-│    ▸ Argument                        │ │  Variable [Group] (ToshTextStyleConfig)                                     │
-│  ▸ Completion                        │ │  Flag [Group] (ToshTextStyleConfig)                                         │
-│  ▸ Diagnostics                       │ │  Comment [Group] (ToshTextStyleConfig)                                      │
-│  ▸ Tables                            │ │  Type [Group] (ToshTextStyleConfig)                                         │
-│  ▸ Tui                               │ │  Namespace [Group] (ToshTextStyleConfig)                                    │
-│▾ Display                             │ │  Punctuation [Group] (ToshTextStyleConfig)                                  │
-│  • Style                             │ │  Subexpression [Group] (ToshTextStyleConfig)                                │
-│  ▸ Date Time                         │ │  Valid Command [Group] (ToshTextStyleConfig)                                │
-│  ▸ Date Time Offset                  │ │  Invalid Command [Group] (ToshTextStyleConfig)                              │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Syntax ──────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax                                               │
+│    ▸ Keyword                        │ │Type: ToshSyntaxThemeConfig                                                   │
+│    ▸ Control Flow                   │ │Kind: Group                                                                   │
+│    ▸ Language Form                  │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│    ▸ Operator                       │ │Children: 23                                                                  │
+│    ▸ String                         │ │                                                                              │
+│    ▸ Escaped String                 │ │Theme Preview                                                                 │
+│    ▸ Interpolated String            │ │Sample Command                                                                │
+│    ▸ Number                         │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Float Number                   │ │                                                                              │
+│    ▸ Hex Number                     │ │Members                                                                       │
+│    ▸ Unit Literal                   │ │  Keyword [Group] (ToshTextStyleConfig)                                       │
+│    ▸ Constant                       │ │  Control Flow [Group] (ToshTextStyleConfig)                                  │
+│    ▸ Variable                       │ │  Language Form [Group] (ToshTextStyleConfig)                                 │
+│    ▸ Flag                           │ │  Operator [Group] (ToshTextStyleConfig)                                      │
+│    ▸ Comment                        │ │  String [Group] (ToshTextStyleConfig)                                        │
+│    ▸ Type                           │ │  Escaped String [Group] (ToshTextStyleConfig)                                │
+│    ▸ Namespace                      │ │  Interpolated String [Group] (ToshTextStyleConfig)                           │
+│    ▸ Punctuation                    │ │  Number [Group] (ToshTextStyleConfig)                                        │
+│    ▸ Subexpression                  │ │  Float Number [Group] (ToshTextStyleConfig)                                  │
+│    ▸ Valid Command                  │ │  Hex Number [Group] (ToshTextStyleConfig)                                    │
+│    ▸ Invalid Command                │ │  Unit Literal [Group] (ToshTextStyleConfig)                                  │
+│    ▸ Path                           │ │  Constant [Group] (ToshTextStyleConfig)                                      │
+│    ▸ Argument                       │ │  Variable [Group] (ToshTextStyleConfig)                                      │
+│  ▸ Completion                       │ │  Flag [Group] (ToshTextStyleConfig)                                          │
+│  ▸ Diagnostics                      │ │  Comment [Group] (ToshTextStyleConfig)                                       │
+│  ▸ Tables                           │ │  Type [Group] (ToshTextStyleConfig)                                          │
+│  ▸ Tui                              │ │  Namespace [Group] (ToshTextStyleConfig)                                     │
+│▾ Display                            │ │  Punctuation [Group] (ToshTextStyleConfig)                                   │
+│  • Style                            │ │  Subexpression [Group] (ToshTextStyleConfig)                                 │
+│  ▸ Date Time                        │ │  Valid Command [Group] (ToshTextStyleConfig)                                 │
+│  ▸ Date Time Offset                 │ │  Invalid Command [Group] (ToshTextStyleConfig)                               │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after down → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Path: $tosh.Config.Theme.Syntax.Keyword                                      │
-│    ▸ Keyword                         │ │Type: ToshTextStyleConfig                                                    │
-│    ▸ Control Flow                    │ │Kind: Group                                                                  │
-│    ▸ Language Form                   │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│    ▸ Operator                        │ │Children: 6                                                                  │
-│    ▸ String                          │ │                                                                             │
-│    ▸ Escaped String                  │ │Style Preview                                                                │
-│    ▸ Interpolated String             │ │Foreground: "cyan"                                                           │
-│    ▸ Number                          │ │Background: <null>                                                           │
-│    ▸ Float Number                    │ │Attributes: <none>                                                           │
-│    ▸ Hex Number                      │ │ Sample Text 123                                                             │
-│    ▸ Unit Literal                    │ │ Heading / Accent Preview                                                    │
-│    ▸ Constant                        │ │ path/to/example  --flag  42                                                 │
-│    ▸ Variable                        │ │                                                                             │
-│    ▸ Flag                            │ │Theme Preview                                                                │
-│    ▸ Comment                         │ │Sample Command                                                               │
-│    ▸ Type                            │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ Namespace                       │ │                                                                             │
-│    ▸ Punctuation                     │ │Style Editor                                                                 │
-│    ▸ Subexpression                   │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Valid Command                   │ │  [ ] Bold: disabled                                                         │
-│    ▸ Invalid Command                 │ │  [ ] Italic: disabled                                                       │
-│    ▸ Path                            │ │  [ ] Underline: disabled                                                    │
-│    ▸ Argument                        │ │  [ ] Dim: disabled                                                          │
-│  ▸ Completion                        │ │                                                                             │
-│  ▸ Diagnostics                       │ │Press e to edit this section as a structured sub-editor.                     │
-│  ▸ Tables                            │ │                                                                             │
-│  ▸ Tui                               │ │Members                                                                      │
-│▾ Display                             │ │  Foreground [Text] (String)                                                 │
-│  • Style                             │ │  Background [Unsupported] (Object)                                          │
-│  ▸ Date Time                         │ │  Bold [Boolean] (Boolean)                                                   │
-│  ▸ Date Time Offset                  │ │  Italic [Boolean] (Boolean)                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▸ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│    ▸ Control Flow                   │ │Kind: Group                                                                   │
+│    ▸ Language Form                  │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│    ▸ Operator                       │ │Children: 6                                                                   │
+│    ▸ String                         │ │                                                                              │
+│    ▸ Escaped String                 │ │Style Preview                                                                 │
+│    ▸ Interpolated String            │ │Foreground: "cyan"                                                            │
+│    ▸ Number                         │ │Background: <null>                                                            │
+│    ▸ Float Number                   │ │Attributes: <none>                                                            │
+│    ▸ Hex Number                     │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ Unit Literal                   │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Constant                       │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Variable                       │ │                                                                              │
+│    ▸ Flag                           │ │Theme Preview                                                                 │
+│    ▸ Comment                        │ │Sample Command                                                                │
+│    ▸ Type                           │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Namespace                      │ │                                                                              │
+│    ▸ Punctuation                    │ │Style Editor                                                                  │
+│    ▸ Subexpression                  │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Valid Command                  │ │  [ ] Bold: disabled                                                          │
+│    ▸ Invalid Command                │ │  [ ] Italic: disabled                                                        │
+│    ▸ Path                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Argument                       │ │  [ ] Dim: disabled                                                           │
+│  ▸ Completion                       │ │                                                                              │
+│  ▸ Diagnostics                      │ │Press e to edit this section as a structured sub-editor.                      │
+│  ▸ Tables                           │ │                                                                              │
+│  ▸ Tui                              │ │Members                                                                       │
+│▾ Display                            │ │  Foreground [Text] (String)                                                  │
+│  • Style                            │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Date Time                        │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Date Time Offset                 │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after right into the detail pane → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Path: $tosh.Config.Theme.Syntax.Keyword                                      │
-│    ▾ Keyword                         │ │Type: ToshTextStyleConfig                                                    │
-│      • Foreground                    │ │Kind: Group                                                                  │
-│      • Background                    │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Bold                          │ │Children: 6                                                                  │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │Style Preview                                                                │
-│      • Dim                           │ │Foreground: "cyan"                                                           │
-│    ▸ Control Flow                    │ │Background: <null>                                                           │
-│    ▸ Language Form                   │ │Attributes: <none>                                                           │
-│    ▸ Operator                        │ │ Sample Text 123                                                             │
-│    ▸ String                          │ │ Heading / Accent Preview                                                    │
-│    ▸ Escaped String                  │ │ path/to/example  --flag  42                                                 │
-│    ▸ Interpolated String             │ │                                                                             │
-│    ▸ Number                          │ │Theme Preview                                                                │
-│    ▸ Float Number                    │ │Sample Command                                                               │
-│    ▸ Hex Number                      │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ Unit Literal                    │ │                                                                             │
-│    ▸ Constant                        │ │Style Editor                                                                 │
-│    ▸ Variable                        │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Flag                            │ │  [ ] Bold: disabled                                                         │
-│    ▸ Comment                         │ │  [ ] Italic: disabled                                                       │
-│    ▸ Type                            │ │  [ ] Underline: disabled                                                    │
-│    ▸ Namespace                       │ │  [ ] Dim: disabled                                                          │
-│    ▸ Punctuation                     │ │                                                                             │
-│    ▸ Subexpression                   │ │Press e to edit this section as a structured sub-editor.                     │
-│    ▸ Valid Command                   │ │                                                                             │
-│    ▸ Invalid Command                 │ │Members                                                                      │
-│    ▸ Path                            │ │  Foreground [Text] (String)                                                 │
-│    ▸ Argument                        │ │  Background [Unsupported] (Object)                                          │
-│  ▸ Completion                        │ │  Bold [Boolean] (Boolean)                                                   │
-│  ▸ Diagnostics                       │ │  Italic [Boolean] (Boolean)                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▾ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│      • Foreground                   │ │Kind: Group                                                                   │
+│      • Background                   │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Bold                         │ │Children: 6                                                                   │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Style Preview                                                                 │
+│      • Dim                          │ │Foreground: "cyan"                                                            │
+│    ▸ Control Flow                   │ │Background: <null>                                                            │
+│    ▸ Language Form                  │ │Attributes: <none>                                                            │
+│    ▸ Operator                       │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ String                         │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Escaped String                 │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Interpolated String            │ │                                                                              │
+│    ▸ Number                         │ │Theme Preview                                                                 │
+│    ▸ Float Number                   │ │Sample Command                                                                │
+│    ▸ Hex Number                     │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Unit Literal                   │ │                                                                              │
+│    ▸ Constant                       │ │Style Editor                                                                  │
+│    ▸ Variable                       │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Flag                           │ │  [ ] Bold: disabled                                                          │
+│    ▸ Comment                        │ │  [ ] Italic: disabled                                                        │
+│    ▸ Type                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Namespace                      │ │  [ ] Dim: disabled                                                           │
+│    ▸ Punctuation                    │ │                                                                              │
+│    ▸ Subexpression                  │ │Press e to edit this section as a structured sub-editor.                      │
+│    ▸ Valid Command                  │ │                                                                              │
+│    ▸ Invalid Command                │ │Members                                                                       │
+│    ▸ Path                           │ │  Foreground [Text] (String)                                                  │
+│    ▸ Argument                       │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after tab → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Path: $tosh.Config.Theme.Syntax.Keyword                                      │
-│    ▾ Keyword                         │ │Type: ToshTextStyleConfig                                                    │
-│      • Foreground                    │ │Kind: Group                                                                  │
-│      • Background                    │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Bold                          │ │Children: 6                                                                  │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │Style Preview                                                                │
-│      • Dim                           │ │Foreground: "cyan"                                                           │
-│    ▸ Control Flow                    │ │Background: <null>                                                           │
-│    ▸ Language Form                   │ │Attributes: <none>                                                           │
-│    ▸ Operator                        │ │ Sample Text 123                                                             │
-│    ▸ String                          │ │ Heading / Accent Preview                                                    │
-│    ▸ Escaped String                  │ │ path/to/example  --flag  42                                                 │
-│    ▸ Interpolated String             │ │                                                                             │
-│    ▸ Number                          │ │Theme Preview                                                                │
-│    ▸ Float Number                    │ │Sample Command                                                               │
-│    ▸ Hex Number                      │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ Unit Literal                    │ │                                                                             │
-│    ▸ Constant                        │ │Style Editor                                                                 │
-│    ▸ Variable                        │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Flag                            │ │  [ ] Bold: disabled                                                         │
-│    ▸ Comment                         │ │  [ ] Italic: disabled                                                       │
-│    ▸ Type                            │ │  [ ] Underline: disabled                                                    │
-│    ▸ Namespace                       │ │  [ ] Dim: disabled                                                          │
-│    ▸ Punctuation                     │ │                                                                             │
-│    ▸ Subexpression                   │ │Press e to edit this section as a structured sub-editor.                     │
-│    ▸ Valid Command                   │ │                                                                             │
-│    ▸ Invalid Command                 │ │Members                                                                      │
-│    ▸ Path                            │ │  Foreground [Text] (String)                                                 │
-│    ▸ Argument                        │ │  Background [Unsupported] (Object)                                          │
-│  ▸ Completion                        │ │  Bold [Boolean] (Boolean)                                                   │
-│  ▸ Diagnostics                       │ │  Italic [Boolean] (Boolean)                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▾ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│      • Foreground                   │ │Kind: Group                                                                   │
+│      • Background                   │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Bold                         │ │Children: 6                                                                   │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Style Preview                                                                 │
+│      • Dim                          │ │Foreground: "cyan"                                                            │
+│    ▸ Control Flow                   │ │Background: <null>                                                            │
+│    ▸ Language Form                  │ │Attributes: <none>                                                            │
+│    ▸ Operator                       │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ String                         │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Escaped String                 │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Interpolated String            │ │                                                                              │
+│    ▸ Number                         │ │Theme Preview                                                                 │
+│    ▸ Float Number                   │ │Sample Command                                                                │
+│    ▸ Hex Number                     │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Unit Literal                   │ │                                                                              │
+│    ▸ Constant                       │ │Style Editor                                                                  │
+│    ▸ Variable                       │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Flag                           │ │  [ ] Bold: disabled                                                          │
+│    ▸ Comment                        │ │  [ ] Italic: disabled                                                        │
+│    ▸ Type                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Namespace                      │ │  [ ] Dim: disabled                                                           │
+│    ▸ Punctuation                    │ │                                                                              │
+│    ▸ Subexpression                  │ │Press e to edit this section as a structured sub-editor.                      │
+│    ▸ Valid Command                  │ │                                                                              │
+│    ▸ Invalid Command                │ │Members                                                                       │
+│    ▸ Path                           │ │  Foreground [Text] (String)                                                  │
+│    ▸ Argument                       │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after end → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Children: 6                                                                  │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Style Preview                                                                │
-│    ▾ Keyword                         │ │Foreground: "cyan"                                                           │
-│      • Foreground                    │ │Background: <null>                                                           │
-│      • Background                    │ │Attributes: <none>                                                           │
-│      • Bold                          │ │ Sample Text 123                                                             │
-│      • Italic                        │ │ Heading / Accent Preview                                                    │
-│      • Underline                     │ │ path/to/example  --flag  42                                                 │
-│      • Dim                           │ │                                                                             │
-│    ▸ Control Flow                    │ │Theme Preview                                                                │
-│    ▸ Language Form                   │ │Sample Command                                                               │
-│    ▸ Operator                        │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ String                          │ │                                                                             │
-│    ▸ Escaped String                  │ │Style Editor                                                                 │
-│    ▸ Interpolated String             │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Number                          │ │  [ ] Bold: disabled                                                         │
-│    ▸ Float Number                    │ │  [ ] Italic: disabled                                                       │
-│    ▸ Hex Number                      │ │  [ ] Underline: disabled                                                    │
-│    ▸ Unit Literal                    │ │  [ ] Dim: disabled                                                          │
-│    ▸ Constant                        │ │                                                                             │
-│    ▸ Variable                        │ │Press e to edit this section as a structured sub-editor.                     │
-│    ▸ Flag                            │ │                                                                             │
-│    ▸ Comment                         │ │Members                                                                      │
-│    ▸ Type                            │ │  Foreground [Text] (String)                                                 │
-│    ▸ Namespace                       │ │  Background [Unsupported] (Object)                                          │
-│    ▸ Punctuation                     │ │  Bold [Boolean] (Boolean)                                                   │
-│    ▸ Subexpression                   │ │  Italic [Boolean] (Boolean)                                                 │
-│    ▸ Valid Command                   │ │  Underline [Boolean] (Boolean)                                              │
-│    ▸ Invalid Command                 │ │  Dim [Boolean] (Boolean)                                                    │
-│    ▸ Path                            │ │                                                                             │
-│    ▸ Argument                        │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│  ▸ Completion                        │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│  ▸ Diagnostics                       │ │to apply all staged changes.                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▾ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│      • Foreground                   │ │Kind: Group                                                                   │
+│      • Background                   │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Bold                         │ │Children: 6                                                                   │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Style Preview                                                                 │
+│      • Dim                          │ │Foreground: "cyan"                                                            │
+│    ▸ Control Flow                   │ │Background: <null>                                                            │
+│    ▸ Language Form                  │ │Attributes: <none>                                                            │
+│    ▸ Operator                       │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ String                         │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Escaped String                 │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Interpolated String            │ │                                                                              │
+│    ▸ Number                         │ │Theme Preview                                                                 │
+│    ▸ Float Number                   │ │Sample Command                                                                │
+│    ▸ Hex Number                     │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Unit Literal                   │ │                                                                              │
+│    ▸ Constant                       │ │Style Editor                                                                  │
+│    ▸ Variable                       │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Flag                           │ │  [ ] Bold: disabled                                                          │
+│    ▸ Comment                        │ │  [ ] Italic: disabled                                                        │
+│    ▸ Type                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Namespace                      │ │  [ ] Dim: disabled                                                           │
+│    ▸ Punctuation                    │ │                                                                              │
+│    ▸ Subexpression                  │ │Press e to edit this section as a structured sub-editor.                      │
+│    ▸ Valid Command                  │ │                                                                              │
+│    ▸ Invalid Command                │ │Members                                                                       │
+│    ▸ Path                           │ │  Foreground [Text] (String)                                                  │
+│    ▸ Argument                       │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after home → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Path: $tosh.Config.Theme.Syntax.Keyword                                      │
-│    ▾ Keyword                         │ │Type: ToshTextStyleConfig                                                    │
-│      • Foreground                    │ │Kind: Group                                                                  │
-│      • Background                    │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Bold                          │ │Children: 6                                                                  │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │Style Preview                                                                │
-│      • Dim                           │ │Foreground: "cyan"                                                           │
-│    ▸ Control Flow                    │ │Background: <null>                                                           │
-│    ▸ Language Form                   │ │Attributes: <none>                                                           │
-│    ▸ Operator                        │ │ Sample Text 123                                                             │
-│    ▸ String                          │ │ Heading / Accent Preview                                                    │
-│    ▸ Escaped String                  │ │ path/to/example  --flag  42                                                 │
-│    ▸ Interpolated String             │ │                                                                             │
-│    ▸ Number                          │ │Theme Preview                                                                │
-│    ▸ Float Number                    │ │Sample Command                                                               │
-│    ▸ Hex Number                      │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ Unit Literal                    │ │                                                                             │
-│    ▸ Constant                        │ │Style Editor                                                                 │
-│    ▸ Variable                        │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Flag                            │ │  [ ] Bold: disabled                                                         │
-│    ▸ Comment                         │ │  [ ] Italic: disabled                                                       │
-│    ▸ Type                            │ │  [ ] Underline: disabled                                                    │
-│    ▸ Namespace                       │ │  [ ] Dim: disabled                                                          │
-│    ▸ Punctuation                     │ │                                                                             │
-│    ▸ Subexpression                   │ │Press e to edit this section as a structured sub-editor.                     │
-│    ▸ Valid Command                   │ │                                                                             │
-│    ▸ Invalid Command                 │ │Members                                                                      │
-│    ▸ Path                            │ │  Foreground [Text] (String)                                                 │
-│    ▸ Argument                        │ │  Background [Unsupported] (Object)                                          │
-│  ▸ Completion                        │ │  Bold [Boolean] (Boolean)                                                   │
-│  ▸ Diagnostics                       │ │  Italic [Boolean] (Boolean)                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▾ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│      • Foreground                   │ │Kind: Group                                                                   │
+│      • Background                   │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Bold                         │ │Children: 6                                                                   │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Style Preview                                                                 │
+│      • Dim                          │ │Foreground: "cyan"                                                            │
+│    ▸ Control Flow                   │ │Background: <null>                                                            │
+│    ▸ Language Form                  │ │Attributes: <none>                                                            │
+│    ▸ Operator                       │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ String                         │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Escaped String                 │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Interpolated String            │ │                                                                              │
+│    ▸ Number                         │ │Theme Preview                                                                 │
+│    ▸ Float Number                   │ │Sample Command                                                                │
+│    ▸ Hex Number                     │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Unit Literal                   │ │                                                                              │
+│    ▸ Constant                       │ │Style Editor                                                                  │
+│    ▸ Variable                       │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Flag                           │ │  [ ] Bold: disabled                                                          │
+│    ▸ Comment                        │ │  [ ] Italic: disabled                                                        │
+│    ▸ Type                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Namespace                      │ │  [ ] Dim: disabled                                                           │
+│    ▸ Punctuation                    │ │                                                                              │
+│    ▸ Subexpression                  │ │Press e to edit this section as a structured sub-editor.                      │
+│    ▸ Valid Command                  │ │                                                                              │
+│    ▸ Invalid Command                │ │Members                                                                       │
+│    ▸ Path                           │ │  Foreground [Text] (String)                                                  │
+│    ▸ Argument                       │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after page down → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Children: 6                                                                  │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Style Preview                                                                │
-│    ▾ Keyword                         │ │Foreground: "cyan"                                                           │
-│      • Foreground                    │ │Background: <null>                                                           │
-│      • Background                    │ │Attributes: <none>                                                           │
-│      • Bold                          │ │ Sample Text 123                                                             │
-│      • Italic                        │ │ Heading / Accent Preview                                                    │
-│      • Underline                     │ │ path/to/example  --flag  42                                                 │
-│      • Dim                           │ │                                                                             │
-│    ▸ Control Flow                    │ │Theme Preview                                                                │
-│    ▸ Language Form                   │ │Sample Command                                                               │
-│    ▸ Operator                        │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ String                          │ │                                                                             │
-│    ▸ Escaped String                  │ │Style Editor                                                                 │
-│    ▸ Interpolated String             │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Number                          │ │  [ ] Bold: disabled                                                         │
-│    ▸ Float Number                    │ │  [ ] Italic: disabled                                                       │
-│    ▸ Hex Number                      │ │  [ ] Underline: disabled                                                    │
-│    ▸ Unit Literal                    │ │  [ ] Dim: disabled                                                          │
-│    ▸ Constant                        │ │                                                                             │
-│    ▸ Variable                        │ │Press e to edit this section as a structured sub-editor.                     │
-│    ▸ Flag                            │ │                                                                             │
-│    ▸ Comment                         │ │Members                                                                      │
-│    ▸ Type                            │ │  Foreground [Text] (String)                                                 │
-│    ▸ Namespace                       │ │  Background [Unsupported] (Object)                                          │
-│    ▸ Punctuation                     │ │  Bold [Boolean] (Boolean)                                                   │
-│    ▸ Subexpression                   │ │  Italic [Boolean] (Boolean)                                                 │
-│    ▸ Valid Command                   │ │  Underline [Boolean] (Boolean)                                              │
-│    ▸ Invalid Command                 │ │  Dim [Boolean] (Boolean)                                                    │
-│    ▸ Path                            │ │                                                                             │
-│    ▸ Argument                        │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│  ▸ Completion                        │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│  ▸ Diagnostics                       │ │to apply all staged changes.                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▾ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│      • Foreground                   │ │Kind: Group                                                                   │
+│      • Background                   │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Bold                         │ │Children: 6                                                                   │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Style Preview                                                                 │
+│      • Dim                          │ │Foreground: "cyan"                                                            │
+│    ▸ Control Flow                   │ │Background: <null>                                                            │
+│    ▸ Language Form                  │ │Attributes: <none>                                                            │
+│    ▸ Operator                       │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ String                         │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Escaped String                 │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Interpolated String            │ │                                                                              │
+│    ▸ Number                         │ │Theme Preview                                                                 │
+│    ▸ Float Number                   │ │Sample Command                                                                │
+│    ▸ Hex Number                     │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Unit Literal                   │ │                                                                              │
+│    ▸ Constant                       │ │Style Editor                                                                  │
+│    ▸ Variable                       │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Flag                           │ │  [ ] Bold: disabled                                                          │
+│    ▸ Comment                        │ │  [ ] Italic: disabled                                                        │
+│    ▸ Type                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Namespace                      │ │  [ ] Dim: disabled                                                           │
+│    ▸ Punctuation                    │ │                                                                              │
+│    ▸ Subexpression                  │ │Press e to edit this section as a structured sub-editor.                      │
+│    ▸ Valid Command                  │ │                                                                              │
+│    ▸ Invalid Command                │ │Members                                                                       │
+│    ▸ Path                           │ │  Foreground [Text] (String)                                                  │
+│    ▸ Argument                       │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after left → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Keyword ────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Children: 6                                                                  │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▾ Syntax                            │ │Style Preview                                                                │
-│    ▾ Keyword                         │ │Foreground: "cyan"                                                           │
-│      • Foreground                    │ │Background: <null>                                                           │
-│      • Background                    │ │Attributes: <none>                                                           │
-│      • Bold                          │ │ Sample Text 123                                                             │
-│      • Italic                        │ │ Heading / Accent Preview                                                    │
-│      • Underline                     │ │ path/to/example  --flag  42                                                 │
-│      • Dim                           │ │                                                                             │
-│    ▸ Control Flow                    │ │Theme Preview                                                                │
-│    ▸ Language Form                   │ │Sample Command                                                               │
-│    ▸ Operator                        │ │var report = (df --total | summarize --sum _.Used); echo $report             │
-│    ▸ String                          │ │                                                                             │
-│    ▸ Escaped String                  │ │Style Editor                                                                 │
-│    ▸ Interpolated String             │ │   -  Foreground: "cyan"                                                     │
-│    ▸ Number                          │ │  [ ] Bold: disabled                                                         │
-│    ▸ Float Number                    │ │  [ ] Italic: disabled                                                       │
-│    ▸ Hex Number                      │ │  [ ] Underline: disabled                                                    │
-│    ▸ Unit Literal                    │ │  [ ] Dim: disabled                                                          │
-│    ▸ Constant                        │ │                                                                             │
-│    ▸ Variable                        │ │Press e to edit this section as a structured sub-editor.                     │
-│    ▸ Flag                            │ │                                                                             │
-│    ▸ Comment                         │ │Members                                                                      │
-│    ▸ Type                            │ │  Foreground [Text] (String)                                                 │
-│    ▸ Namespace                       │ │  Background [Unsupported] (Object)                                          │
-│    ▸ Punctuation                     │ │  Bold [Boolean] (Boolean)                                                   │
-│    ▸ Subexpression                   │ │  Italic [Boolean] (Boolean)                                                 │
-│    ▸ Valid Command                   │ │  Underline [Boolean] (Boolean)                                              │
-│    ▸ Invalid Command                 │ │  Dim [Boolean] (Boolean)                                                    │
-│    ▸ Path                            │ │                                                                             │
-│    ▸ Argument                        │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│  ▸ Completion                        │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│  ▸ Diagnostics                       │ │to apply all staged changes.                                                 │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Keyword ─────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▾ Syntax                           │ │Path: $tosh.Config.Theme.Syntax.Keyword                                       │
+│    ▾ Keyword                        │ │Type: ToshTextStyleConfig                                                     │
+│      • Foreground                   │ │Kind: Group                                                                   │
+│      • Background                   │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Bold                         │ │Children: 6                                                                   │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Style Preview                                                                 │
+│      • Dim                          │ │Foreground: "cyan"                                                            │
+│    ▸ Control Flow                   │ │Background: <null>                                                            │
+│    ▸ Language Form                  │ │Attributes: <none>                                                            │
+│    ▸ Operator                       │ │[36m Sample Text 123 [0m                                                      │
+│    ▸ String                         │ │[36m Heading / Accent Preview [0m                                             │
+│    ▸ Escaped String                 │ │[36m path/to/example  --flag  42 [0m                                          │
+│    ▸ Interpolated String            │ │                                                                              │
+│    ▸ Number                         │ │Theme Preview                                                                 │
+│    ▸ Float Number                   │ │Sample Command                                                                │
+│    ▸ Hex Number                     │ │[36mvar[0m [32mreport[0m [32m=[0m [37m([0m[32mdf[0m [90m--total[0m [31m|[0m [1│
+│    ▸ Unit Literal                   │ │                                                                              │
+│    ▸ Constant                       │ │Style Editor                                                                  │
+│    ▸ Variable                       │ │   -  Foreground: "cyan"                                                      │
+│    ▸ Flag                           │ │  [ ] Bold: disabled                                                          │
+│    ▸ Comment                        │ │  [ ] Italic: disabled                                                        │
+│    ▸ Type                           │ │  [ ] Underline: disabled                                                     │
+│    ▸ Namespace                      │ │  [ ] Dim: disabled                                                           │
+│    ▸ Punctuation                    │ │                                                                              │
+│    ▸ Subexpression                  │ │Press e to edit this section as a structured sub-editor.                      │
+│    ▸ Valid Command                  │ │                                                                              │
+│    ▸ Invalid Command                │ │Members                                                                       │
+│    ▸ Path                           │ │  Foreground [Text] (String)                                                  │
+│    ▸ Argument                       │ │  Background [Unsupported] (Object)                                           │
+│  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
+│  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…

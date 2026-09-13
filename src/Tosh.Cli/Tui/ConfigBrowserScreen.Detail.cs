@@ -223,7 +223,7 @@ internal sealed partial class ConfigBrowserScreen
 
             if (isEditingThisEnum)
             {
-                _enumPicker.Refresh(enumNames, Math.Max(1, _detailScroll.PageSize), _enumPicker.SelectedKey);
+                _enumPicker.Refresh(enumNames, Math.Max(1, _detailLines.Bounds.Height), _enumPicker.SelectedKey);
             }
 
             for (var index = 0; index < enumNames.Length; index++)
@@ -516,7 +516,7 @@ internal sealed partial class ConfigBrowserScreen
 
         if (_editMode == ConfigBrowserEditMode.Enum && string.Equals(_editingPath, node.Path, StringComparison.OrdinalIgnoreCase))
         {
-            _enumPicker.Refresh(Enum.GetNames(node.ValueType), Math.Max(1, _detailScroll.PageSize), _enumPicker.SelectedKey);
+            _enumPicker.Refresh(Enum.GetNames(node.ValueType), Math.Max(1, _detailLines.Bounds.Height), _enumPicker.SelectedKey);
             var entries = new List<ConfigDetailEntry>();
             var enumNames = _enumPicker.Items;
 
@@ -574,7 +574,7 @@ internal sealed partial class ConfigBrowserScreen
 
     private IReadOnlyList<ConfigDetailEntry> BuildColorEditorEntries(ConfigBrowserNode node, int width)
     {
-        _colorPicker.Refresh(BuildColorEditorOptions(node), Math.Max(1, _detailScroll.PageSize), _colorPicker.SelectedKey);
+        _colorPicker.Refresh(BuildColorEditorOptions(node), Math.Max(1, _detailLines.Bounds.Height), _colorPicker.SelectedKey);
 
         var currentColor = _colorPicker.Items.Count == 0
             ? new ColorEditorOption(GetEditableText(GetEffectiveValue(node)), GetEditableText(GetEffectiveValue(node)))
@@ -630,7 +630,7 @@ internal sealed partial class ConfigBrowserScreen
 
     private IReadOnlyList<ConfigDetailEntry> BuildPathPickerEntries(int width)
     {
-        var height = Math.Max(10, _detailScroll.PageSize);
+        var height = Math.Max(10, _detailLines.Bounds.Height);
 
         return
         [
@@ -669,7 +669,7 @@ internal sealed partial class ConfigBrowserScreen
 
         if (isEditingThisLayout)
         {
-            _promptLayoutEditor.SetPageSize(Math.Max(1, _detailScroll.PageSize));
+            _promptLayoutEditor.SetPageSize(Math.Max(1, _detailLines.Bounds.Height));
         }
 
         var items = isEditingThisLayout

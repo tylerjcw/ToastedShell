@@ -1,440 +1,451 @@
 ─── initial ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search:                                                                                                               │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search:                                                                                                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▸ Syntax                            │ │Path: $tosh.Config.Theme                                                     │
-│  ▸ Completion                        │ │Type: ToshThemeConfig                                                        │
-│  ▸ Diagnostics                       │ │Kind: Group                                                                  │
-│  ▸ Tables                            │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│  ▸ Tui                               │ │Children: 6                                                                  │
-│▾ Display                             │ │                                                                             │
-│  • Style                             │ │Members                                                                      │
-│  ▸ Date Time                         │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│  ▸ Date Time Offset                  │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│  ▸ Date Only                         │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│  ▸ Time Only                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│  ▸ Time Span                         │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│  ▸ Storage Size                      │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│  ▸ Permissions                       │ │                                                                             │
-│  ▸ File Attributes                   │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│  ▸ Paging                            │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│  ▸ Profiles                          │ │to apply all staged changes.                                                 │
-│▾ Repl                                │ │                                                                             │
-│  • Continuation Prompt               │ │                                                                             │
-│  • Syntax Highlighting Enabled       │ │                                                                             │
-│  • Ghost Text Enabled                │ │                                                                             │
-│  • Completion Max Visible            │ │                                                                             │
-│  • Shift Enter Executes              │ │                                                                             │
-│  • Continuation Gutter Right Border  │ │                                                                             │
-│  • Continuation Line Numbers         │ │                                                                             │
-│▾ Prompt                              │ │                                                                             │
-│  • Time Enabled                      │ │                                                                             │
-│  • Header Left Layout                │ │                                                                             │
-│  • Header Right Layout               │ │                                                                             │
-│  • Prompt Left Layout                │ │                                                                             │
-│  • Time Format                       │ │                                                                             │
-│  • Time Color                        │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▸ Syntax                           │ │Path: $tosh.Config.Theme                                                      │
+│  ▸ Completion                       │ │Type: ToshThemeConfig                                                         │
+│  ▸ Diagnostics                      │ │Kind: Group                                                                   │
+│  ▸ Tables                           │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│  ▸ Tui                              │ │Children: 6                                                                   │
+│▾ Display                            │ │                                                                              │
+│  • Style                            │ │Members                                                                       │
+│  ▸ Date Time                        │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│  ▸ Date Time Offset                 │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│  ▸ Date Only                        │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│  ▸ Time Only                        │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│  ▸ Time Span                        │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│  ▸ Storage Size                     │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│  ▸ Permissions                      │ │                                                                              │
+│  ▸ File Attributes                  │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│  ▸ Paging                           │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│  ▸ Profiles                         │ │to apply all staged changes.                                                  │
+│▾ Repl                               │ │                                                                              │
+│  • Continuation Prompt              │ │                                                                              │
+│  • Syntax Highlighting Enabled      │ │                                                                              │
+│  • Ghost Text Enabled               │ │                                                                              │
+│  • Completion Max Visible           │ │                                                                              │
+│  • Shift Enter Executes             │ │                                                                              │
+│  • Continuation Gutter Right Border │ │                                                                              │
+│  • Continuation Line Numbers        │ │                                                                              │
+│▾ Prompt                             │ │                                                                              │
+│  • Time Enabled                     │ │                                                                              │
+│  • Header Left Layout               │ │                                                                              │
+│  • Header Right Layout              │ │                                                                              │
+│  • Prompt Left Layout               │ │                                                                              │
+│  • Time Format                      │ │                                                                              │
+│  • Time Color                       │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after / opens search → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*:                                                                                                              │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*:                                                                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▸ Prompt                            │ │                                                                             │
-│  ▸ Syntax                            │ │Path: $tosh.Config.Theme                                                     │
-│  ▸ Completion                        │ │Type: ToshThemeConfig                                                        │
-│  ▸ Diagnostics                       │ │Kind: Group                                                                  │
-│  ▸ Tables                            │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│  ▸ Tui                               │ │Children: 6                                                                  │
-│▾ Display                             │ │                                                                             │
-│  • Style                             │ │Members                                                                      │
-│  ▸ Date Time                         │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│  ▸ Date Time Offset                  │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│  ▸ Date Only                         │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│  ▸ Time Only                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│  ▸ Time Span                         │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│  ▸ Storage Size                      │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│  ▸ Permissions                       │ │                                                                             │
-│  ▸ File Attributes                   │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│  ▸ Paging                            │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│  ▸ Profiles                          │ │to apply all staged changes.                                                 │
-│▾ Repl                                │ │                                                                             │
-│  • Continuation Prompt               │ │                                                                             │
-│  • Syntax Highlighting Enabled       │ │                                                                             │
-│  • Ghost Text Enabled                │ │                                                                             │
-│  • Completion Max Visible            │ │                                                                             │
-│  • Shift Enter Executes              │ │                                                                             │
-│  • Continuation Gutter Right Border  │ │                                                                             │
-│  • Continuation Line Numbers         │ │                                                                             │
-│▾ Prompt                              │ │                                                                             │
-│  • Time Enabled                      │ │                                                                             │
-│  • Header Left Layout                │ │                                                                             │
-│  • Header Right Layout               │ │                                                                             │
-│  • Prompt Left Layout                │ │                                                                             │
-│  • Time Format                       │ │                                                                             │
-│  • Time Color                        │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▸ Prompt                           │ │                                                                              │
+│  ▸ Syntax                           │ │Path: $tosh.Config.Theme                                                      │
+│  ▸ Completion                       │ │Type: ToshThemeConfig                                                         │
+│  ▸ Diagnostics                      │ │Kind: Group                                                                   │
+│  ▸ Tables                           │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│  ▸ Tui                              │ │Children: 6                                                                   │
+│▾ Display                            │ │                                                                              │
+│  • Style                            │ │Members                                                                       │
+│  ▸ Date Time                        │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│  ▸ Date Time Offset                 │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│  ▸ Date Only                        │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│  ▸ Time Only                        │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│  ▸ Time Span                        │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│  ▸ Storage Size                     │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│  ▸ Permissions                      │ │                                                                              │
+│  ▸ File Attributes                  │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│  ▸ Paging                           │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│  ▸ Profiles                         │ │to apply all staged changes.                                                  │
+│▾ Repl                               │ │                                                                              │
+│  • Continuation Prompt              │ │                                                                              │
+│  • Syntax Highlighting Enabled      │ │                                                                              │
+│  • Ghost Text Enabled               │ │                                                                              │
+│  • Completion Max Visible           │ │                                                                              │
+│  • Shift Enter Executes             │ │                                                                              │
+│  • Continuation Gutter Right Border │ │                                                                              │
+│  • Continuation Line Numbers        │ │                                                                              │
+│▾ Prompt                             │ │                                                                              │
+│  • Time Enabled                     │ │                                                                              │
+│  • Header Left Layout               │ │                                                                              │
+│  • Header Right Layout              │ │                                                                              │
+│  • Prompt Left Layout               │ │                                                                              │
+│  • Time Format                      │ │                                                                              │
+│  • Time Color                       │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after type 'p' → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*: p                                                                                                            │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*: p                                                                                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after type 'r' → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*: pr                                                                                                           │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*: pr                                                                                                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after type 'o' → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*: pro                                                                                                          │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*: pro                                                                                                          │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after type 'm' → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*: prom                                                                                                         │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*: prom                                                                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after type 'p' → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*: promp                                                                                                        │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*: promp                                                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after type 't' → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search*: prompt                                                                                                       │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search*: prompt                                                                                                       │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
 ─── after enter → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search: prompt                                                                                                        │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search: prompt                                                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Theme ──────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme                                                     │
-│      • Foreground                    │ │Type: ToshThemeConfig                                                        │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ Directory                       │ │  Prompt [Group] (ToshPromptThemeConfig)                                     │
-│      • Foreground                    │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                     │
-│      • Background                    │ │  Completion [Group] (ToshCompletionThemeConfig)                             │
-│      • Bold                          │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            │
-│      • Italic                        │ │  Tables [Group] (ToshTableThemeConfig)                                      │
-│      • Underline                     │ │  Tui [Group] (ToshTuiThemeConfig)                                           │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage │
-│      • Foreground                    │ │this section back to defaults, r to drop staged edits in this subtree, and a │
-│      • Background                    │ │to apply all staged changes.                                                 │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ User Host                       │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │                                                                             │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Theme ───────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme                                                      │
+│      • Foreground                   │ │Type: ToshThemeConfig                                                         │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ Directory                      │ │  Prompt [Group] (ToshPromptThemeConfig)                                      │
+│      • Foreground                   │ │  Syntax [Group] (ToshSyntaxThemeConfig)                                      │
+│      • Background                   │ │  Completion [Group] (ToshCompletionThemeConfig)                              │
+│      • Bold                         │ │  Diagnostics [Group] (ToshDiagnosticThemeConfig)                             │
+│      • Italic                       │ │  Tables [Group] (ToshTableThemeConfig)                                       │
+│      • Underline                    │ │  Tui [Group] (ToshTuiThemeConfig)                                            │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Use Enter to expand or collapse sections in the tree. Press Shift+R to stage  │
+│      • Foreground                   │ │this section back to defaults, r to drop staged edits in this subtree, and a  │
+│      • Background                   │ │to apply all staged changes.                                                  │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ User Host                      │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │                                                                              │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after down → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search: prompt                                                                                                        │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search: prompt                                                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Prompt ─────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme.Prompt                                              │
-│      • Foreground                    │ │Type: ToshPromptThemeConfig                                                  │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 10                                                                 │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Prompt Preview                                                               │
-│    ▾ Directory                       │ │Layout: two-line prompt                                                      │
-│      • Foreground                    │ │Header Left: Directory, Git                                                  │
-│      • Background                    │ │Header Right: UserHost, Jobs, Duration                                       │
-│      • Bold                          │ │Prompt Left: ExitCode, Name, Indicator                                       │
-│      • Italic                        │ │                                                                             │
-│      • Underline                     │ │Sample Success Preview                                                       │
-│      • Dim                           │ │<prompt preview>
-│    ▾ Git                             │ │tosh  ❯                                                                      │
-│      • Foreground                    │ │                                                                             │
-│      • Background                    │ │Sample Failure Preview                                                       │
-│      • Bold                          │ │<prompt preview>
-│      • Italic                        │ │✘ 7 tosh  ❯                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Members                                                                      │
-│    ▾ User Host                       │ │  Time [Group] (ToshTextStyleConfig)                                         │
-│      • Foreground                    │ │  Directory [Group] (ToshTextStyleConfig)                                    │
-│      • Background                    │ │  Git [Group] (ToshTextStyleConfig)                                          │
-│      • Bold                          │ │  User Host [Group] (ToshTextStyleConfig)                                    │
-│      • Italic                        │ │  History Id [Group] (ToshTextStyleConfig)                                   │
-│      • Underline                     │ │  Jobs [Group] (ToshTextStyleConfig)                                         │
-│      • Dim                           │ │  Duration [Group] (ToshTextStyleConfig)                                     │
-│    ▾ History Id                      │ │  Exit Code [Group] (ToshTextStyleConfig)                                    │
-│      • Foreground                    │ │  Name [Group] (ToshTextStyleConfig)                                         │
-│      • Background                    │ │  Indicator [Group] (ToshTextStyleConfig)                                    │
-│      • Bold                          │ │                                                                             │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Prompt ──────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme.Prompt                                               │
+│      • Foreground                   │ │Type: ToshPromptThemeConfig                                                   │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 10                                                                  │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Prompt Preview                                                                │
+│    ▾ Directory                      │ │Layout: two-line prompt                                                       │
+│      • Foreground                   │ │Header Left: Directory, Git                                                   │
+│      • Background                   │ │Header Right: UserHost, Jobs, Duration                                        │
+│      • Bold                         │ │Prompt Left: ExitCode, Name, Indicator                                        │
+│      • Italic                       │ │                                                                              │
+│      • Underline                    │ │Sample Success Preview                                                        │
+│      • Dim                          │ │[1;34m<prompt preview>
+│    ▾ Git                            │ │[1;36mtosh[0m [96m ❯ [0m                                                      │
+│      • Foreground                   │ │                                                                              │
+│      • Background                   │ │Sample Failure Preview                                                        │
+│      • Bold                         │ │[1;34m<prompt preview>
+│      • Italic                       │ │[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                         │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Members                                                                       │
+│    ▾ User Host                      │ │  Time [Group] (ToshTextStyleConfig)                                          │
+│      • Foreground                   │ │  Directory [Group] (ToshTextStyleConfig)                                     │
+│      • Background                   │ │  Git [Group] (ToshTextStyleConfig)                                           │
+│      • Bold                         │ │  User Host [Group] (ToshTextStyleConfig)                                     │
+│      • Italic                       │ │  History Id [Group] (ToshTextStyleConfig)                                    │
+│      • Underline                    │ │  Jobs [Group] (ToshTextStyleConfig)                                          │
+│      • Dim                          │ │  Duration [Group] (ToshTextStyleConfig)                                      │
+│    ▾ History Id                     │ │  Exit Code [Group] (ToshTextStyleConfig)                                     │
+│      • Foreground                   │ │  Name [Group] (ToshTextStyleConfig)                                          │
+│      • Background                   │ │  Indicator [Group] (ToshTextStyleConfig)                                     │
+│      • Bold                         │ │                                                                              │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
 ─── after down → Continue ───
-╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮│Search: prompt                                                                                                        │
+╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│Search: prompt                                                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭ Configuration ───────────────────────╮ ╭ Time ───────────────────────────────────────────────────────────────────────╮
-│▾ Theme                               │ │Config Section                                                               │
-│  ▾ Prompt                            │ │                                                                             │
-│    ▾ Time                            │ │Path: $tosh.Config.Theme.Prompt.Time                                         │
-│      • Foreground                    │ │Type: ToshTextStyleConfig                                                    │
-│      • Background                    │ │Kind: Group                                                                  │
-│      • Bold                          │ │Nullable: yes  Editable: no  Resettable: yes                                 │
-│      • Italic                        │ │Children: 6                                                                  │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Style Preview                                                                │
-│    ▾ Directory                       │ │Foreground: "gray"                                                           │
-│      • Foreground                    │ │Background: <null>                                                           │
-│      • Background                    │ │Attributes: dim                                                              │
-│      • Bold                          │ │ Sample Text 123                                                             │
-│      • Italic                        │ │ Heading / Accent Preview                                                    │
-│      • Underline                     │ │ path/to/example  --flag  42                                                 │
-│      • Dim                           │ │                                                                             │
-│    ▾ Git                             │ │Prompt Preview                                                               │
-│      • Foreground                    │ │Layout: two-line prompt                                                      │
-│      • Background                    │ │Header Left: Directory, Git                                                  │
-│      • Bold                          │ │Header Right: UserHost, Jobs, Duration                                       │
-│      • Italic                        │ │Prompt Left: ExitCode, Name, Indicator                                       │
-│      • Underline                     │ │                                                                             │
-│      • Dim                           │ │Sample Success Preview                                                       │
-│    ▾ User Host                       │ │<prompt preview>
-│      • Foreground                    │ │tosh  ❯                                                                      │
-│      • Background                    │ │                                                                             │
-│      • Bold                          │ │Sample Failure Preview                                                       │
-│      • Italic                        │ │<prompt preview>
-│      • Underline                     │ │✘ 7 tosh  ❯                                                                  │
-│      • Dim                           │ │                                                                             │
-│    ▾ History Id                      │ │Style Editor                                                                 │
-│      • Foreground                    │ │   -  Foreground: "gray"                                                     │
-│      • Background                    │ │  [ ] Bold: disabled                                                         │
-│      • Bold                          │ │  [ ] Italic: disabled                                                       │
-╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
+╭ Configuration ──────────────────────╮ ╭ Time ────────────────────────────────────────────────────────────────────────╮
+│▾ Theme                              │ │Config Section                                                                │
+│  ▾ Prompt                           │ │                                                                              │
+│    ▾ Time                           │ │Path: $tosh.Config.Theme.Prompt.Time                                          │
+│      • Foreground                   │ │Type: ToshTextStyleConfig                                                     │
+│      • Background                   │ │Kind: Group                                                                   │
+│      • Bold                         │ │Nullable: yes  Editable: no  Resettable: yes                                  │
+│      • Italic                       │ │Children: 6                                                                   │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Style Preview                                                                 │
+│    ▾ Directory                      │ │Foreground: "gray"                                                            │
+│      • Foreground                   │ │Background: <null>                                                            │
+│      • Background                   │ │Attributes: dim                                                               │
+│      • Bold                         │ │[2;90m Sample Text 123 [0m                                                    │
+│      • Italic                       │ │[2;90m Heading / Accent Preview [0m                                           │
+│      • Underline                    │ │[2;90m path/to/example  --flag  42 [0m                                        │
+│      • Dim                          │ │                                                                              │
+│    ▾ Git                            │ │Prompt Preview                                                                │
+│      • Foreground                   │ │Layout: two-line prompt                                                       │
+│      • Background                   │ │Header Left: Directory, Git                                                   │
+│      • Bold                         │ │Header Right: UserHost, Jobs, Duration                                        │
+│      • Italic                       │ │Prompt Left: ExitCode, Name, Indicator                                        │
+│      • Underline                    │ │                                                                              │
+│      • Dim                          │ │Sample Success Preview                                                        │
+│    ▾ User Host                      │ │[1;34m<prompt preview>
+│      • Foreground                   │ │[1;36mtosh[0m [96m ❯ [0m                                                      │
+│      • Background                   │ │                                                                              │
+│      • Bold                         │ │Sample Failure Preview                                                        │
+│      • Italic                       │ │[1;34m<prompt preview>
+│      • Underline                    │ │[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                         │
+│      • Dim                          │ │                                                                              │
+│    ▾ History Id                     │ │Style Editor                                                                  │
+│      • Foreground                   │ │   -  Foreground: "gray"                                                      │
+│      • Background                   │ │  [ ] Bold: disabled                                                          │
+│      • Bold                         │ │  [ ] Italic: disabled                                                        │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
 focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…

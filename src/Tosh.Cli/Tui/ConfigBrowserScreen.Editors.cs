@@ -59,7 +59,7 @@ internal sealed partial class ConfigBrowserScreen
             OpenGroupEditor(node, preferredKey: null);
             _editMode = ConfigBrowserEditMode.Group;
             _focus = ConfigBrowserFocus.Editor;
-            _detailScroll.Home();
+            _detailLines.Offset = 0;
             return true;
         }
 
@@ -132,7 +132,7 @@ internal sealed partial class ConfigBrowserScreen
         _editingPath = node.Path;
         _editMode = ConfigBrowserEditMode.Text;
         _focus = ConfigBrowserFocus.Editor;
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         return true;
     }
 
@@ -160,7 +160,7 @@ internal sealed partial class ConfigBrowserScreen
 
         if (_editMode == ConfigBrowserEditMode.Path)
         {
-            var result = _pathEditor.HandleKey(key, Math.Max(8, _detailScroll.PageSize));
+            var result = _pathEditor.HandleKey(key, Math.Max(8, _detailLines.Bounds.Height));
 
             switch (result.Kind)
             {
@@ -280,28 +280,28 @@ internal sealed partial class ConfigBrowserScreen
     private void RefreshGroupEditor(ConfigBrowserNode node, string? preferredKey)
     {
         var editableChildren = GetGroupEditableChildren(node);
-        var pageSize = Math.Max(5, Math.Min(12, _detailScroll.PageSize > 0 ? _detailScroll.PageSize - 8 : 8));
+        var pageSize = Math.Max(5, Math.Min(12, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height - 8 : 8));
         _groupEditor.Refresh(editableChildren, pageSize, preferredKey);
     }
 
     private void OpenGroupEditor(ConfigBrowserNode node, string? preferredKey)
     {
         var editableChildren = GetGroupEditableChildren(node);
-        var pageSize = Math.Max(5, Math.Min(12, _detailScroll.PageSize > 0 ? _detailScroll.PageSize - 8 : 8));
+        var pageSize = Math.Max(5, Math.Min(12, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height - 8 : 8));
         _groupEditor.Open(editableChildren, pageSize, child => child.Path, preferredKey);
     }
 
     private void RefreshCollectionEditor(ConfigBrowserNode node, string? preferredKey)
     {
         var items = ConfigCollectionEditorRegistry.GetItems(_runtime, node, GetEffectiveValue(node));
-        var pageSize = Math.Max(5, Math.Min(12, _detailScroll.PageSize > 0 ? _detailScroll.PageSize - 8 : 8));
+        var pageSize = Math.Max(5, Math.Min(12, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height - 8 : 8));
         _collectionEditor.Refresh(items, pageSize, preferredKey);
     }
 
     private void OpenCollectionEditor(ConfigBrowserNode node, string? preferredKey)
     {
         var items = ConfigCollectionEditorRegistry.GetItems(_runtime, node, GetEffectiveValue(node));
-        var pageSize = Math.Max(5, Math.Min(12, _detailScroll.PageSize > 0 ? _detailScroll.PageSize - 8 : 8));
+        var pageSize = Math.Max(5, Math.Min(12, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height - 8 : 8));
         _collectionEditor.Open(items, pageSize, item => item.Key, item => item.EditValue, preferredKey);
     }
 
@@ -482,7 +482,7 @@ internal sealed partial class ConfigBrowserScreen
             _editingPath = child.Path;
             _editMode = ConfigBrowserEditMode.Text;
             _focus = ConfigBrowserFocus.Editor;
-            _detailScroll.Home();
+            _detailLines.Offset = 0;
         }
     }
 
@@ -497,7 +497,7 @@ internal sealed partial class ConfigBrowserScreen
         _editingPath = node.Path;
         _editMode = ConfigBrowserEditMode.Path;
         _focus = ConfigBrowserFocus.Editor;
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         return true;
     }
 
@@ -511,11 +511,11 @@ internal sealed partial class ConfigBrowserScreen
         var enumNames = Enum.GetNames(node.ValueType);
         var currentName = GetEffectiveValue(node)?.ToString();
         var preferredName = enumNames.FirstOrDefault(name => string.Equals(name, currentName, StringComparison.OrdinalIgnoreCase));
-        _enumPicker.Open(enumNames, Math.Max(1, _detailScroll.PageSize > 0 ? _detailScroll.PageSize : 8), name => name, preferredName);
+        _enumPicker.Open(enumNames, Math.Max(1, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height : 8), name => name, preferredName);
         _editingPath = node.Path;
         _editMode = ConfigBrowserEditMode.Enum;
         _focus = ConfigBrowserFocus.Editor;
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         return true;
     }
 
@@ -534,7 +534,7 @@ internal sealed partial class ConfigBrowserScreen
         _focus = ConfigBrowserFocus.Editor;
         _statusMessage = null;
         OpenCollectionEditor(node, preferredKey: null);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         return true;
     }
 
@@ -561,7 +561,7 @@ internal sealed partial class ConfigBrowserScreen
             startDirectory,
             GetPathPickerSelectionMode(editingNode),
             initialSelectionPath,
-            Math.Max(8, _detailScroll.PageSize));
+            Math.Max(8, _detailLines.Bounds.Height));
         _statusMessage = null;
     }
 
@@ -624,11 +624,11 @@ internal sealed partial class ConfigBrowserScreen
         var items = BuildColorEditorOptions(node);
         var preferredIndex = Math.Clamp(GetCurrentColorSelectionIndex(node), 0, Math.Max(0, items.Count - 1));
         var preferredKey = items.Count == 0 ? null : items[preferredIndex].Label;
-        _colorPicker.Open(items, Math.Max(1, _detailScroll.PageSize > 0 ? _detailScroll.PageSize : 8), item => item.Label, preferredKey);
+        _colorPicker.Open(items, Math.Max(1, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height : 8), item => item.Label, preferredKey);
         _editingPath = node.Path;
         _editMode = ConfigBrowserEditMode.Color;
         _focus = ConfigBrowserFocus.Editor;
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         return true;
     }
 
@@ -649,7 +649,7 @@ internal sealed partial class ConfigBrowserScreen
         CaptureLiveEditSnapshot(GetPromptLayoutSnapshotPaths(node.Path));
         _promptLayoutEditor.Open(
             CreatePromptLayoutEditorItems(layoutText),
-            Math.Max(1, _detailScroll.PageSize > 0 ? _detailScroll.PageSize : 8),
+            Math.Max(1, _detailLines.Bounds.Height > 0 ? _detailLines.Bounds.Height : 8),
             keySelector: item => item.Name,
             includedSelector: item => item.Included,
             includedUpdater: (item, included) => item with { Included = included },
@@ -658,7 +658,7 @@ internal sealed partial class ConfigBrowserScreen
         _editingPath = node.Path;
         _editMode = ConfigBrowserEditMode.PromptLayout;
         _focus = ConfigBrowserFocus.Editor;
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         return true;
     }
 
@@ -763,7 +763,7 @@ internal sealed partial class ConfigBrowserScreen
         }
 
         SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
     }
 
     private IEnumerable<string> GetPromptLayoutSnapshotPaths(string layoutPath)

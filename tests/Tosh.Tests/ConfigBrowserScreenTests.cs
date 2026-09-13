@@ -63,7 +63,7 @@ public sealed class ConfigBrowserScreenTests
         var screen = new ConfigBrowserScreen(runtime, new ConfigBrowseRequest("box style", null));
 
         var frame = screen.Render(new TuiSize(90, 24));
-        var rendered = StyledText.StripAnsi(frame.Content);
+        var rendered = frame.ToPlainText();
 
         Assert.Contains("Config Browser", rendered, StringComparison.Ordinal);
         Assert.Contains("Configuration", rendered, StringComparison.Ordinal);
