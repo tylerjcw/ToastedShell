@@ -39,7 +39,7 @@ public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassF
         var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("grep", "grep"));
 
         var frame = screen.Render(new TuiSize(80, 20));
-        var rendered = StyledText.StripAnsi(frame.Content);
+        var rendered = frame.ToPlainText();
 
         Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, rendered);
         Assert.Contains("Help Browser", rendered, StringComparison.Ordinal);
@@ -55,7 +55,7 @@ public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassF
         var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("grep", "grep"));
 
         var frame = screen.Render(new TuiSize(80, 20));
-        var rendered = StyledText.StripAnsi(frame.Content);
+        var rendered = frame.ToPlainText();
 
         Assert.Contains("╔", rendered, StringComparison.Ordinal);
         Assert.Contains("║", rendered, StringComparison.Ordinal);
@@ -112,7 +112,7 @@ public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassF
 
         screen.HandleKey(new ConsoleKeyInfo('\0', ConsoleKey.F3, shift: false, alt: false, control: false));
 
-        var rendered = StyledText.StripAnsi(screen.Render(new TuiSize(80, 20)).Content);
+        var rendered = screen.Render(new TuiSize(80, 20)).ToPlainText();
         Assert.Contains("ToastScript", rendered, StringComparison.Ordinal);
         Assert.Contains("func", rendered, StringComparison.OrdinalIgnoreCase);
     }
@@ -122,7 +122,7 @@ public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassF
     {
         var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("func", null));
 
-        var rendered = StyledText.StripAnsi(screen.Render(new TuiSize(80, 20)).Content);
+        var rendered = screen.Render(new TuiSize(80, 20)).ToPlainText();
         Assert.Contains("ToastScript", rendered, StringComparison.Ordinal);
     }
 

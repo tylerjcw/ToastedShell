@@ -1,7 +1,9 @@
 ─── initial ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Shell              │ │Section                                                                      │
 │    apropos                           │ │                                                                             │
 │    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
@@ -36,11 +38,13 @@
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after / opens search → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*:                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Shell              │ │Section                                                                      │
 │    apropos                           │ │                                                                             │
 │    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
@@ -75,11 +79,13 @@ focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forwa
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after type 'p' → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*: p                                                                                                            │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Shell              │ │Section                                                                      │
 │    apropos                           │ │                                                                             │
 │    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
@@ -114,11 +120,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    exists                            │ │                                                                             │
 │    find                              │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after type 'i' → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*: pi                                                                                                           │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Shell              │ │Section                                                                      │
 │    apropos                           │ │                                                                             │
 │    help                              │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
@@ -153,11 +161,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    dedup                             │ │                                                                             │
 │    describe                          │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after type 'n' → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*: pin                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Filesystem         │ │Section                                                                      │
 │    seek                              │ │                                                                             │
 │  ▾ ToastedShell / Network            │ │ToastedShell / Filesystem is currently expanded. Press Enter to toggle it.   │
@@ -192,11 +202,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │                                      │ │                                                                             │
 │                                      │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after type 'g' → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*: ping                                                                                                         │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Filesystem         │ │Section                                                                      │
 │    seek                              │ │                                                                             │
 │  ▾ ToastedShell / Network            │ │ToastedShell / Filesystem is currently expanded. Press Enter to toggle it.   │
@@ -231,11 +243,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │                                      │ │                                                                             │
 │                                      │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after enter → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search: ping                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Filesystem ──────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Filesystem         │ │Section                                                                      │
 │    seek                              │ │                                                                             │
 │  ▾ ToastedShell / Network            │ │ToastedShell / Filesystem is currently expanded. Press Enter to toggle it.   │
@@ -270,11 +284,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │                                      │ │                                                                             │
 │                                      │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after down → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search: ping                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
 │  ▾ ToastedShell / Filesystem         │ │Select a topic to view its full help page.                                   │
 │›   seek                              │ │                                                                             │
 │  ▾ ToastedShell / Network            │ │                                                                             │
@@ -309,11 +325,13 @@ focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forwa
 │                                      │ │                                                                             │
 │                                      │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after right, opening the entry → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search: ping                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ seek [BuiltIn] ─────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ seek [BuiltIn] ─────────────────────────────────────────────────────────────╮
 │  ▾ Filesystem                        │ │BuiltIn • Filesystem                                                         │
 │›   seek                              │ │                                                                             │
 │  ▾ Network                           │ │Moves an open managed file handle to a new position and returns the handle   │
@@ -348,4 +366,4 @@ focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forwa
 │                                      │ │    `FileSystemEntry` methods like `OpenText()` and `OpenRead()`. `seek`     │
 │                                      │ │    returns the handle so you can keep piping through the stream workflow,   │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related

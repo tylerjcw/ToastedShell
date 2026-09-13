@@ -12,7 +12,6 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
     private readonly ToshRuntime _runtime;
     private readonly IReadOnlyList<HelpSummary> _allTopics;
     private readonly TuiListState<HelpBrowserListEntry> _sidebar = new();
-    private readonly TuiScrollState _detailScroll = new();
     private readonly Stack<string> _backHistory = new();
     private readonly Stack<string> _forwardHistory = new();
     private readonly HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
@@ -30,9 +29,6 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
     private string? _detailEntriesCacheKey;
     private IReadOnlyList<HelpDetailEntry>? _detailEntriesCache;
     private readonly TuiShortcuts _shortcuts;
-    private TuiRect _lastSearchRect;
-    private TuiRect _lastListRect;
-    private TuiRect _lastDetailRect;
 
     public HelpBrowserScreen(ToshRuntime runtime, HelpBrowseRequest request)
     {
@@ -57,13 +53,16 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         // hands back `Divide` for `/` and `None` for both brackets, so the three cases
         // written against `Oem2`, `Oem4` and `Oem6` could never fire outside a test that
         // built its own key info. Search, back and forward were dead keys.
+        // Registered in the order the footer should read them, because the footer is
+        // generated from this table rather than written out again beside it.
         _shortcuts = new TuiShortcuts()
-            .On(ConsoleKey.Q, "q", "quit", Quit)
-            .On(ConsoleKey.Escape, "Esc", string.Empty, Quit)
             .On('/', "/", "search", () => _focus = HelpBrowserFocus.Search)
             .On('[', "[", "back", () => NavigateBack())
-            .On(']', "]", "forward", () => NavigateForward());
+            .On(']', "]", "forward", () => NavigateForward())
+            .On(ConsoleKey.Q, "q", "quit", Quit)
+            .On(ConsoleKey.Escape, "Esc", string.Empty, Quit);
 
+        BuildTree();
         ApplyFilter(pageSize: 10);
 
         if (!string.IsNullOrWhiteSpace(request.InitialTopicName))
@@ -89,93 +88,65 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         }
     }
 
-    public TuiFrame Render(TuiSize size)
-    {
-        var width = Math.Max(60, size.Width);
-        var height = Math.Max(14, size.Height);
-        var root = new TuiRect(0, 0, width, height);
-        var (searchRect, restRows) = TuiSplitLayout.SplitRows(root, SearchBoxHeight, gap: 0);
-        var (contentRows, footerRow) = TuiSplitLayout.SplitRows(restRows, Math.Max(4, restRows.Height - 1), gap: 0);
-        var listWidth = Math.Clamp(width / 3, 24, 40);
-        var (listRect, detailRect) = TuiSplitLayout.SplitColumns(contentRows, listWidth, 1);
-
-        _lastSearchRect = searchRect;
-        _lastListRect = listRect;
-        _lastDetailRect = detailRect;
-
-        SyncSidebar(Math.Max(1, listRect.Height - 2));
-        var detailEntries = BuildDetailEntries(Math.Max(1, detailRect.Width - 2));
-        _detailScroll.SetDimensions(detailEntries.Count, Math.Max(1, detailRect.Height - 2));
-
-        var builder = new StringBuilder();
-        builder.Append(RenderSearchBox(searchRect.Width));
-        builder.Append(RenderContentRows(listRect, detailRect, detailEntries));
-        builder.Append(RenderFooter(footerRow.Width));
-        return new TuiFrame(builder.ToString());
-    }
-
     public TuiScreenResult HandleInput(TuiInputEvent input)
     {
         if (input.IsKey)
+        {
             return HandleKey(input.Key);
+        }
 
         var mouse = input.Mouse;
 
-        // Scroll wheel in detail pane
-        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastDetailRect))
+        // Asked of the arrangement rather than of rectangles saved during the last render.
+        // A pane that has been laid out knows where it is, and a browser that keeps its own
+        // copy of that has two answers to one question.
+        if (_headerFrame.Bounds.Contains(mouse.Column, mouse.Row))
         {
-            if (mouse.Button == TuiMouseButton.ScrollUp)
-                _detailScroll.LineUp();
-            else if (mouse.Button == TuiMouseButton.ScrollDown)
-                _detailScroll.LineDown();
-
-            return TuiScreenResult.Continue;
-        }
-
-        // Scroll wheel in list pane
-        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastListRect))
-        {
-            if (mouse.Button == TuiMouseButton.ScrollUp)
-                MoveSidebarPrevious();
-            else if (mouse.Button == TuiMouseButton.ScrollDown)
-                MoveSidebarNext();
-
-            return TuiScreenResult.Continue;
-        }
-
-        // Click to switch focus between panes
-        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
-        {
-            if (mouse.HitsRect(_lastSearchRect))
+            if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
             {
                 _focus = HelpBrowserFocus.Search;
-                return TuiScreenResult.Continue;
             }
 
-            if (mouse.HitsRect(_lastListRect))
+            return TuiScreenResult.Continue;
+        }
+
+        if (_listFrame.Bounds.Contains(mouse.Column, mouse.Row))
+        {
+            // The wheel moves the choice rather than the view: the point of the sidebar is
+            // to land on a topic, and the list keeps whatever it lands on in sight itself.
+            if (mouse.Action == TuiMouseAction.Scroll)
             {
-                _focus = HelpBrowserFocus.List;
-
-                // Click on a specific list item
-                var listRow = mouse.Row - _lastListRect.Top - 1; // -1 for border
-                if (listRow >= 0)
+                if (mouse.Button == TuiMouseButton.ScrollUp)
                 {
-                    var range = _sidebar.Scroll.GetVisibleRange();
-
-                    if (listRow < range.Length)
-                    {
-                        _sidebar.SelectIndex(range.Start + listRow);
-                    }
+                    MoveSidebarPrevious();
+                }
+                else
+                {
+                    MoveSidebarNext();
                 }
 
                 return TuiScreenResult.Continue;
             }
 
-            if (mouse.HitsRect(_lastDetailRect))
+            if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+            {
+                _focus = HelpBrowserFocus.List;
+
+                // The list converts the click through its own offset and tells the model.
+                _sidebarList.OnInput(input);
+            }
+
+            return TuiScreenResult.Continue;
+        }
+
+        if (_detailFrame.Bounds.Contains(mouse.Column, mouse.Row))
+        {
+            if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
             {
                 _focus = HelpBrowserFocus.Detail;
-                return TuiScreenResult.Continue;
             }
+
+            _detailLines.OnInput(input);
         }
 
         return TuiScreenResult.Continue;
@@ -597,27 +568,9 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
             }
         }
 
-        switch (key.Key)
-        {
-            case ConsoleKey.UpArrow:
-                _detailScroll.LineUp();
-                break;
-            case ConsoleKey.DownArrow:
-                _detailScroll.LineDown();
-                break;
-            case ConsoleKey.PageUp:
-                _detailScroll.PageUp();
-                break;
-            case ConsoleKey.PageDown:
-                _detailScroll.PageDown();
-                break;
-            case ConsoleKey.Home:
-                _detailScroll.Home();
-                break;
-            case ConsoleKey.End:
-                _detailScroll.End();
-                break;
-        }
+        // The pane keeps its own offset, so scrolling is asking it to move rather than
+        // driving a scroll state alongside it and hoping the two agree (`TUI-0007`).
+        _detailLines.OnInput(TuiInputEvent.FromKey(key));
 
         return TuiScreenResult.Continue;
     }
@@ -668,7 +621,7 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
     {
         SyncSidebar(Math.Max(1, pageSize));
         EnsureSidebarSelection();
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
     }
 
     private void SyncSidebar(int pageSize)
@@ -1039,92 +992,6 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         return false;
     }
 
-    private string BuildGroupLine(int width, ToshTuiThemeConfig theme)
-    {
-        var groups = new[]
-        {
-            HelpBrowserGroup.All,
-            HelpBrowserGroup.ToastedShell,
-            HelpBrowserGroup.ToastScript,
-            HelpBrowserGroup.Clr,
-        };
-
-        var segments = new List<object?>();
-
-        for (var index = 0; index < groups.Length; index += 1)
-        {
-            if (index > 0)
-            {
-                segments.Add(theme.Meta.Apply("  "));
-            }
-
-            var group = groups[index];
-            var style = group == _activeGroup ? theme.Title : theme.Meta;
-            segments.Add(style.Apply(BuildGroupLabel(group)));
-        }
-
-        var rendered = StyledText.RenderSegments(segments);
-        var visible = StyledText.GetVisibleLength(rendered);
-        if (visible > width)
-        {
-            return theme.Meta.Apply(TuiRenderHelpers.TrimOrPadPlain(GetGroupTitle(_activeGroup), width)).ToAnsi();
-        }
-
-        return rendered + new string(' ', width - visible);
-    }
-
-    private string RenderSearchBox(int width)
-    {
-        var label = _focus == HelpBrowserFocus.Search ? "Search*" : "Search";
-        var theme = _runtime.Config.Theme.Tui;
-        var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
-        var builder = new StringBuilder();
-        builder.Append(TuiRenderHelpers.RenderTopBorder(width, "Help Browser", theme, box));
-
-        var innerWidth = Math.Max(1, width - 2);
-        var groupLine = BuildGroupLine(innerWidth, theme);
-        builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
-        builder.Append(groupLine);
-        builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
-        builder.AppendLine();
-
-        builder.AppendLine(TuiRenderHelpers.RenderSearchRow(label, _query, width, theme, box));
-        builder.Append(TuiRenderHelpers.RenderBottomBorder(width, theme, box));
-        return builder.ToString();
-    }
-
-    private string RenderContentRows(TuiRect listRect, TuiRect detailRect, IReadOnlyList<HelpDetailEntry> detailEntries)
-    {
-        var theme = _runtime.Config.Theme.Tui;
-        var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
-        var detailInnerWidth = Math.Max(1, detailRect.Width - 2);
-
-        return TuiRenderHelpers.RenderDualPaneContent(
-            listRect,
-            detailRect,
-            GetGroupTitle(_activeGroup),
-            GetDetailTitle(),
-            _sidebar.Scroll.GetVisibleRange(),
-            _detailScroll.GetVisibleRange(),
-            _sidebar.SelectedIndex,
-            (itemIndex, isSelected) => RenderSidebarLine(_sidebar.Items[itemIndex], isSelected, listRect.Width, theme, box),
-            entryIndex =>
-            {
-                var entry = detailEntries[entryIndex];
-                var text = TuiRenderHelpers.TrimOrPadPlain(entry.Text, detailInnerWidth);
-                return TuiRenderHelpers.RenderBoxContentLine(text, detailRect.Width, GetDetailStyle(entry.Kind, theme), theme, box);
-            },
-            theme,
-            box);
-    }
-
-    private string RenderFooter(int width)
-    {
-        var focus = _focus.ToString().ToLowerInvariant();
-        var theme = _runtime.Config.Theme.Tui;
-        return TuiRenderHelpers.RenderFooterLine($"focus:{focus}  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit", width, theme);
-    }
-
     private bool TryInsertCurrentSelection()
     {
         var sink = _runtime.CommandLineInsertion;
@@ -1173,7 +1040,7 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         }
 
         SelectTopicByName(resolved.Name);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         InvalidateDetailCache();
         return true;
     }
@@ -1194,7 +1061,7 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         }
 
         SelectTopicByName(_currentTopicName);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         _focus = HelpBrowserFocus.Detail;
         InvalidateDetailCache();
         return true;
@@ -1216,7 +1083,7 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         }
 
         SelectTopicByName(_currentTopicName);
-        _detailScroll.Home();
+        _detailLines.Offset = 0;
         _focus = HelpBrowserFocus.Detail;
         InvalidateDetailCache();
         return true;
@@ -1363,21 +1230,6 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
             ? $"{selected.Kind}:{selected.TopicName}:{selected.SectionKey}:{selected.Value}:{selected.IsCollapsed}"
             : "<none>";
         return $"{width}|topic:{_currentTopicName}|{selectedIdentity}";
-    }
-
-    private string RenderSidebarLine(
-        HelpBrowserListEntry item,
-        bool isSelected,
-        int width,
-        ToshTuiThemeConfig theme,
-        TuiBoxCharacters box)
-    {
-        var gutterSegments = new (string Text, ToshTextStyleConfig Style)[]
-        {
-            (isSelected ? "› " : "  ", isSelected ? theme.SelectedGutter : theme.Meta),
-        };
-        var contentSegments = BuildSidebarContentSegments(item, isSelected, theme);
-        return TuiRenderHelpers.RenderStyledBoxLine(gutterSegments.Concat(contentSegments), width, theme, box);
     }
 
     private IEnumerable<(string Text, ToshTextStyleConfig Style)> BuildSidebarContentSegments(

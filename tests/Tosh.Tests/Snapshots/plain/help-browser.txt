@@ -1,7 +1,9 @@
 ─── initial ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ ToastedShell / Shell ───────────────────────────────────────────────────────╮
 │› ▾ ToastedShell / Shell              │ │Section                                                                      │
 │    apropos                           │ │                                                                             │
 │    clear                             │ │ToastedShell / Shell is currently expanded. Press Enter to toggle it.        │
@@ -36,11 +38,13 @@
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after down → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
 │  ▾ ToastedShell / Shell              │ │Select a topic to view its full help page.                                   │
 │›   apropos                           │ │                                                                             │
 │    clear                             │ │                                                                             │
@@ -75,11 +79,13 @@ focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forwa
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after down → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ All ─────────────────────────────────╮ ╭ Topic ──────────────────────────────────────────────────────────────────────╮
 │  ▾ ToastedShell / Shell              │ │Select a topic to view its full help page.                                   │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │                                                                             │
@@ -114,11 +120,13 @@ focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forwa
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after right, opening the entry → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -153,11 +161,13 @@ focus:list  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forwa
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after down in the detail pane → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -192,11 +202,13 @@ focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after tab → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*:                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -231,11 +243,13 @@ focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after end → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*:                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -270,11 +284,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after home → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*:                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -309,11 +325,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after page down → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search*:                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -348,11 +366,13 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after shift+tab → Continue ───
-╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
 │Search:                                                                                                               │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ ToastedShell ────────────────────────╮ ╭ clear [BuiltIn] ────────────────────────────────────────────────────────────╮
 │  ▾ Shell                             │ │BuiltIn • Shell                                                              │
 │    apropos                           │ │                                                                             │
 │›   clear                             │ │Clears the terminal display.                                                 │
@@ -387,4 +407,4 @@ focus:search  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] for
 │    copy-to                           │ │                                                                             │
 │    cp                                │ │                                                                             │
 ╰──────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related

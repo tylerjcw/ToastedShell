@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui;
@@ -39,4 +40,19 @@ public sealed record TuiFrame
 
     /// <summary>The text, when this frame was built as a string.</summary>
     public string Content { get; }
+
+    /// <summary>
+    /// What the reader sees, whichever form the frame was drawn in.
+    /// </summary>
+    /// <remarks>
+    /// A caller that wants to read a frame — a test, a log, a diff — should not have to
+    /// know which half of this record is filled in. Cells answer as rows of text; a string
+    /// frame answers with its escape codes removed.
+    /// </remarks>
+    public string ToPlainText()
+        => Buffer is { } buffer
+            ? string.Join('\n', Enumerable
+                .Range(0, buffer.Height)
+                .Select(row => buffer.RowText(row).TrimEnd()))
+            : StyledText.StripAnsi(Content);
 }

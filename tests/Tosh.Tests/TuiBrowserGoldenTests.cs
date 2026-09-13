@@ -111,7 +111,7 @@ public sealed class TuiBrowserGoldenTests : IDisposable
     /// Renders, then drives the script, capturing a frame after every step. Each frame is
     /// labelled so a diff names the keystroke that moved the output.
     /// </summary>
-    private static string Drive(ITuiScreen screen, params (string Label, TuiInputEvent Input)[] script)
+    private static Transcript Drive(ITuiScreen screen, params (string Label, TuiInputEvent Input)[] script)
         => Drive(screen, 0, script);
 
     /// <summary>
@@ -124,17 +124,19 @@ public sealed class TuiBrowserGoldenTests : IDisposable
     /// assemblies with generated names, so the rows above the fold differ depending on what
     /// else has run. Only the filtered view is stable enough to hold still.
     /// </param>
-    private static string Drive(
+    private static Transcript Drive(
         ITuiScreen screen,
         int captureAfter,
         params (string Label, TuiInputEvent Input)[] script)
     {
         var sb = new StringBuilder();
+        var plain = new StringBuilder();
         var step = 0;
 
         if (captureAfter == 0)
         {
             sb.Append("─── initial ───\n").Append(Normalize(Paint(screen))).Append('\n');
+            plain.Append("─── initial ───\n").Append(Normalize(PlainOf(screen))).Append('\n');
         }
 
         foreach (var (label, input) in script)
@@ -148,11 +150,16 @@ public sealed class TuiBrowserGoldenTests : IDisposable
             var result = screen.HandleInput(input);
             sb.Append($"─── after {label} → {result} ───\n");
             sb.Append(Normalize(Paint(screen))).Append('\n');
+            plain.Append($"─── after {label} → {result} ───\n");
+            plain.Append(Normalize(PlainOf(screen))).Append('\n');
             if (result == TuiScreenResult.Exit) break;
         }
 
-        return sb.ToString();
+        return new Transcript(sb.ToString(), plain.ToString());
     }
+
+    /// <summary>A session recorded twice: as the terminal receives it, and as it reads.</summary>
+    private readonly record struct Transcript(string Styled, string Plain);
 
     /// <summary>
     /// Replaces the parts of a frame that change without anyone editing the code.
@@ -214,6 +221,10 @@ public sealed class TuiBrowserGoldenTests : IDisposable
     /// The pane starts at a fixed column because <see cref="Size"/> is fixed: the layout
     /// gives the sidebar width/3 columns, clamped to at least 28, then a one-column gap.
     /// </remarks>
+    /// <summary>Both halves of a transcript, narrowed to the detail pane.</summary>
+    private static Transcript DetailPaneOnly(Transcript transcript)
+        => new(DetailPaneOnly(transcript.Styled), DetailPaneOnly(transcript.Plain));
+
     private static string DetailPaneOnly(string frame)
     {
         const int detailColumn = 42;
@@ -239,6 +250,26 @@ public sealed class TuiBrowserGoldenTests : IDisposable
         return frame.Buffer is { } buffer ? TuiTerminalWriter.Present(buffer) : frame.Content;
     }
 
+    /// <summary>The frame as rows of plain text: what the reader actually sees.</summary>
+    /// <remarks>
+    /// Taken from the cells when there are cells, because the painted form positions the
+    /// cursor instead of emitting newlines and stripping its escapes would run the whole
+    /// screen onto one line. A string frame is split on the newlines it wrote itself.
+    /// </remarks>
+    private static string PlainOf(ITuiScreen screen)
+    {
+        var frame = screen.Render(Size);
+
+        if (frame.Buffer is not { } buffer)
+        {
+            return Plain(frame.Content);
+        }
+
+        return string.Join('\n', Enumerable
+            .Range(0, buffer.Height)
+            .Select(row => buffer.RowText(row).TrimEnd()));
+    }
+
     /// <summary>
     /// The same frame with every escape sequence removed: what the reader actually sees.
     /// </summary>
@@ -256,10 +287,10 @@ public sealed class TuiBrowserGoldenTests : IDisposable
             .Split('\n')
             .Select(line => line.TrimEnd()));
 
-    private void Verify(string name, string actual)
+    private void Verify(string name, Transcript transcript)
     {
-        VerifyAgainst(Path.Combine("Snapshots", "plain"), name, Plain(actual));
-        VerifyAgainst("Snapshots", name, actual);
+        VerifyAgainst(Path.Combine("Snapshots", "plain"), name, transcript.Plain);
+        VerifyAgainst("Snapshots", name, transcript.Styled);
     }
 
     private void VerifyAgainst(string folder, string name, string actual)
@@ -527,6 +558,5 @@ public sealed class TuiBrowserGoldenTests : IDisposable
     }
 
     /// <summary>The whole frame as plain text, for asserting that a query reached the box.</summary>
-    private static string Frame(ITuiScreen screen)
-        => Regex.Replace(Normalize(screen.Render(Size).Content), @"\x1b\[[0-9;]*m", string.Empty);
+    private static string Frame(ITuiScreen screen) => Normalize(PlainOf(screen));
 }
