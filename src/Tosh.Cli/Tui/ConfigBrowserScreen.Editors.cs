@@ -758,6 +758,7 @@ internal sealed partial class ConfigBrowserScreen
             else
             {
                 _stagedValues.Remove(snapshotEntry.Path);
+                _stagedVersion += 1;
             }
         }
 

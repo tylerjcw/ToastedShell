@@ -13,6 +13,13 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     private const string ManagedConfigBlockStart = "# >>> tosh config browse >>>";
     private const string ManagedConfigBlockEnd = "# <<< tosh config browse <<<";
     private readonly ToshRuntime _runtime;
+    private readonly Dictionary<string, ToshRuntime> _previewRuntimes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyList<ConfigBrowserNode>> _previewLeaves = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (int Version, int Width, IReadOnlyList<ConfigDetailEntry> Entries)> _previewCache
+        = new(StringComparer.Ordinal);
+
+    /// <summary>Bumped whenever a staged value changes, so previews know to re-render.</summary>
+    private int _stagedVersion;
     private readonly ConfigBrowserSchema _schema;
     private readonly TuiListState<ConfigBrowserListEntry> _tree = new();
     private readonly TuiScrollState _detailScroll = new();
@@ -565,6 +572,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         {
             var appliedCount = ApplyStagedValuesToRuntime();
             _stagedValues.Clear();
+            _stagedVersion += 1;
             SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
             _statusMessage = $"Applied {appliedCount} staged change{(appliedCount == 1 ? string.Empty : "s")}.";
             return true;
@@ -607,6 +615,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         try
         {
             _stagedValues.Clear();
+            _stagedVersion += 1;
             _pathEditor.Close();
             _promptLayoutEditor.Close();
             _liveEditSnapshot.Clear();
@@ -690,6 +699,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             if (appliedCount > 0)
             {
                 _stagedValues.Clear();
+                _stagedVersion += 1;
             }
 
             SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
@@ -746,6 +756,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         foreach (var removedKey in removedKeys)
         {
             _stagedValues.Remove(removedKey);
+            _stagedVersion += 1;
         }
 
         if (_editMode == ConfigBrowserEditMode.PromptLayout && _editingPath is not null && IsPathWithinNode(_editingPath, node.Path))
@@ -859,10 +870,13 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
 
         if (ValuesEqual(currentValue, value))
         {
+            _stagedVersion += 1;
             return _stagedValues.Remove(path);
         }
 
         _stagedValues[path] = value;
+
+        _stagedVersion += 1;
         return true;
     }
 

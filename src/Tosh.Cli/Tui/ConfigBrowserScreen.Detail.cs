@@ -710,7 +710,55 @@ internal sealed partial class ConfigBrowserScreen
         return entries;
     }
 
+    /// <summary>
+    /// Renders a preview, or returns the one already rendered for these settings.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Previews are expensive and were rebuilt on every frame. The prompt preview is the
+    /// worst of them: it renders two complete sample prompts, which runs the prompt's own
+    /// modules — including the one that reads git state. Selecting <c>Prompt</c> in the
+    /// tree cost <b>17 ms per frame</b> against the help browser's 0.13 ms, so every
+    /// arrow key paid it (<c>TUI-0014</c>).
+    /// </para>
+    /// <para>
+    /// A preview depends on the staged values and the width it is drawn at, and on
+    /// nothing else that matters — so it is kept until one of those changes. It also
+    /// stops the preview drifting between frames from the clock and the working
+    /// directory, which is what made these screens hard to snapshot.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<ConfigDetailEntry> CachedPreview(
+        string key,
+        int width,
+        Func<int, IReadOnlyList<ConfigDetailEntry>> render)
+    {
+        if (_previewCache.TryGetValue(key, out var cached) &&
+            cached.Version == _stagedVersion &&
+            cached.Width == width)
+        {
+            return cached.Entries;
+        }
+
+        var entries = render(width);
+        _previewCache[key] = (_stagedVersion, width, entries);
+
+        return entries;
+    }
+
     private IReadOnlyList<ConfigDetailEntry> BuildPromptPreviewEntries(int width)
+        => CachedPreview("prompt", width, RenderPromptPreviewEntries);
+
+    private IReadOnlyList<ConfigDetailEntry> BuildTableThemePreviewEntries(int width)
+        => CachedPreview("theme.tables", width, RenderTableThemePreviewEntries);
+
+    private IReadOnlyList<ConfigDetailEntry> BuildSyntaxThemePreviewEntries(int width)
+        => CachedPreview("theme.syntax", width, RenderSyntaxThemePreviewEntries);
+
+    private IReadOnlyList<ConfigDetailEntry> BuildTuiThemePreviewEntries(int width)
+        => CachedPreview("theme.tui", width, RenderTuiThemePreviewEntries);
+
+    private IReadOnlyList<ConfigDetailEntry> RenderPromptPreviewEntries(int width)
     {
         var previewRuntime = CreatePromptPreviewRuntime();
         var successPreview = ToshPromptRenderer.BuildPreviewLines(previewRuntime, 0, width);
@@ -757,7 +805,7 @@ internal sealed partial class ConfigBrowserScreen
         return [];
     }
 
-    private IReadOnlyList<ConfigDetailEntry> BuildTableThemePreviewEntries(int width)
+    private IReadOnlyList<ConfigDetailEntry> RenderTableThemePreviewEntries(int width)
     {
         var previewRuntime = CreateThemePreviewRuntime("Theme.Tables");
         var renderWidth = Math.Max(32, width);
@@ -776,7 +824,7 @@ internal sealed partial class ConfigBrowserScreen
         ];
     }
 
-    private IReadOnlyList<ConfigDetailEntry> BuildSyntaxThemePreviewEntries(int width)
+    private IReadOnlyList<ConfigDetailEntry> RenderSyntaxThemePreviewEntries(int width)
     {
         var previewRuntime = CreateThemePreviewRuntime("Theme.Syntax");
         var sample = "var report = (df --total | summarize --sum _.Used); echo $report";
@@ -789,7 +837,7 @@ internal sealed partial class ConfigBrowserScreen
         ];
     }
 
-    private IReadOnlyList<ConfigDetailEntry> BuildTuiThemePreviewEntries(int width)
+    private IReadOnlyList<ConfigDetailEntry> RenderTuiThemePreviewEntries(int width)
     {
         var previewRuntime = CreateThemePreviewRuntime("Theme.Tui");
         var theme = previewRuntime.Config.Theme.Tui;
@@ -812,36 +860,64 @@ internal sealed partial class ConfigBrowserScreen
         ];
     }
 
-    private ToshRuntime CreateThemePreviewRuntime(params string[] pathPrefixes)
+    /// <summary>
+    /// A runtime configured as the user's staged settings would leave it, for rendering a
+    /// live preview of a theme or prompt.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The runtime is built once per preview and kept; only the values are re-applied.
+    /// Building it was previously part of drawing, and <see cref="ToshRuntime.CreateDefault"/>
+    /// is not a cheap object — it loads the standard library, registers every built-in
+    /// type and command, and starts a background walk of the platform type index. Doing
+    /// that per frame made the config browser cost 676 us and 1.18 MB against the help
+    /// browser's 59 us and 220 KB at the same size, which is to say per arrow key, and
+    /// once a second on any screen with a refresh interval (<c>TUI-0014</c>).
+    /// </para>
+    /// <para>
+    /// One runtime per set of prefixes rather than one shared between them, so each
+    /// preview still sees only the values it asked for and nothing carried over from a
+    /// preview the user looked at earlier.
+    /// </para>
+    /// </remarks>
+    private ToshRuntime PreviewRuntime(string key, Func<ConfigBrowserNode, bool> selects)
     {
-        var previewRuntime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
+        if (!_previewRuntimes.TryGetValue(key, out var previewRuntime))
+        {
+            previewRuntime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
+            _previewRuntimes[key] = previewRuntime;
+        }
+
         previewRuntime.CurrentDirectory = _runtime.CurrentDirectory;
 
-        foreach (var leaf in EnumerateLeafNodes(_schema.Root).Where(node =>
-                     node.IsEditable &&
-                     pathPrefixes.Any(prefix => node.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))))
+        // The schema does not change, so the nodes a preview covers are worked out once.
+        if (!_previewLeaves.TryGetValue(key, out var leaves))
+        {
+            leaves = EnumerateLeafNodes(_schema.Root).Where(selects).ToArray();
+            _previewLeaves[key] = leaves;
+        }
+
+        // Values are re-applied every time: they are what the user is editing.
+        foreach (var leaf in leaves)
         {
             previewRuntime.ObjectAccessor.SetValue(previewRuntime.Config, leaf.Path, GetEffectiveValue(leaf));
         }
 
         return previewRuntime;
     }
+
+    private ToshRuntime CreateThemePreviewRuntime(params string[] pathPrefixes)
+        => PreviewRuntime(
+            string.Join('|', pathPrefixes),
+            node => node.IsEditable &&
+                    pathPrefixes.Any(prefix => node.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
 
     private ToshRuntime CreatePromptPreviewRuntime()
-    {
-        var previewRuntime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
-        previewRuntime.CurrentDirectory = _runtime.CurrentDirectory;
-
-        foreach (var leaf in EnumerateLeafNodes(_schema.Root).Where(node =>
-                     node.IsEditable &&
-                     (node.Path.StartsWith("Prompt.", StringComparison.OrdinalIgnoreCase) ||
-                      node.Path.StartsWith("Theme.Prompt.", StringComparison.OrdinalIgnoreCase))))
-        {
-            previewRuntime.ObjectAccessor.SetValue(previewRuntime.Config, leaf.Path, GetEffectiveValue(leaf));
-        }
-
-        return previewRuntime;
-    }
+        => PreviewRuntime(
+            "<prompt>",
+            node => node.IsEditable &&
+                    (node.Path.StartsWith("Prompt.", StringComparison.OrdinalIgnoreCase) ||
+                     node.Path.StartsWith("Theme.Prompt.", StringComparison.OrdinalIgnoreCase)));
 
     private static bool ShouldShowPromptPreview(ConfigBrowserNode node)
     {

@@ -31,6 +31,7 @@ public class TuiRenderBenchmarks
     private HelpBrowserScreen _help = null!;
     private HelpBrowserScreen _clr = null!;
     private ConfigBrowserScreen _config = null!;
+    private ConfigBrowserScreen _configPrompt = null!;
     private string _longLine = null!;
 
     [GlobalSetup]
@@ -42,6 +43,7 @@ public class TuiRenderBenchmarks
             _runtime,
             new HelpBrowseRequest("System.Text.StringBuilder", "System.Text.StringBuilder"));
         _config = new ConfigBrowserScreen(_runtime, new ConfigBrowseRequest(null, null));
+        _configPrompt = new ConfigBrowserScreen(_runtime, new ConfigBrowseRequest(null, "Prompt"));
 
         // Long enough to show the shape of ClipPlain's cost rather than just its constant.
         _longLine = string.Join(" ", Enumerable.Range(0, 200).Select(i => $"word{i}"));
@@ -75,6 +77,19 @@ public class TuiRenderBenchmarks
     /// the visible length of the whole accumulated string on each iteration, so the cost
     /// grows with the square of the line length rather than with the width it clips to.
     /// </remarks>
+    /// <summary>
+    /// The config browser on its most expensive node.
+    /// </summary>
+    /// <remarks>
+    /// The default selection lands on the Theme group and does not draw a prompt preview,
+    /// so it hid the worst case entirely: selecting <c>Prompt</c> renders two complete
+    /// sample prompts per frame, which runs the prompt's own modules including the one
+    /// that reads git state. A benchmark that never selects it cannot notice
+    /// (<c>TUI-0014</c>).
+    /// </remarks>
+    [Benchmark(Description = "config browser on Prompt, 120x40")]
+    public int ConfigPromptNode() => _configPrompt.Render(new TuiSize(120, 40)).Content.Length;
+
     [Benchmark(Description = "ClipPlain, 1200 chars to 80")]
     public string ClipLongLine() => TuiRenderHelpers.ClipPlain(_longLine, 80);
 
