@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Widgets;
 
 namespace Tosh.Tui;
@@ -51,6 +52,24 @@ public sealed class TuiScreen
     /// <summary>Screen title displayed in the header bar.</summary>
     public string? ScreenTitle { get; set; }
 
+    /// <summary>
+    /// How often to redraw when no key is pressed, or <see langword="null"/> to redraw only
+    /// on input.
+    /// </summary>
+    public TimeSpan? RefreshInterval { get; set; }
+
+    /// <summary>
+    /// A script function called each time <see cref="RefreshInterval"/> elapses, before the
+    /// redraw. Set it to re-sample whatever the screen is watching.
+    /// </summary>
+    /// <remarks>
+    /// The handler runs on the render loop's thread, between frames, so it should return
+    /// promptly — whatever it costs is added to the refresh interval. It updates the screen
+    /// by assigning to the widgets it already holds (a text widget's <c>Content</c>, a list
+    /// widget's <c>Items</c>); there is no separate update channel to learn.
+    /// </remarks>
+    public IShellCallable? OnTick { get; set; }
+
     /// <summary>Layout configuration.</summary>
     public TuiLayoutConfig LayoutConfig => _layout;
 
@@ -82,6 +101,20 @@ public sealed class TuiScreen
     public TuiScreen SetGap(int gap)
     {
         _layout.Gap = gap;
+        return this;
+    }
+
+    /// <summary>Sets the live refresh interval. Returns this screen for chaining.</summary>
+    public TuiScreen SetRefreshInterval(TimeSpan interval)
+    {
+        RefreshInterval = interval;
+        return this;
+    }
+
+    /// <summary>Sets the tick handler. Returns this screen for chaining.</summary>
+    public TuiScreen SetOnTick(IShellCallable handler)
+    {
+        OnTick = handler;
         return this;
     }
 

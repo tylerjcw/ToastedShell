@@ -6,7 +6,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[ShellOnly]
 [CommandCategory("Shell")]
 [CommandArgument("pick [items...]", "Pick one or more values from arguments or pipeline input.", Required = false)]
 [CommandArgument("confirm <message>", "Ask for a yes/no confirmation.", Required = false)]
@@ -33,6 +32,7 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--fullscreen", "Run `filter` as a fullscreen picker with search open, instead of its inline default.")]
 [CommandOption("--ratio <a:b>", "Layout split ratio for `layout`.")]
 [CommandOption("--gap <n>", "Gap between layout regions.")]
+[CommandOption("--title <text>", "Screen title shown in the header bar, for `screen`.")]
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
 [CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
@@ -42,7 +42,7 @@ public sealed class TuiCommand : ShellCommand
 {
     public TuiCommand()
         : base("tui",
-            "Interactive TUI components for an interactive shell session. Provides list pickers, confirmations, text input, file pickers, and composed screens. Use --cli for inline (non-fullscreen) prompts. This command is shell-only: it needs a live terminal, so it cannot be used from a script run non-interactively.",
+            "Interactive TUI components. Provides list pickers, confirmations, text input, file pickers, and composed screens. Use --cli for inline (non-fullscreen) prompts. It needs a live terminal: run from a script whose output is a terminal, not from a pipeline or a redirect.",
             "tui pick|confirm|input|file|filter|screen|add-list|add-text|add-input|add-picker|add-confirm|add-file|layout|run [options]")
     { }
 
@@ -707,7 +707,53 @@ public sealed class TuiCommand : ShellCommand
                 help: "Pipe a TuiScreen into 'tui run' or provide one as an argument.");
         }
 
-        yield return new TuiRunRequest(screen, returnOutcome);
+        yield return new TuiRunRequest(screen, returnOutcome, BuildTickInvoker(screen, context));
+    }
+
+    /// <summary>
+    /// Wraps a screen's tick handler so the TUI runtime can call it without knowing anything
+    /// about the shell.
+    /// </summary>
+    /// <remarks>
+    /// The handler is a script function, and invoking one needs a <see cref="CommandContext"/>.
+    /// The TUI runtime has none and should not acquire one just to call back, so the closure
+    /// is built here, where the context is already in hand, and travels as a plain
+    /// <see cref="Action"/>.
+    ///
+    /// The call is drained synchronously: the render loop is blocked while it runs, and the
+    /// handler's job is to mutate the widgets the screen already holds, not to yield values.
+    /// Anything it does yield is discarded rather than being written over the live frame.
+    /// </remarks>
+    private static Action? BuildTickInvoker(TuiScreen screen, CommandContext context)
+    {
+        if (screen.OnTick is not { } handler)
+        {
+            return null;
+        }
+
+        return () =>
+        {
+            var inner = context with
+            {
+                Arguments = Array.Empty<object?>(),
+                Input = AsyncEnumerableExtensions.Empty<object?>(),
+                IsPipelined = false,
+            };
+
+            var enumerator = handler.InvokeAsync(inner).GetAsyncEnumerator(context.CancellationToken);
+
+            try
+            {
+                while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+                {
+                    // Drain: a tick handler updates widgets, it does not produce output.
+                }
+            }
+            finally
+            {
+                enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        };
     }
 
     // ── Helpers ───────────────────────────────────────────────

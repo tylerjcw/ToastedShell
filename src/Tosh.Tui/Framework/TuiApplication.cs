@@ -35,9 +35,31 @@ public static class TuiApplication
                 host.Write(ClearScreenAndHome);
                 host.Write(frame.Content);
 
-                var firstInput = host.ReadInput();
+                var refresh = screen.RefreshInterval;
 
-                if (ProcessInputBatch(host, screen, firstInput) == TuiScreenResult.Exit)
+                if (refresh is null)
+                {
+                    // Nothing changes without the user, so block rather than spin.
+                    if (ProcessInputBatch(host, screen, host.ReadInput()) == TuiScreenResult.Exit)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (host.TryReadInput(refresh.Value, out var timedInput))
+                {
+                    if (ProcessInputBatch(host, screen, timedInput) == TuiScreenResult.Exit)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                // The interval elapsed with no input: let the screen re-sample, then redraw.
+                if (screen.Tick() == TuiScreenResult.Exit)
                 {
                     break;
                 }

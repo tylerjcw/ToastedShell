@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Text;
+using Tosh.Runtime;
 using Tosh.Tui;
 using Tosh.Tui.Requests;
 using Tosh.Tui.Widgets;
@@ -21,6 +23,19 @@ internal sealed class TuiCustomScreen : ITuiScreen
     }
 
     public TuiScreenOutcome? Outcome { get; private set; }
+
+    /// <inheritdoc />
+    public TimeSpan? RefreshInterval => _definition.RefreshInterval;
+
+    /// <inheritdoc />
+    public TuiScreenResult Tick()
+    {
+        // Widget hosts re-read their config on every render — a list host calls
+        // SetItems each frame — so a handler that assigns new Items or Content is
+        // picked up by the redraw that follows without anything being told to refresh.
+        _request.Tick?.Invoke();
+        return TuiScreenResult.Continue;
+    }
 
     public TuiFrame Render(TuiSize size)
     {
@@ -351,6 +366,42 @@ internal sealed class TuiCustomScreen : ITuiScreen
         Exit,
     }
 
+    /// <summary>
+    /// Renders one list item under a widget's display property, whatever shape the item is.
+    /// </summary>
+    /// <remarks>
+    /// A script's list is normally records or dictionaries, and their fields are not CLR
+    /// properties — reflection alone finds nothing on them, so every row falls back to
+    /// <c>ToString()</c> and the list reads as a column of type names. Shell records are
+    /// asked first, then reflection for ordinary CLR objects.
+    /// </remarks>
+    private static string FormatDisplayValue(object? item, string? displayProperty)
+    {
+        if (item is null)
+        {
+            return "(null)";
+        }
+
+        if (displayProperty is not null)
+        {
+            if (ShellRecordUtilities.TryGetValue(item, displayProperty, out var recordValue))
+            {
+                return recordValue?.ToString() ?? string.Empty;
+            }
+
+            var property = item.GetType().GetProperty(
+                displayProperty,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+            if (property is not null)
+            {
+                return property.GetValue(item)?.ToString() ?? string.Empty;
+            }
+        }
+
+        return item.ToString() ?? string.Empty;
+    }
+
     private abstract class WidgetHost
     {
         public abstract string WidgetId { get; }
@@ -440,25 +491,7 @@ internal sealed class TuiCustomScreen : ITuiScreen
         }
 
         private string FormatItem(object? item)
-        {
-            if (item is null)
-            {
-                return "(null)";
-            }
-
-            if (_config.DisplayProperty is not null)
-            {
-                var prop = item.GetType().GetProperty(_config.DisplayProperty,
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
-
-                if (prop is not null)
-                {
-                    return prop.GetValue(item)?.ToString() ?? string.Empty;
-                }
-            }
-
-            return item.ToString() ?? string.Empty;
-        }
+            => FormatDisplayValue(item, _config.DisplayProperty);
     }
 
     private sealed class TextWidgetHost : WidgetHost
@@ -486,7 +519,7 @@ internal sealed class TuiCustomScreen : ITuiScreen
             var content = _config.Binding is not null ? _boundContent : _config.Content;
             var text = content?.ToString() ?? string.Empty;
             var allLines = _config.WordWrap
-                ? TextDocumentFormatter.WrapParagraph(text, width)
+                ? TextDocumentFormatter.WrapDocument(text, width)
                 : text.Split('\n');
 
             _scroll.SetDimensions(allLines.Count, Math.Max(1, height));
@@ -639,25 +672,7 @@ internal sealed class TuiCustomScreen : ITuiScreen
         }
 
         private string FormatItem(object? item)
-        {
-            if (item is null)
-            {
-                return "(null)";
-            }
-
-            if (_config.DisplayProperty is not null)
-            {
-                var prop = item.GetType().GetProperty(_config.DisplayProperty,
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
-
-                if (prop is not null)
-                {
-                    return prop.GetValue(item)?.ToString() ?? string.Empty;
-                }
-            }
-
-            return item.ToString() ?? string.Empty;
-        }
+            => FormatDisplayValue(item, _config.DisplayProperty);
     }
 
     private sealed class ConfirmationWidgetHost : WidgetHost

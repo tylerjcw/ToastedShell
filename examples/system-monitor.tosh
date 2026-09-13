@@ -1,0 +1,197 @@
+#!/usr/bin/env tosh
+## @summary A live system monitor, written against the TōSh TUI from a script.
+## @remarks
+##   This is a worked example of building a TUI the way an application would: construct a
+##   screen object, add widgets to it, set properties, attach a handler, and run it. Nothing
+##   here is built into the shell — `tui` hands back a `TuiScreen` and the rest is ordinary
+##   ToastScript against that object.
+##
+##   It exercises the parts of the framework that a static picker does not: a refresh
+##   interval and a tick handler (live data), a list the user can move through while it is
+##   being updated underneath them, a detail pane bound to the list's selection, and a
+##   two-pane layout.
+##
+##   Run it from a terminal: `tosh examples/system-monitor.tosh`. Arrow keys move, Tab
+##   switches panes, Escape quits.
+
+# ── Sampling ────────────────────────────────────────────────────────────────────
+# Everything comes from /proc, read through the CLR rather than by spawning ps and
+# free once a second.
+
+## @summary Whole-machine CPU load, as a percentage of the time since the last sample.
+## @remarks
+##   /proc/stat counts time, not load, so a single reading says nothing — the number
+##   everyone wants is the change between two readings. That is why this is a class with
+##   a memory rather than a function: the previous totals are part of the meter.
+class CpuMeter {
+    shy prop previousIdle: double = 0.0
+    shy prop previousTotal: double = 0.0
+
+    proud func Sample() -> double {
+        var line = (System.IO.File.ReadAllLines("/proc/stat"))[0]
+        var parts = $line.Split(" ", System.StringSplitOptions.RemoveEmptyEntries)
+
+        # Fields are: user nice system idle iowait irq softirq steal guest guest_nice.
+        # Idle time is idle + iowait; the rest is work.
+        var idle = System.Double.Parse($parts[4]) + System.Double.Parse($parts[5])
+
+        var total = 0.0
+        for index in 1..10 {
+            $total = $total + System.Double.Parse($parts[$index])
+        }
+
+        var idleDelta = $idle - $this.previousIdle
+        var totalDelta = $total - $this.previousTotal
+
+        $this.previousIdle = $idle
+        $this.previousTotal = $total
+
+        # The first sample has no predecessor, so it has nothing to report.
+        if ($totalDelta <= 0.0) {
+            return 0.0
+        }
+
+        return (1.0 - ($idleDelta / $totalDelta)) * 100.0
+    }
+}
+
+## @summary One process, as the monitor cares about it.
+record ProcessInfo(Pid: string, Name: string, ResidentKb: long, State: string)
+
+## @summary Reads a /proc field of the form "MemTotal:  123 kB".
+func MemoryFieldKb(lines, name: string) -> long {
+    for line in $lines {
+        if ($line.StartsWith($name)) {
+            var parts = $line.Split(" ", System.StringSplitOptions.RemoveEmptyEntries)
+            return System.Int64.Parse($parts[1])
+        }
+    }
+
+    return 0
+}
+
+## @summary The processes currently on the machine, heaviest first.
+## @remarks
+##   Resident size comes from /proc/<pid>/statm, whose second field is resident pages.
+##   A process can exit between the directory listing and the read, which is ordinary
+##   rather than exceptional — hence the catch around each one rather than around the loop.
+func ReadProcesses(limit: int) {
+    var results = []
+    var pageKb = 4
+
+    for entry in System.IO.Directory.GetDirectories("/proc") {
+        var pid = System.IO.Path.GetFileName($entry)
+
+        # /proc holds plenty of non-numeric entries; the processes are the numbered ones.
+        if (not System.Char.IsDigit($pid[0])) {
+            continue
+        }
+
+        try {
+            var name = (System.IO.File.ReadAllText($"/proc/{$pid}/comm")).Trim()
+            var statm = (System.IO.File.ReadAllText($"/proc/{$pid}/statm")).Split(" ", System.StringSplitOptions.RemoveEmptyEntries)
+            var resident = System.Int64.Parse($statm[1]) * $pageKb
+            var state = (System.IO.File.ReadAllText($"/proc/{$pid}/stat")).Split(") ", System.StringSplitOptions.None)[1].Split(" ", System.StringSplitOptions.None)[0]
+
+            $results = $results + [new ProcessInfo($pid, $name, $resident, $state)]
+        } catch (e) {
+            # Gone between listing and reading. Nothing to report.
+        }
+    }
+
+    var ranked = $results | sort --descending ResidentKb | first $limit
+    return $ranked
+}
+
+## @summary How many processes exist, without reading each one's files.
+func ProcessCount() -> int {
+    var count = 0
+
+    for entry in System.IO.Directory.GetDirectories("/proc") {
+        if (System.Char.IsDigit((System.IO.Path.GetFileName($entry))[0])) {
+            $count = $count + 1
+        }
+    }
+
+    return $count
+}
+
+## @summary Formats a kilobyte count the way a person reads it.
+func FormatKb(kb: long) -> string {
+    if ($kb >= 1048576) { return $"{($kb / 1048576.0).ToString("F1")} GB" }
+    if ($kb >= 1024) { return $"{($kb / 1024.0).ToString("F1")} MB" }
+    return $"{$kb} KB"
+}
+
+## @summary Repeats a string. `PadRight` fills with a char, which these glyphs are not,
+## and the `repeat` builtin yields a list rather than a joined string.
+func RepeatGlyph(text: string, count: int) -> string {
+    var builder = ""
+
+    for index in 1..$count {
+        $builder = $builder + $text
+    }
+
+    return $builder
+}
+
+## @summary A fixed-width bar, so the eye can track a changing number.
+func Bar(percent: double, width: int) -> string {
+    var filled = System.Math.Clamp(System.Convert.ToInt32($percent / 100.0 * $width), 0, $width)
+    return $"[{RepeatGlyph("█", $filled)}{RepeatGlyph("·", $width - $filled)}]"
+}
+
+# ── The screen ──────────────────────────────────────────────────────────────────
+
+var cpu = new CpuMeter()
+var processes = ReadProcesses(40)
+
+var screen = tui screen --title "System Monitor"
+$screen | tui add-list $processes --id processes --display Name --prompt "Processes by memory" | ignore
+$screen | tui add-text --id summary | ignore
+$screen | tui layout horizontal --ratio "1:1" | ignore
+
+## @summary Re-samples the machine and rewrites both widgets.
+## @remarks
+##   Called by the runtime each time the refresh interval elapses. It mutates the widgets
+##   the screen already holds; there is no separate update channel. Assigning to a list's
+##   Items keeps the selection by index, so the row under the cursor does not jump while
+##   the user is reading it.
+func Refresh() {
+    var load = $cpu.Sample()
+    var memory = System.IO.File.ReadAllLines("/proc/meminfo")
+    var totalKb = MemoryFieldKb($memory, "MemTotal:")
+    var availableKb = MemoryFieldKb($memory, "MemAvailable:")
+    var usedKb = $totalKb - $availableKb
+    var memoryPercent = $totalKb > 0 ? ($usedKb * 100.0 / $totalKb) : 0.0
+
+    var uptime = System.Double.Parse((System.IO.File.ReadAllText("/proc/uptime")).Split(" ", System.StringSplitOptions.None)[0])
+    var uptimeSpan = System.TimeSpan.FromSeconds($uptime)
+
+    var list = $screen.GetWidget("processes")
+    var summary = $screen.GetWidget("summary")
+
+    $list.Items = ReadProcesses(40)
+    $summary.Content = $"
+CPU   {$load.ToString("F1").PadLeft(5)} %  {Bar($load, 28)}
+Memory{$memoryPercent.ToString("F1").PadLeft(5)} %  {Bar($memoryPercent, 28)}
+
+  Used       {FormatKb($usedKb)}
+  Available  {FormatKb($availableKb)}
+  Total      {FormatKb($totalKb)}
+
+  Load       {(System.IO.File.ReadAllText("/proc/loadavg")).Trim()}
+  Uptime     {$uptimeSpan.Days}d {$uptimeSpan.Hours}h {$uptimeSpan.Minutes}m
+  Processes  {ProcessCount()}
+
+  Updated    {(date).ToString("HH:mm:ss")}
+
+Arrows move   Tab switches panes   Escape quits"
+}
+
+Refresh()
+
+$screen.RefreshInterval = 1s
+$screen.OnTick = &Refresh
+
+$screen | tui run

@@ -17,7 +17,12 @@ public sealed class TuiListWidgetConfig : ITuiWidget
     public TuiWidgetKind Kind => TuiWidgetKind.List;
 
     /// <summary>Items to display in the list.</summary>
-    public IReadOnlyList<object?> Items { get; }
+    /// <remarks>
+    /// Settable so a live screen can replace its contents from a tick handler. The list
+    /// widget keeps selection by index, so replacing the items of a list the user is
+    /// pointing at leaves the cursor where it was rather than jumping home.
+    /// </remarks>
+    public IReadOnlyList<object?> Items { get; set; }
 
     /// <summary>Property name used to produce the display label for each item.
     /// When null, <c>ToString()</c> is used.</summary>
