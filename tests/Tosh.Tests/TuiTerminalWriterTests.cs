@@ -131,4 +131,39 @@ public sealed class TuiTerminalWriterTests
         // on its own when it draws a wide character.
         Assert.Equal("\\e[1;1H日", Readable(output));
     }
+
+    [Fact]
+    public void A_frame_with_no_cursor_hides_it()
+    {
+        var buffer = Buffer();
+
+        Assert.Contains("\x1b[?25l", TuiTerminalWriter.Present(buffer), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_frame_with_a_cursor_places_and_shows_it()
+    {
+        var buffer = Buffer();
+        buffer.DrawText(0, 0, "name: bob", TuiStyle.Default);
+        buffer.Cursor = (9, 0);
+
+        var output = TuiTerminalWriter.Present(buffer);
+
+        Assert.Contains("\x1b[1;10H", output, StringComparison.Ordinal);
+        Assert.Contains("\x1b[?25h", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_cursor_that_only_moves_is_repositioned_without_being_reshown()
+    {
+        var previous = Buffer();
+        previous.Cursor = (3, 0);
+
+        var next = Buffer();
+        next.Cursor = (4, 0);
+
+        var output = TuiTerminalWriter.Present(previous, next);
+
+        Assert.Equal("\\e[1;5H", Readable(output));
+    }
 }

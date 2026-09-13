@@ -29,6 +29,18 @@ public sealed class TuiBuffer
 
     public TuiSize Size { get; }
 
+    /// <summary>
+    /// Where the terminal cursor should sit once this frame is drawn, or
+    /// <see langword="null"/> to hide it.
+    /// </summary>
+    /// <remarks>
+    /// Part of the frame rather than something the runtime does around it. The screen
+    /// hides the cursor for the whole session today, which is right for a browser and
+    /// wrong for a text field: the caret is the one piece of feedback a terminal can
+    /// draw better than we can, and only the widget with focus knows where it belongs.
+    /// </remarks>
+    public (int Column, int Row)? Cursor { get; set; }
+
     public int Width => Size.Width;
 
     public int Height => Size.Height;

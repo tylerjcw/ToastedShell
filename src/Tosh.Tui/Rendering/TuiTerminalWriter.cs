@@ -105,7 +105,40 @@ public static class TuiTerminalWriter
             builder.Append(Reset);
         }
 
+        AppendCursor(builder, reusable ? previous!.Cursor : null, next.Cursor, reusable);
+
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Places or hides the cursor, emitting nothing when neither changed.
+    /// </summary>
+    /// <remarks>
+    /// The position has to be re-stated whenever anything was drawn, because drawing
+    /// leaves the cursor wherever the last run ended.
+    /// </remarks>
+    private static void AppendCursor(
+        StringBuilder builder,
+        (int Column, int Row)? previous,
+        (int Column, int Row)? next,
+        bool reusable)
+    {
+        if (next is null)
+        {
+            if (!reusable || previous is not null)
+            {
+                builder.Append("\x1b[?25l");
+            }
+
+            return;
+        }
+
+        builder.Append($"\x1b[{next.Value.Row + 1};{next.Value.Column + 1}H");
+
+        if (!reusable || previous is null)
+        {
+            builder.Append("\x1b[?25h");
+        }
     }
 
     private static bool Differs(TuiBuffer previous, TuiBuffer next, int column, int row)
