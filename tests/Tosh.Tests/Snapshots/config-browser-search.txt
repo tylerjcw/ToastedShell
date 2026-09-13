@@ -1,0 +1,440 @@
+─── initial ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Syntax                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Completion                        [0m[2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Diagnostics                       [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Tables                            [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Tui                               [0m[2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Display                             [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Style                             [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Time                         [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl                                [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Syntax Highlighting Enabled       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…[0m
+─── after / opens search → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97m[0m                                                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Syntax                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Completion                        [0m[2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Diagnostics                       [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Tables                            [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Tui                               [0m[2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Display                             [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Style                             [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Time                         [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl                                [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Syntax Highlighting Enabled       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after type 'p' → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97mp[0m                                                                                                            [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after type 'r' → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97mpr[0m                                                                                                           [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after type 'o' → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97mpro[0m                                                                                                          [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after type 'm' → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97mprom[0m                                                                                                         [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after type 'p' → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97mpromp[0m                                                                                                        [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after type 't' → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch*: [0m[97mprompt[0m                                                                                                       [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:search  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after enter → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97mprompt[0m                                                                                                        [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Theme [0m[2;90m──────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme                                                     [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshThemeConfig                                                        [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0m  Prompt [Group] (ToshPromptThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Syntax [Group] (ToshSyntaxThemeConfig)                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Completion [Group] (ToshCompletionThemeConfig)                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  Diagnostics [Group] (ToshDiagnosticThemeConfig)                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  Tables [Group] (ToshTableThemeConfig)                                      [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Tui [Group] (ToshTuiThemeConfig)                                           [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[2;90mUse Enter to expand or collapse sections in the tree. Press Shift+R to stage [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mthis section back to defaults, r to drop staged edits in this subtree, and a [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mto apply all staged changes.                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…[0m
+─── after down → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97mprompt[0m                                                                                                        [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Prompt [0m[2;90m─────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme.Prompt                                              [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshPromptThemeConfig                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 10                                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mPrompt Preview                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0mLayout: two-line prompt                                                      [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0mHeader Left: Directory, Git                                                  [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0mHeader Right: UserHost, Jobs, Duration                                       [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0mPrompt Left: ExitCode, Name, Indicator                                       [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0mSample Success Preview                                                       [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m<prompt preview>
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[1;36mtosh[0m [96m ❯ [0m                                                                     [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0mSample Failure Preview                                                       [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m<prompt preview>
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                                                 [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mMembers                                                                      [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m  Time [Group] (ToshTextStyleConfig)                                         [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Directory [Group] (ToshTextStyleConfig)                                    [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Git [Group] (ToshTextStyleConfig)                                          [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  User Host [Group] (ToshTextStyleConfig)                                    [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m  History Id [Group] (ToshTextStyleConfig)                                   [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m  Jobs [Group] (ToshTextStyleConfig)                                         [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m  Duration [Group] (ToshTextStyleConfig)                                     [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m  Exit Code [Group] (ToshTextStyleConfig)                                    [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m  Name [Group] (ToshTextStyleConfig)                                         [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  Indicator [Group] (ToshTextStyleConfig)                                    [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…[0m
+─── after down → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97mprompt[0m                                                                                                        [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Time [0m[2;90m───────────────────────────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m▾ Theme                               [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Section                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▾ Prompt                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Time                            [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Theme.Prompt.Time                                         [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[2;90mType: ToshTextStyleConfig                                                    [0m[2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m[2;90mKind: Group                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90mNullable: yes  Editable: no  Resettable: yes                                 [0m[2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90mChildren: 6                                                                  [0m[2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m[1;33mStyle Preview                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Directory                       [0m[2;90m│[0m [2;90m│[0mForeground: "gray"                                                           [2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0mBackground: <null>                                                           [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0mAttributes: dim                                                              [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m[2;90m Sample Text 123 [0m                                                            [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m[2;90m Heading / Accent Preview [0m                                                   [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m[2;90m path/to/example  --flag  42 [0m                                                [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ Git                             [0m[2;90m│[0m [2;90m│[0m[1;33mPrompt Preview                                                               [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0mLayout: two-line prompt                                                      [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0mHeader Left: Directory, Git                                                  [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0mHeader Right: UserHost, Jobs, Duration                                       [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0mPrompt Left: ExitCode, Name, Indicator                                       [2;90m│[0m
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0mSample Success Preview                                                       [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ User Host                       [0m[2;90m│[0m [2;90m│[0m<prompt preview>
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m[1;36mtosh[0m [96m ❯ [0m                                                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0mSample Failure Preview                                                       [2;90m│[0m
+[2;90m│[0m      • Italic                        [2;90m│[0m [2;90m│[0m<prompt preview>
+[2;90m│[0m      • Underline                     [2;90m│[0m [2;90m│[0m[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                                                 [2;90m│[0m
+[2;90m│[0m      • Dim                           [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m    ▾ History Id                      [0m[2;90m│[0m [2;90m│[0m[1;33mStyle Editor                                                                 [0m[2;90m│[0m
+[2;90m│[0m      • Foreground                    [2;90m│[0m [2;90m│[0m   -  Foreground: "gray"                                                     [2;90m│[0m
+[2;90m│[0m      • Background                    [2;90m│[0m [2;90m│[0m  [ ] Bold: disabled                                                         [2;90m│[0m
+[2;90m│[0m      • Bold                          [2;90m│[0m [2;90m│[0m  [ ] Italic: disabled                                                       [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…[0m

@@ -1,0 +1,360 @@
+─── initial ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mStatus: default                                                              [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl                                [0m[2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled       [0m[2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m[x] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…[0m
+─── after space, toggling the boolean → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Changes: 1                                                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl *                              [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = false.                                  [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m[2;90mStatus: default  Pending: yes                                                [0m[2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled *     [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m[1;33mStaged Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0mfalse                                                                        [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m[ ] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after space, toggling it back → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = true.                                   [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl                                [0m[2;90m│[0m [2;90m│[0m[2;90mStatus: default                                                              [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled       [0m[2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[x] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after down to the next leaf → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = true.                                   [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl                                [0m[2;90m│[0m [2;90m│[0m[2;90mStatus: default                                                              [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled       [0m[2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[x] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after e, opening the editor → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Changes: 1                                                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl *                              [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = false.                                  [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m[2;90mStatus: default  Pending: yes                                                [0m[2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled *     [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m[1;33mStaged Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0mfalse                                                                        [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m[ ] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after escape, cancelling the edit → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Changes: 1                                                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl *                              [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = false.                                  [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m[2;90mStatus: default  Pending: yes                                                [0m[2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled *     [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m[1;33mStaged Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0mfalse                                                                        [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m[ ] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after t, opening the raw editor → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Changes: 1                                                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl *                              [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = false.                                  [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m[2;90mStatus: default  Pending: yes                                                [0m[2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled *     [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m[1;33mStaged Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0mfalse                                                                        [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m[ ] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after escape, cancelling the raw edit → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Changes: 1                                                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl *                              [0m[2;90m│[0m [2;90m│[0m[2;90mStaged Syntax Highlighting Enabled = false.                                  [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m[2;90mStatus: default  Pending: yes                                                [0m[2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled *     [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0m[1;33mStaged Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0mfalse                                                                        [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m[ ] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:1  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m
+─── after r, reverting the node → Continue ───
+[2;90m╭[0m[1;96m Config Browser [0m[2;90m──────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m[2;90m│[0m[1;96mSearch: [0m[97m[0m                                                                                                              [2;90m│[0m
+[2;90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90m╭[0m[1;96m Configuration [0m[2;90m───────────────────────╮[0m [2;90m╭[0m[1;96m Syntax Highlighting Enabled [0m[2;90m────────────────────────────────────────────────╮[0m
+[2;90m│[0m[1;33m  ▸ Date Time Offset                  [0m[2;90m│[0m [2;90m│[0m[1;33mConfig Value                                                                 [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Date Only                         [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Only                         [0m[2;90m│[0m [2;90m│[0m[2;90mPath: $tosh.Config.Repl.SyntaxHighlightingEnabled                            [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Time Span                         [0m[2;90m│[0m [2;90m│[0m[2;90mType: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Storage Size                      [0m[2;90m│[0m [2;90m│[0m[2;90mKind: Boolean                                                                [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Permissions                       [0m[2;90m│[0m [2;90m│[0m[2;90mNullable: no  Editable: yes  Resettable: no                                  [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ File Attributes                   [0m[2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Paging                            [0m[2;90m│[0m [2;90m│[0m[1;33mStatus Message                                                               [0m[2;90m│[0m
+[2;90m│[0m[1;33m  ▸ Profiles                          [0m[2;90m│[0m [2;90m│[0m[2;90mReverted 1 staged change.                                                    [0m[2;90m│[0m
+[2;90m│[0m[1;33m▾ Repl                                [0m[2;90m│[0m [2;90m│[0m[2;90mStatus: default                                                              [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Prompt               [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1m  • Syntax Highlighting Enabled       [0m[2;90m│[0m [2;90m│[0m[1;33mCurrent Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Ghost Text Enabled                [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Completion Max Visible            [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Shift Enter Executes              [2;90m│[0m [2;90m│[0m[1;33mDefault Value                                                                [0m[2;90m│[0m
+[2;90m│[0m  • Continuation Gutter Right Border  [2;90m│[0m [2;90m│[0mtrue                                                                         [2;90m│[0m
+[2;90m│[0m  • Continuation Line Numbers         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m[1;33m▾ Prompt                              [0m[2;90m│[0m [2;90m│[0m[1;33mControl                                                                      [0m[2;90m│[0m
+[2;90m│[0m  • Time Enabled                      [2;90m│[0m [2;90m│[0m[x] enabled                                                                  [2;90m│[0m
+[2;90m│[0m  • Header Left Layout                [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Header Right Layout               [2;90m│[0m [2;90m│[0m[2;90mPress Space to toggle this value, a to apply it, r to drop the staged change,[0m[2;90m│[0m
+[2;90m│[0m  • Prompt Left Layout                [2;90m│[0m [2;90m│[0m[2;90mor Shift+R to stage the default value.                                       [0m[2;90m│[0m
+[2;90m│[0m  • Time Format                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Color                        [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Time Bold                         [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Directory Depth                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Enabled                       [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Foreground                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • Git Bold                          [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Enabled                 [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Color                   [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m│[0m  • User Host Bold                    [2;90m│[0m [2;90m│[0m                                                                             [2;90m│[0m
+[2;90m╰──────────────────────────────────────╯[0m [2;90m╰─────────────────────────────────────────────────────────────────────────────╯[0m
+[2;90mfocus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …[0m

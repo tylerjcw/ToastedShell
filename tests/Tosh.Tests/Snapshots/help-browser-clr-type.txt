@@ -1,0 +1,273 @@
+─── initial ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+Type • CLR                                                                   │
+                                                                             │
+CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+                                                                             │
+Identity                                                                     │
+  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
+  Full Name: System.Text.StringBuilder                                       │
+  Namespace: System.Text                                                     │
+  Assembly: System.Private.CoreLib                                           │
+  Base: System.Object                                                        │
+  Kind: Class                                                                │
+  Interfaces: System.Runtime.Serialization.ISerializable                     │
+                                                                             │
+Usage                                                                        │
+  new System.Text.StringBuilder(...)                                         │
+                                                                             │
+Constructors                                                                 │
+  System.Text.StringBuilder()                                                │
+  System.Text.StringBuilder(System.Int32 capacity)                           │
+  System.Text.StringBuilder(System.String value)                             │
+  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
+  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
+  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
+    System.Int32 length, System.Int32 capacity)                              │
+                                                                             │
+Properties & Fields                                                          │
+  property Capacity: System.Int32                                            │
+  property Length: System.Int32                                              │
+  property MaxCapacity: System.Int32 readonly                                │
+                                                                             │
+Methods                                                                      │
+  System.Text.StringBuilder Append(System.String value)                      │
+  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+─────────────────────────────────────────────────────────────────────────────╯
+r open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+ue ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+Type • CLR                                                                   │
+                                                                             │
+CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+                                                                             │
+Identity                                                                     │
+  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
+  Full Name: System.Text.StringBuilder                                       │
+  Namespace: System.Text                                                     │
+  Assembly: System.Private.CoreLib                                           │
+  Base: System.Object                                                        │
+  Kind: Class                                                                │
+  Interfaces: System.Runtime.Serialization.ISerializable                     │
+                                                                             │
+Usage                                                                        │
+  new System.Text.StringBuilder(...)                                         │
+                                                                             │
+Constructors                                                                 │
+  System.Text.StringBuilder()                                                │
+  System.Text.StringBuilder(System.Int32 capacity)                           │
+  System.Text.StringBuilder(System.String value)                             │
+  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
+  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
+  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
+    System.Int32 length, System.Int32 capacity)                              │
+                                                                             │
+Properties & Fields                                                          │
+  property Capacity: System.Int32                                            │
+  property Length: System.Int32                                              │
+  property MaxCapacity: System.Int32 readonly                                │
+                                                                             │
+Methods                                                                      │
+  System.Text.StringBuilder Append(System.String value)                      │
+  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+─────────────────────────────────────────────────────────────────────────────╯
+open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+inue ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+Type • CLR                                                                   │
+                                                                             │
+CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+                                                                             │
+Identity                                                                     │
+  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
+  Full Name: System.Text.StringBuilder                                       │
+  Namespace: System.Text                                                     │
+  Assembly: System.Private.CoreLib                                           │
+  Base: System.Object                                                        │
+  Kind: Class                                                                │
+  Interfaces: System.Runtime.Serialization.ISerializable                     │
+                                                                             │
+Usage                                                                        │
+  new System.Text.StringBuilder(...)                                         │
+                                                                             │
+Constructors                                                                 │
+  System.Text.StringBuilder()                                                │
+  System.Text.StringBuilder(System.Int32 capacity)                           │
+  System.Text.StringBuilder(System.String value)                             │
+  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
+  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
+  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
+    System.Int32 length, System.Int32 capacity)                              │
+                                                                             │
+Properties & Fields                                                          │
+  property Capacity: System.Int32                                            │
+  property Length: System.Int32                                              │
+  property MaxCapacity: System.Int32 readonly                                │
+                                                                             │
+Methods                                                                      │
+  System.Text.StringBuilder Append(System.String value)                      │
+  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+─────────────────────────────────────────────────────────────────────────────╯
+r open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after page down → Continue ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+  System.Text.StringBuilder Append(System.Boolean value)                     │
+  System.Text.StringBuilder Append(System.Char value)                        │
+  System.Text.StringBuilder Append(System.SByte value)                       │
+  System.Text.StringBuilder Append(System.Byte value)                        │
+  System.Text.StringBuilder Append(System.Int16 value)                       │
+  System.Text.StringBuilder Append(System.Int32 value)                       │
+  System.Text.StringBuilder Append(System.Int64 value)                       │
+  System.Text.StringBuilder Append(System.Single value)                      │
+  System.Text.StringBuilder Append(System.Double value)                      │
+  System.Text.StringBuilder Append(System.Decimal value)                     │
+  … 81 more                                                                  │
+                                                                             │
+Shell Helpers                                                                │
+  describe-type System.Text.StringBuilder                                    │
+  constructors System.Text.StringBuilder                                     │
+  members System.Text.StringBuilder                                          │
+  methods System.Text.StringBuilder                                          │
+                                                                             │
+Examples                                                                     │
+    describe-type System.Text.StringBuilder                                  │
+    methods System.Text.StringBuilder | first 10                             │
+                                                                             │
+Notes                                                                        │
+  Namespace: System.Text | Base: System.Object | Members: 112 | Methods: 100 │
+    | Constructors: 6                                                        │
+                                                                             │
+Related                                                                      │
+  [1] describe-type                                                          │
+  [2] members                                                                │
+  [3] methods                                                                │
+  [4] constructors                                                           │
+  [5] cast                                                                   │
+  [6] new                                                                    │
+─────────────────────────────────────────────────────────────────────────────╯
+r open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after page down → Continue ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+  System.Text.StringBuilder Append(System.Boolean value)                     │
+  System.Text.StringBuilder Append(System.Char value)                        │
+  System.Text.StringBuilder Append(System.SByte value)                       │
+  System.Text.StringBuilder Append(System.Byte value)                        │
+  System.Text.StringBuilder Append(System.Int16 value)                       │
+  System.Text.StringBuilder Append(System.Int32 value)                       │
+  System.Text.StringBuilder Append(System.Int64 value)                       │
+  System.Text.StringBuilder Append(System.Single value)                      │
+  System.Text.StringBuilder Append(System.Double value)                      │
+  System.Text.StringBuilder Append(System.Decimal value)                     │
+  … 81 more                                                                  │
+                                                                             │
+Shell Helpers                                                                │
+  describe-type System.Text.StringBuilder                                    │
+  constructors System.Text.StringBuilder                                     │
+  members System.Text.StringBuilder                                          │
+  methods System.Text.StringBuilder                                          │
+                                                                             │
+Examples                                                                     │
+    describe-type System.Text.StringBuilder                                  │
+    methods System.Text.StringBuilder | first 10                             │
+                                                                             │
+Notes                                                                        │
+  Namespace: System.Text | Base: System.Object | Members: 112 | Methods: 100 │
+    | Constructors: 6                                                        │
+                                                                             │
+Related                                                                      │
+  [1] describe-type                                                          │
+  [2] members                                                                │
+  [3] methods                                                                │
+  [4] constructors                                                           │
+  [5] cast                                                                   │
+  [6] new                                                                    │
+─────────────────────────────────────────────────────────────────────────────╯
+r open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after end → Continue ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+  System.Text.StringBuilder Append(System.Boolean value)                     │
+  System.Text.StringBuilder Append(System.Char value)                        │
+  System.Text.StringBuilder Append(System.SByte value)                       │
+  System.Text.StringBuilder Append(System.Byte value)                        │
+  System.Text.StringBuilder Append(System.Int16 value)                       │
+  System.Text.StringBuilder Append(System.Int32 value)                       │
+  System.Text.StringBuilder Append(System.Int64 value)                       │
+  System.Text.StringBuilder Append(System.Single value)                      │
+  System.Text.StringBuilder Append(System.Double value)                      │
+  System.Text.StringBuilder Append(System.Decimal value)                     │
+  … 81 more                                                                  │
+                                                                             │
+Shell Helpers                                                                │
+  describe-type System.Text.StringBuilder                                    │
+  constructors System.Text.StringBuilder                                     │
+  members System.Text.StringBuilder                                          │
+  methods System.Text.StringBuilder                                          │
+                                                                             │
+Examples                                                                     │
+    describe-type System.Text.StringBuilder                                  │
+    methods System.Text.StringBuilder | first 10                             │
+                                                                             │
+Notes                                                                        │
+  Namespace: System.Text | Base: System.Object | Members: 112 | Methods: 100 │
+    | Constructors: 6                                                        │
+                                                                             │
+Related                                                                      │
+  [1] describe-type                                                          │
+  [2] members                                                                │
+  [3] methods                                                                │
+  [4] constructors                                                           │
+  [5] cast                                                                   │
+  [6] new                                                                    │
+─────────────────────────────────────────────────────────────────────────────╯
+r open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
+─── after home → Continue ───
+─────────────────────────────────────────────────────────────────────────────╮│F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
+                                                                             │
+─────────────────────────────────────────────────────────────────────────────╯╭ CLR / .NET ──────────────────────────╮ ╭ StringBuilder [Type] ───────────────────────────────────────────────────────╮
+Type • CLR                                                                   │
+                                                                             │
+CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+                                                                             │
+Identity                                                                     │
+  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
+  Full Name: System.Text.StringBuilder                                       │
+  Namespace: System.Text                                                     │
+  Assembly: System.Private.CoreLib                                           │
+  Base: System.Object                                                        │
+  Kind: Class                                                                │
+  Interfaces: System.Runtime.Serialization.ISerializable                     │
+                                                                             │
+Usage                                                                        │
+  new System.Text.StringBuilder(...)                                         │
+                                                                             │
+Constructors                                                                 │
+  System.Text.StringBuilder()                                                │
+  System.Text.StringBuilder(System.Int32 capacity)                           │
+  System.Text.StringBuilder(System.String value)                             │
+  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
+  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
+  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
+    System.Int32 length, System.Int32 capacity)                              │
+                                                                             │
+Properties & Fields                                                          │
+  property Capacity: System.Int32                                            │
+  property Length: System.Int32                                              │
+  property MaxCapacity: System.Int32 readonly                                │
+                                                                             │
+Methods                                                                      │
+  System.Text.StringBuilder Append(System.String value)                      │
+  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+─────────────────────────────────────────────────────────────────────────────╯
+r open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit
