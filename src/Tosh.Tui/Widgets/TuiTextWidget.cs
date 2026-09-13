@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui.Widgets;
@@ -34,6 +35,14 @@ public sealed class TuiTextWidget : TuiWidget
             }
         }
     } = string.Empty;
+
+    /// <summary>A script function that supplies the text, re-read on every redraw.</summary>
+    /// <remarks>
+    /// Assigning one of these is what makes a property live. Setting <see cref="Text"/>
+    /// puts a value there once; setting this puts a question there, asked again each time
+    /// the screen is drawn.
+    /// </remarks>
+    public IShellCallable? TextSource { get; set; }
 
     /// <summary>How the text is drawn.</summary>
     public TuiStyle Style { get; set; }

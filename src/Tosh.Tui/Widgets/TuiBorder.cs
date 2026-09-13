@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui.Widgets;
@@ -29,6 +30,15 @@ public sealed class TuiBorder : TuiWidget
 
     /// <summary>The glyphs to draw the box with.</summary>
     public TuiBorderGlyphs Glyphs { get; set; } = TuiBorderGlyphs.Rounded;
+
+
+    /// <summary>A script function that supplies the title, re-read on every redraw.</summary>
+    /// <remarks>
+    /// Assigning one of these is what makes a property live. Setting <see cref="Title"/>
+    /// puts a value there once; setting this puts a question there, asked again each time
+    /// the screen is drawn.
+    /// </remarks>
+    public IShellCallable? TitleSource { get; set; }
 
     public override IReadOnlyList<TuiWidget> Children => Child is null ? [] : [Child];
 

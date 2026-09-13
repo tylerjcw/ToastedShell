@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui.Widgets;
@@ -57,6 +58,15 @@ public sealed class TuiTextField : TuiWidget
 
     /// <inheritdoc />
     public override object? Value => Text;
+
+
+    /// <summary>A script function that supplies the value, re-read on every redraw.</summary>
+    /// <remarks>
+    /// Assigning one of these is what makes a property live. Setting <see cref="Text"/>
+    /// puts a value there once; setting this puts a question there, asked again each time
+    /// the screen is drawn.
+    /// </remarks>
+    public IShellCallable? ValueSource { get; set; }
 
     public override bool IsFocusable => true;
 

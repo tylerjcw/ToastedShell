@@ -98,6 +98,20 @@ public abstract class TuiWidget
     /// </remarks>
     public virtual object? Value => null;
 
+    /// <summary>
+    /// How much room this widget asks its parent for.
+    /// </summary>
+    /// <remarks>
+    /// On the child rather than held by the parent, so a widget can be built complete and
+    /// handed over — which is what makes a tree writable as a literal, or assembled a
+    /// line at a time, without the parent having to be told about each child twice.
+    ///
+    /// Auto by default: a widget takes what it needs, and filling the space is something
+    /// a layout asks for explicitly. The opposite default spreads a column of form fields
+    /// evenly down the pane, each with blank rows under it.
+    /// </remarks>
+    public TuiLength Size { get; set; } = TuiLength.Auto;
+
     /// <summary>Where this widget was last placed, in its parent's coordinates.</summary>
     public TuiRect Bounds { get; private set; }
 

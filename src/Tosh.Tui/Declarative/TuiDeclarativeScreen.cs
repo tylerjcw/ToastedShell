@@ -134,17 +134,12 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     /// </remarks>
     private void ApplyBindings()
     {
-        if (_bindings.Count == 0 || _invoke is null)
+        if (_invoke is null)
         {
             return;
         }
 
-        var values = ShellRecordUtilities.CreateExpando(Values());
-
-        foreach (var binding in _bindings)
-        {
-            binding.Apply(binding.Widget, _invoke(binding.Source, values));
-        }
+        TuiBindings.Apply(_root, _invoke, ShellRecordUtilities.CreateExpando(Values()));
     }
 
     public TuiScreenResult HandleInput(TuiInputEvent input)

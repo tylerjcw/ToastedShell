@@ -705,7 +705,11 @@ public sealed class TuiCommand : ShellCommand
                 continue;
             }
 
-            if (positional is IDictionary<string, object?> || ShellRecordUtilities.IsRecordLike(positional))
+            // A widget built in code, a widget loaded from a UI file, or a record tree —
+            // all three are the same tree by the time anything draws them.
+            if (positional is Tosh.Tui.Widgets.TuiWidget ||
+                positional is IDictionary<string, object?> ||
+                ShellRecordUtilities.IsRecordLike(positional))
             {
                 foreach (var produced in RunOrYield(context, new TuiTreeRunRequest(
                     positional,

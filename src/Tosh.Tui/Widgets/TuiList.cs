@@ -82,6 +82,15 @@ public sealed class TuiList : TuiWidget
     /// <remarks>Ticked items when multi-select is on, otherwise the highlighted one.</remarks>
     public override object? Value => MultiSelect ? CheckedItems : SelectedItem;
 
+
+    /// <summary>A script function that supplies the items, re-read on every redraw.</summary>
+    /// <remarks>
+    /// Assigning one of these is what makes a property live. Setting <see cref="Items"/>
+    /// puts a value there once; setting this puts a question there, asked again each time
+    /// the screen is drawn.
+    /// </remarks>
+    public IShellCallable? ItemsSource { get; set; }
+
     public override bool IsFocusable => true;
 
     /// <summary>Which item the keyboard is on.</summary>

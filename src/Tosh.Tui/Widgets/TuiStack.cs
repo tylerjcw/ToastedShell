@@ -24,7 +24,7 @@ public enum TuiOrientation
 /// </remarks>
 public sealed class TuiStack : TuiWidget
 {
-    private readonly List<(TuiWidget Widget, TuiLength Length)> _children = [];
+    private readonly List<TuiWidget> _children = [];
 
     public TuiStack(TuiOrientation orientation = TuiOrientation.Vertical)
     {
@@ -36,16 +36,43 @@ public sealed class TuiStack : TuiWidget
     /// <summary>Blank cells between children.</summary>
     public int Gap { get; set; }
 
-    public override IReadOnlyList<TuiWidget> Children => _children.Select(entry => entry.Widget).ToArray();
+    /// <summary>
+    /// The children, in order. Settable so a stack can be written as a literal.
+    /// </summary>
+    public IReadOnlyList<TuiWidget> Items
+    {
+        get => _children;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
 
-    /// <summary>Adds a child, sized by <paramref name="length"/>. Returns this stack.</summary>
-    public TuiStack Add(TuiWidget child, TuiLength length = default)
+            _children.Clear();
+            _children.AddRange(value);
+        }
+    }
+
+    public override IReadOnlyList<TuiWidget> Children => _children;
+
+    /// <summary>Adds a child, at whatever size it asks for. Returns this stack.</summary>
+    public TuiStack Add(TuiWidget child)
     {
         ArgumentNullException.ThrowIfNull(child);
 
-        // The default of a record struct is Auto, which is the right default anyway: a
-        // child that has not been told how big to be is as big as it asks.
-        _children.Add((child, length));
+        _children.Add(child);
+        return this;
+    }
+
+    /// <summary>Adds a child at a given size. Returns this stack.</summary>
+    /// <remarks>
+    /// Sets the size on the child rather than remembering it here, so the two cannot
+    /// disagree and a child moved between containers keeps the size it was given.
+    /// </remarks>
+    public TuiStack Add(TuiWidget child, TuiLength length)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+
+        child.Size = length;
+        _children.Add(child);
         return this;
     }
 
@@ -55,8 +82,9 @@ public sealed class TuiStack : TuiWidget
         var along = 0;
         var across = 0;
 
-        foreach (var (child, length) in _children)
+        foreach (var child in _children)
         {
+            var length = child.Size;
             var desired = length.Kind == TuiLengthKind.Fixed
                 ? new TuiSize(
                     horizontal ? length.Value : constraints.MaxWidth,
@@ -89,7 +117,7 @@ public sealed class TuiStack : TuiWidget
         {
             var size = sizes[index];
 
-            _children[index].Widget.Arrange(horizontal
+            _children[index].Arrange(horizontal
                 ? new TuiRect(bounds.Left + offset, bounds.Top, size, bounds.Height)
                 : new TuiRect(bounds.Left, bounds.Top + offset, bounds.Width, size));
 
@@ -114,12 +142,12 @@ public sealed class TuiStack : TuiWidget
 
         for (var index = 0; index < _children.Count; index += 1)
         {
-            var (child, length) = _children[index];
+            var child = _children[index];
 
-            switch (length.Kind)
+            switch (child.Size.Kind)
             {
                 case TuiLengthKind.Fixed:
-                    sizes[index] = Math.Min(length.Value, Math.Max(0, remaining));
+                    sizes[index] = Math.Min(child.Size.Value, Math.Max(0, remaining));
                     remaining -= sizes[index];
                     break;
 
@@ -133,7 +161,7 @@ public sealed class TuiStack : TuiWidget
                     break;
 
                 case TuiLengthKind.Star:
-                    totalWeight += length.Value;
+                    totalWeight += child.Size.Value;
                     break;
             }
         }
@@ -149,12 +177,12 @@ public sealed class TuiStack : TuiWidget
 
         for (var index = 0; index < _children.Count; index += 1)
         {
-            if (_children[index].Length.Kind != TuiLengthKind.Star)
+            if (_children[index].Size.Kind != TuiLengthKind.Star)
             {
                 continue;
             }
 
-            sizes[index] = share * _children[index].Length.Value / totalWeight;
+            sizes[index] = share * _children[index].Size.Value / totalWeight;
             handedOut += sizes[index];
             lastStar = index;
         }
@@ -169,7 +197,7 @@ public sealed class TuiStack : TuiWidget
 
     public override void Draw(TuiSurface surface)
     {
-        foreach (var (child, _) in _children)
+        foreach (var child in _children)
         {
             // Each child draws into its own region and cannot reach outside it.
             child.Draw(surface.Clip(child.Bounds.Offset(-Bounds.Left, -Bounds.Top)));

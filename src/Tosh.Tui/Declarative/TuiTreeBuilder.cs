@@ -185,57 +185,11 @@ public static class TuiTreeBuilder
         {
             if (spec.Callable(key) is { } source)
             {
-                context.Bind(widget, source, Assign);
+                TuiBindings.Attach(widget, source);
                 return;
             }
         }
     }
-
-    /// <summary>Puts a re-read value back into whichever widget asked for it.</summary>
-    private static void Assign(TuiWidget widget, object? value)
-    {
-        switch (widget)
-        {
-            case TuiTextWidget text:
-                text.Text = value?.ToString() ?? string.Empty;
-                return;
-
-            case TuiTextField field:
-                field.Text = value?.ToString() ?? string.Empty;
-                return;
-
-            case TuiBorder border:
-                border.Title = value?.ToString();
-                return;
-
-            case TuiList list:
-                list.Items = AsItems(value);
-                return;
-
-            case TuiScroll { Child: TuiList scrolled }:
-                scrolled.Items = AsItems(value);
-                return;
-        }
-
-        // A labelled field is a row around an input; the input is what was meant.
-        foreach (var child in widget.Children)
-        {
-            if (child is TuiTextField nested)
-            {
-                nested.Text = value?.ToString() ?? string.Empty;
-                return;
-            }
-        }
-    }
-
-    private static IReadOnlyList<object?> AsItems(object? value)
-        => value switch
-        {
-            null => [],
-            string text => [text],
-            System.Collections.IEnumerable sequence => sequence.Cast<object?>().ToArray(),
-            _ => [value],
-        };
 
     /// <summary>Finds the key that names a widget, and treats the rest as its properties.</summary>
     private static TuiWidgetSpec? ToSpec(IDictionary<string, object?> fields, TuiWidgetRegistry registry)
