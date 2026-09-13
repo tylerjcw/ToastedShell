@@ -46,7 +46,12 @@ public sealed class TuiOverlay : TuiWidget
     public TuiWidget? Modal { get; set; }
 
     /// <summary>Whether something is currently on top.</summary>
-    public bool IsModal => Modal is not null;
+    /// <remarks>
+    /// A hidden modal is no modal. That is how a markup screen puts a dialog up: it
+    /// declares the dialog once and says when it applies, rather than reaching into a tree
+    /// it cannot reach into.
+    /// </remarks>
+    public bool IsModal => Modal is { IsVisible: true };
 
     /// <summary>Blank cells between the modal and the edge of the overlay.</summary>
     /// <remarks>
@@ -71,7 +76,7 @@ public sealed class TuiOverlay : TuiWidget
     /// keyboard cannot land somewhere the reader cannot see it.
     /// </remarks>
     public override IReadOnlyList<TuiWidget> FocusChildren
-        => Modal is null ? Children : [Modal];
+        => IsModal ? [Modal!] : base.FocusChildren;
 
     /// <inheritdoc />
     protected override TuiSize MeasureCore(TuiConstraints constraints)
@@ -82,7 +87,11 @@ public sealed class TuiOverlay : TuiWidget
     {
 
         Content?.Arrange(bounds);
-        Modal?.Arrange(ModalBounds(bounds));
+
+        if (IsModal)
+        {
+            Modal!.Arrange(ModalBounds(bounds));
+        }
     }
 
     /// <inheritdoc />
@@ -90,7 +99,7 @@ public sealed class TuiOverlay : TuiWidget
     {
         DrawChild(Content, surface);
 
-        if (Modal is null)
+        if (!IsModal)
         {
             return;
         }
@@ -118,12 +127,12 @@ public sealed class TuiOverlay : TuiWidget
     /// </remarks>
     public override TuiWidget? HitTest(int column, int row)
     {
-        if (Modal is null)
+        if (!IsModal)
         {
             return Content?.HitTest(column, row) ?? base.HitTest(column, row);
         }
 
-        return Modal.HitTest(column, row) ?? this;
+        return Modal!.HitTest(column, row) ?? this;
     }
 
     /// <inheritdoc />
@@ -137,7 +146,7 @@ public sealed class TuiOverlay : TuiWidget
     /// <summary>Where the modal sits: its own measured size, centred, inside the margin.</summary>
     private TuiRect ModalBounds(TuiRect bounds)
     {
-        if (Modal is null)
+        if (!IsModal)
         {
             return default;
         }

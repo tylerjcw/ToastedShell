@@ -525,7 +525,17 @@ an \code{Id} on the field is the id its text is reported under.
 
 \begin{lstlisting}
 {| Button = "Save", OnPress = &Save |}
+{| Button = "Discard", Exit = true, OnPress = &Forget |}
 \end{lstlisting}
+
+A button draws a marker and answers \code{Enter} when it has the keyboard, so a
+dialog's buttons say nothing about which one is chosen: focus lands on the first
+of them and \code{Tab} moves the answer along with it.
+
+\code{Exit = true} ends the screen after the handler has run. Markup never names
+the form it is inside, so without it a dialog could raise itself and have no way
+to let the reader out; the object style says the same thing with
+\code{\$form.Discard()}.
 
 \section{Containers}
 
@@ -712,6 +722,14 @@ $form.Cancelled = func() {
     $overlay.Modal = $confirm
     $form.KeepOpen()
 }
+\end{lstlisting}
+
+\code{Discard} is the other half of it. The button that answers the question must
+not ask it again --- \code{Cancel} would, and the same dialog would go straight
+back up:
+
+\begin{lstlisting}
+$discard.Pressed = func() { $form.Discard() }
 \end{lstlisting}
 
 \subsection{Keys travel outwards}
@@ -904,7 +922,7 @@ List    & the items           & Display, Multi, OnChange, OnSelect, + style \\
 Table   & the rows            & Columns, Borders, Header, Scrollbar, OnChange, OnSelect \\
 Tree    & the root            & Children, Display, Key, Root, Scrollbar, OnChange, OnSelect \\
 Field   & the caption         & Value, Placeholder, Password, Multiline, OnChange, OnSubmit \\
-Button  & the label           & OnPress, + style \\
+Button  & the label           & OnPress, Exit, + style \\
 Gauge   & ---                 & Value, Min, Max, Label, + style \\
 Spark   & the series          & Scale, Capacity, Pad, + style \\
 Bars    & the values          & Scale, Values, + style \\

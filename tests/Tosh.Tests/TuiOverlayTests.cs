@@ -198,6 +198,56 @@ public sealed class TuiOverlayTests
     }
 
     [Fact]
+    public void A_dialogs_button_needs_no_marker_written_on_it()
+    {
+        // Selection and focus are the same fact, and writing it twice is how a dialog ends
+        // up with a marker on one button and the keyboard on another.
+        var form = new TuiForm(new TuiTextField("draft"));
+        var discard = new TuiButton("Discard");
+        var keep = new TuiButton("Keep editing");
+        var overlay = new TuiOverlay(
+            form,
+            new TuiStack(TuiOrientation.Horizontal) { Gap = 2, Items = [discard, keep] });
+
+        var pressed = string.Empty;
+
+        discard.Pressed = () => pressed = "discard";
+        keep.Pressed = () => pressed = "keep";
+
+        var screen = new Tosh.Tui.Declarative.TuiDeclarativeScreen(overlay, []);
+        screen.Render(new TuiSize(40, 8));
+
+        Assert.True(discard.IsSelected);
+        Assert.False(keep.IsSelected);
+
+        screen.HandleInput(Key(ConsoleKey.Tab));
+
+        Assert.False(discard.IsSelected);
+        Assert.True(keep.IsSelected);
+
+        screen.HandleInput(Key(ConsoleKey.Enter));
+
+        Assert.Equal("keep", pressed);
+    }
+
+    [Fact]
+    public void A_button_that_says_so_ends_the_screen()
+    {
+        // What `Exit = true` gives a markup dialog: a way out that does not need a handle
+        // on a form the markup never named.
+        var overlay = new TuiOverlay(new TuiTextWidget("page"));
+        var quit = new TuiButton("Quit") { ClosesScreen = false };
+
+        quit.Pressed = () => quit.ClosesScreen = true;
+        overlay.Modal = quit;
+
+        var screen = new Tosh.Tui.Declarative.TuiDeclarativeScreen(overlay, []);
+        screen.Render(new TuiSize(30, 8));
+
+        Assert.Equal(TuiScreenResult.Exit, screen.HandleInput(Key(ConsoleKey.Enter)));
+    }
+
+    [Fact]
     public void A_form_behind_a_dialog_is_not_submitted_by_the_dialog_s_enter()
     {
         // The shape this exists for: a confirmation over a form. Enter belongs to whatever

@@ -47,6 +47,34 @@ public static class TuiBindings
         }
     }
 
+    /// <summary>
+    /// Asks only the visibility predicates, before anything has been drawn.
+    /// </summary>
+    /// <remarks>
+    /// A widget hidden by <c>When</c> is visible until its predicate has been asked, so
+    /// the keyboard would otherwise be seated inside a dialog that was never up. Only
+    /// these are asked, rather than every binding: the rest are answers about what to
+    /// draw, and nothing has been drawn yet.
+    /// </remarks>
+    public static void ApplyVisibility(
+        TuiWidget root,
+        Func<IShellCallable, object?, object?> invoke,
+        object? values)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(invoke);
+
+        if (root.VisibleSource is { } visible)
+        {
+            root.IsVisible = invoke(visible, values) is not (null or false or 0);
+        }
+
+        foreach (var child in root.Children)
+        {
+            ApplyVisibility(child, invoke, values);
+        }
+    }
+
     /// <summary>Re-reads every bound property in a tree.</summary>
     /// <param name="root">The tree to refresh.</param>
     /// <param name="invoke">Calls a script function with the screen's current values.</param>
@@ -55,6 +83,13 @@ public static class TuiBindings
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(invoke);
+
+        // Asked first and of every widget, because whether something is drawn at all
+        // decides whether anything else about it matters.
+        if (root.VisibleSource is { } visible)
+        {
+            root.IsVisible = invoke(visible, values) is not (null or false or 0);
+        }
 
         switch (root)
         {

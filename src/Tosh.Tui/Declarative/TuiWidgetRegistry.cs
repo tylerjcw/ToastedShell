@@ -65,12 +65,86 @@ public sealed class TuiWidgetRegistry
             widget.Padding = spec.Thickness("padding");
             widget.Align = spec.Alignment("align");
             widget.VerticalAlign = spec.VerticalAlignment("valign");
+            widget.Keys = ReadKeys(spec, context);
+            widget.IsVisible = spec.Flag("visible", true);
+            widget.VisibleSource = spec.Callable("when");
 
             return true;
         }
 
         widget = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Reads the keys a node registers.
+    /// </summary>
+    /// <remarks>
+    /// <code>
+    /// Keys = [
+    ///     {| Key = "ctrl+s", Does = "save",  Do = &amp;Save |},
+    ///     {| Key = "q",      Does = "quit",  Exit = true  |}
+    /// ]
+    /// </code>
+    /// On the node they belong to rather than on the screen, because where a binding is
+    /// written is where it applies: keys on a dialog answer while the dialog is up.
+    /// </remarks>
+    private static TuiShortcuts? ReadKeys(TuiWidgetSpec spec, TuiBuildContext context)
+    {
+        if (!spec.TryGet("keys", out var declared) || declared is not IEnumerable<object?> bindings)
+        {
+            return null;
+        }
+
+        var keys = new TuiShortcuts();
+        var any = false;
+
+        foreach (var binding in bindings)
+        {
+            if (!ShellRecordUtilities.TryGetValue(binding, "Key", out var chord) || chord is null)
+            {
+                continue;
+            }
+
+            var text = chord.ToString() ?? string.Empty;
+            var label = ShellRecordUtilities.TryGetValue(binding, "Label", out var written) && written is not null
+                ? written.ToString() ?? text
+                : text;
+            var describes = ShellRecordUtilities.TryGetValue(binding, "Does", out var does) && does is not null
+                ? does.ToString() ?? string.Empty
+                : string.Empty;
+
+            var exits = ShellRecordUtilities.TryGetValue(binding, "Exit", out var exit) &&
+                exit is bool flag && flag;
+
+            var handler = ShellRecordUtilities.TryGetValue(binding, "Do", out var action)
+                ? action as IShellCallable
+                : null;
+
+            if (exits)
+            {
+                if (handler is null)
+                {
+                    keys.Exit(text, label, describes);
+                }
+                else
+                {
+                    keys.Exit(text, label, describes, () => context.Invoke(handler, null));
+                }
+            }
+            else if (handler is not null)
+            {
+                keys.On(text, label, describes, () => context.Invoke(handler, null));
+            }
+            else
+            {
+                continue;
+            }
+
+            any = true;
+        }
+
+        return any ? keys : null;
     }
 
     /// <summary>The built-in widget set.</summary>
@@ -270,6 +344,20 @@ public sealed class TuiWidgetRegistry
             var button = new TuiButton(spec.PrimaryText() ?? "OK") { Style = spec.Style() };
 
             context.OnHandler(spec, "onpress", handler => button.Pressed = () => handler(null));
+
+            // `Exit = true`, spelled the same way a key is. A markup screen has no handle
+            // on its own form, so without this a dialog could raise itself and never let
+            // the reader out of one.
+            if (spec.Flag("exit"))
+            {
+                var pressed = button.Pressed;
+
+                button.Pressed = () =>
+                {
+                    pressed?.Invoke();
+                    button.ClosesScreen = true;
+                };
+            }
 
             return button;
         });

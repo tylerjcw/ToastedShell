@@ -157,6 +157,45 @@ public sealed class TuiMarkupSurfaceTests
     }
 
     [Fact]
+    public void Keys_written_on_a_node_are_registered_on_that_widget()
+    {
+        var pressed = 0;
+
+        var widget = TuiTreeBuilder.Build(
+            Node(
+                ("Column", new object?[] { "a" }),
+                ("Keys", new object?[]
+                {
+                    Node(("Key", "t"), ("Do", new Pressed(() => pressed += 1))),
+                })),
+            registry: null,
+            invoke: (callable, _) => ((Pressed)callable).Fire(),
+            out _);
+
+        Assert.NotNull(widget.Keys);
+        Assert.True(widget.Keys!.TryHandle(new ConsoleKeyInfo('t', ConsoleKey.T, false, false, false), out _));
+        Assert.Equal(1, pressed);
+    }
+
+    private sealed class Pressed(Action action) : Tosh.Runtime.IShellCallable
+    {
+        public object? Fire()
+        {
+            action();
+            return null;
+        }
+
+        public string CallableName => "pressed";
+
+        public int RequiredParameterCount => 0;
+
+        public int? MaximumParameterCount => 0;
+
+        public IAsyncEnumerable<object?> InvokeAsync(Tosh.Runtime.CommandContext context)
+            => throw new NotSupportedException();
+    }
+
+    [Fact]
     public void A_document_keeps_the_lines_it_was_given()
     {
         var widget = TuiTreeBuilder.Build(Node(("Lines", new object?[] { "first", "second" })));
@@ -164,6 +203,29 @@ public sealed class TuiMarkupSurfaceTests
         var lines = Assert.IsType<TuiLines>(widget);
 
         Assert.Equal(["first", "second"], lines.Lines.Select(line => line.Text));
+    }
+
+    [Fact]
+    public void A_button_that_exits_ends_the_screen_as_well_as_running_its_handler()
+    {
+        // Markup has no handle on its own form, so a dialog written this way could raise
+        // itself and never let the reader out.
+        var pressed = 0;
+
+        var widget = TuiTreeBuilder.Build(
+            Node(("Button", "Discard"), ("Exit", true), ("OnPress", new Pressed(() => pressed += 1))),
+            registry: null,
+            invoke: (callable, _) => ((Pressed)callable).Fire(),
+            out _);
+
+        var button = Assert.IsType<TuiButton>(widget);
+
+        Assert.False(button.ClosesScreen);
+
+        button.Pressed!.Invoke();
+
+        Assert.Equal(1, pressed);
+        Assert.True(button.ClosesScreen);
     }
 
     [Fact]

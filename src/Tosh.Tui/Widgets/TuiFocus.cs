@@ -23,6 +23,9 @@ public sealed class TuiFocus
 {
     private readonly TuiWidget _root;
 
+    /// <summary>Whether the keyboard was taken away on purpose rather than never given.</summary>
+    private bool _cleared;
+
     public TuiFocus(TuiWidget root)
     {
         ArgumentNullException.ThrowIfNull(root);
@@ -73,17 +76,28 @@ public sealed class TuiFocus
         // a caller can ask for — a screen that wants every key for itself sets it — and
         // seating the keyboard somewhere it was deliberately taken from would override
         // that silently.
-        if (Focused is null || IndexOf(Focusable(), Focused) >= 0)
+        if (Focused is null && _cleared)
         {
             return;
         }
 
-        Focus(Focusable().FirstOrDefault());
+        if (Focused is not null && IndexOf(Focusable(), Focused) >= 0)
+        {
+            return;
+        }
+
+        var reachable = Focusable();
+
+        Focused = reachable.Count > 0 ? reachable[0] : null;
+        Apply();
     }
 
     /// <summary>Gives the keyboard to a particular widget.</summary>
     public void Focus(TuiWidget? widget)
     {
+        // Asking for nothing focused is a decision; ending up with nothing focused because
+        // what held it disappeared is an accident. Only the second is repaired.
+        _cleared = widget is null;
         Focused = widget;
         Apply();
     }
@@ -187,6 +201,42 @@ public sealed class TuiFocus
     }
 
     /// <summary>The widgets from the root down to <paramref name="target"/>, inclusive.</summary>
+    /// <summary>
+    /// The focused widget and then its ancestors, in the order an event travels.
+    /// </summary>
+    /// <remarks>
+    /// The same order <see cref="Dispatch"/> uses. Exposed so a screen can ask each of them
+    /// about its registered keys after all of them have declined the event itself, which
+    /// keeps "nearest the keyboard wins" true for shortcuts as well as for input.
+    /// </remarks>
+    public IReadOnlyList<TuiWidget> FromFocused()
+    {
+        if (Focused is not null)
+        {
+            return [.. PathTo(Focused).Reverse()];
+        }
+
+        // With nothing focused there is no path to walk, but a screen may still have keys
+        // registered somewhere in it — a screen made only of text and shortcuts is an
+        // ordinary thing to build. Deepest first, so the innermost table still wins.
+        var found = new List<TuiWidget>();
+
+        Collect(_root, found);
+        found.Reverse();
+
+        return found;
+
+        static void Collect(TuiWidget widget, List<TuiWidget> into)
+        {
+            into.Add(widget);
+
+            foreach (var child in widget.FocusChildren)
+            {
+                Collect(child, into);
+            }
+        }
+    }
+
     private IReadOnlyList<TuiWidget> PathTo(TuiWidget target)
     {
         var path = new List<TuiWidget>();

@@ -101,6 +101,25 @@ public sealed class TuiForm : TuiWidget
     /// <summary>Abandons the form, as a cancel button would.</summary>
     public void Cancel() => Close(TuiFormResult.Cancelled, Cancelled);
 
+    /// <summary>Abandons the form without asking <see cref="Cancelled"/> about it.</summary>
+    /// <remarks>
+    /// <para>
+    /// The other half of <see cref="KeepOpen"/>. A handler that vetoes leaving puts a
+    /// question up; the button that answers it must not ask the same question again, and
+    /// <see cref="Cancel"/> would:
+    /// </para>
+    /// <code>
+    /// $form.Cancelled = func() {
+    ///     if ($saved) { return }
+    ///     $overlay.Modal = $confirm
+    ///     $form.KeepOpen()
+    /// }
+    ///
+    /// $discard.Pressed = func() { $form.Discard() }
+    /// </code>
+    /// </remarks>
+    public void Discard() => Close(TuiFormResult.Cancelled, handler: null);
+
     /// <summary>Changes the form's mind about closing, from inside a handler.</summary>
     /// <remarks>
     /// <para>

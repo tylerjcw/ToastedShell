@@ -23,7 +23,16 @@ public sealed class TuiButton : TuiWidget
     public Action? Pressed { get; set; }
 
     /// <summary>Whether this is the button the keyboard will act on.</summary>
+    /// <remarks>
+    /// Follows focus wherever a screen has a focus manager, so a dialog's buttons need
+    /// nothing written on them: the one the keyboard is on is the one that draws a marker
+    /// and the one Enter presses. A screen that routes keys itself sets this by hand — the
+    /// confirmation prompt does, and toggles it with the arrow keys.
+    /// </remarks>
     public bool IsSelected { get; set; }
+
+    /// <inheritdoc />
+    protected override void OnFocusChanged() => IsSelected = IsFocused;
 
     public TuiStyle Style { get; set; }
 

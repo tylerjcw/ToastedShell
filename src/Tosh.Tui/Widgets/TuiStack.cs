@@ -84,12 +84,24 @@ public sealed class TuiStack : TuiWidget
 
         foreach (var child in _children)
         {
+            // A hidden child asks for nothing. Measuring it would answer nothing anyway,
+            // but a fixed length is taken from the child rather than measured, so without
+            // this a hidden pane written as "20" still claimed its twenty columns.
+            if (!child.IsVisible)
+            {
+                continue;
+            }
+
             var length = child.Size;
 
             // A fixed length settles one dimension, not both. Reporting the full offered
             // size across the stack's axis made a row containing anything fixed claim
-            // every row on the screen: a labelled field is such a row, so a column of
-            // them left nothing for the second one onwards.
+            // every row on the screen: a labelled field is such a row, so a column of them
+            // left nothing for the second one onwards.
+            //
+            // Everything else is measured, star children included. "A share of what is
+            // left" is an instruction for arranging; asked how big it would like to be, a
+            // stack answers with its content.
             var desired = length.Kind == TuiLengthKind.Fixed
                 ? Fix(child, length.Value, horizontal, constraints)
                 : child.Measure(constraints);
@@ -98,7 +110,7 @@ public sealed class TuiStack : TuiWidget
             across = Math.Max(across, horizontal ? desired.Height : desired.Width);
         }
 
-        along += Gap * Math.Max(0, _children.Count - 1);
+        along += Gap * Math.Max(0, _children.Count(child => child.IsVisible) - 1);
 
         return constraints.Constrain(horizontal
             ? new TuiSize(along, across)
@@ -121,10 +133,9 @@ public sealed class TuiStack : TuiWidget
 
     protected override void ArrangeCore(TuiRect bounds)
     {
-
         var horizontal = Orientation == TuiOrientation.Horizontal;
         var total = horizontal ? bounds.Width : bounds.Height;
-        var gaps = Gap * Math.Max(0, _children.Count - 1);
+        var gaps = Gap * Math.Max(0, _children.Count(child => child.IsVisible) - 1);
         var sizes = Distribute(Math.Max(0, total - gaps), horizontal, bounds);
 
         var offset = 0;
@@ -137,7 +148,12 @@ public sealed class TuiStack : TuiWidget
                 ? new TuiRect(bounds.Left + offset, bounds.Top, size, bounds.Height)
                 : new TuiRect(bounds.Left, bounds.Top + offset, bounds.Width, size));
 
-            offset += size + Gap;
+            // A hidden child takes no room, so the ones after it close up rather than
+            // leaving a gap where it would have been.
+            if (_children[index].IsVisible)
+            {
+                offset += size + Gap;
+            }
         }
     }
 
@@ -162,6 +178,13 @@ public sealed class TuiStack : TuiWidget
         for (var index = 0; index < _children.Count; index += 1)
         {
             var child = _children[index];
+            // A hidden child is not a child with nothing in it: it takes no row and no
+            // share, so the ones beside it close up rather than leaving a gap.
+            if (!child.IsVisible)
+            {
+                continue;
+            }
+
             var length = child.Size;
 
             switch (length.Kind)
@@ -201,7 +224,11 @@ public sealed class TuiStack : TuiWidget
         {
             var length = _children[index].Size;
 
-            if (length.Kind != TuiLengthKind.Star)
+            // Hidden children were left out of the weight, so they must be left out of the
+            // sharing too. Paying them anyway ran the total handed out past the share, and
+            // the absorber below then subtracted the overspend from the last visible
+            // child — which is why a dialog that was the last of its siblings vanished.
+            if (length.Kind != TuiLengthKind.Star || !_children[index].IsVisible)
             {
                 continue;
             }

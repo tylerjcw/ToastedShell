@@ -1,0 +1,166 @@
+#!/bin/tosh
+## @summary The same editor as `editor-dialogs.tosh`, written as markup.
+## @remarks
+##   Everything outside the screen is identical on purpose: the two files exist to be read
+##   side by side, and the diff between them is the difference between the styles.
+##
+##   Three dialogs, raised three different ways:
+##
+##     Ctrl+S   a registered key puts up "Saved", which dismisses itself
+##     Ctrl+O   a registered key puts up a chooser, which answers with a file
+##     Esc / q  the form's own cancel handler asks before discarding changes
+##
+##   Nothing is imported. A markup tree names widgets by what they are rather than by CLR
+##   type, so there is no namespace to bring in.
+
+# ── State ───────────────────────────────────────────────────────────────────────
+
+var documentName = "untitled.txt"
+var saved = true
+var showing = "none"
+
+## @summary What the status line says.
+func Status() => $"  {$documentName}{$saved ? "" : " *"}   Ctrl+S save   Ctrl+O open   Esc quit"
+
+## @summary Which dialog, if any, is up. Each one asks this about itself.
+func Saving()   => $showing == "saved"
+func Opening()  => $showing == "open"
+func Quitting() => $showing == "quit"
+func Asking()   => $showing != "none"
+
+# ── What the dialogs do ─────────────────────────────────────────────────────────
+#
+# The overlay is rebuilt from `$showing` on every redraw, so raising a dialog is
+# setting a variable. That is the markup answer to a screen that changes shape: the
+# tree is a function of the state rather than something handlers reach into.
+
+func Dismiss() { $showing = "none" }
+func Save()    { $saved = true;  $showing = "saved" }
+func Open()    { $showing = "open" }
+
+func Choose(name) {
+    $documentName = $"{$name}"
+    $saved = true
+    $showing = "none"
+}
+
+func Typed(text) { $saved = false }
+
+## @summary What the "Saved" dialog says.
+func Wrote() => $"Wrote {$documentName}."
+
+## @summary Escape inside a dialog: close what is up.
+## @remarks
+##   Registered on the overlay, because a dialog is the overlay's modal and the form is
+##   not one of its ancestors — Escape pressed inside a dialog never reaches the form.
+func Escape() {
+    if ($showing != "none") { Dismiss() }
+}
+
+## @summary Leaving: asked by the form, which owns Escape while nothing is up.
+## @remarks
+##   Handed the form, the way a Windows Forms event is handed its sender. `KeepOpen` is
+##   `FormClosing` with `e.Cancel`: the result is set before the handler runs, so a handler
+##   can read how the form ended and decide that it has not.
+func Leaving(form) {
+    if ($saved) {
+        $quit = true
+        return
+    }
+
+    $showing = "quit"
+    $form.KeepOpen()
+}
+
+## @summary Yes, throw it away.
+## @remarks
+##   `Exit = true` on the button is what ends the screen; this only records why. A markup
+##   screen has no handle on its own form, so a button says "and then we are done" the
+##   same way a key does.
+func Discard() { $quit = true }
+
+var quit = false
+
+# ── The screen ──────────────────────────────────────────────────────────────────
+#
+# `Keys` hangs on the node it belongs to, so where a binding is written is where it
+# applies. These sit on the form — everything below the overlay — so they stop
+# answering the moment a dialog goes up: a reader inside "Discard changes?" should not
+# be able to press Ctrl+O.
+
+# Every dialog is declared once and says when it applies. A markup screen cannot reach
+# into itself to swap a widget, so it does not: the tree is fixed and the state decides
+# what of it is drawn. Nothing is rebuilt, so the chooser keeps its selection while it is
+# up and the buttons keep theirs — which is the difference between hiding a pane and
+# building the tree again without it.
+#
+# The dialog column carries `When` too, because an overlay whose modal is hidden is not
+# modal, and that is what lets the page below stay usable when no dialog is up.
+
+var screen = {|
+    Overlay = [
+        {|
+            Title = "edit",
+            Keys = [
+                {| Key = "ctrl+s", Label = "Ctrl+S", Does = "save", Do = &Save |},
+                {| Key = "ctrl+o", Label = "Ctrl+O", Does = "open", Do = &Open |},
+                {| Key = "q",      Label = "q",      Does = "quit", Exit = true |}
+            ],
+            Form = [ {|
+                Column = [
+                    {| Title = "Document", Size = "*",
+                       Box = [ {| Field = "", Id = "body", Value = "The quick brown fox.",
+                                  Multiline = true, OnChange = &Typed |} ] |},
+                    {| Text = &Status, Size = "1" |}
+                ]
+            |} ],
+            OnCancel = &Leaving
+        |},
+
+        {|
+            When = &Asking,
+            Column = [
+                {|
+                    When = &Saving,
+                    Title = "Saved",
+                    Box = [ {|
+                        Padding = 1,
+                        Column = [
+                            {| Text = &Wrote |},
+                            {| Button = "OK", Align = "center", OnPress = &Dismiss |}
+                        ]
+                    |} ]
+                |},
+
+                {|
+                    When = &Opening,
+                    Title = "Open",
+                    Box = [ {| List = ["untitled.txt", "notes.md", "reactor.tosh"],
+                               Padding = 1, OnSelect = &Choose |} ]
+                |},
+
+                {|
+                    When = &Quitting,
+                    Title = "Discard changes?",
+                    Box = [ {|
+                        Padding = 1,
+                        Column = [
+                            {| Text = "This document has unsaved changes." |},
+                            {| Text = "" |},
+                            {| Row = [
+                                   {| Button = "Discard", Exit = true, OnPress = &Discard |},
+                                   {| Button = "Keep editing", OnPress = &Dismiss |}
+                               ], Gap = 2 |}
+                        ]
+                    |} ]
+                |}
+            ]
+        |}
+    ],
+    Margin = 6,
+    Keys = [ {| Key = "escape", Label = "Esc", Does = "", Do = &Escape |} ]
+|}
+
+tui run $screen
+
+writeline $"{$documentName}: quit={$quit}"

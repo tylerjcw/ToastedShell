@@ -69,6 +69,15 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
             TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold),
         };
 
+        // Visibility is settled before focus is seated. A widget hidden by `When` is
+        // visible until its predicate has been asked, so seating the keyboard first put it
+        // inside a dialog that was never up — and a dialog with nothing focusable in it
+        // left the keyboard nowhere at all.
+        if (_invoke is not null)
+        {
+            TuiBindings.ApplyVisibility(_root, _invoke, ShellRecordUtilities.CreateExpando(Values()));
+        }
+
         _focus = new TuiFocus(_root);
     }
 
@@ -174,6 +183,17 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
             return TuiScreenResult.Continue;
         }
 
+        // Registered keys, asked outwards from whatever has the keyboard: a dialog's keys
+        // answer before the screen's, and neither is asked while a text field is using the
+        // same character as a letter.
+        foreach (var widget in _focus.FromFocused())
+        {
+            if (widget.Keys is { } keys && keys.TryHandle(input.Key, out var shortcut))
+            {
+                return shortcut == TuiScreenResult.Exit ? TuiScreenResult.Exit : Closed();
+            }
+        }
+
         switch (input.Key.Key)
         {
             case ConsoleKey.Tab:
@@ -219,6 +239,14 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
             return TuiScreenResult.Exit;
         }
 
+        // A widget that asked to leave is answered before the form is, because a dialog
+        // button saying "yes, discard it" is answering the question the form asked.
+        if (AskedToClose(_root))
+        {
+            Accept();
+            return TuiScreenResult.Exit;
+        }
+
         switch (_form?.Result)
         {
             case TuiFormResult.Submitted:
@@ -233,6 +261,15 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
                 return TuiScreenResult.Continue;
         }
     }
+
+    /// <summary>Whether anything in the tree has asked the screen to end.</summary>
+    /// <remarks>
+    /// Walked rather than subscribed to: a widget has no parent to raise an event on, and
+    /// a screen's tree is small enough that asking it is cheaper than keeping a list of
+    /// who to ask in step with a tree that can change shape.
+    /// </remarks>
+    private static bool AskedToClose(TuiWidget widget)
+        => widget.ClosesScreen || widget.Children.Any(AskedToClose);
 
     /// <summary>Records what every identified widget holds, for a caller that asked for it.</summary>
     private void Accept()

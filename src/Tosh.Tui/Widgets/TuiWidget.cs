@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui.Widgets;
@@ -249,6 +250,8 @@ public enum TuiLengthKind
 /// </remarks>
 public abstract class TuiWidget
 {
+    private bool _focused;
+
     /// <summary>
     /// A name for this widget, used to address it and to key its value in a result.
     /// </summary>
@@ -312,6 +315,45 @@ public abstract class TuiWidget
     /// <summary>Where this widget sits when it is shorter than the room it was given.</summary>
     public TuiVerticalAlignment VerticalAlign { get; set; } = TuiVerticalAlignment.Stretch;
 
+    /// <summary>
+    /// Keys this widget answers when nothing nearer the keyboard wanted them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A shortcut table hung on a widget rather than on the screen, so where it applies is
+    /// where it is written: keys on a dialog answer while the dialog is up, keys on the
+    /// root answer everywhere, and the dialog's win because a key travels outwards from
+    /// whatever has the keyboard.
+    /// </para>
+    /// <para>
+    /// Asked after <see cref="OnInput"/> has declined, at every step of that journey. A
+    /// letter typed into a search box is a letter, whatever the screen would otherwise
+    /// have done with it.
+    /// </para>
+    /// </remarks>
+    public TuiShortcuts? Keys { get; set; }
+
+    /// <summary>
+    /// Whether this widget is drawn at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A hidden widget takes no room, draws nothing, cannot be focused and cannot be
+    /// clicked — but it is still there, and so is everything it was holding. That is the
+    /// difference between hiding a pane and rebuilding the tree without it: a list that
+    /// comes back has the selection it had, and a field has what was typed into it.
+    /// </para>
+    /// <para>
+    /// This is how a markup tree changes shape. A screen written as a value cannot reach
+    /// into itself to swap a widget, so it declares everything it might show and says when
+    /// each applies: <c>When = &amp;IsSaving</c>.
+    /// </para>
+    /// </remarks>
+    public bool IsVisible { get; set; } = true;
+
+    /// <summary>A script function deciding whether this is drawn, re-read on every redraw.</summary>
+    public IShellCallable? VisibleSource { get; set; }
+
     /// <summary>Whether this widget can hold keyboard focus.</summary>
     public virtual bool IsFocusable => false;
 
@@ -323,7 +365,44 @@ public abstract class TuiWidget
     /// selected button with a marker — and should not otherwise act on it. What happens
     /// to an event is routing's business, not the widget's.
     /// </remarks>
-    public bool IsFocused { get; internal set; }
+    public bool IsFocused
+    {
+        get => _focused;
+
+        internal set
+        {
+            if (_focused == value)
+            {
+                return;
+            }
+
+            _focused = value;
+            OnFocusChanged();
+        }
+    }
+
+    /// <summary>
+    /// Set by a handler that has decided the screen is over — a dialog's Discard button,
+    /// say.
+    /// </summary>
+    /// <remarks>
+    /// A widget has no parent to tell, so it says so on itself and the screen asks the
+    /// tree after each event it dispatched, the same place it asks a form how it ended.
+    /// This is what <c>Exit = true</c> on a button means, and it works in a screen with no
+    /// form at all — which <see cref="TuiForm.Discard"/>, the object-style answer, cannot.
+    /// </remarks>
+    public bool ClosesScreen { get; set; }
+
+    /// <summary>Called when the keyboard arrives or leaves.</summary>
+    /// <remarks>
+    /// For the widget whose own state duplicates the answer — a button's selection is the
+    /// same fact as its focus — so that a screen with a focus manager has one place the
+    /// answer lives. A screen that routes keys itself never sets <see cref="IsFocused"/>,
+    /// so nothing here fires and whatever it set by hand stands.
+    /// </remarks>
+    protected virtual void OnFocusChanged()
+    {
+    }
 
     /// <summary>The widget's children, outermost first.</summary>
     public virtual IReadOnlyList<TuiWidget> Children => [];
@@ -337,7 +416,10 @@ public abstract class TuiWidget
     /// up answers with the dialog alone, which is what stops Tab walking into a form the
     /// reader cannot currently see.
     /// </remarks>
-    public virtual IReadOnlyList<TuiWidget> FocusChildren => Children;
+    public virtual IReadOnlyList<TuiWidget> FocusChildren
+        => Children.Count == 0 || Children.All(child => child.IsVisible)
+            ? Children
+            : [.. Children.Where(child => child.IsVisible)];
 
     /// <summary>
     /// How much room this widget would like, given what is on offer.
@@ -350,6 +432,11 @@ public abstract class TuiWidget
     /// </remarks>
     public TuiSize Measure(TuiConstraints constraints)
     {
+        if (!IsVisible)
+        {
+            return new TuiSize(0, 0);
+        }
+
         if (Padding.IsEmpty)
         {
             return MeasureCore(constraints);
@@ -455,7 +542,14 @@ public abstract class TuiWidget
     /// remembered to allow for it.
     /// </remarks>
     protected void DrawChild(TuiWidget? child, TuiSurface surface)
-        => child?.Paint(surface.Clip(child.Slot.Offset(-Bounds.Left, -Bounds.Top)));
+    {
+        if (child is not { IsVisible: true })
+        {
+            return;
+        }
+
+        child.Paint(surface.Clip(child.Slot.Offset(-Bounds.Left, -Bounds.Top)));
+    }
 
     /// <summary>
     /// Handles an input event, returning whether it was consumed.
@@ -475,7 +569,7 @@ public abstract class TuiWidget
     /// </remarks>
     public virtual TuiWidget? HitTest(int column, int row)
     {
-        if (!Bounds.Contains(column, row))
+        if (!IsVisible || !Bounds.Contains(column, row))
         {
             return null;
         }

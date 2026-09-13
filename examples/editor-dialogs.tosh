@@ -1,0 +1,148 @@
+#!/bin/tosh
+## @summary A small editor showing overlays raised by a key, by a button, and by a
+##          cancelled form — written with `new`.
+## @remarks
+##   The companion file `editor-dialogs-markup.tosh` is the same screen written as a
+##   record. Everything outside the screen is identical, so the diff between the two is
+##   the difference between the styles and nothing else.
+##
+##   Three dialogs, because they are raised three different ways:
+##
+##     Ctrl+S   a registered key puts up "Saved", which dismisses itself
+##     Ctrl+O   a registered key puts up a chooser, which answers with a file
+##     Esc / q  the form's own cancel handler asks before discarding changes
+##
+##   Run it from a terminal: `tosh examples/editor-dialogs.tosh`.
+
+using Tosh.Tui.Widgets
+using Tosh.Tui.Rendering
+
+# ── State ───────────────────────────────────────────────────────────────────────
+
+var documentName = "untitled.txt"
+var saved = true
+
+# ── The document ────────────────────────────────────────────────────────────────
+
+var body = new TuiTextField("The quick brown fox.") {| Multiline = true, Id = "body" |}
+$body.Changed = func(text) { $saved = false }
+
+var status = new TuiTextWidget() {| Size = "1" |}
+$status.TextSource = func() => $"  {$documentName}{$saved ? "" : " *"}   Ctrl+S save   Ctrl+O open   Esc quit"
+
+var page = new TuiStack(TuiOrientation.Vertical) {|
+    Items = [ new TuiBorder($body, "Document") {| Size = "*" |}, $status ]
+|}
+
+var form = new TuiForm($page) {| Title = "edit" |}
+
+# ── The layer everything is shown on ────────────────────────────────────────────
+#
+# One overlay wraps the whole screen. Raising a dialog is setting `Modal`; dismissing
+# one is setting it back to null. While something is up it is the only thing the
+# keyboard and the mouse can reach, and the page behind it keeps drawing.
+
+var screen = new TuiOverlay($form) {| Margin = 6 |}
+
+## @summary Takes whatever is up back down.
+func Dismiss() {
+    $screen.Modal = null
+}
+
+# ── 1. A dialog raised by a key, dismissed by a button ──────────────────────────
+
+var savedOk = new TuiButton("OK") {| Align = TuiHorizontalAlignment.Center |}
+$savedOk.Pressed = &Dismiss
+
+var savedDialog = new TuiBorder(
+    new TuiStack(TuiOrientation.Vertical) {|
+        Padding = 1,
+        Items = [
+            new TuiTextWidget() {| TextSource = func() => $"Wrote {$documentName}." |},
+            $savedOk
+        ]
+    |},
+    "Saved")
+
+func Save() {
+    $saved = true
+    $screen.Modal = $savedDialog
+}
+
+# ── 2. A dialog that answers with a choice ──────────────────────────────────────
+
+var files = new TuiList(["untitled.txt", "notes.md", "reactor.tosh"])
+
+$files.Activated = func(name) {
+    $documentName = $"{$name}"
+    $saved = true
+    Dismiss()
+}
+
+$files.Padding = 1
+
+var openDialog = new TuiBorder($files, "Open")
+
+func Open() {
+    $screen.Modal = $openDialog
+}
+
+# ── 3. A dialog that vetoes leaving ─────────────────────────────────────────────
+#
+# `KeepOpen` is the important part. The form's result is set before the handler runs,
+# so a handler can read how the form ended and decide that it has not — which is what
+# lets Escape ask a question instead of throwing the document away.
+
+# Neither button says which is selected: focus lands on the first one in the dialog
+# and the marker follows it, so Tab moves the answer as well as the keyboard.
+var discard = new TuiButton("Discard")
+var keep = new TuiButton("Keep editing")
+
+# `Discard`, not `Cancel`: the reader has just answered the question `Cancelled` asks,
+# and asking it again would put the same dialog back up forever.
+$discard.Pressed = func() { $form.Discard() }
+$keep.Pressed = &Dismiss
+
+var quitDialog = new TuiBorder(
+    new TuiStack(TuiOrientation.Vertical) {|
+        Padding = 1,
+        Items = [
+            new TuiTextWidget("This document has unsaved changes."),
+            new TuiTextWidget(),
+            new TuiStack(TuiOrientation.Horizontal) {| Gap = 2, Items = [ $discard, $keep ] |}
+        ]
+    |},
+    "Discard changes?")
+
+$form.Cancelled = func() {
+    if ($saved) { return }
+
+    $screen.Modal = $quitDialog
+    $form.KeepOpen()
+}
+
+# ── Keys ────────────────────────────────────────────────────────────────────────
+#
+# Hung on the widget they belong to, so where a binding is written is where it
+# applies. These are on the form, which is everything below the overlay, so they stop
+# answering the moment a dialog goes up — a reader inside "Discard changes?" should
+# not be able to press Ctrl+O.
+#
+# They are also asked only after the focused widget declines, so Ctrl+S reaches them
+# while a multi-line text field has the keyboard, and an ordinary letter does not.
+
+$form.Keys = new TuiShortcuts()
+$form.Keys.On("ctrl+s", "Ctrl+S", "save", &Save) | ignore
+$form.Keys.On("ctrl+o", "Ctrl+O", "open", &Open) | ignore
+$form.Keys.On("q", "q", "quit", func() { $form.Cancel() }) | ignore
+
+## Escape inside a dialog takes it down rather than leaving the editor. On the overlay
+## rather than the form, so it answers only while something is up.
+$screen.Keys = new TuiShortcuts()
+$screen.Keys.On("escape", "Esc", "", func() {
+    if ($screen.IsModal) { Dismiss() } else { $form.Cancel() }
+}) | ignore
+
+tui run $screen
+
+writeline $"{$documentName}: {$form.Result}"

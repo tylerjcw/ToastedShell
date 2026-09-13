@@ -164,4 +164,29 @@ public sealed class TuiFormTests
         Assert.True(registry.Knows("form"));
         Assert.Contains("form", registry.Names);
     }
+
+    [Fact]
+    public void Discard_leaves_without_asking_the_handler_that_vetoed()
+    {
+        // The other half of KeepOpen. Cancel would ask again, and the handler would put
+        // the same dialog back up — which is a loop, not a confirmation.
+        var form = new TuiForm(new TuiTextField("draft"));
+        var asked = 0;
+
+        form.Cancelled = closing =>
+        {
+            asked += 1;
+            closing.KeepOpen();
+        };
+
+        form.Cancel();
+
+        Assert.Equal(1, asked);
+        Assert.Equal(TuiFormResult.Open, form.Result);
+
+        form.Discard();
+
+        Assert.Equal(1, asked);
+        Assert.True(form.WasCancelled);
+    }
 }
