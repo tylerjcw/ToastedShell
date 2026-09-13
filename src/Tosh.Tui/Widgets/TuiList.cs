@@ -61,6 +61,16 @@ public sealed class TuiList : TuiWidget
     /// <summary>Raised when the selection moves.</summary>
     public Action<int>? SelectionChanged { get; set; }
 
+    /// <summary>
+    /// Renders a row as styled runs, for a list whose rows are not one style throughout.
+    /// </summary>
+    /// <remarks>
+    /// A sidebar entry is a selection marker, an indent, a name and a dimmed count. Given
+    /// this, the list stops drawing its own marker: a row that knows it is selected draws
+    /// the marker it wants, in the gutter colour it wants.
+    /// </remarks>
+    public Func<object?, bool, TuiSpanLine>? SpanSelector { get; set; }
+
     /// <summary>Raised when an item is chosen with Enter.</summary>
     public Action<object?>? Activated { get; set; }
 
@@ -228,8 +238,19 @@ public sealed class TuiList : TuiWidget
 
     private int MarkerWidth => MultiSelect ? 6 : 2;
 
-    public override void Draw(TuiSurface surface)
+    /// <summary>Draws a bar down the right edge saying where in the list you are.</summary>
+    /// <remarks>Off by default: a bar beside a list that entirely fits is noise.</remarks>
+    public bool Scrollbar { get; set; }
+
+    /// <summary>How the scrollbar is drawn, when there is one.</summary>
+    public TuiStyle ScrollbarStyle { get; set; } = new(Attributes: TuiTextAttributes.Dim);
+
+    public override void Draw(TuiSurface outer)
     {
+        var surface = Scrollbar && Items.Count > outer.Height
+            ? outer.Clip(new TuiRect(0, 0, Math.Max(0, outer.Width - 1), outer.Height))
+            : outer;
+
         for (var row = 0; row < surface.Height; row += 1)
         {
             var index = row + _offset;
@@ -240,6 +261,16 @@ public sealed class TuiList : TuiWidget
             }
 
             var isSelected = index == _selectedIndex;
+
+            // A row that says how to draw itself draws itself entirely, marker included:
+            // a sidebar's selection marker is part of its own gutter, in its own colour,
+            // and second-guessing that here would put two markers on the line.
+            if (SpanSelector is not null)
+            {
+                SpanSelector(Items[index], isSelected).Draw(surface, row);
+                continue;
+            }
+
             var style = isSelected ? SelectedStyle : Style;
 
             var marker = isSelected ? "> " : "  ";
@@ -252,6 +283,11 @@ public sealed class TuiList : TuiWidget
 
             var used = surface.DrawText(0, row, marker, style);
             surface.DrawText(used, row, Format(Items[index]), style);
+        }
+
+        if (Scrollbar)
+        {
+            TuiScrollbar.DrawVertical(outer, _offset, Items.Count, ScrollbarStyle, ScrollbarStyle);
         }
     }
 
