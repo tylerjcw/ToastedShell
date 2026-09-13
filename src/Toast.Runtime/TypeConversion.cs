@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Globalization;
 using System.Collections;
 using System.Net;
@@ -576,7 +577,72 @@ public static class TypeConversion
             }
         }
 
+        // A type may declare how to make one of itself from something else. Honouring that
+        // is what lets a layout be written `Size = "2*"` rather than
+        // `Size = TuiLength.Star(2)`, and it costs nothing anywhere else: a type with no
+        // such operator is exactly as unconvertible as it was.
+        return TryUserDefinedConversion(value, effectiveType, out converted);
+    }
+
+    /// <summary>
+    /// Converts through a conversion operator the source or target type declares.
+    /// </summary>
+    /// <remarks>
+    /// Implicit operators are tried before explicit ones, because an implicit conversion is
+    /// the author saying it always succeeds, while an explicit one is the author saying it
+    /// might not. Both are tried: a cast a person would write by hand should not be
+    /// unavailable here.
+    /// </remarks>
+    private static bool TryUserDefinedConversion(object value, Type targetType, out object? converted)
+    {
         converted = null;
+
+        // A span is the case that makes this necessary rather than merely tidy: `string`
+        // declares an implicit conversion to `ReadOnlySpan<char>`, so without this guard
+        // overload resolution would happily bind `Int32.Parse("42")` to the span overload
+        // and then fail — reflection cannot box a ref struct, and `Invoke` says so with a
+        // bare `NotSupportedException`. A target nothing can hold is not a target.
+        if (targetType.IsByRefLike ||
+            targetType.IsByRef ||
+            targetType.IsPointer ||
+            targetType.ContainsGenericParameters)
+        {
+            return false;
+        }
+
+        var sourceType = value.GetType();
+
+        foreach (var name in (string[])["op_Implicit", "op_Explicit"])
+        {
+            foreach (var declaring in (Type[])[targetType, sourceType])
+            {
+                var method = declaring
+                    .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                    .FirstOrDefault(candidate =>
+                        candidate.Name == name &&
+                        candidate.ReturnType == targetType &&
+                        candidate.GetParameters() is [var parameter] &&
+                        parameter.ParameterType.IsAssignableFrom(sourceType));
+
+                if (method is null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    converted = method.Invoke(null, [value]);
+                    return true;
+                }
+                catch (TargetInvocationException)
+                {
+                    // The operator itself rejected the value; that is an answer, not a
+                    // reason to keep looking.
+                    return false;
+                }
+            }
+        }
+
         return false;
     }
 

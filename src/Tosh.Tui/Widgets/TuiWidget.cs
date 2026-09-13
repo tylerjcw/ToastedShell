@@ -51,6 +51,45 @@ public readonly record struct TuiLength
 
     /// <summary>A share of whatever is left over, split by weight.</summary>
     public static TuiLength Star(int weight = 1) => new(Math.Max(1, weight), TuiLengthKind.Star);
+
+    /// <summary>
+    /// Reads a length written the way a layout author writes one.
+    /// </summary>
+    /// <remarks>
+    /// <c>"*"</c> and <c>"2*"</c> are the spellings a layout uses, <c>"auto"</c> means as
+    /// big as the content, and a bare number is cells. Anything unrecognised is auto,
+    /// which is the safe answer: a widget sized to its content is always drawable.
+    /// </remarks>
+    public static TuiLength Parse(string? text)
+    {
+        var trimmed = text?.Trim() ?? string.Empty;
+
+        if (trimmed.Length == 0 || trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return Auto;
+        }
+
+        if (trimmed.EndsWith('*'))
+        {
+            var weight = trimmed[..^1].Trim();
+            return Star(weight.Length == 0 ? 1 : int.TryParse(weight, out var parsed) ? parsed : 1);
+        }
+
+        return int.TryParse(trimmed, out var cells) ? Fixed(cells) : Auto;
+    }
+
+    /// <summary>So a layout can be written as <c>Size = "2*"</c>.</summary>
+    public static implicit operator TuiLength(string text) => Parse(text);
+
+    /// <summary>So a layout can be written as <c>Size = 12</c>.</summary>
+    public static implicit operator TuiLength(int cells) => Fixed(cells);
+
+    public override string ToString() => Kind switch
+    {
+        TuiLengthKind.Auto => "auto",
+        TuiLengthKind.Fixed => Value.ToString(),
+        _ => Value == 1 ? "*" : $"{Value}*",
+    };
 }
 
 public enum TuiLengthKind

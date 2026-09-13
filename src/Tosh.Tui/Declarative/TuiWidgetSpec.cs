@@ -154,25 +154,12 @@ public sealed class TuiWidgetSpec
             return fallback;
         }
 
-        if (value is int cells)
+        return value switch
         {
-            return TuiLength.Fixed(cells);
-        }
-
-        var text = value.ToString()?.Trim() ?? string.Empty;
-
-        if (text.Equals("auto", StringComparison.OrdinalIgnoreCase))
-        {
-            return TuiLength.Auto;
-        }
-
-        if (text.EndsWith('*'))
-        {
-            var weight = text[..^1];
-            return TuiLength.Star(weight.Length == 0 ? 1 : int.TryParse(weight, out var parsed) ? parsed : 1);
-        }
-
-        return int.TryParse(text, out var fixedCells) ? TuiLength.Fixed(fixedCells) : fallback;
+            TuiLength length => length,
+            int cells => TuiLength.Fixed(cells),
+            _ => TuiLength.Parse(value.ToString()),
+        };
     }
 
     /// <summary>Reads the styling keys a node may carry.</summary>
