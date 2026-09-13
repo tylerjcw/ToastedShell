@@ -51,6 +51,7 @@
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
 | [`TOAST-0092`](items/TOAST-0092.md) | P2 | complete | 9/9 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
+| [`TS-P3-12`](items/TS-P3-12.md) | P3 | complete | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0046`](items/TOAST-0046.md) | P2 | complete | 4/4 | `-> void` is unspecified, and disagrees with `-> nothing` for the same declared type |
 | [`TOAST-0129`](items/TOAST-0129.md) | P2 | complete | 5/5 | Eighteen of the 609 built-in command examples were not valid ToastScript, and one of them was the command's fault |

@@ -12,7 +12,6 @@
 | [`TOAST-0125`](items/TOAST-0125.md) | P1 | partial | 10/12 | Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
-| [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | partial | 5/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
