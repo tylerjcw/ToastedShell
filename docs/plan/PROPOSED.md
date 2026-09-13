@@ -21,11 +21,13 @@
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TUI-0009`](items/TUI-0009.md) | P3 | proposed | 0/6 | The TUI assumes truecolor and a terminal, with no degradation and no plain-text path |
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
+| [`TUI-0026`](items/TUI-0026.md) | P3 | proposed | 0/7 | A keybinding can run a function but cannot move the keyboard, so 'jump to the search box' is unwritable |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
 | [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
+| [`TUI-0024`](items/TUI-0024.md) | P3 | proposed | 0/7 | A status bar is a hand-built string, so it cannot be aligned, segmented or styled per part |
 | [`TOAST-0123`](items/TOAST-0123.md) | P2 | proposed | 0/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0101`](items/TOAST-0101.md) | P3 | proposed | 0/5 | A pipeline into a user function does not bind to a parameter, and the arity error misdescribes why |
@@ -41,7 +43,9 @@
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TUI-0001`](items/TUI-0001.md) | P1 | proposed | 0/8 | A frame is a string, so there is no compositing, no partial redraw and no hit testing |
+| [`TUI-0025`](items/TUI-0025.md) | P3 | proposed | 0/8 | A TUI cannot show a picture, so a file browser's preview pane is a hex dump or nothing |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
+| [`TUI-0023`](items/TUI-0023.md) | P3 | proposed | 0/8 | There is no menu: a command a screen offers is either a key you have to know or a button taking up room |
 | [`TUI-0012`](items/TUI-0012.md) | P3 | proposed | 0/6 | There is no performance budget, so 'fast enough' is a feeling |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
