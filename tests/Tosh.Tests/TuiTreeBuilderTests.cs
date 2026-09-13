@@ -60,11 +60,13 @@ public sealed class TuiTreeBuilderTests
     {
         var widget = TuiTreeBuilder.Build(Node(("Field", "Width"), ("Id", "Width"), ("Value", "2")));
 
-        // The field is inside a labelled row, so the id lives on the field itself.
-        var field = Descendants(widget).OfType<TuiTextField>().Single();
+        // The id is on the row, which answers with what its input holds — so a caller
+        // names the thing they wrote rather than a widget synthesised inside it.
+        var field = Assert.IsType<TuiField>(widget);
 
         Assert.Equal("Width", field.Id);
         Assert.Equal("2", field.Text);
+        Assert.Equal("2", field.Value);
     }
 
     [Fact]

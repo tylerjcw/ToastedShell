@@ -23,6 +23,7 @@ public static class TuiBindings
         switch (widget)
         {
             case TuiTextWidget text: text.TextSource = source; return;
+            case TuiField labelled: labelled.TextSource = source; return;
             case TuiTextField field: field.ValueSource = source; return;
             case TuiBorder border: border.TitleSource = source; return;
             case TuiList list: list.ItemsSource = source; return;

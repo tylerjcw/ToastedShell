@@ -82,29 +82,17 @@ public sealed class TuiWidgetRegistry
 
         registry.Register("field", static (spec, context) =>
         {
-            // A labelled input, because a bare field with no label is not what anyone
-            // means when they ask for one.
-            var field = new TuiTextField(spec.Text("value") ?? string.Empty)
+            var widget = new TuiField(spec.PrimaryText() ?? string.Empty, spec.Text("value") ?? string.Empty)
             {
                 Placeholder = spec.Text("placeholder"),
-                Mask = spec.Flag("password"),
+                Password = spec.Flag("password"),
                 Multiline = spec.Flag("multiline"),
-                Id = spec.Text("id"),
             };
 
-            context.OnHandler(spec, "onchange", handler => field.Changed = text => handler(text));
-            context.OnHandler(spec, "onsubmit", handler => field.Submitted = text => handler(text));
+            context.OnHandler(spec, "onchange", handler => widget.Changed = text => handler(text));
+            context.OnHandler(spec, "onsubmit", handler => widget.Submitted = text => handler(text));
 
-            var label = spec.PrimaryText();
-
-            if (string.IsNullOrEmpty(label))
-            {
-                return field;
-            }
-
-            return new TuiStack(TuiOrientation.Horizontal)
-                .Add(new TuiTextWidget($"{label}: ") { Style = new TuiStyle(Attributes: TuiTextAttributes.Dim) }, TuiLength.Auto)
-                .Add(field, TuiLength.Star());
+            return widget;
         });
 
         registry.Register("button", static (spec, context) =>
