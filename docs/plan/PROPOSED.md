@@ -42,7 +42,6 @@
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
-| [`TUI-0001`](items/TUI-0001.md) | P1 | proposed | 0/8 | A frame is a string, so there is no compositing, no partial redraw and no hit testing |
 | [`TUI-0025`](items/TUI-0025.md) | P3 | proposed | 0/8 | A TUI cannot show a picture, so a file browser's preview pane is a hex dump or nothing |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
 | [`TUI-0023`](items/TUI-0023.md) | P3 | proposed | 0/8 | There is no menu: a command a screen offers is either a key you have to know or a button taking up room |

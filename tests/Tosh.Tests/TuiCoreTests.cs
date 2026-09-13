@@ -882,7 +882,7 @@ public sealed class TuiCoreTests
 
         public List<TuiInputEvent> HandledInputs { get; } = [];
 
-        public TuiFrame Render(TuiSize size) => new(string.Empty);
+        public TuiFrame Render(TuiSize size) => new(new Tosh.Tui.Rendering.TuiBuffer(size));
 
         public TuiScreenResult HandleInput(TuiInputEvent input)
         {

@@ -10,7 +10,6 @@ public static class TuiApplication
     private const string ExitAlternateScreen = "\u001b[?1049l";
     private const string HideCursor = "\u001b[?25l";
     private const string ShowCursor = "\u001b[?25h";
-    private const string ClearScreenAndHome = "\u001b[2J\u001b[H";
     private const string EnableSgrMouse = "\u001b[?1000h\u001b[?1006h";
     private const string DisableSgrMouse = "\u001b[?1000l\u001b[?1006l";
     private const int MaxInputBurst = 512;
@@ -38,23 +37,11 @@ public static class TuiApplication
                 var size = host.TryGetSize() ?? new TuiSize(80, 25);
                 var frame = screen.Render(size);
 
-                if (frame.Buffer is { } buffer)
-                {
-                    failure.Draw(buffer);
+                failure.Draw(frame.Buffer);
 
-                    // Only what changed since the last frame reaches the terminal.
-                    host.Write(TuiTerminalWriter.Present(presented, buffer));
-                    presented = buffer;
-                }
-                else
-                {
-                    // A screen still producing a string: clear and repaint, as before.
-                    // Anything drawn this way invalidates the diff, so the next buffered
-                    // frame has to paint in full.
-                    host.Write(ClearScreenAndHome);
-                    host.Write(frame.Content + failure.AsLine());
-                    presented = null;
-                }
+                // Only what changed since the last frame reaches the terminal.
+                host.Write(TuiTerminalWriter.Present(presented, frame.Buffer));
+                presented = frame.Buffer;
 
                 var refresh = screen.RefreshInterval;
 

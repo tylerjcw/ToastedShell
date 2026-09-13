@@ -243,37 +243,20 @@ public sealed class TuiBrowserGoldenTests : IDisposable
     /// A frame as text, whichever form the screen produced it in.
     /// </summary>
     /// <remarks>
-    /// A screen that has moved onto widgets answers with a grid of cells and an empty
-    /// <c>Content</c>; one that has not answers with a string it built itself. Painting
-    /// the grid in full — no diff against a previous frame — is what makes the two
-    /// comparable at all, and is what the terminal does for the first frame anyway.
+    /// Painted in full — no diff against a previous frame — because a golden master is
+    /// what the screen looks like, not what changed since last time. It is also what the
+    /// terminal receives for the first frame anyway.
     /// </remarks>
     private static string Paint(ITuiScreen screen)
-    {
-        var frame = screen.Render(Size);
-
-        return frame.Buffer is { } buffer ? TuiTerminalWriter.Present(buffer) : frame.Content;
-    }
+        => TuiTerminalWriter.Present(screen.Render(Size).Buffer);
 
     /// <summary>The frame as rows of plain text: what the reader actually sees.</summary>
     /// <remarks>
-    /// Taken from the cells when there are cells, because the painted form positions the
-    /// cursor instead of emitting newlines and stripping its escapes would run the whole
-    /// screen onto one line. A string frame is split on the newlines it wrote itself.
+    /// Taken from the cells rather than from the painted form, which positions the cursor
+    /// instead of emitting newlines — stripping its escapes would run the whole screen onto
+    /// one line.
     /// </remarks>
-    private static string PlainOf(ITuiScreen screen)
-    {
-        var frame = screen.Render(Size);
-
-        if (frame.Buffer is not { } buffer)
-        {
-            return Plain(frame.Content);
-        }
-
-        return string.Join('\n', Enumerable
-            .Range(0, buffer.Height)
-            .Select(row => buffer.RowText(row).TrimEnd()));
-    }
+    private static string PlainOf(ITuiScreen screen) => screen.Render(Size).ToPlainText();
 
     /// <summary>
     /// The same frame with every escape sequence removed: what the reader actually sees.

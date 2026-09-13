@@ -91,7 +91,4 @@ internal sealed class TuiHandlerFailureReporter
         buffer.Fill(new TuiRect(0, row, buffer.Width, 1), BannerStyle);
         buffer.DrawText(0, row, text, BannerStyle);
     }
-
-    /// <summary>The banner as a trailing line, for screens still rendering strings.</summary>
-    public string AsLine() => BannerText() is { } text ? Environment.NewLine + text : string.Empty;
 }
