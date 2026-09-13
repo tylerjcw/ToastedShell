@@ -96,6 +96,37 @@ public sealed class TuiWidgetRegistry
             return widget;
         });
 
+        registry.Register("tree", static (spec, context) =>
+        {
+            var tree = new TuiTree(spec.Primary)
+            {
+                ShowRoot = spec.Flag("root", true),
+                Scrollbar = spec.Flag("scrollbar"),
+            };
+
+            // `Children = &Kids` is a question asked of a node, not a pull binding on the
+            // screen's values — so it is wired here rather than through TuiBindings.
+            if (spec.Callable("children") is { } children)
+            {
+                tree.ChildrenOf = node => context.Invoke(children, node) as IEnumerable<object?> ?? [];
+            }
+
+            if (spec.Callable("display") is { } display)
+            {
+                tree.Display = node => context.Invoke(display, node)?.ToString() ?? string.Empty;
+            }
+
+            if (spec.Callable("id") is { } identify)
+            {
+                tree.Identify = node => context.Invoke(identify, node)?.ToString() ?? string.Empty;
+            }
+
+            context.OnHandler(spec, "onselect", handler => tree.Activated = node => handler(node));
+            context.OnHandler(spec, "onchange", handler => tree.SelectionChanged = node => handler(node));
+
+            return tree;
+        });
+
         registry.Register("table", static (spec, context) =>
         {
             var table = new TuiTable(spec.PrimaryItems())

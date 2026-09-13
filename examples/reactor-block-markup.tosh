@@ -144,13 +144,15 @@ func Whole(value, fallback: int) -> int {
         return $fallback
     }
 
-    ## `as` is the safe cast: it yields null rather than throwing, which is what makes it
-    ## usable against a field someone is still typing into.
-    var parsed = $trimmed as int
-
-    if ($parsed == null) {
+    ## A cast is not a test. `"abc" as int` throws rather than yielding null — the same
+    ## trap `TS-P2-111` records against the argument shift below — so the shape has to be
+    ## checked before the value is read, and a half-typed field is exactly where that
+    ## matters.
+    if (not ($trimmed =~ "^[0-9]+$")) {
         return $fallback
     }
+
+    var parsed = $trimmed as int
 
     if ($parsed < 1) {
         return $fallback

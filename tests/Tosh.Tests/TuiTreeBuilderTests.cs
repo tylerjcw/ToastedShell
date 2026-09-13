@@ -1,4 +1,5 @@
 using System.Dynamic;
+using Tosh.Runtime;
 using Tosh.Tui;
 using Tosh.Tui.Declarative;
 using Tosh.Tui.Rendering;
@@ -162,6 +163,48 @@ public sealed class TuiTreeBuilderTests
         var widget = TuiTreeBuilder.Build(Node(("Banner", "hi")), registry);
 
         Assert.Equal(["** hi **"], Render(widget, 10, 1));
+    }
+
+    [Fact]
+    public void A_tree_gets_its_children_display_and_identity_from_the_node()
+    {
+        object?[] kids = ["a", "b"];
+
+        var widget = TuiTreeBuilder.Build(
+            Node(
+                ("Tree", "root"),
+                ("Children", Callable(_ => kids)),
+                ("Display", Callable(node => $"<{node}>")),
+                ("Id", Callable(node => $"id:{node}"))),
+            registry: null,
+            invoke: (callable, argument) => ((FakeCallable)callable).Body(argument),
+            out _);
+
+        var tree = Assert.IsType<TuiTree>(widget);
+
+        tree.Rebuild();
+        Assert.Equal(["▸ <root>"], Render(tree, 20, 1));
+
+        // The fake answers every node with the same two children, so they look like
+        // branches too — which is the lookahead working, not a mistake.
+        tree.Expand(tree.Root);
+        Assert.Equal(["▾ <root>", "├▸ <a>", "└▸ <b>"], Render(tree, 20, 3));
+    }
+
+    private static IShellCallable Callable(Func<object?, object?> body) => new FakeCallable(body);
+
+    private sealed class FakeCallable(Func<object?, object?> body) : IShellCallable
+    {
+        public Func<object?, object?> Body { get; } = body;
+
+        public string CallableName => "fake";
+
+        public int RequiredParameterCount => 1;
+
+        public int? MaximumParameterCount => 1;
+
+        public IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
+            => throw new NotSupportedException("Invoked through the screen's invoker instead.");
     }
 
     private static IEnumerable<TuiWidget> Descendants(TuiWidget widget)

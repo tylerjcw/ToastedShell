@@ -37,7 +37,6 @@
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
 | [`TUI-0022`](items/TUI-0022.md) | P3 | proposed | 0/5 | A keybinding's help text is written twice, and the two drift |
 | [`TUI-0020`](items/TUI-0020.md) | P3 | proposed | 0/6 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
-| [`TUI-0018`](items/TUI-0018.md) | P2 | proposed | 0/6 | Both browsers hand-render a tree, and a script cannot show one at all |
 | [`TOAST-0094`](items/TOAST-0094.md) | P3 | proposed | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
