@@ -454,3 +454,27 @@ commands. The shape is settled as follows.
 Filed as `TUI-0001` through `TUI-0012`. `tui` becomes a plan area, because an item
 about how a widget lays itself out belongs to neither the language nor the shell.
 
+### September 12, 2026 — What the `tui` command is for
+
+`tui` stays, narrowed to two jobs: asking a question, and running a screen.
+
+- **Asking** — `tui input`, `tui confirm`, `tui pick`, `tui filter`, `tui file`, inline
+  with `--cli` or as a modal. A command that returns a value is the most shell-like
+  thing the TUI offers, and `ls | tui pick` is a pipeline stage that filters through a
+  person.
+- **Running** — `tui run` takes a widget tree, as a record literal or a built screen.
+- **Composing** — `tui screen`, the `add-*` family, `bind` and `layout` retire with
+  `TUI-0004`. They exist only because a widget tree could not be written as a value, and
+  it can be.
+
+The terminal host becomes a runtime service, `ToshRuntime.TuiHost`, beside the existing
+`ToshRuntime.InlinePrompts`. The standard library cannot reach a terminal today, which
+is why modal subcommands yield a request object for a display sink to intercept and run
+— and why assigning one to a variable silently stores the request instead of asking the
+question. With a host on the runtime the command runs the screen and returns the answer.
+
+`tui` is the shell's façade, not the framework's API. Compiled Tōast programs use
+`Tosh.Tui` directly.
+
+Filed as `TUI-0015`.
+

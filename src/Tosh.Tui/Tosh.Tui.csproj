@@ -14,6 +14,12 @@
 
 
   <ItemGroup>
+    <!-- TuiHandlerFailureReporter is an implementation detail of the run loop, and the
+         guarantees it provides are exactly what wants testing (TUI-0010). -->
+    <InternalsVisibleTo Include="Tosh.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The TUI themes off shell configuration: ToshTuiThemeConfig, ToshTextStyleConfig
          and ToshTableBoxStyle live in Tosh.Runtime, and the render helpers take them
          directly. Tosh.Runtime references neither this project nor Tosh.Stdlib, so this

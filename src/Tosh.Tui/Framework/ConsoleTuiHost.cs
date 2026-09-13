@@ -5,6 +5,8 @@ public sealed class ConsoleTuiHost : ITuiHost
 {
     private readonly TuiInputReader _inputReader = new();
 
+    private static readonly Lazy<Stream> _standardOutput = new(Console.OpenStandardOutput);
+
     public bool IsInteractive => !Console.IsInputRedirected && !Console.IsOutputRedirected;
 
     public TuiSize? TryGetSize()
@@ -53,5 +55,15 @@ public sealed class ConsoleTuiHost : ITuiHost
     public void Write(string text)
     {
         Console.Write(text);
+    }
+
+    /// <inheritdoc />
+    public void WriteUrgent(string text)
+    {
+        // Straight to the file descriptor: no TextWriter, no console lock, no wait on
+        // whichever thread is blocked reading a key.
+        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+        _standardOutput.Value.Write(bytes, 0, bytes.Length);
+        _standardOutput.Value.Flush();
     }
 }

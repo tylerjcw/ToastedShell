@@ -47,4 +47,20 @@ public interface ITuiHost
     }
 
     void Write(string text);
+
+    /// <summary>
+    /// Writes without taking the console's lock, for use from a signal handler.
+    /// </summary>
+    /// <remarks>
+    /// A signal handler runs on its own thread while the render loop is usually blocked
+    /// in <see cref="Console.ReadKey"/>, and .NET serialises console access — so an
+    /// ordinary write from the handler waits for a lock the blocked thread is holding,
+    /// and the process dies from the signal before the bytes leave. That is the
+    /// difference between handing the terminal back and leaving the user staring at an
+    /// alternate screen with no cursor (<c>TUI-0010</c>).
+    ///
+    /// The default is an ordinary write, which is right for any host that is not a real
+    /// console and keeps this off the list of things a test host must implement.
+    /// </remarks>
+    void WriteUrgent(string text) => Write(text);
 }

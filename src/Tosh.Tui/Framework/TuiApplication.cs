@@ -3,6 +3,7 @@ using Tosh.Tui.Rendering;
 
 namespace Tosh.Tui;
 
+/// <summary>Runs a screen against a terminal.</summary>
 public static class TuiApplication
 {
     private const string EnterAlternateScreen = "\u001b[?1049h";
@@ -24,11 +25,11 @@ public static class TuiApplication
             throw new InvalidOperationException("This interactive browser requires a real terminal.");
         }
 
-        host.Write(EnterAlternateScreen);
-        host.Write(HideCursor);
-        host.Write(EnableSgrMouse);
+        // Owns the terminal modes and restores them even if the process is signalled.
+        using var session = TuiTerminalSession.Enter(host);
 
         TuiBuffer? presented = null;
+        var failure = new TuiHandlerFailureReporter();
 
         try
         {
@@ -39,6 +40,8 @@ public static class TuiApplication
 
                 if (frame.Buffer is { } buffer)
                 {
+                    failure.Draw(buffer);
+
                     // Only what changed since the last frame reaches the terminal.
                     host.Write(TuiTerminalWriter.Present(presented, buffer));
                     presented = buffer;
@@ -49,7 +52,7 @@ public static class TuiApplication
                     // Anything drawn this way invalidates the diff, so the next buffered
                     // frame has to paint in full.
                     host.Write(ClearScreenAndHome);
-                    host.Write(frame.Content);
+                    host.Write(frame.Content + failure.AsLine());
                     presented = null;
                 }
 
@@ -58,7 +61,8 @@ public static class TuiApplication
                 if (refresh is null)
                 {
                     // Nothing changes without the user, so block rather than spin.
-                    if (ProcessInputBatch(host, screen, host.ReadInput()) == TuiScreenResult.Exit)
+                    if (failure.Guard(() => ProcessInputBatch(host, screen, host.ReadInput()))
+                        == TuiScreenResult.Exit)
                     {
                         break;
                     }
@@ -68,7 +72,8 @@ public static class TuiApplication
 
                 if (host.TryReadInput(refresh.Value, out var timedInput))
                 {
-                    if (ProcessInputBatch(host, screen, timedInput) == TuiScreenResult.Exit)
+                    if (failure.Guard(() => ProcessInputBatch(host, screen, timedInput))
+                        == TuiScreenResult.Exit)
                     {
                         break;
                     }
@@ -77,7 +82,7 @@ public static class TuiApplication
                 }
 
                 // The interval elapsed with no input: let the screen re-sample, then redraw.
-                if (screen.Tick() == TuiScreenResult.Exit)
+                if (failure.Guard(screen.Tick) == TuiScreenResult.Exit)
                 {
                     break;
                 }
@@ -85,9 +90,7 @@ public static class TuiApplication
         }
         finally
         {
-            host.Write(DisableSgrMouse);
-            host.Write(ShowCursor);
-            host.Write(ExitAlternateScreen);
+            session.Restore();
         }
     }
 

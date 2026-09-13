@@ -9,8 +9,9 @@
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TUI-0008`](items/TUI-0008.md) | P2 | proposed | 0/6 | A live screen can only poll on a timer; it cannot be fed by a job, a channel or a pipeline |
 | [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
-| [`TUI-0010`](items/TUI-0010.md) | P1 | proposed | 0/6 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
+| [`TUI-0010`](items/TUI-0010.md) | P1 | proposed | 5/7 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
+| [`TUI-0015`](items/TUI-0015.md) | P2 | proposed | 0/7 | The `tui` command is three things, and the screen-builder third of it is a workaround for having no tree syntax |
 | [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
 | [`TOAST-0056`](items/TOAST-0056.md) | P2 | proposed | 0/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
 | [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
