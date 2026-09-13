@@ -15,6 +15,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tosh.Client\Tosh.Client.csproj" />
+    <!-- The config file is ToastScript, so Crumb evaluates it with the real engine
+         rather than parsing a format of its own. ~3.5 MB against an 80 MB
+         self-contained binary, and the tool is a TōSh companion already. -->
+    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
   </ItemGroup>
 
   <ItemGroup>

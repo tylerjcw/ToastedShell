@@ -107,13 +107,16 @@ public static class AurBuilder
     {
         if (targets.Count == 0) return true;
 
-        var pager = pagerOverride
-            ?? Environment.GetEnvironmentVariable("CRUMB_PAGER")
-            ?? Environment.GetEnvironmentVariable("PAGER")
-            ?? "less";
+        var pager = Config.CrumbConfig.ResolvePager(pagerOverride);
 
         var label = targets.Count == 1 ? "PKGBUILD" : $"{targets.Count} PKGBUILDs";
-        if (Output.Confirm.YesNo($":: Review {label}?", defaultYes: false))
+
+        // Defaults to yes, because getting here already took a deliberate act: review is
+        // off unless `--review` or `CRUMB_REVIEW=1` asked for it. Defaulting this second
+        // gate to *no* made the flag a no-op for anyone who answers a prompt with Enter,
+        // which is the one thing it exists to prevent — a PKGBUILD is arbitrary code about
+        // to run as you, and reading it is the only control there is.
+        if (Output.Confirm.YesNo($":: Review {label}?", defaultYes: true))
         {
             var cache = ReviewCache.Load();
             foreach (var (pkg, dir) in targets)
@@ -200,6 +203,8 @@ public static class AurBuilder
             var buildArgs = new List<string> { "--noconfirm", "-s", "-f" };
             if (options.AsDeps) buildArgs.Add("--asdeps");
             if (options.Clean) buildArgs.Add("--clean");
+            // Last, so a flag the user persisted can override one derived above.
+            buildArgs.AddRange(Config.CrumbConfig.Current.MakepkgFlags);
             var brc = await RunAsync("makepkg", buildArgs, workdir: dir, logPath, ct);
             if (brc != 0) return Fail(pkg, "build", brc, logPath);
 
@@ -226,6 +231,7 @@ public static class AurBuilder
         var args = new List<string> { "-si" };
         if (options.AsDeps) args.Add("--asdeps");
         if (options.Clean) args.Add("--clean");
+        args.AddRange(Config.CrumbConfig.Current.MakepkgFlags);
         var ircI = await RunAsync("makepkg", args, workdir: dir, logPath: null, ct);
         if (ircI == 0) await RecordDevelAsync(pkg, dir, devel, ct);
         return ircI;

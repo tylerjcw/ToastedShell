@@ -15,6 +15,7 @@ public sealed class CrumbOptions
     public bool AurOnly { get; set; }
     public bool InstalledOnly { get; set; }
     public bool ExplicitOnly { get; set; }
+    public bool DepsOnly { get; set; }
     public bool ForeignOnly { get; set; }
     public bool OrphansOnly { get; set; }
     public string SearchBy { get; set; } = "name-desc";
@@ -50,6 +51,13 @@ public sealed class CrumbOptions
     public static CrumbOptions Parse(IReadOnlyList<string> args)
     {
         var opt = new CrumbOptions();
+
+        // The file supplies the starting point and the flags are applied over it, so a
+        // command-line flag always wins without needing to know whether it was written.
+        var config = Config.CrumbConfig.Current;
+        if (config.Quiet is { } quiet) opt.Quiet = quiet;
+        if (config.Verbose is { } verbose) opt.Verbose = verbose;
+        if (config.Review is { } review) opt.Review = review;
         for (var i = 0; i < args.Count; i++)
         {
             var a = args[i];
@@ -89,6 +97,7 @@ public sealed class CrumbOptions
                 case "--installed":
                 case "-i": opt.InstalledOnly = true; break;
                 case "--explicit": opt.ExplicitOnly = true; break;
+                case "--deps": opt.DepsOnly = true; break;
                 case "--foreign": opt.ForeignOnly = true; break;
                 case "--orphans": opt.OrphansOnly = true; break;
                 case "--by":

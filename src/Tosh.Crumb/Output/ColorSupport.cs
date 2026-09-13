@@ -38,6 +38,11 @@ internal static class ColorSupport
     {
         if (string.Equals(Environment.GetEnvironmentVariable("CRUMB_NO_TRUECOLOR"), "1", StringComparison.Ordinal))
             return false;
+
+        // Below the environment variable, above terminal detection: someone who wrote
+        // `truecolor = false` in their config meant it more than TERM does.
+        if (Config.CrumbConfig.Current.Truecolor is false) return false;
+
         var colorterm = Environment.GetEnvironmentVariable("COLORTERM");
         if (colorterm is "truecolor" or "24bit") return true;
         var term = Environment.GetEnvironmentVariable("TERM");

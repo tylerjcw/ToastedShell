@@ -29,9 +29,25 @@ internal static class Vercmp
             psi.ArgumentList.Add(b);
             using var p = Process.Start(psi);
             if (p is null) return null;
-            var stdout = p.StandardOutput.ReadToEnd().Trim();
-            p.WaitForExit();
-            return int.TryParse(stdout, out var n) ? Math.Sign(n) : null;
+
+            // Both pipes are started before waiting. Reading one to the end while the
+            // other fills its buffer is the classic way to deadlock on a redirected
+            // child; `vercmp` never writes enough to hit it, but the shape is wrong and
+            // the next thing bound this way might.
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+
+            // A version comparison is a millisecond of work. If it has not finished in
+            // five seconds something is wrong with the process rather than the input,
+            // and an upgrade check should not hang on it.
+            if (!p.WaitForExit(milliseconds: 5_000))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* already gone */ }
+                return null;
+            }
+
+            _ = stderr;
+            return int.TryParse(stdout.GetAwaiter().GetResult().Trim(), out var n) ? Math.Sign(n) : null;
         }
         catch
         {
@@ -42,6 +58,11 @@ internal static class Vercmp
     /// <summary>True when <paramref name="installed"/> is strictly older than <paramref name="candidate"/>.</summary>
     public static bool IsOlder(string installed, string candidate)
     {
+        // Identical strings are the common case during `-Syu` — most installed packages
+        // are already current — and comparing a version with itself cannot need a
+        // process. On a machine with 139 foreign packages this is most of them.
+        if (string.Equals(installed, candidate, StringComparison.Ordinal)) return false;
+
         var r = Compare(installed, candidate);
         if (r is not null) return r.Value < 0;
         // No vercmp available — fall back to ordinal inequality. Better

@@ -124,8 +124,7 @@ public static class PacmanFlags
                 case 'J': flags.Add("--json"); break;
                 case 'N': flags.Add("--ndjson"); break;
                 case 'T': flags.Add("--tsv"); break;
-                case 'd':
-                    throw new ArgumentException("-Qd (dep-installed filter) is not implemented yet");
+                case 'd': sub = "list"; flags.Add("--deps"); break;
                 default:
                     throw new ArgumentException($"unknown -Q modifier '-{m}'");
             }

@@ -120,6 +120,7 @@ internal static class Program
         Console.WriteLine("  -Ql <pkg>     files owned by pkg                (= files)");
         Console.WriteLine("  -Qo <path>    which pkg owns path               (= owns)");
         Console.WriteLine("  -Qe           explicitly installed              (= list --explicit)");
+        Console.WriteLine("  -Qd           installed as dependencies        (= list --deps)");
         Console.WriteLine("  -Qm           foreign packages                  (= list --foreign)");
         Console.WriteLine("  -Qt           orphans                           (= list --orphans)");
         Console.WriteLine();
@@ -180,6 +181,13 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("privilege escalation:");
         Console.WriteLine("  $CRUMB_SUDO env wins; otherwise doas → sudo → pkexec are auto-detected.");
+        Console.WriteLine();
+        Console.WriteLine("config:");
+        Console.WriteLine("  ~/.config/crumb/crumb.tosh — ToastScript; its value is a record:");
+        Console.WriteLine("    {| quiet = false, pager = \"bat\", review = true,");
+        Console.WriteLine("       exclude = [\"linux\"], makepkgFlags = [\"--skippgpcheck\"] |}");
+        Console.WriteLine("  A flag beats an environment variable beats this file.");
+        Console.WriteLine("  Settings can be computed: exclude = [...$held, $\"{$host}-kernel\"]");
         Console.WriteLine();
         Console.WriteLine("AUR review:");
         Console.WriteLine("  PKGBUILD review is OFF by default (paru-style).");

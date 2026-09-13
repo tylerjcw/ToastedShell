@@ -130,14 +130,13 @@ public static partial class CrumbCommands
         });
 
         if (opt.ExplicitOnly) rows = rows.Where(p => p.InstallReason == "explicit");
+        // `-Qd`, the counterpart of `-Qe`. The reason is already parsed out of the local
+        // desc for `--explicit` and `--orphans`; this is the same field read the other way.
+        if (opt.DepsOnly) rows = rows.Where(p => p.InstallReason == "depend");
         if (opt.ForeignOnly) rows = rows.Where(p => !sync.Contains(p.Name));
         if (opt.OrphansOnly)
         {
-            var needed = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var p in db.Local.Values)
-                foreach (var d in p.Depends)
-                    needed.Add(StripVersionConstraint(d));
-            rows = rows.Where(p => p.InstallReason == "depend" && !needed.Contains(p.Name));
+            rows = rows.Where(p => p.InstallReason == "depend" && !NeededPackages(db).Contains(p.Name));
         }
         if (opt.Positional.Count > 0)
         {
@@ -146,6 +145,67 @@ public static partial class CrumbCommands
         }
 
         return PackageFormatter.Render(rows.OrderBy(p => p.Name, StringComparer.Ordinal), opt.Format, opt.Verbose);
+    }
+
+    /// <summary>
+    /// Every installed package that something else still wants — the complement of
+    /// the orphan set.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to be the literal <c>Depends</c> of every installed package, which
+    /// over-reported orphans badly: 80 against <c>pacman -Qdt</c>'s 43 on the author's
+    /// machine. Two things were missing.
+    /// </para>
+    /// <para>
+    /// <b>A dependency may be satisfied by another name.</b> <c>lutris</c> depends on
+    /// <c>p7zip</c> and <c>7zip</c> *provides* it, so <c>7zip</c> looked unwanted. Every
+    /// installed package's <c>Provides</c> is now mapped back to the package offering
+    /// it, so satisfying a dependency under any name counts.
+    /// </para>
+    /// <para>
+    /// <b>An optional dependency still counts.</b> `pacman` does not call a package an
+    /// orphan while something lists it in <c>OptDepends</c>, and those are written
+    /// <c>name: description</c> — so they need the description stripped before the name
+    /// is any use.
+    /// </para>
+    /// <para>
+    /// Provides are matched on the bare name, deliberately. A versioned provide
+    /// (<c>libavcodec.so=58-64</c>) could in principle be told from another version of
+    /// the same soname, and not doing so keeps at most a package or two off this list
+    /// that pacman would show. That is the safe direction: this list is what someone
+    /// reads before deciding what to delete, so erring towards "still wanted" costs a
+    /// missed cleanup, while erring the other way costs a broken package.
+    /// </para>
+    /// </remarks>
+    internal static HashSet<string> NeededPackages(PacmanDb db)
+    {
+        var providers = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var p in db.Local.Values)
+        {
+            foreach (var provided in p.Provides)
+            {
+                var name = DependencyName(provided);
+                if (name.Length == 0) continue;
+                if (!providers.TryGetValue(name, out var list))
+                    providers[name] = list = new List<string>();
+                list.Add(p.Name);
+            }
+        }
+
+        var needed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var p in db.Local.Values)
+        {
+            foreach (var dep in p.Depends.Concat(p.OptDepends))
+            {
+                var name = DependencyName(dep);
+                if (name.Length == 0) continue;
+                needed.Add(name);
+                if (providers.TryGetValue(name, out var offering))
+                    foreach (var provider in offering) needed.Add(provider);
+            }
+        }
+        return needed;
     }
 
     public static int Files(CrumbOptions opt)

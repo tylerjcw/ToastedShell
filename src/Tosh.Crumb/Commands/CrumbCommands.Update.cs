@@ -93,6 +93,16 @@ public static partial class CrumbCommands
         }
 
         var args = new List<string> { "pacman", opt.DownloadOnly ? "-Suw" : "-Su", "--noconfirm" };
+
+        // `exclude` holds a package back from a full upgrade. pacman already knows how
+        // to do that, so repo packages are handed to `--ignore` rather than filtered
+        // here — that way pacman's own dependency resolution sees the hold, instead of
+        // being handed a plan that quietly contradicts it.
+        foreach (var held in Config.CrumbConfig.Current.Exclude)
+        {
+            args.Add("--ignore");
+            args.Add(held);
+        }
         var rc = await RunEscalatedAsync(args, opt.DryRun, ct);
         if (rc != 0)
         {
@@ -169,8 +179,14 @@ public static partial class CrumbCommands
     {
         var upgrades = new List<(string Name, string From, string To)>();
         var lookup = latest.ToDictionary(p => p.Name, p => p, StringComparer.Ordinal);
+
+        // The AUR half of the same hold. Nothing else applies it for these: pacman never
+        // sees an AUR package, so `--ignore` above does not reach them.
+        var held = new HashSet<string>(Config.CrumbConfig.Current.Exclude, StringComparer.Ordinal);
+
         foreach (var name in foreign)
         {
+            if (held.Contains(name)) continue;
             if (!db.Local.TryGetValue(name, out var inst)) continue;
             if (develHits.Contains(name))
             {

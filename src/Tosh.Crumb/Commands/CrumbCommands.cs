@@ -57,6 +57,23 @@ public static partial class CrumbCommands
         return i < 0 ? dep : dep[..i];
     }
 
+    /// <summary>
+    /// The bare package name from any dependency spelling, including an optional
+    /// dependency's description: <c>"foo&gt;=1.2"</c> and
+    /// <c>"foo: for bar support"</c> both give <c>"foo"</c>.
+    /// </summary>
+    /// <remarks>
+    /// The description has to go first. `pacman` writes an optdepend as
+    /// <c>name: why you might want it</c>, and a description containing a version
+    /// — which many do — would otherwise be cut at the wrong place.
+    /// </remarks>
+    private static string DependencyName(string dep)
+    {
+        var colon = dep.IndexOf(':');
+        if (colon >= 0) dep = dep[..colon];
+        return StripVersionConstraint(dep).Trim();
+    }
+
     private static async Task<int> RunEscalatedAsync(List<string> commandWithArgs, bool dryRun, CancellationToken ct)
     {
         var wrapped = Privilege.Wrap(commandWithArgs);
