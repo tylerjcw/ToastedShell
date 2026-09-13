@@ -573,25 +573,9 @@ public sealed class TuiCoreTests
             DefaultConfirm: true);
         var screen = new TuiConfirmScreen(request);
 
-        // Render to compute button positions
+        // Render to place the buttons.
         var frame = screen.Render(new TuiSize(80, 24));
-
-        // Find the button row and confirm button position in the rendered output
-        var lines = frame.Content.Split('\n');
-        var buttonRow = -1;
-        var confirmCol = -1;
-
-        for (var row = 0; row < lines.Length; row++)
-        {
-            var idx = lines[row].IndexOf("[Yes]", StringComparison.Ordinal);
-
-            if (idx >= 0)
-            {
-                buttonRow = row;
-                confirmCol = idx + 1; // Click inside the button
-                break;
-            }
-        }
+        var (buttonRow, confirmCol) = FindLabel(frame, "[Yes]");
 
         Assert.True(buttonRow >= 0, "Could not find button row");
 
@@ -615,21 +599,7 @@ public sealed class TuiCoreTests
         var screen = new TuiConfirmScreen(request);
 
         var frame = screen.Render(new TuiSize(80, 24));
-        var lines = frame.Content.Split('\n');
-        var buttonRow = -1;
-        var cancelCol = -1;
-
-        for (var row = 0; row < lines.Length; row++)
-        {
-            var idx = lines[row].IndexOf("[No]", StringComparison.Ordinal);
-
-            if (idx >= 0)
-            {
-                buttonRow = row;
-                cancelCol = idx + 1;
-                break;
-            }
-        }
+        var (buttonRow, cancelCol) = FindLabel(frame, "[No]");
 
         Assert.True(buttonRow >= 0, "Could not find cancel button");
 
@@ -640,6 +610,31 @@ public sealed class TuiCoreTests
         Assert.Equal(TuiScreenResult.Exit, result);
         Assert.NotNull(screen.Outcome);
         Assert.True(screen.Outcome.Cancelled);
+    }
+
+    /// <summary>
+    /// Finds a label in a rendered frame and returns the row and a column inside it.
+    /// </summary>
+    /// <remarks>
+    /// Reads the cell grid. These tests used to split <c>frame.Content</c> on newlines,
+    /// which is the same trick the confirm screen itself used to locate its buttons, and
+    /// it stopped working for the same reason: the screen draws into a buffer now.
+    /// </remarks>
+    private static (int Row, int Column) FindLabel(TuiFrame frame, string label)
+    {
+        Assert.NotNull(frame.Buffer);
+
+        for (var row = 0; row < frame.Buffer.Height; row += 1)
+        {
+            var index = frame.Buffer.RowText(row).IndexOf(label, StringComparison.Ordinal);
+
+            if (index >= 0)
+            {
+                return (row, index + 1);
+            }
+        }
+
+        return (-1, -1);
     }
 
     // ── TuiInputScreen mouse interaction ──

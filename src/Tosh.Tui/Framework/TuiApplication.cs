@@ -1,4 +1,6 @@
 
+using Tosh.Tui.Rendering;
+
 namespace Tosh.Tui;
 
 public static class TuiApplication
@@ -26,14 +28,30 @@ public static class TuiApplication
         host.Write(HideCursor);
         host.Write(EnableSgrMouse);
 
+        TuiBuffer? presented = null;
+
         try
         {
             while (true)
             {
                 var size = host.TryGetSize() ?? new TuiSize(80, 25);
                 var frame = screen.Render(size);
-                host.Write(ClearScreenAndHome);
-                host.Write(frame.Content);
+
+                if (frame.Buffer is { } buffer)
+                {
+                    // Only what changed since the last frame reaches the terminal.
+                    host.Write(TuiTerminalWriter.Present(presented, buffer));
+                    presented = buffer;
+                }
+                else
+                {
+                    // A screen still producing a string: clear and repaint, as before.
+                    // Anything drawn this way invalidates the diff, so the next buffered
+                    // frame has to paint in full.
+                    host.Write(ClearScreenAndHome);
+                    host.Write(frame.Content);
+                    presented = null;
+                }
 
                 var refresh = screen.RefreshInterval;
 
