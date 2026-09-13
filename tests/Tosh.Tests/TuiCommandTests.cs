@@ -150,82 +150,37 @@ public sealed class TuiCommandTests
         Assert.Equal("*.json", request.Filter);
     }
 
-    // ── widgets that the renderer supported but no command could add ──────────
-    //
-    // TuiCustomScreen has dispatched ConfirmationWidgetHost and FilePickerWidgetHost
-    // since it was written; two of the six widget kinds were simply unreachable.
-
     [Fact]
-    public async Task Add_confirm_puts_a_confirmation_on_the_screen()
-    {
-        var engine = CreateEngine();
-        var results = await engine.ExecuteToListAsync(
-            "tui screen title \"Deploy\" | tui add-confirm \"Deploy now?\" --id go --default no");
-
-        var screen = Assert.IsType<TuiScreen>(Assert.Single(results));
-        var widget = Assert.IsType<TuiConfirmationConfig>(Assert.Single(screen.Widgets));
-
-        Assert.Equal("go", widget.Id);
-        Assert.Equal("Deploy now?", widget.Message);
-        Assert.False(widget.DefaultConfirm);
-    }
-
-    [Fact]
-    public async Task Add_confirm_requires_a_message()
+    public async Task A_run_rejects_a_flag_it_does_not_take()
     {
         var engine = CreateEngine();
 
         var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            () => engine.ExecuteToListAsync("tui screen | tui add-confirm"));
-
-        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.tui.add_confirm.missing_message");
-    }
-
-    [Fact]
-    public async Task Add_file_puts_a_file_picker_on_the_screen()
-    {
-        var engine = CreateEngine();
-        var results = await engine.ExecuteToListAsync(
-            "tui screen | tui add-file --id pick --path /tmp --filter \"*.tosh\" --directory");
-
-        var screen = Assert.IsType<TuiScreen>(Assert.Single(results));
-        var widget = Assert.IsType<TuiFilePickerConfig>(Assert.Single(screen.Widgets));
-
-        Assert.Equal("pick", widget.Id);
-        Assert.Equal("/tmp", widget.InitialPath);
-        Assert.Equal("*.tosh", widget.Filter);
-        Assert.True(widget.DirectoryOnly);
-    }
-
-    [Fact]
-    public async Task A_screen_builder_rejects_a_flag_it_does_not_take()
-    {
-        var engine = CreateEngine();
-
-        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            () => engine.ExecuteToListAsync("tui screen title \"x\" | tui run --cli"));
+            () => engine.ExecuteToListAsync("tui run {| Text = \"x\" |} --cli"));
 
         Assert.Contains(error.Diagnostics, d => d.Code == "tosh.tui.unknown_flag");
     }
 
     [Fact]
-    public async Task Tui_screen_yields_TuiScreen()
+    public async Task A_run_with_no_tree_says_what_one_looks_like()
     {
         var engine = CreateEngine();
-        var results = await engine.ExecuteToListAsync("tui screen title \"My App\"");
 
-        var screen = Assert.IsType<TuiScreen>(Assert.Single(results));
-        Assert.Equal("My App", screen.ScreenTitle);
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("tui run"));
+
+        Assert.Contains(error.Diagnostics, d => d.Code == "tosh.tui.run.no_screen");
     }
 
     [Fact]
-    public async Task Tui_run_yields_TuiRunRequest()
+    public async Task Tui_run_yields_a_tree_request()
     {
         var engine = CreateEngine();
-        var results = await engine.ExecuteToListAsync("tui screen title \"Test\" | tui run");
+        var results = await engine.ExecuteToListAsync("tui run {| Text = \"hello\" |} --title \"Test\"");
 
-        var request = Assert.IsType<TuiRunRequest>(Assert.Single(results));
-        Assert.Equal("Test", request.Screen.ScreenTitle);
+        var request = Assert.IsType<TuiTreeRunRequest>(Assert.Single(results));
+
+        Assert.Equal("Test", request.Title);
         Assert.False(request.ReturnOutcome);
     }
 
@@ -233,21 +188,18 @@ public sealed class TuiCommandTests
     public async Task Tui_run_with_result_flag()
     {
         var engine = CreateEngine();
-        var results = await engine.ExecuteToListAsync("tui screen title \"Test\" | tui run --result");
+        var results = await engine.ExecuteToListAsync("tui run {| Text = \"hello\" |} --result");
 
-        var request = Assert.IsType<TuiRunRequest>(Assert.Single(results));
-        Assert.True(request.ReturnOutcome);
+        Assert.True(Assert.IsType<TuiTreeRunRequest>(Assert.Single(results)).ReturnOutcome);
     }
 
     [Fact]
-    public async Task Tui_layout_sets_orientation()
+    public async Task A_tree_reaches_run_through_the_pipeline_as_well()
     {
         var engine = CreateEngine();
-        var results = await engine.ExecuteToListAsync("tui screen | tui layout split-horizontal ratio \"30:70\"");
+        var results = await engine.ExecuteToListAsync("{| Text = \"hello\" |} | tui run");
 
-        var screen = Assert.IsType<TuiScreen>(Assert.Single(results));
-        Assert.Equal(TuiLayout.SplitHorizontal, screen.LayoutConfig.Layout);
-        Assert.Equal("30:70", screen.LayoutConfig.Ratio);
+        Assert.IsType<TuiTreeRunRequest>(Assert.Single(results));
     }
 
     [Fact]

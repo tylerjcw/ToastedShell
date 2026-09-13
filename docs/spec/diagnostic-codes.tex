@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 584 diagnostic codes currently emitted by the
+This chapter lists all 581 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -677,18 +677,15 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
-\item[\texttt{\small tosh.tui.add\_confirm.missing\_message}] 'tui add-confirm' requires a message.
 \item[\texttt{\small tosh.tui.file.unreadable\_directory}] Could not read directory '\{path\}'.
 \item[\texttt{\small tosh.tui.filter.no\_items}] No items provided for 'tui filter'.
 \item[\texttt{\small tosh.tui.input.multiline\_requires\_fullscreen}] 'tui input --multiline' cannot be combined with '--cli'.
 \item[\texttt{\small tosh.tui.invalid\_page\_size}] '--page-size' needs a positive whole number, not '\{text\}'.
-\item[\texttt{\small tosh.tui.layout.missing\_orientation}] The 'tui layout' subcommand requires an orientation.
 \item[\texttt{\small tosh.tui.missing\_subcommand}] The 'tui' command requires a subcommand.
 \item[\texttt{\small tosh.tui.no\_inline\_provider}] Inline prompts (--cli) are not available in this environment.
-\item[\texttt{\small tosh.tui.no\_screen}] Expected a TuiScreen from pipeline input.
 \item[\texttt{\small tosh.tui.no\_terminal}] A full-screen TUI needs a terminal.
 \item[\texttt{\small tosh.tui.pick.no\_items}] No items provided for 'tui pick'.
-\item[\texttt{\small tosh.tui.run.no\_screen}] No TuiScreen provided to 'tui run'.
+\item[\texttt{\small tosh.tui.run.no\_screen}] No screen was given to 'tui run'.
 \item[\texttt{\small tosh.tui.unknown\_flag}] Unknown flag '--\{flag\}' for 'tui \{subcommand\}'.
 \item[\texttt{\small tosh.tui.unknown\_subcommand}] Unknown tui subcommand '\{subcommand\}'.
 \end{description}

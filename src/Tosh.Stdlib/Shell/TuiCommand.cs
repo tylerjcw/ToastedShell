@@ -12,39 +12,33 @@ namespace Tosh.Stdlib.Shell;
 [CommandArgument("input [prompt]", "Read text input, optionally multiline or password-style.", Required = false)]
 [CommandArgument("file", "Open a file or directory picker.", Required = false)]
 [CommandArgument("filter [items...]", "Open a fuzzy filter picker.", Required = false)]
-[CommandArgument("screen|add-*|layout|run", "Build and run composed TUI screens from pipeline-carried screen definitions. Widgets: add-list, add-text, add-input, add-picker, add-confirm, add-file.", Required = false)]
+[CommandArgument("run <screen>", "Run a full-screen widget tree, written as a record or built with `new`.", Required = false)]
 [CommandOption("--cli", "Use inline terminal prompts instead of returning fullscreen TUI request objects where supported.")]
-[CommandOption("--multi, -m", "Allow multiple selections for `pick`, `filter`, and list widgets.")]
+[CommandOption("--multi, -m", "Allow multiple selections for `pick` and `filter`.")]
 [CommandOption("--result", "Return a structured outcome object instead of only the selected value/result.")]
-[CommandOption("--prompt <text>", "Prompt text for picker, filter, input, and widget subcommands.")]
+[CommandOption("--prompt <text>", "Prompt text for picker, filter and input.")]
 [CommandOption("--display <property>", "Property name used as the display label for object items.")]
 [CommandOption("--page-size <n>", "Number of visible entries in pick/filter lists.", Default = "10")]
 [CommandOption("--default <value|yes|no>", "Default input value or confirmation default.")]
-[CommandOption("--multiline", "Allow multiline input for `input` and `add-input`.")]
+[CommandOption("--multiline", "Allow multiline input for `input`.")]
 [CommandOption("--password", "Mask text for `input`.")]
 [CommandOption("--path <start>", "Initial path for `file`.")]
 [CommandOption("--filter <glob>", "File picker filter such as `*.tosh`.")]
 [CommandOption("--directory, -d", "Choose directories instead of files for `file`.")]
-[CommandOption("--id <id>", "Stable widget id for screen-builder subcommands.")]
-[CommandOption("--searchable, -s", "Make a list widget searchable.")]
-[CommandOption("--bind <widget.property>", "Bind a text widget to another widget property.")]
-[CommandOption("--no-wrap", "Disable text wrapping for `add-text`.")]
 [CommandOption("--fullscreen", "Run `filter` as a fullscreen picker with search open, instead of its inline default.")]
-[CommandOption("--ratio <a:b>", "Layout split ratio for `layout`.")]
-[CommandOption("--gap <n>", "Gap between layout regions.")]
-[CommandOption("--title <text>", "Screen title shown in the header bar, for `screen` and `run`.")]
+[CommandOption("--title <text>", "Screen title shown in the header bar, for `run`. A form names its own window.")]
 [CommandOption("--refresh <duration>", "Redraw this often with no input, for `run`. Accepts 1s, 500ms or 00:00:01.")]
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
 [CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
-[CommandExample("tui screen --title Deploy | tui add-confirm \"Deploy now?\" | tui run --result", Title = "Composed screen with a confirmation")]
-[CommandOutput("The user's selection: picked item(s) for `pick`/`filter`, a bool for `confirm`, the text for `input`, the path for `file`, or a TuiScreenOutcome when `--result` is given. Nothing is emitted when the prompt is cancelled and `--result` was not asked for. The screen-builder subcommands emit the TuiScreen being composed; without `--cli`, the modal subcommands emit a request object for the shell host to run.")]
+[CommandExample("tui run {| Form = [ {| Field = \"Name\", Id = \"name\" |} ], Title = \"New\" |}", Title = "Run a widget tree")]
+[CommandOutput("The user's selection: picked item(s) for `pick`/`filter`, a bool for `confirm`, the text for `input`, the path for `file`, or a TuiScreenOutcome when `--result` is given. Nothing is emitted when the prompt is cancelled and `--result` was not asked for, and a screen showing a form emits nothing either — its handlers have already said what happened.")]
 public sealed class TuiCommand : ShellCommand
 {
     public TuiCommand()
         : base("tui",
-            "Interactive TUI components. Provides list pickers, confirmations, text input, file pickers, and composed screens. Use --cli for inline (non-fullscreen) prompts. It needs a live terminal: run from a script whose output is a terminal, not from a pipeline or a redirect.",
-            "tui pick|confirm|input|file|filter|screen|add-list|add-text|add-input|add-picker|add-confirm|add-file|layout|run [options]")
+            "Interactive TUI components: asking a question, and running a screen. Provides list pickers, confirmations, text input and file pickers, and runs a widget tree written as a record or built with `new`. Use --cli for inline (non-fullscreen) prompts. It needs a live terminal: run from a script whose output is a terminal, not from a pipeline or a redirect.",
+            "tui pick|confirm|input|file|filter|run [options]")
     { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
@@ -54,7 +48,7 @@ public sealed class TuiCommand : ShellCommand
             throw context.CreateDiagnostic(
                 code: "tosh.tui.missing_subcommand",
                 title: "The 'tui' command requires a subcommand.",
-                help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, add-confirm, add-file, layout, run");
+                help: "Available subcommands: pick, confirm, input, file, filter, run");
         }
 
         var subcommand = CommandArguments.RequireString(context.Arguments, 0, "subcommand");
@@ -76,20 +70,12 @@ public sealed class TuiCommand : ShellCommand
             "input" => ExecuteInputAsync(context),
             "file" => ExecuteFileAsync(context),
             "filter" => ExecuteFilterAsync(context),
-            "screen" => ExecuteScreenAsync(context),
-            "add-list" => ExecuteAddListAsync(context),
-            "add-text" => ExecuteAddTextAsync(context),
-            "add-input" => ExecuteAddInputAsync(context),
-            "add-picker" => ExecuteAddPickerAsync(context),
-            "add-confirm" => ExecuteAddConfirmAsync(context),
-            "add-file" => ExecuteAddFileAsync(context),
-            "layout" => ExecuteLayoutAsync(context),
             "run" => ExecuteRunAsync(context),
             _ => throw context.CreateDiagnostic(
                 code: "tosh.tui.unknown_subcommand",
                 title: $"Unknown tui subcommand '{subcommand}'.",
                 argumentIndex: 0,
-                help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, add-confirm, add-file, layout, run"),
+                help: "Available subcommands: pick, confirm, input, file, filter, run"),
         };
     }
 
@@ -457,352 +443,65 @@ public sealed class TuiCommand : ShellCommand
         };
     }
 
-    // ── tui screen ────────────────────────────────────────────
-    // Usage: tui screen [--title "text"]
-    // Creates and yields a new TuiScreen for pipeline building
-    private static async IAsyncEnumerable<object?> ExecuteScreenAsync(CommandContext context)
-    {
-        await Task.CompletedTask;
-
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "screen");
-        var title = ExtractNamedArgument(parsed.Positionals, "title");
-
-        var screen = new TuiScreen();
-
-        if (title is not null)
-        {
-            screen.Title(title);
-        }
-
-        yield return screen;
-    }
-
-    // ── tui add-list ──────────────────────────────────────────
-    // Usage: <screen> | tui add-list <items-var> [--id <id>] [--display <prop>] [--multi] [--searchable] [--prompt "text"]
-    private static async IAsyncEnumerable<object?> ExecuteAddListAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "add-list", "searchable", "s", "multi", "m");
-        var multi = parsed.HasFlag("multi", "m");
-        var searchable = parsed.HasFlag("searchable", "s");
-        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"list-{Guid.NewGuid():N}"[..12];
-        var display = ExtractNamedArgument(parsed.Positionals, "display");
-        var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
-
-        var (screen, remaining) = await ReadScreenFromPipelineAsync(context);
-
-        // Remaining positionals after named extraction are the items (or a single collection arg)
-        var items = CollectPositionalItems(remaining);
-
-        var widget = new TuiListWidgetConfig(id, items)
-        {
-            DisplayProperty = display,
-            MultiSelect = multi,
-            Searchable = searchable,
-            Prompt = prompt,
-        };
-
-        screen.AddWidget(widget);
-        yield return screen;
-    }
-
-    // ── tui add-text ──────────────────────────────────────────
-    // Usage: <screen> | tui add-text [content] [--id <id>] [--bind <widget.property>] [--no-wrap]
-    private static async IAsyncEnumerable<object?> ExecuteAddTextAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "add-text", "no-wrap");
-        var noWrap = parsed.HasFlag("no-wrap");
-        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"text-{Guid.NewGuid():N}"[..12];
-        var bindSpec = ExtractNamedArgument(parsed.Positionals, "bind");
-
-        var (screen, remaining) = await ReadScreenFromPipelineAsync(context);
-
-        var widget = new TuiTextWidgetConfig(id)
-        {
-            WordWrap = !noWrap,
-        };
-
-        if (bindSpec is not null)
-        {
-            var parts = bindSpec.Split('.', 2);
-            widget.Binding = parts.Length == 2
-                ? new TuiWidgetBinding(parts[0], parts[1])
-                : new TuiWidgetBinding(parts[0], "selected");
-        }
-        else if (remaining.Count > 0)
-        {
-            widget.Content = remaining.Count == 1 ? remaining[0] : string.Join("\n", remaining.Select(o => o?.ToString() ?? string.Empty));
-        }
-
-        screen.AddWidget(widget);
-        yield return screen;
-    }
-
-    // ── tui add-input ─────────────────────────────────────────
-    // Usage: <screen> | tui add-input [--id <id>] [--prompt "text"] [--default <value>] [--multiline]
-    private static async IAsyncEnumerable<object?> ExecuteAddInputAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "add-input", "multiline");
-        var multiline = parsed.HasFlag("multiline");
-        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"input-{Guid.NewGuid():N}"[..12];
-        var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
-        var defaultValue = ExtractNamedArgument(parsed.Positionals, "default");
-
-        var (screen, _) = await ReadScreenFromPipelineAsync(context);
-
-        var widget = new TuiTextInputConfig(id)
-        {
-            Prompt = prompt,
-            DefaultValue = defaultValue,
-            Multiline = multiline,
-        };
-
-        screen.AddWidget(widget);
-        yield return screen;
-    }
-
-    // ── tui add-confirm ───────────────────────────────────────
-    // Usage: <screen> | tui add-confirm <message> [--id <id>] [--default yes|no]
-    //
-    // `TuiCustomScreen` has rendered a ConfirmationWidgetHost since it was written; only
-    // the command to put one on a screen was missing, so a composed screen could not ask
-    // a yes/no question without dropping out to the standalone `tui confirm`.
-    private static async IAsyncEnumerable<object?> ExecuteAddConfirmAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "add-confirm");
-        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"confirm-{Guid.NewGuid():N}"[..14];
-        var defaultValue = ExtractNamedArgument(parsed.Positionals, "default");
-
-        var (screen, remainingPositionals) = await ReadScreenFromPipelineAsync(context);
-        var remaining = FilterNamedArguments(remainingPositionals, new[] { "id", "default" });
-        var message = remaining.Count > 0 ? remaining[0]?.ToString() : null;
-
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            throw context.CreateDiagnostic(
-                code: "tosh.tui.add_confirm.missing_message",
-                title: "'tui add-confirm' requires a message.",
-                help: "Write the question to ask: tui add-confirm \"Deploy now?\"");
-        }
-
-        var widget = new TuiConfirmationConfig(id, message)
-        {
-            DefaultConfirm = !(string.Equals(defaultValue, "no", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(defaultValue, "false", StringComparison.OrdinalIgnoreCase)),
-        };
-
-        screen.AddWidget(widget);
-        yield return screen;
-    }
-
-    // ── tui add-file ──────────────────────────────────────────
-    // Usage: <screen> | tui add-file [--id <id>] [--path <start>] [--filter "*.tosh"] [--directory]
-    //
-    // The FilePickerWidgetHost counterpart of `add-confirm` above: rendered all along,
-    // unreachable from the command surface.
-    private static async IAsyncEnumerable<object?> ExecuteAddFileAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "add-file", "directory", "d");
-        var directoryOnly = parsed.HasFlag("directory", "d");
-        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"file-{Guid.NewGuid():N}"[..11];
-        var initialPath = ExtractNamedArgument(parsed.Positionals, "path");
-        var filter = ExtractNamedArgument(parsed.Positionals, "filter");
-
-        var (screen, _) = await ReadScreenFromPipelineAsync(context);
-
-        var widget = new TuiFilePickerConfig(id)
-        {
-            InitialPath = initialPath,
-            Filter = filter,
-            DirectoryOnly = directoryOnly,
-        };
-
-        screen.AddWidget(widget);
-        yield return screen;
-    }
-
-    // ── tui add-picker ────────────────────────────────────────
-    // Usage: <screen> | tui add-picker <items-var> [--id <id>] [--display <prop>] [--prompt "text"]
-    private static async IAsyncEnumerable<object?> ExecuteAddPickerAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "add-picker");
-        var id = ExtractNamedArgument(parsed.Positionals, "id") ?? $"picker-{Guid.NewGuid():N}"[..12];
-        var display = ExtractNamedArgument(parsed.Positionals, "display");
-        var prompt = ExtractNamedArgument(parsed.Positionals, "prompt");
-
-        var (screen, remaining) = await ReadScreenFromPipelineAsync(context);
-        var options = CollectPositionalItems(remaining);
-
-        var widget = new TuiOptionPickerConfig(id, options)
-        {
-            DisplayProperty = display,
-            Prompt = prompt,
-        };
-
-        screen.AddWidget(widget);
-        yield return screen;
-    }
-
-    // ── tui layout ────────────────────────────────────────────
-    // Usage: <screen> | tui layout <orientation> [--ratio 30:70] [--gap <n>]
-    private static async IAsyncEnumerable<object?> ExecuteLayoutAsync(CommandContext context)
-    {
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "layout");
-        var ratio = ExtractNamedArgument(parsed.Positionals, "ratio");
-        var gapStr = ExtractNamedArgument(parsed.Positionals, "gap");
-
-        var (screen, remaining) = await ReadScreenFromPipelineAsync(context);
-
-        if (remaining.Count == 0)
-        {
-            throw context.CreateDiagnostic(
-                code: "tosh.tui.layout.missing_orientation",
-                title: "The 'tui layout' subcommand requires an orientation.",
-                help: "Available orientations: single, split-horizontal, split-vertical, stacked");
-        }
-
-        var orientationStr = remaining[0]?.ToString() ?? string.Empty;
-        var layout = ParseLayoutOrientation(orientationStr);
-        screen.SetLayout(layout);
-
-        if (ratio is not null)
-        {
-            screen.SetRatio(ratio);
-        }
-
-        if (gapStr is not null && int.TryParse(gapStr, out var gap))
-        {
-            screen.SetGap(gap);
-        }
-
-        yield return screen;
-    }
-
     // ── tui run ───────────────────────────────────────────────
-    // Usage: <screen> | tui run [--result]
-    // Or: tui run <screen-variable> [--result]
+    // Usage: tui run <tree> [--title <text>] [--refresh <duration>] [--result]
+    // Or:    <tree> | tui run
     private static async IAsyncEnumerable<object?> ExecuteRunAsync(CommandContext context)
     {
         var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
         RejectUnknownFlags(context, parsed, "run", "result");
-        var returnOutcome = parsed.HasFlag("result");
 
-        TuiScreen? screen = null;
+        var tree = FindTree(parsed.Positionals);
 
-        // A record tree is the declarative form: `tui run {| Column = [ ... ] |}`.
-        // Anything shaped like a record that is not already a built screen is one.
-        foreach (var positional in parsed.Positionals)
-        {
-            if (positional is TuiScreen or null)
-            {
-                continue;
-            }
-
-            // A widget built in code, a widget loaded from a UI file, or a record tree —
-            // all three are the same tree by the time anything draws them.
-            if (positional is Tosh.Tui.Widgets.TuiWidget ||
-                positional is IDictionary<string, object?> ||
-                ShellRecordUtilities.IsRecordLike(positional))
-            {
-                foreach (var produced in RunOrYield(context, new TuiTreeRunRequest(
-                    positional,
-                    returnOutcome,
-                    BuildArgumentInvoker(context),
-                    ParseInterval(ExtractNamedArgument(parsed.Positionals, "refresh")),
-                    ExtractNamedArgument(parsed.Positionals, "title"))))
-                {
-                    yield return produced;
-                }
-
-                yield break;
-            }
-        }
-
-        // Check positional argument first
-        if (parsed.Positionals.Count > 0 && parsed.Positionals[0] is TuiScreen argScreen)
-        {
-            screen = argScreen;
-        }
-
-        // Fall back to pipeline input
-        if (screen is null)
+        if (tree is null)
         {
             await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
             {
-                if (item is TuiScreen pipeScreen)
+                if (IsTree(item))
                 {
-                    screen = pipeScreen;
+                    tree = item;
                     break;
                 }
             }
         }
 
-        if (screen is null)
+        if (tree is null)
         {
             throw context.CreateDiagnostic(
                 code: "tosh.tui.run.no_screen",
-                title: "No TuiScreen provided to 'tui run'.",
-                help: "Pipe a TuiScreen into 'tui run' or provide one as an argument.");
+                title: "No screen was given to 'tui run'.",
+                help: "Pass a widget tree as an argument or pipe one in: "
+                      + "tui run {| Column = [ \"hello\" ] |}");
         }
 
-        foreach (var produced in RunOrYield(context, new TuiRunRequest(screen, returnOutcome, BuildTickInvoker(screen, context))))
-            {
-                yield return produced;
-            }
+        foreach (var produced in RunOrYield(context, new TuiTreeRunRequest(
+            tree,
+            parsed.HasFlag("result"),
+            BuildArgumentInvoker(context),
+            ParseInterval(ExtractNamedArgument(parsed.Positionals, "refresh")),
+            ExtractNamedArgument(parsed.Positionals, "title"))))
+        {
+            yield return produced;
+        }
     }
 
     /// <summary>
-    /// Wraps a screen's tick handler so the TUI runtime can call it without knowing anything
-    /// about the shell.
+    /// Whether a value is something the widget builder can make a screen out of.
     /// </summary>
     /// <remarks>
-    /// The handler is a script function, and invoking one needs a <see cref="CommandContext"/>.
-    /// The TUI runtime has none and should not acquire one just to call back, so the closure
-    /// is built here, where the context is already in hand, and travels as a plain
-    /// <see cref="Action"/>.
-    ///
-    /// The call is drained synchronously: the render loop is blocked while it runs, and the
-    /// handler's job is to mutate the widgets the screen already holds, not to yield values.
-    /// Anything it does yield is discarded rather than being written over the live frame.
+    /// A widget built with <c>new</c>, a record tree written as a literal, and a tree
+    /// loaded from a file of its own are the same tree by the time anything draws them.
+    /// The option values a caller wrote — <c>--title "x"</c> reaches here as a positional
+    /// pair — are not, which is why the search is for a shape rather than for the first
+    /// argument.
     /// </remarks>
-    private static Action? BuildTickInvoker(TuiScreen screen, CommandContext context)
-    {
-        if (screen.OnTick is not { } handler)
-        {
-            return null;
-        }
+    private static bool IsTree(object? value)
+        => value is TuiWidget ||
+           value is IDictionary<string, object?> ||
+           (value is not null && ShellRecordUtilities.IsRecordLike(value));
 
-        return () =>
-        {
-            var inner = context with
-            {
-                Arguments = Array.Empty<object?>(),
-                Input = AsyncEnumerableExtensions.Empty<object?>(),
-                IsPipelined = false,
-            };
-
-            var enumerator = handler.InvokeAsync(inner).GetAsyncEnumerator(context.CancellationToken);
-
-            try
-            {
-                while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
-                {
-                    // Drain: a tick handler updates widgets, it does not produce output.
-                }
-            }
-            finally
-            {
-                enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            }
-        };
-    }
+    private static object? FindTree(IReadOnlyList<object?> positionals)
+        => positionals.FirstOrDefault(IsTree);
 
     /// <summary>
     /// Reads a refresh interval, in the spellings a script would write.
@@ -1128,87 +827,6 @@ public sealed class TuiCommand : ShellCommand
         return result;
     }
 
-    private static async Task<(TuiScreen Screen, IReadOnlyList<object?> RemainingPositionals)> ReadScreenFromPipelineAsync(CommandContext context)
-    {
-        TuiScreen? screen = null;
-        var remaining = new List<object?>();
-        var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-
-        // First check if any positional is a TuiScreen
-        foreach (var pos in parsed.Positionals)
-        {
-            if (pos is TuiScreen argScreen && screen is null)
-            {
-                screen = argScreen;
-            }
-            else
-            {
-                remaining.Add(pos);
-            }
-        }
-
-        if (screen is not null)
-        {
-            return (screen, remaining);
-        }
-
-        // Read from pipeline
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
-        {
-            if (item is TuiScreen pipeScreen && screen is null)
-            {
-                screen = pipeScreen;
-            }
-            else
-            {
-                remaining.Add(item);
-            }
-        }
-
-        if (screen is null)
-        {
-            throw context.CreateDiagnostic(
-                code: "tosh.tui.no_screen",
-                title: "Expected a TuiScreen from pipeline input.",
-                help: "Create a screen first: tui screen | tui add-list ...");
-        }
-
-        // Named options are stripped here rather than being left for the caller to
-        // recognise. Each builder pulls its own options out of its own parse of the
-        // arguments, which is a different list from this one — so without this,
-        // `tui add-list --id Types --display Name $items` offered "id", "Types",
-        // "display" and "Name" as things to choose from.
-        return (screen, FilterNamedArguments(remaining, [.. ValueOptionNames]));
-    }
-
-    private static IReadOnlyList<object?> CollectPositionalItems(IReadOnlyList<object?> positionals)
-    {
-        if (positionals.Count == 1 && positionals[0] is System.Collections.IEnumerable enumerable and not string)
-        {
-            return enumerable.Cast<object?>().ToArray();
-        }
-
-        return positionals;
-    }
-
-    private static TuiLayout ParseLayoutOrientation(string value)
-    {
-        var normalized = value.Replace("-", string.Empty);
-
-        if (Enum.TryParse<TuiLayout>(normalized, ignoreCase: true, out var layout))
-        {
-            return layout;
-        }
-
-        return value.ToLowerInvariant() switch
-        {
-            "horizontal" or "h" => TuiLayout.SplitHorizontal,
-            "vertical" or "v" => TuiLayout.SplitVertical,
-            "stack" => TuiLayout.Stacked,
-            _ => throw new InvalidOperationException(
-                $"Unknown layout orientation '{value}'. Options: single, split-horizontal, split-vertical, stacked"),
-        };
-    }
 
     private static IInlinePromptProvider RequireInlineProvider(CommandContext context)
     {

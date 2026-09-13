@@ -90,23 +90,6 @@ internal static class TuiRequestDispatcher
             return true;
         }
 
-        if (value is TuiRunRequest runRequest)
-        {
-            // A screen assembled by the builder subcommands takes the same path as a
-            // record tree: one screen implementation rather than two (TUI-0015).
-            var built = new TuiDeclarativeScreen(
-                TuiScreenAdapter.BuildTree(runRequest.Screen),
-                [],
-                invoke: null,
-                runRequest.Screen.ScreenTitle,
-                runRequest.Screen.RefreshInterval,
-                runRequest.Tick);
-
-            TuiApplication.Run(new ConsoleTuiHost(), built);
-            outcomeValues = BuildOutcomeValues(built.Outcome, runRequest.ReturnOutcome);
-            return true;
-        }
-
         return false;
     }
 

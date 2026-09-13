@@ -191,25 +191,20 @@ Memory{$memoryPercent.ToString("F1").PadLeft(5)} %  {Bar($memoryPercent, 28)}
 """
 }
 
-var processes = new Tui.TuiList()
-$processes.DisplayProperty = "Name"
-$processes.ItemsSource     = &TopProcesses
+## The whole screen, as one value. `ItemsSource` and `TextSource` are pull bindings: a
+## property set to a function is asked again on every redraw, and `--refresh 1s` is what
+## causes one. That is why there is no tick handler here and nothing to keep in step — the
+## two panes are functions of the machine, read afresh each second.
+var screen = new Tui.TuiStack(Tui.TuiOrientation.Horizontal) {|
+    Items = [
+        new Tui.TuiBorder(
+            new Tui.TuiList() {| DisplayProperty = "Name", ItemsSource = &TopProcesses |},
+            "Processes by memory") {| Size = "2*" |},
 
-var summary = new Tui.TuiTextWidget()
-$summary.TextSource = &Summary
-
-var left = new Tui.TuiBorder()
-$left.Title = "Processes by memory"
-$left.Child = $processes
-$left.Size  = Tui.TuiLength.Star(2)
-
-var right = new Tui.TuiBorder()
-$right.Title = "System"
-$right.Child = $summary
-$right.Size  = Tui.TuiLength.Star(3)
-
-var screen = new Tui.TuiStack(Tui.TuiOrientation.Horizontal)
-$screen.Add($left)
-$screen.Add($right)
+        new Tui.TuiBorder(
+            new Tui.TuiTextWidget() {| TextSource = &Summary |},
+            "System") {| Size = "3*" |},
+    ]
+|}
 
 tui run $screen --title "System Monitor" --refresh 1s

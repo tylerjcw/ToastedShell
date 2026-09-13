@@ -1727,7 +1727,7 @@ public static class DiagnosticCodeManifest
             Title: "This host does not support AutoCd navigation.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7907),
+            SourceLine: 7933),
         ["tosh.runtime.await_requires_future"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.await_requires_future",
             Namespace: "runtime",
@@ -1823,7 +1823,7 @@ public static class DiagnosticCodeManifest
             Title: "Callable invocation in expression context must produce exactly one value.",
             Help: "ensure the callable returns exactly one value, or use 'invoke' in pipeline context for multi-value output.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4078),
+            SourceLine: 4104),
         ["tosh.runtime.callable_named_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.callable_named_argument",
             Namespace: "runtime",
@@ -1975,7 +1975,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot redeclare constant '{name}'.",
             Help: "use a different name, or declare the original with 'var' if '{name}' needs to change.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 5238),
+            SourceLine: 5264),
         ["tosh.runtime.constructor_cycle"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.constructor_cycle",
             Namespace: "runtime",
@@ -2415,7 +2415,7 @@ public static class DiagnosticCodeManifest
             Title: "'{target.OwnerLabel}' inferred type parameter '{typeParameterName}' as '{bound.Name}', but argument '{parameterName}' is '{clrType.Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7354),
+            SourceLine: 7380),
         ["tosh.runtime.generic_constraint_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.generic_constraint_failed",
             Namespace: "runtime",
@@ -2423,7 +2423,7 @@ public static class DiagnosticCodeManifest
             Title: "'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7375),
+            SourceLine: 7401),
         ["tosh.runtime.generic_return_type_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.generic_return_type_mismatch",
             Namespace: "runtime",
@@ -2431,7 +2431,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{definition.Name}' inferred '{rawReturn}' as '{bound.Name}', but returned a '{value.GetType().Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7439),
+            SourceLine: 7465),
         ["tosh.runtime.generic_type_argument_count_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.generic_type_argument_count_mismatch",
             Namespace: "runtime",
@@ -2535,7 +2535,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '| first N'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8187),
+            SourceLine: 8213),
         ["tosh.runtime.input_redirection_source_not_found"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.input_redirection_source_not_found",
             Namespace: "runtime",
@@ -2591,7 +2591,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: "use a format the value's type supports, or drop the clause. A clause ",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4566),
+            SourceLine: 4592),
         ["tosh.runtime.invalid_member_assignment_target"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.invalid_member_assignment_target",
             Namespace: "runtime",
@@ -3263,7 +3263,7 @@ public static class DiagnosticCodeManifest
             Title: "Nested type '{member.Name}' in class '{@class.Name}' did not produce a type.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 5348),
+            SourceLine: 5374),
         ["tosh.runtime.networkctl_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.networkctl_command_failed",
             Namespace: "runtime",
@@ -3719,7 +3719,7 @@ public static class DiagnosticCodeManifest
             Title: "'{name}' is a {titleSuffix}.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4515),
+            SourceLine: 4541),
         ["tosh.runtime.return_type_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.return_type_conversion_failed",
             Namespace: "runtime",
@@ -4351,7 +4351,7 @@ public static class DiagnosticCodeManifest
             Title: "Type '{name}' could not be resolved as a type argument for '{methodName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 5389),
+            SourceLine: 5415),
         ["tosh.runtime.unknown_type_name"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_type_name",
             Namespace: "runtime",
@@ -4455,7 +4455,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{definition.Name}' returns 'void' but produced a value.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7467),
+            SourceLine: 7493),
         ["tosh.runtime.window_requires_positive_integer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.window_requires_positive_integer",
             Namespace: "runtime",
@@ -4504,14 +4504,6 @@ public static class DiagnosticCodeManifest
             Help: "TON writes declared records, classes, structs, enums, union variants, ",
             SourceFile: "src/Toast.Stdlib/Data/TonWriter.cs",
             SourceLine: 459),
-        ["tosh.tui.add_confirm.missing_message"] = new DiagnosticCodeInfo(
-            Code: "tosh.tui.add_confirm.missing_message",
-            Namespace: "tui",
-            Name: "add_confirm.missing_message",
-            Title: "'tui add-confirm' requires a message.",
-            Help: "Write the question to ask: tui add-confirm \"Deploy now?\"",
-            SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 586),
         ["tosh.tui.file.unreadable_directory"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.file.unreadable_directory",
             Namespace: "tui",
@@ -4519,7 +4511,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not read directory '{path}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 377),
+            SourceLine: 364),
         ["tosh.tui.filter.no_items"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.filter.no_items",
             Namespace: "tui",
@@ -4527,7 +4519,7 @@ public static class DiagnosticCodeManifest
             Title: "No items provided for 'tui filter'.",
             Help: "Pipe items into 'tui filter' or provide them as arguments.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 402),
+            SourceLine: 389),
         ["tosh.tui.input.multiline_requires_fullscreen"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.input.multiline_requires_fullscreen",
             Namespace: "tui",
@@ -4535,7 +4527,7 @@ public static class DiagnosticCodeManifest
             Title: "'tui input --multiline' cannot be combined with '--cli'.",
             Help: "The inline prompt is a single-row box. Drop --cli for a multiline field, ",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 213),
+            SourceLine: 200),
         ["tosh.tui.invalid_page_size"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.invalid_page_size",
             Namespace: "tui",
@@ -4543,23 +4535,15 @@ public static class DiagnosticCodeManifest
             Title: "'--page-size' needs a positive whole number, not '{text}'.",
             Help: "For example: tui pick $items --page-size 20",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 929),
-        ["tosh.tui.layout.missing_orientation"] = new DiagnosticCodeInfo(
-            Code: "tosh.tui.layout.missing_orientation",
-            Namespace: "tui",
-            Name: "layout.missing_orientation",
-            Title: "The 'tui layout' subcommand requires an orientation.",
-            Help: "Available orientations: single, split-horizontal, split-vertical, stacked",
-            SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 665),
+            SourceLine: 743),
         ["tosh.tui.missing_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.missing_subcommand",
             Namespace: "tui",
             Name: "missing_subcommand",
             Title: "The 'tui' command requires a subcommand.",
-            Help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, add-confirm, add-file, layout, run",
+            Help: "Available subcommands: pick, confirm, input, file, filter, run",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 54),
+            SourceLine: 49),
         ["tosh.tui.no_inline_provider"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.no_inline_provider",
             Namespace: "tui",
@@ -4567,15 +4551,7 @@ public static class DiagnosticCodeManifest
             Title: "Inline prompts (--cli) are not available in this environment.",
             Help: "The --cli flag requires an interactive terminal. Remove --cli to use fullscreen mode.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 1102),
-        ["tosh.tui.no_screen"] = new DiagnosticCodeInfo(
-            Code: "tosh.tui.no_screen",
-            Namespace: "tui",
-            Name: "no_screen",
-            Title: "Expected a TuiScreen from pipeline input.",
-            Help: "Create a screen first: tui screen | tui add-list ...",
-            SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 1056),
+            SourceLine: 835),
         ["tosh.tui.no_terminal"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.no_terminal",
             Namespace: "tui",
@@ -4583,7 +4559,7 @@ public static class DiagnosticCodeManifest
             Title: "A full-screen TUI needs a terminal.",
             Help: "Output is redirected, so there is nothing to draw on. Run this ",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 807),
+            SourceLine: 621),
         ["tosh.tui.pick.no_items"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.pick.no_items",
             Namespace: "tui",
@@ -4591,15 +4567,15 @@ public static class DiagnosticCodeManifest
             Title: "No items provided for 'tui pick'.",
             Help: "Pipe items into 'tui pick' or provide them as arguments: tui pick item1 item2 item3",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 114),
+            SourceLine: 101),
         ["tosh.tui.run.no_screen"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.run.no_screen",
             Namespace: "tui",
             Name: "run.no_screen",
-            Title: "No TuiScreen provided to 'tui run'.",
-            Help: "Pipe a TuiScreen into 'tui run' or provide one as an argument.",
+            Title: "No screen was given to 'tui run'.",
+            Help: "Pass a widget tree as an argument or pipe one in: ",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 720),
+            SourceLine: 471),
         ["tosh.tui.unknown_flag"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.unknown_flag",
             Namespace: "tui",
@@ -4607,15 +4583,15 @@ public static class DiagnosticCodeManifest
             Title: "Unknown flag '--{flag}' for 'tui {subcommand}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 907),
+            SourceLine: 721),
         ["tosh.tui.unknown_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.unknown_subcommand",
             Namespace: "tui",
             Name: "unknown_subcommand",
             Title: "Unknown tui subcommand '{subcommand}'.",
-            Help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, add-confirm, add-file, layout, run",
+            Help: "Available subcommands: pick, confirm, input, file, filter, run",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 88),
+            SourceLine: 75),
         ["tosh.type.arity"] = new DiagnosticCodeInfo(
             Code: "tosh.type.arity",
             Namespace: "type",
@@ -4699,7 +4675,7 @@ public static class DiagnosticCodeManifest
     };
 
     /// <summary>Total number of diagnostic codes in the manifest.</summary>
-    public const int Count = 584;
+    public const int Count = 581;
 
     /// <summary>Lookup metadata for a single code (case-insensitive).</summary>
     public static DiagnosticCodeInfo? TryGet(string code)

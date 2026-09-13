@@ -7766,12 +7766,10 @@ Metrics include wall time, user/system CPU, memory, and page faults.
 \textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{tui}
-Interactive TUI components. Provides list pickers, confirmations, text input, file pickers, and composed screens. Use --cli for inline (non-fullscreen) prompts. It needs a live terminal: run from a script whose output is a terminal, not from a pipeline or a redirect.
+Interactive TUI components: asking a question, and running a screen. Provides list pickers, confirmations, text input and file pickers, and runs a widget tree written as a record or built with `new`. Use --cli for inline (non-fullscreen) prompts. It needs a live terminal: run from a script whose output is a terminal, not from a pipeline or a redirect.
 
 \begin{signature}
-tui \\
-\quad pick|\allowbreak confirm|\allowbreak input|\allowbreak file|\allowbreak filter|\allowbreak screen|\allowbreak add-list|\allowbreak add-text|\allowbreak add-input|\allowbreak add-picker|\allowbreak add-confirm|\allowbreak add-file|\allowbreak layout|\allowbreak run \\
-\quad [options]
+tui pick|confirm|input|file|filter|run [options]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -7783,7 +7781,7 @@ confirm <message> & Ask for a yes/no confirmation. (optional) \\
 input [prompt] & Read text input, optionally multiline or password-style. (optional) \\
 file & Open a file or directory picker. (optional) \\
 filter [items...] & Open a fuzzy filter picker. (optional) \\
-screen|\allowbreak add-*|\allowbreak layout|\allowbreak run & Build and run composed TUI screens from pipeline-carried screen definitions. Widgets: add-list, add-text, add-input, add-picker, add-confirm, add-file. (optional) \\
+run <screen> & Run a full-screen widget tree, written as a record or built with `new`. (optional) \\
 \bottomrule
 \end{tabular}
 
@@ -7792,35 +7790,30 @@ screen|\allowbreak add-*|\allowbreak layout|\allowbreak run & Build and run comp
 \textbf{Flag / Option} & \textbf{Description} \\
 \midrule
 --cli & Use inline terminal prompts instead of returning fullscreen TUI request objects where supported. \\
---multi, -m & Allow multiple selections for `pick`, `filter`, and list widgets. \\
+--multi, -m & Allow multiple selections for `pick` and `filter`. \\
 --result & Return a structured outcome object instead of only the selected value/result. \\
---prompt <text> & Prompt text for picker, filter, input, and widget subcommands. \\
+--prompt <text> & Prompt text for picker, filter and input. \\
 --display <property> & Property name used as the display label for object items. \\
 --page-size <n> & Number of visible entries in pick/filter lists. \\
 --default <value|\allowbreak yes|\allowbreak no> & Default input value or confirmation default. \\
---multiline & Allow multiline input for `input` and `add-input`. \\
+--multiline & Allow multiline input for `input`. \\
 --password & Mask text for `input`. \\
 --path <start> & Initial path for `file`. \\
 --filter <glob> & File picker filter such as `*.tosh`. \\
 --directory, -d & Choose directories instead of files for `file`. \\
---id <id> & Stable widget id for screen-builder subcommands. \\
---searchable, -s & Make a list widget searchable. \\
---bind <widget.property> & Bind a text widget to another widget property. \\
---no-wrap & Disable text wrapping for `add-text`. \\
 --fullscreen & Run `filter` as a fullscreen picker with search open, instead of its inline default. \\
---ratio <a:b> & Layout split ratio for `layout`. \\
---gap <n> & Gap between layout regions. \\
---title <text> & Screen title shown in the header bar, for `screen`. \\
+--title <text> & Screen title shown in the header bar, for `run`. A form names its own window. \\
+--refresh <duration> & Redraw this often with no input, for `run`. Accepts 1s, 500ms or 00:00:01. \\
 \bottomrule
 \end{tabular}
 
-\textbf{Output:} The user's selection: picked item(s) for `pick`/`filter`, a bool for `confirm`, the text for `input`, the path for `file`, or a TuiScreenOutcome when `--result` is given. Nothing is emitted when the prompt is cancelled and `--result` was not asked for. The screen-builder subcommands emit the TuiScreen being composed; without `--cli`, the modal subcommands emit a request object for the shell host to run.
+\textbf{Output:} The user's selection: picked item(s) for `pick`/`filter`, a bool for `confirm`, the text for `input`, the path for `file`, or a TuiScreenOutcome when `--result` is given. Nothing is emitted when the prompt is cancelled and `--result` was not asked for, and a screen showing a form emits nothing either — its handlers have already said what happened.
 
 \begin{lstlisting}
 tui confirm "Deploy now?" --cli  # Inline confirmation
 ls | tui pick --display Name --result  # Pick from pipeline values
 tui input "Project name:" --default demo --cli  # Inline text input
-tui screen --title Deploy | tui add-confirm "Deploy now?" | tui run --result  # Composed screen with a confirmation
+tui run {| Form = [ {| Field = "Name", Id = "name" |} ], Title = "New" |}  # Run a widget tree
 \end{lstlisting}
 
 \end{cmdbox}
