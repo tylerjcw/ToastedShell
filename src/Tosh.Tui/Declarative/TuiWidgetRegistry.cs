@@ -59,7 +59,7 @@ public sealed class TuiWidgetRegistry
     {
         var registry = new TuiWidgetRegistry();
 
-        registry.Register("text", static (spec, _) => new TuiTextWidget(spec.Primary?.ToString() ?? string.Empty)
+        registry.Register("text", static (spec, _) => new TuiTextWidget(spec.PrimaryText() ?? string.Empty)
         {
             Style = spec.Style(),
             Wrap = spec.Flag("wrap", true),
@@ -99,7 +99,7 @@ public sealed class TuiWidgetRegistry
             context.OnHandler(spec, "onchange", handler => field.Changed = text => handler(text));
             context.OnHandler(spec, "onsubmit", handler => field.Submitted = text => handler(text));
 
-            var label = spec.Primary?.ToString();
+            var label = spec.PrimaryText();
 
             if (string.IsNullOrEmpty(label))
             {
@@ -113,7 +113,7 @@ public sealed class TuiWidgetRegistry
 
         registry.Register("button", static (spec, context) =>
         {
-            var button = new TuiButton(spec.Primary?.ToString() ?? "OK") { Style = spec.Style() };
+            var button = new TuiButton(spec.PrimaryText() ?? "OK") { Style = spec.Style() };
 
             context.OnHandler(spec, "onpress", handler => button.Pressed = () => handler(null));
 

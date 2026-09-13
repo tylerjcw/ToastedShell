@@ -65,8 +65,19 @@ public sealed class TuiWidgetSpec
     }
 
     /// <summary>Reads a key as text.</summary>
+    /// <remarks>
+    /// A callable is not content. A property written as <c>&amp;Summary</c> is a binding
+    /// to be read later, and taking its <c>ToString()</c> now would put the function's
+    /// type name on screen until the first binding pass replaced it.
+    /// </remarks>
     public string? Text(string key, string? fallback = null)
-        => TryGet(key, out var value) && value is not null ? value.ToString() : fallback;
+        => TryGet(key, out var value) && value is not null and not IShellCallable
+            ? value.ToString()
+            : fallback;
+
+    /// <summary>The primary value as text, or nothing when it is a binding.</summary>
+    public string? PrimaryText(string? fallback = null)
+        => Primary is null or IShellCallable ? fallback : Primary.ToString();
 
     /// <summary>Reads a key as a whole number, however it was written.</summary>
     public int Number(string key, int fallback)
@@ -117,8 +128,9 @@ public sealed class TuiWidgetSpec
         return AsItems(value);
     }
 
-    /// <summary>The primary value read as a list.</summary>
-    public IReadOnlyList<object?> PrimaryItems() => Primary is null ? [] : AsItems(Primary);
+    /// <summary>The primary value read as a list, or nothing when it is a binding.</summary>
+    public IReadOnlyList<object?> PrimaryItems()
+        => Primary is null or IShellCallable ? [] : AsItems(Primary);
 
     private static IReadOnlyList<object?> AsItems(object value)
         => value is System.Collections.IEnumerable sequence and not string
