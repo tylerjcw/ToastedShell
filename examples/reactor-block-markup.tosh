@@ -1,11 +1,15 @@
 #!/bin/tosh
 # Reactor block calculator for Factorio 2.0.77 + Plutonium Energy 1.8.1
+#
+# The same calculator as `reactor-block.tosh`, with the form written as markup rather
+# than built with `new`. Everything outside the form is identical, on purpose: the two
+# files exist to be read side by side.
+#
 # Values verified against prototype Lua source:
 #   base/prototypes/entity/entities.lua   (reactor, exchanger, turbine)
 #   base/prototypes/item.lua              (uranium-fuel-cell)
 #   PlutoniumEnergy/prototypes/entity/entities.lua  (MOX, breeder reactors)
 #   PlutoniumEnergy/prototypes/item/items.lua       (fuel cells)
-
 # ── Fuel types (GJ per cell from prototype fuel_value fields) ──────────
 module Fuel {
     enum Mox: int {
@@ -71,7 +75,10 @@ class ReactorBlock(reactorType: Reactor, width: int = 2, height: int = 2, buffer
     prop FuelPerMin: double       => (60`s / $this.BurnTime) * $this.ReactorCount
 }
 
-using Tosh.Tui.Widgets = Tui
+## Nothing is imported. A markup tree names widgets by what they are — `Field`, `List`,
+## `Box` — rather than by CLR type, so there is no namespace to bring in and no prefix to
+## repeat. `using Tosh.Tui.Widgets` is only wanted by a script that also reaches for the
+## types directly.
 
 ## @summary Resolves a reactor type by name.
 ## @remarks
@@ -196,50 +203,56 @@ subcommand calc {
     ## type, with the block itself alongside the fields — the numbers move as they are
     ## typed, so the shape of the answer is visible before committing to it.
     ##
-    ## Built the way a Windows Forms window is: construct the widgets, set their
-    ## properties, put them in containers, and answer the events worth answering.
+    ## Written as a value rather than assembled: the whole window is one record, and the
+    ## first key of each node says what that node is. A tree that is a value can be moved
+    ## into a file of its own and brought back with `source`, which is the reason to write
+    ## one this way.
+    ##
+    ## `Text = &Preview` is a pull binding: a property set to a function is asked again on
+    ## every redraw, and a keystroke is what causes a redraw. That is the whole of the live
+    ## right-hand pane — there is no update code to write.
+    ##
+    ## Markup holds no variables, so `OnSubmit` is handed the form and reads the widgets by
+    ## the ids the markup gave them. The object-built version keeps the widgets in variables
+    ## and reads those instead; both run at the same moment, while the form is still up.
     if ($ReactorType == "") {
-        var kinds = new Tui.TuiList(["Nuclear", "Plutonium", "MOX", "Breeder"]) {| Id = "ReactorType" |}
+        var cancelled = false
 
-        var wide     = new Tui.TuiField("Wide",     $"{$Width}")    {| Id = "Width"    |}
-        var high     = new Tui.TuiField("High",     $"{$Height}")   {| Id = "Height"   |}
-        var seconds  = new Tui.TuiField("Seconds",  $"{$Seconds}")  {| Id = "Seconds"  |}
-        var capacity = new Tui.TuiField("Capacity", $"{$Capacity}") {| Id = "Capacity" |}
+        var screen = {|
+            Form = [ {|
+                Row = [
+                    {|
+                        Box = [
+                            {| List  = ["Nuclear", "Plutonium", "MOX", "Breeder"], Id = "ReactorType" |},
+                            {| Field = "Wide",     Id = "Width",    Value = $"{$Width}"    |},
+                            {| Field = "High",     Id = "Height",   Value = $"{$Height}"   |},
+                            {| Field = "Seconds",  Id = "Seconds",  Value = $"{$Seconds}"  |},
+                            {| Field = "Capacity", Id = "Capacity", Value = $"{$Capacity}" |}
+                        ],
+                        Title = "Inputs",
+                        Size  = "2*"
+                    |},
 
-        ## `TextSource` is what makes the right pane live: a property set to a function is
-        ## re-read whenever the screen redraws, and a keystroke is what causes a redraw.
-        ## There is no update code and nothing to wire.
-        var preview = new Tui.TuiTextWidget() {| TextSource = &Preview |}
+                    {| Box = [ {| Text = &Preview |} ], Title = "Block", Size = "3*" |}
+                ]
+            |} ],
 
-        var inputs = new Tui.TuiStack(Tui.TuiOrientation.Vertical) {|
-            Items = [$kinds, $wide, $high, $seconds, $capacity]
+            Title = "Reactor Block",
+
+            OnSubmit = func(form) {
+                $ReactorType = $"{$form.Values.ReactorType}"
+                $Width       = Whole($form.Values.Width,    2)
+                $Height      = Whole($form.Values.Height,   2)
+                $Seconds     = Whole($form.Values.Seconds,  300)
+                $Capacity    = Whole($form.Values.Capacity, 25000)
+            },
+
+            OnCancel = func() { $cancelled = true }
         |}
 
-        var panes = new Tui.TuiStack(Tui.TuiOrientation.Horizontal) {|
-            Items = [
-                new Tui.TuiBorder($inputs,  "Inputs") {| Size = "2*" |},
-                new Tui.TuiBorder($preview, "Block")  {| Size = "3*" |},
-            ]
-        |}
+        tui run $screen
 
-        var form = new Tui.TuiForm($panes) {| Title = "Reactor Block" |}
-
-        ## Enter accepts the form and this runs while the widgets are still here to be
-        ## read, so the answers come from the things the script just built rather than
-        ## from a dictionary keyed by their ids. The ids are still worth having — they are
-        ## what `Preview` sees — but they are for the live view, not for the result.
-        $form.Submitted = func() {
-            $ReactorType = $"{$kinds.SelectedItem}"
-            $Width       = Whole($wide.Text,     2)
-            $Height      = Whole($high.Text,     2)
-            $Seconds     = Whole($seconds.Text,  300)
-            $Capacity    = Whole($capacity.Text, 25000)
-        }
-
-        tui run $form
-
-        ## Escape leaves the form cancelled, so walking away needs no flag of its own.
-        if ($form.WasCancelled) {
+        if ($cancelled) {
             throw "Cancelled."
         }
     }
