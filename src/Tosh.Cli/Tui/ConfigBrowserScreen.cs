@@ -13,6 +13,7 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     private const string ManagedConfigBlockStart = "# >>> tosh config browse >>>";
     private const string ManagedConfigBlockEnd = "# <<< tosh config browse <<<";
     private readonly ToshRuntime _runtime;
+    private readonly TuiShortcuts _shortcuts;
     private readonly Dictionary<string, ToshRuntime> _previewRuntimes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyList<ConfigBrowserNode>> _previewLeaves = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (int Version, int Width, IReadOnlyList<ConfigDetailEntry> Entries)> _previewCache
@@ -54,6 +55,14 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         _runtime = runtime;
         _schema = ConfigBrowserSchemaBuilder.Build(runtime);
         _query = request.InitialQuery ?? string.Empty;
+
+        // The browser's own keys, asked about only once the focused pane has declined.
+        // `/` is matched on the character: .NET reports `ConsoleKey.Divide` for it on a
+        // real terminal, so the case written against `Oem2` was a dead key and the search
+        // box could not be opened at all.
+        _shortcuts = new TuiShortcuts()
+            .On(ConsoleKey.Q, "q", "quit", Quit)
+            .On('/', "/", "search", () => _focus = ConfigBrowserFocus.Search);
 
         foreach (var child in _schema.Root.Children)
         {
@@ -212,22 +221,18 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             return HandleEditorKey(key);
         }
 
-        if (key.Key == ConsoleKey.Q && key.Modifiers == 0)
+        // Whatever holds the keyboard answers first. A search box consumes `q` as a
+        // letter, so the browser's own keys never see it — which is the whole of
+        // `TOSH-0011`, and is now a property of the order rather than of where somebody
+        // happened to write the check.
+        if (_focus == ConfigBrowserFocus.Search && TryHandleSearchKey(key))
         {
-            if (_stagedValues.Count > 0)
-            {
-                _pendingConfirmAction = ConfigBrowserConfirmAction.Exit;
-                _confirmDialog.Open(
-                    "Discard Staged Changes?",
-                    $"You have {_stagedValues.Count} staged change{(_stagedValues.Count == 1 ? string.Empty : "s")}. Discard them and quit?",
-                    confirmLabel: "Discard & Quit",
-                    cancelLabel: "Stay");
-                _focus = ConfigBrowserFocus.Detail;
-                _statusMessage = null;
-                return TuiScreenResult.Continue;
-            }
+            return TuiScreenResult.Continue;
+        }
 
-            return TuiScreenResult.Exit;
+        if (_shortcuts.TryHandle(key, out var shortcut))
+        {
+            return shortcut;
         }
 
         if (_focus != ConfigBrowserFocus.Search && !key.Modifiers.HasFlag(ConsoleModifiers.Control) && !key.Modifiers.HasFlag(ConsoleModifiers.Alt))
@@ -260,9 +265,6 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             case ConsoleKey.Tab:
                 CycleFocus(reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
                 return TuiScreenResult.Continue;
-            case ConsoleKey.Oem2 when key.KeyChar == '/':
-                _focus = ConfigBrowserFocus.Search;
-                return TuiScreenResult.Continue;
             case ConsoleKey.LeftArrow:
                 if (_focus == ConfigBrowserFocus.Tree && CollapseSelectedGroup())
                 {
@@ -290,7 +292,8 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
 
         return _focus switch
         {
-            ConfigBrowserFocus.Search => HandleSearchKey(key),
+            // Anything the search box wanted was taken above.
+            ConfigBrowserFocus.Search => TuiScreenResult.Continue,
             ConfigBrowserFocus.Tree => HandleTreeKey(key),
             _ => HandleDetailKey(key),
         };
@@ -346,13 +349,43 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         return TuiScreenResult.Continue;
     }
 
-    private TuiScreenResult HandleSearchKey(ConsoleKeyInfo key)
+    /// <summary>Quitting, which has to ask first when there is work that would be lost.</summary>
+    private TuiScreenResult Quit()
+    {
+        if (_stagedValues.Count == 0)
+        {
+            return TuiScreenResult.Exit;
+        }
+
+        _pendingConfirmAction = ConfigBrowserConfirmAction.Exit;
+        _confirmDialog.Open(
+            "Discard Staged Changes?",
+            $"You have {_stagedValues.Count} staged change{(_stagedValues.Count == 1 ? string.Empty : "s")}. Discard them and quit?",
+            confirmLabel: "Discard & Quit",
+            cancelLabel: "Stay");
+        _focus = ConfigBrowserFocus.Detail;
+        _statusMessage = null;
+
+        return TuiScreenResult.Continue;
+    }
+
+    /// <summary>
+    /// Gives the search box the key, and says whether it wanted it.
+    /// </summary>
+    /// <remarks>
+    /// Answering "did I take it?" rather than "here is a result" is what lets the rest of
+    /// the browser still see a key the box had no use for. <c>Enter</c> is the one that
+    /// makes the difference: it leaves the search box, and it does so through the same
+    /// handler every other pane's <c>Enter</c> goes through.
+    /// </remarks>
+    private bool TryHandleSearchKey(ConsoleKeyInfo key)
     {
         switch (key.Key)
         {
             case ConsoleKey.Escape:
                 _focus = ConfigBrowserFocus.Tree;
-                return TuiScreenResult.Continue;
+                return true;
+
             case ConsoleKey.Backspace:
                 if (_query.Length > 0)
                 {
@@ -361,17 +394,19 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
                     SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
                 }
 
-                return TuiScreenResult.Continue;
+                return true;
         }
 
-        if (!char.IsControl(key.KeyChar))
+        if (char.IsControl(key.KeyChar))
         {
-            _query += key.KeyChar;
-            _detailScroll.Home();
-            SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
+            return false;
         }
 
-        return TuiScreenResult.Continue;
+        _query += key.KeyChar;
+        _detailScroll.Home();
+        SyncTree(_tree.Scroll.PageSize > 0 ? _tree.Scroll.PageSize : 10);
+
+        return true;
     }
 
     private TuiScreenResult HandleTreeKey(ConsoleKeyInfo key)

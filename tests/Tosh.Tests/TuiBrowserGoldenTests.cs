@@ -428,28 +428,65 @@ public sealed class TuiBrowserGoldenTests : IDisposable
     /// so a search for anything containing that letter quits instead of typing.
     /// </summary>
     /// <remarks>
-    /// Pinned rather than fixed: this is a characterisation suite written to hold behaviour
-    /// still during a refactor, and changing behaviour in the same breath would defeat it.
-    /// Filed as a wart to fix separately. In the help browser the same ordering makes its
-    /// <c>Escape</c>-leaves-search branch unreachable — Escape quits the browser outright.
+    /// These two were pinned asserting the wrong answer, because a characterisation suite
+    /// exists to hold behaviour still and changing it in the same breath would defeat the
+    /// point. The refactor they were guarding is done, so they now assert what a reader
+    /// expects: a letter typed into a search box is a letter (<c>TUI-0006</c>).
     /// </remarks>
     [Fact]
-    public void The_help_browser_quits_when_q_is_typed_into_its_search_box()
+    public void The_help_browser_takes_q_as_a_letter_while_its_search_box_has_the_keyboard()
     {
         var screen = new HelpBrowserScreen(SandboxedRuntime(), new HelpBrowseRequest(null, null));
 
         Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('/')));
         Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('s')));
+        Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('q')));
+
+        Assert.Contains("sq", Frame(screen), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_help_browser_still_quits_on_q_when_the_search_box_does_not_have_it()
+    {
+        var screen = new HelpBrowserScreen(SandboxedRuntime(), new HelpBrowseRequest(null, null));
+
         Assert.Equal(TuiScreenResult.Exit, screen.HandleInput(Type('q')));
     }
 
     [Fact]
-    public void The_config_browser_quits_when_q_is_typed_into_its_search_box()
+    public void Escape_leaves_the_help_browsers_search_box_rather_than_the_browser()
+    {
+        // The branch this reaches was unreachable while Escape quit outright.
+        var screen = new HelpBrowserScreen(SandboxedRuntime(), new HelpBrowseRequest(null, null));
+
+        Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('/')));
+        Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Key(ConsoleKey.Escape)));
+
+        // Out of the search box, so the browser's own keys answer again.
+        Assert.Equal(TuiScreenResult.Exit, screen.HandleInput(Type('q')));
+    }
+
+    [Fact]
+    public void The_config_browser_takes_q_as_a_letter_while_its_search_box_has_the_keyboard()
     {
         var screen = new ConfigBrowserScreen(SandboxedRuntime(), new ConfigBrowseRequest(null, null));
 
         Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('/')));
         Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('s')));
+        Assert.Equal(TuiScreenResult.Continue, screen.HandleInput(Type('q')));
+
+        Assert.Contains("sq", Frame(screen), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_config_browser_still_quits_on_q_when_the_search_box_does_not_have_it()
+    {
+        var screen = new ConfigBrowserScreen(SandboxedRuntime(), new ConfigBrowseRequest(null, null));
+
         Assert.Equal(TuiScreenResult.Exit, screen.HandleInput(Type('q')));
     }
+
+    /// <summary>The whole frame as plain text, for asserting that a query reached the box.</summary>
+    private static string Frame(ITuiScreen screen)
+        => Regex.Replace(Normalize(screen.Render(Size).Content), @"\x1b\[[0-9;]*m", string.Empty);
 }

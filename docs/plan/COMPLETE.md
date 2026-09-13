@@ -41,6 +41,7 @@
 | [`TOAST-0034`](items/TOAST-0034.md) | P2 | complete | 8/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
 | [`TOAST-0111`](items/TOAST-0111.md) | P2 | complete | 6/6 | `is` and `as` do not see refinement types, so a type test on one is always false |
 | [`TOAST-0049`](items/TOAST-0049.md) | P2 | complete | 5/5 | Recursion is capped at 128 frames, and the cap is a stack size nobody can change |
+| [`TOSH-0011`](items/TOSH-0011.md) | P2 | complete | 5/5 | Both TUI browsers test for `q` before they test for focus, so searching for anything with a q in it quits |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | complete | 9/9 | The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways |
 | [`TOSH-0007`](items/TOSH-0007.md) | P1 | complete | 4/4 | The marshalled struct statvfs was 24 bytes short, corrupting memory on every call |
 | [`TOAST-0093`](items/TOAST-0093.md) | P1 | complete | — | A compiled unit claims its type names process-wide, so a bare name resolves to another script's compiled output |
@@ -106,6 +107,7 @@
 | [`TOAST-0132`](items/TOAST-0132.md) | P2 | complete | 3/3 | A trait's default body runs in the adopting class's scope, so a library trait cannot name its own types |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TOAST-0065`](items/TOAST-0065.md) | P2 | complete | 5/5 | An emitted class inherited object.ToString, so it converted to its CLR name and a match value arm missed |
+| [`TUI-0006`](items/TUI-0006.md) | P2 | complete | 7/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | complete | 1/1 | Class and member doc comments never reach `help` |
 | [`TOAST-0070`](items/TOAST-0070.md) | P3 | complete | 4/4 | Whether a rune is called is decided by a textual scan, so a name in a string disables compilation |

@@ -23,7 +23,6 @@
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
-| [`TOSH-0011`](items/TOSH-0011.md) | P2 | proposed | 0/5 | Both TUI browsers test for `q` before they test for focus, so searching for anything with a q in it quits |
 | [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |

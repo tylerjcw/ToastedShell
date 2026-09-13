@@ -61,10 +61,28 @@ public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassF
         Assert.Contains("║", rendered, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A letter typed into the search box is a letter (<c>TOSH-0011</c>).
+    /// </summary>
+    /// <remarks>
+    /// This asserted the opposite, under a name that describes the defect: the browser
+    /// checked its quit key before it checked where focus was, so <c>q</c> closed the
+    /// window mid-search. Opening the request with a query is what puts focus in the box.
+    /// </remarks>
     [Fact]
-    public void Help_browser_can_quit_with_q_even_when_search_has_focus()
+    public void Help_browser_takes_q_as_a_letter_while_search_has_focus()
     {
         var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("grep", "grep"));
+
+        var result = screen.HandleKey(new ConsoleKeyInfo('q', ConsoleKey.Q, shift: false, alt: false, control: false));
+
+        Assert.Equal(TuiScreenResult.Continue, result);
+    }
+
+    [Fact]
+    public void Help_browser_quits_with_q_once_search_does_not_have_focus()
+    {
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest(null, "grep"));
 
         var result = screen.HandleKey(new ConsoleKeyInfo('q', ConsoleKey.Q, shift: false, alt: false, control: false));
 

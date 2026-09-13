@@ -29,6 +29,7 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
     private HelpTopic? _resolvedTopicCache;
     private string? _detailEntriesCacheKey;
     private IReadOnlyList<HelpDetailEntry>? _detailEntriesCache;
+    private readonly TuiShortcuts _shortcuts;
     private TuiRect _lastSearchRect;
     private TuiRect _lastListRect;
     private TuiRect _lastDetailRect;
@@ -49,6 +50,20 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         }
 
         _focus = _query.Length > 0 ? HelpBrowserFocus.Search : HelpBrowserFocus.List;
+
+        // The browser's own keys, asked about only once the focused pane has declined.
+        // Matched on the character for `/`, `[` and `]`, because the `ConsoleKey` a
+        // terminal reports for punctuation is not the one the Oem names suggest: .NET
+        // hands back `Divide` for `/` and `None` for both brackets, so the three cases
+        // written against `Oem2`, `Oem4` and `Oem6` could never fire outside a test that
+        // built its own key info. Search, back and forward were dead keys.
+        _shortcuts = new TuiShortcuts()
+            .On(ConsoleKey.Q, "q", "quit", Quit)
+            .On(ConsoleKey.Escape, "Esc", string.Empty, Quit)
+            .On('/', "/", "search", () => _focus = HelpBrowserFocus.Search)
+            .On('[', "[", "back", () => NavigateBack())
+            .On(']', "]", "forward", () => NavigateForward());
+
         ApplyFilter(pageSize: 10);
 
         if (!string.IsNullOrWhiteSpace(request.InitialTopicName))
@@ -173,15 +188,18 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
             return TuiScreenResult.Exit;
         }
 
-        if (key.Key is ConsoleKey.Q or ConsoleKey.Escape)
-        {
-            _shouldExit = true;
-            return TuiScreenResult.Exit;
-        }
-
+        // Whatever holds the keyboard answers first. A search box consumes `q` as a
+        // letter, so the browser's own keys never see it — which is the whole of
+        // `TOSH-0011`, and is now a property of the order rather than of two `if`s
+        // somebody has to keep in the right sequence.
         if (_focus == HelpBrowserFocus.Search && HandleSearchKey(key))
         {
             return _shouldExit ? TuiScreenResult.Exit : TuiScreenResult.Continue;
+        }
+
+        if (_shortcuts.TryHandle(key, out var shortcut))
+        {
+            return shortcut;
         }
 
         switch (key.Key)
@@ -197,12 +215,6 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
                 return TuiScreenResult.Continue;
             case ConsoleKey.F4:
                 SelectGroup(HelpBrowserGroup.Clr);
-                return TuiScreenResult.Continue;
-            case ConsoleKey.Oem4 when key.Modifiers == 0:
-                NavigateBack();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.Oem6 when key.Modifiers == 0:
-                NavigateForward();
                 return TuiScreenResult.Continue;
             case ConsoleKey.Tab:
                 CycleFocus(reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
@@ -231,14 +243,6 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
             case ConsoleKey.Backspace:
                 if (_focus == HelpBrowserFocus.List && NavigateClrUp())
                 {
-                    return TuiScreenResult.Continue;
-                }
-
-                break;
-            case ConsoleKey.Oem2:
-                if (key.KeyChar == '/')
-                {
-                    _focus = HelpBrowserFocus.Search;
                     return TuiScreenResult.Continue;
                 }
 
@@ -616,6 +620,12 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         }
 
         return TuiScreenResult.Continue;
+    }
+
+    private TuiScreenResult Quit()
+    {
+        _shouldExit = true;
+        return TuiScreenResult.Exit;
     }
 
     private bool HandleSearchKey(ConsoleKeyInfo key)
