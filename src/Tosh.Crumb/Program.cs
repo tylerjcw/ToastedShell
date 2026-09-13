@@ -87,110 +87,16 @@ internal static class Program
         return 2;
     }
 
+    /// <summary>
+    /// Crumb's help, drawn by the shell's own renderer from a <see cref="Tosh.Runtime.HelpTopic"/>.
+    /// </summary>
+    /// <remarks>
+    /// This was forty hand-aligned `Console.WriteLine` calls — a second help layout to
+    /// keep in step, which looked like a different program from everything else in the
+    /// shell. The description lives in <see cref="Output.CrumbHelp"/> as data now, so
+    /// the drawing is not Crumb's job and anything else that wants the description can
+    /// have it.
+    /// </remarks>
     private static void PrintHelp()
-    {
-        Console.WriteLine("crumb — TōSh's pacman + AUR companion");
-        Console.WriteLine();
-        Console.WriteLine("usage:");
-        Console.WriteLine("  crumb <subcommand> [options] [args...]");
-        Console.WriteLine("  crumb -<OP><modifiers> [args...]    pacman-style stacked flags");
-        Console.WriteLine();
-        Console.WriteLine("pacman-style operations:");
-        Console.WriteLine("  -S    sync (install / refresh / upgrade)   -Q    query installed");
-        Console.WriteLine("  -R    remove                               -F    sync file index");
-        Console.WriteLine();
-        Console.WriteLine("common stacked combos:");
-        Console.WriteLine("  -S <pkg>      install                          (= install)");
-        Console.WriteLine("  -Sw <pkg>     download repo pkg / fetch AUR     (= install --download-only)");
-        Console.WriteLine("  -U <file>     install local package file        (= install-file)");
-        Console.WriteLine("  -Sy           refresh package databases        (= sync)");
-        Console.WriteLine("  -Syu          full system update               (= update)");
-        Console.WriteLine("  -Suw          download pending repo upgrades   (= update --download-only)");
-        Console.WriteLine("  -Ss <terms>   search repos + AUR                (= search)");
-        Console.WriteLine("  -Si <pkg>     info on a repo/AUR pkg            (= info)");
-        Console.WriteLine("  -Ssa <terms>  AUR-only search                   (= search --aur-only)");
-        Console.WriteLine("  -Ssq <terms>  search, names only                (= search --names)");
-        Console.WriteLine("  -SsJ <terms>  search, JSON output               (= search --json)");
-        Console.WriteLine("  -R <pkg>      remove a package                  (= remove)");
-        Console.WriteLine("  -Rs <pkg>     remove + orphaned deps            (= remove --recursive)");
-        Console.WriteLine("  -Rn <pkg>     remove, skip .pacsave backups     (= remove --nosave)");
-        Console.WriteLine("  -Q            list everything installed         (= list)");
-        Console.WriteLine("  -Qs <term>    filter installed                  (= list <term>)");
-        Console.WriteLine("  -Qi <pkg>     info on installed pkg             (= info --installed)");
-        Console.WriteLine("  -Ql <pkg>     files owned by pkg                (= files)");
-        Console.WriteLine("  -Qo <path>    which pkg owns path               (= owns)");
-        Console.WriteLine("  -Qe           explicitly installed              (= list --explicit)");
-        Console.WriteLine("  -Qd           installed as dependencies        (= list --deps)");
-        Console.WriteLine("  -Qm           foreign packages                  (= list --foreign)");
-        Console.WriteLine("  -Qt           orphans                           (= list --orphans)");
-        Console.WriteLine();
-        Console.WriteLine("subcommands (long-form, equivalent to the above):");
-        Console.WriteLine("  search   <terms...>   union of repos + AUR; ranked, structured");
-        Console.WriteLine("  info     <pkg...>     detailed metadata for one or more packages");
-        Console.WriteLine("  list     [filter...]  installed packages, optionally filtered");
-        Console.WriteLine("  files    <pkg>        files owned by an installed package");
-        Console.WriteLine("  owns     <path>       which installed package owns a path");
-        Console.WriteLine("  install  <pkg...>     repo via pacman, AUR via clone + makepkg -si");
-        Console.WriteLine("  install-file <file...> pacman -U local package file(s)");
-        Console.WriteLine("  remove   <pkg...>     pacman -R (with --recursive / --nosave)");
-        Console.WriteLine("  sync                  pacman -Sy (refresh databases)");
-        Console.WriteLine("  update                pacman -Syu + rebuild stale AUR packages");
-        Console.WriteLine("  clean                 wipe the AUR build cache (~/.cache/crumb/aur)");
-        Console.WriteLine("  logs [--pkg N] [--tail] [--clean] [--limit N]  inspect build logs");
-        Console.WriteLine("  gendb                 seed the devel-commit cache for installed VCS pkgs");
-        Console.WriteLine("  news [--all] [--limit N] [--since DATE]   Arch Linux news headlines");
-        Console.WriteLine();
-        Console.WriteLine("output modifiers (work with both forms):");
-        Console.WriteLine("  -q / --names       just names, one per line");
-        Console.WriteLine("  -v / --verbose     show extra fields");
-        Console.WriteLine("  -J / --json        single JSON document");
-        Console.WriteLine("  -N / --ndjson      one JSON object per line");
-        Console.WriteLine("  -T / --tsv         tab-separated values");
-        Console.WriteLine("  --format <fmt>     auto | table | json | ndjson | tsv | names");
-        Console.WriteLine("  --group-by <field> group install/remove summary by 'repo', 'source', or 'version'");
-        Console.WriteLine("  --download-only    download repo packages / fetch AUR PKGBUILDs without installing");
-        Console.WriteLine();
-        Console.WriteLine("scope filters:");
-        Console.WriteLine("  --repos / -Sr*     sync repos only");
-        Console.WriteLine("  --aur   / -Ss*a    AUR only");
-        Console.WriteLine("  --by <field>       AUR search field (name-desc, name, maintainer, depends, …)");
-        Console.WriteLine("  --limit N          cap results: search trims to N (AUR ranked by votes); news shows N most recent");
-        Console.WriteLine("  --pkg <name>       logs: filter package logs");
-        Console.WriteLine("  --tail             logs: show tail of newest matching log");
-        Console.WriteLine("  --clean            logs: remove matching logs");
-        Console.WriteLine();
-        Console.WriteLine("default output:");
-        Console.WriteLine("  When stdout is a TTY  → pretty coloured table");
-        Console.WriteLine("  When piped            → NDJSON (one Package per line)");
-        Console.WriteLine();
-        Console.WriteLine("examples:");
-        Console.WriteLine("  crumb -Ss dotnet                                # pretty terminal output");
-        Console.WriteLine("  crumb -Ssa wlroots                              # AUR-only search");
-        Console.WriteLine("  crumb -SsJ dotnet | from json                   # structured records");
-        Console.WriteLine("  crumb -Qq | wc -l                               # count installed pkgs");
-        Console.WriteLine("  crumb -Qo /usr/bin/ls                           # owning package");
-        Console.WriteLine("  crumb -S ripgrep                                # install from repos");
-        Console.WriteLine("  crumb -Sw ripgrep                               # download only");
-        Console.WriteLine("  crumb -U ./pkg.pkg.tar.zst                      # install local package file");
-        Console.WriteLine("  crumb install yay --review                      # AUR: review PKGBUILD before build");
-        Console.WriteLine("  crumb install yay                               # AUR: build without review (default)");
-        Console.WriteLine("  crumb -Syu                                      # full system update");
-        Console.WriteLine("  crumb update --aur                              # AUR rebuilds only");
-        Console.WriteLine("  crumb logs --pkg yay --tail                     # inspect latest build log");
-        Console.WriteLine("  crumb -Rsn old-pkg                              # remove with deps, no backups");
-        Console.WriteLine();
-        Console.WriteLine("privilege escalation:");
-        Console.WriteLine("  $CRUMB_SUDO env wins; otherwise doas → sudo → pkexec are auto-detected.");
-        Console.WriteLine();
-        Console.WriteLine("config:");
-        Console.WriteLine("  ~/.config/crumb/crumb.tosh — ToastScript; its value is a record:");
-        Console.WriteLine("    {| quiet = false, pager = \"bat\", review = true,");
-        Console.WriteLine("       exclude = [\"linux\"], makepkgFlags = [\"--skippgpcheck\"] |}");
-        Console.WriteLine("  A flag beats an environment variable beats this file.");
-        Console.WriteLine("  Settings can be computed: exclude = [...$held, $\"{$host}-kernel\"]");
-        Console.WriteLine();
-        Console.WriteLine("AUR review:");
-        Console.WriteLine("  PKGBUILD review is OFF by default (paru-style).");
-        Console.WriteLine("  Use --review or set CRUMB_REVIEW=1 to enable; reviews are batched up front.");
-    }
+        => Console.WriteLine(Tosh.Runtime.HelpTopicSummaryRenderer.Render(Output.CrumbHelp.Topic()));
 }

@@ -91,7 +91,11 @@ public sealed class CrumbOptions
                 case "--quiet": opt.Quiet = true; break;
                 case "--repo":
                 case "--repos":
-                case "--repos-only": opt.ReposOnly = true; break;
+                case "--repos-only":
+                // The name someone reaches for first. `--repos` says where to look;
+                // `--no-aur` says where not to, and one of those is what a person
+                // actually has in mind when the AUR results are in the way.
+                case "--no-aur": opt.ReposOnly = true; break;
                 case "--aur":
                 case "--aur-only": opt.AurOnly = true; break;
                 case "--installed":

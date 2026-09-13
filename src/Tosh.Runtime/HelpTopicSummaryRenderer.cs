@@ -8,7 +8,13 @@ namespace Tosh.Runtime;
 // and conditional sections for Usage / Arguments / Options / Pipeline /
 // Examples / Aliases / Related, plus a footer for Notes and a navigation
 // hint.
-internal static class HelpTopicSummaryRenderer
+/// <remarks>
+/// Public because it is a formatter over a public record and nothing is encapsulated
+/// behind it. `DisplayEngine` renders a <see cref="HelpTopic"/> that reaches it through
+/// a pipeline; a tool that writes to the console directly — `crumb --help`, and `tosh`'s
+/// own — needs the same layout without going through one.
+/// </remarks>
+public static class HelpTopicSummaryRenderer
 {
     private const int MinOuterWidth = 50;
     private const int MaxOuterWidthFallback = 150;
@@ -1022,8 +1028,23 @@ internal static class HelpTopicSummaryRenderer
         return text[..(width - 1)] + "…";
     }
 
+    /// <remarks>
+    /// A line break in the source is kept. Without this every embedded newline was
+    /// rewrapped into the running paragraph and then overflowed the box it was drawn in,
+    /// so a `Notes` block holding a small table — or a `Usage` with a second form — came
+    /// out through the side of the frame. Someone who wrote a newline meant it; only the
+    /// overlong lines need breaking.
+    /// </remarks>
     private static IEnumerable<string> WrapText(string text, int width)
     {
+        if (text.Contains('\n'))
+        {
+            foreach (var paragraph in text.Replace("\r\n", "\n").Split('\n'))
+                foreach (var line in WrapText(paragraph, width))
+                    yield return line;
+            yield break;
+        }
+
         if (width <= 0)
         {
             yield return text;
