@@ -126,10 +126,54 @@ public sealed class TuiScroll : TuiWidget
 
     private void Clamp() => Offset = Math.Clamp(Offset, 0, MaxOffset);
 
+    /// <summary>
+    /// Answers in content coordinates, because that is where the child was placed.
+    /// </summary>
+    /// <remarks>
+    /// A scrolled child is arranged at its own full height starting from zero, not at the
+    /// position it appears on screen — so a point has to be converted before the child can
+    /// say whether it covers it. Without this, clicking the fifth visible row of a list
+    /// scrolled halfway down selects the fifth row of the list.
+    /// </remarks>
+    public override TuiWidget? HitTest(int column, int row)
+    {
+        if (!Bounds.Contains(column, row))
+        {
+            return null;
+        }
+
+        return Child?.HitTest(column - Bounds.Left, row - Bounds.Top + Offset) ?? this;
+    }
+
+    /// <summary>The same event, addressed to the content rather than to the screen.</summary>
+    private TuiInputEvent ToContent(TuiInputEvent input)
+    {
+        var mouse = input.Mouse;
+
+        return TuiInputEvent.FromMouse(new TuiMouseEvent(
+            mouse.Action,
+            mouse.Button,
+            mouse.Column - Bounds.Left,
+            mouse.Row - Bounds.Top + Offset,
+            mouse.Shift,
+            mouse.Alt,
+            mouse.Control));
+    }
+
     public override bool OnInput(TuiInputEvent input)
     {
         if (!input.IsKey)
         {
+            // The child sees the click in its own coordinates, and only if it declines
+            // does this become a scroll.
+            if (Child is not null &&
+                input.Mouse.Action == TuiMouseAction.Press &&
+                Bounds.Contains(input.Mouse.Column, input.Mouse.Row) &&
+                Child.OnInput(ToContent(input)))
+            {
+                return true;
+            }
+
             return ScrollWheel(input);
         }
 

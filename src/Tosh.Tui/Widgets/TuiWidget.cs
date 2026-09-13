@@ -128,7 +128,7 @@ public abstract class TuiWidget
     /// Hit testing walks the arrangement instead of each screen remembering where it put
     /// things in fields it updates during rendering.
     /// </remarks>
-    public TuiWidget? HitTest(int column, int row)
+    public virtual TuiWidget? HitTest(int column, int row)
     {
         if (!Bounds.Contains(column, row))
         {

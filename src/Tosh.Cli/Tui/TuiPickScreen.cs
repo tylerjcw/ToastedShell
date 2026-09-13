@@ -1,134 +1,154 @@
-using System.Text;
+using System.Reflection;
 using Tosh.Runtime;
 using Tosh.Tui;
+using Tosh.Tui.Rendering;
 using Tosh.Tui.Requests;
+using Tosh.Tui.Widgets;
 
 namespace Tosh.Cli.Tui;
 
+/// <summary>
+/// The picker behind <c>tui pick</c> and <c>tui filter</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Built from widgets (<c>TUI-0002</c>). The screen owns which items are ticked and what
+/// the search says; the list draws and moves, the scroll container keeps the selection
+/// visible, and the text field owns the search box.
+/// </para>
+/// <para>
+/// Ticks are kept against the unfiltered collection rather than by row, because a row
+/// means something different after every keystroke in the search box — tick two items,
+/// type a letter, and index-based ticks land on whatever took their place.
+/// </para>
+/// </remarks>
 internal sealed class TuiPickScreen : ITuiScreen
 {
     private readonly TuiPickRequest _request;
     private readonly ObjectFormatter? _formatter;
-    private readonly TuiListState<object?> _list = new();
-    private readonly TuiTextInputState _search = new();
-    private readonly HashSet<int> _selectedIndices = new();
-    private IReadOnlyList<object?> _filteredItems;
+    private readonly HashSet<int> _ticked = [];
+    private readonly TuiList _list;
+    private readonly TuiScroll _scrolledList;
+    private readonly TuiTextField _search;
+    private readonly TuiBorder _frame;
+    private readonly TuiTextWidget _footer;
+    private TuiStack _content = new();
+    private TuiFocus _focus;
     private bool _searchActive;
-    private int _headerLines;
-    private int _listPageSize;
-
 
     public TuiPickScreen(TuiPickRequest request, ObjectFormatter? formatter = null)
     {
         _request = request;
         _formatter = formatter;
-        _filteredItems = request.Items;
+
+        _list = new TuiList(request.Items)
+        {
+            MultiSelect = request.MultiSelect,
+            DisplaySelector = FormatItem,
+            IsChecked = item => _ticked.Contains(OriginalIndexOf(item)),
+            CheckedToggled = Toggle,
+            Activated = _ => Commit(),
+        };
+
+        _scrolledList = TuiList.Scrollable(_list);
+
+        _search = new TuiTextField
+        {
+            Placeholder = "type to filter",
+            Changed = _ => ApplyFilter(),
+            Submitted = _ => CloseSearch(keepQuery: true),
+            Cancelled = () => CloseSearch(keepQuery: false),
+        };
+
+        _frame = new TuiBorder { TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold) };
+        _footer = new TuiTextWidget { Style = new TuiStyle(Attributes: TuiTextAttributes.Dim) };
 
         // `tui filter` is this screen with the search bar already open, which is what
         // gives filter a fullscreen mode without a second screen implementation.
         _searchActive = request.StartInSearch;
+        Rebuild();
     }
 
     public TuiScreenOutcome? Outcome { get; private set; }
 
-    public TuiFrame Render(TuiSize size)
+    /// <summary>
+    /// Rebuilds the layout, which changes when the search box opens or closes.
+    /// </summary>
+    private void Rebuild()
     {
-        var sb = new StringBuilder();
-        var width = size.Width;
-        var height = size.Height;
+        // The list sits in a titled box, which is what the separator line and the header
+        // text were approximating before — a border says the same thing and frames the
+        // scrolling region properly.
+        _frame.Child = _scrolledList;
 
-        // Header
-        var title = _request.Prompt ?? "Select an item";
+        var stack = new TuiStack(TuiOrientation.Vertical);
 
-        if (_request.MultiSelect)
-        {
-            title += $" ({_selectedIndices.Count} selected)";
-        }
-
-        sb.AppendLine(title.Length > width ? title[..width] : title);
-
-        // Search bar
         if (_searchActive)
         {
-            var searchLine = $"Search: {_search.RenderWithCursor()}";
-            sb.AppendLine(searchLine.Length > width ? searchLine[..width] : searchLine);
+            stack.Add(
+                new TuiStack(TuiOrientation.Horizontal)
+                    .Add(new TuiTextWidget("Search: "), TuiLength.Auto)
+                    .Add(_search, TuiLength.Star()),
+                TuiLength.Fixed(1));
         }
 
-        sb.AppendLine(new string('─', Math.Min(width, 80)));
+        stack.Add(_frame, TuiLength.Star())
+             .Add(_footer, TuiLength.Fixed(1));
 
-        // List area
-        var headerLines = _searchActive ? 3 : 2;
-        var footerLines = 2;
-        var pageSize = Math.Max(1, height - headerLines - footerLines);
-        _headerLines = headerLines;
-        _listPageSize = pageSize;
-        _list.SetItems(_filteredItems, pageSize);
-        var range = _list.Scroll.GetVisibleRange();
+        _content = stack;
 
-        for (var row = 0; row < range.Length; row++)
+        // Focus is rebuilt with the tree: it walks from a root, and the root changes
+        // when the search box opens or closes.
+        _focus = new TuiFocus(_content);
+        _focus.Focus(_searchActive ? _search : _list);
+    }
+
+    public TuiFrame Render(TuiSize size)
+    {
+        var buffer = new TuiBuffer(size);
+        var bounds = new TuiRect(0, 0, size.Width, size.Height);
+
+        _frame.Title = _request.MultiSelect
+            ? $"{_request.Prompt ?? "Select items"} ({_ticked.Count} selected)"
+            : _request.Prompt ?? "Select an item";
+
+        _footer.Text = _request.MultiSelect
+            ? "Up/Down move   Space toggle   Enter confirm   / search   Esc cancel"
+            : "Up/Down move   Enter select   / search   Esc cancel";
+
+        _content.Measure(TuiConstraints.From(size));
+        _content.Arrange(bounds);
+        _content.Draw(new TuiSurface(buffer, bounds));
+
+        if (_searchActive)
         {
-            var itemIndex = range.Start + row;
-            var item = _filteredItems[itemIndex];
-            var isHighlighted = itemIndex == _list.SelectedIndex;
-            var isSelected = _request.MultiSelect && _selectedIndices.Contains(GetOriginalIndex(item));
-
-            var prefix = isHighlighted ? ">" : " ";
-
-            if (_request.MultiSelect)
-            {
-                prefix += isSelected ? " [x] " : " [ ] ";
-            }
-            else
-            {
-                prefix += " ";
-            }
-
-            var label = FormatItem(item);
-            var line = prefix + label;
-            sb.AppendLine(line.Length > width ? line[..width] : line);
+            // The terminal draws a better caret than a reversed cell does.
+            buffer.Cursor = (_search.Bounds.Left + _search.CaretColumn, _search.Bounds.Top);
         }
 
-        // Footer
-        sb.AppendLine();
-        var help = _request.MultiSelect
-            ? "Up/Down: navigate | Space: toggle | Enter: confirm | /: search | Esc: cancel"
-            : "Up/Down: navigate | Enter: select | /: search | Esc: cancel";
-        sb.Append(help.Length > width ? help[..width] : help);
-
-        return new TuiFrame(sb.ToString());
+        return new TuiFrame(buffer);
     }
 
     public TuiScreenResult HandleInput(TuiInputEvent input)
     {
-        if (input.IsKey)
-            return HandleKey(input.Key);
-
-        var mouse = input.Mouse;
-
-        // Scroll wheel navigates the list
-        if (mouse.Action == TuiMouseAction.Scroll)
+        // In a chooser the wheel moves the choice rather than the view. That is what this
+        // screen has always done, and it is the useful behaviour here: the point of the
+        // screen is to end up on an item, not to read past it.
+        if (!input.IsKey && input.Mouse.Action == TuiMouseAction.Scroll)
         {
-            if (mouse.Button == TuiMouseButton.ScrollUp)
-                _list.MovePrevious();
-            else if (mouse.Button == TuiMouseButton.ScrollDown)
-                _list.MoveNext();
-
+            _list.SelectedIndex += input.Mouse.Button == TuiMouseButton.ScrollUp ? -1 : 1;
             return TuiScreenResult.Continue;
         }
 
-        // Click on a list item to select it
-        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+        // The focused widget gets first refusal; the screen acts only on what it declined.
+        if (_focus.Dispatch(input))
         {
-            var listRow = mouse.Row - _headerLines;
-            var range = _list.Scroll.GetVisibleRange();
+            return Outcome is null ? TuiScreenResult.Continue : TuiScreenResult.Exit;
+        }
 
-            if (listRow >= 0 && listRow < range.Length)
-            {
-                var itemIndex = range.Start + listRow;
-                _list.SelectIndex(itemIndex);
-
-                return TuiScreenResult.Continue;
-            }
+        if (input.IsKey)
+        {
+            return HandleKey(input.Key);
         }
 
         return TuiScreenResult.Continue;
@@ -136,121 +156,101 @@ internal sealed class TuiPickScreen : ITuiScreen
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
     {
-        if (_searchActive)
-        {
-            if (key.Key == ConsoleKey.Escape)
-            {
-                _searchActive = false;
-                _search.SetText(null);
-                _filteredItems = _request.Items;
-                return TuiScreenResult.Continue;
-            }
-
-            if (key.Key == ConsoleKey.Enter)
-            {
-                _searchActive = false;
-                return TuiScreenResult.Continue;
-            }
-
-            _search.HandleKey(key);
-            ApplyFilter();
-            return TuiScreenResult.Continue;
-        }
-
+        // Reached only when nothing in the tree wanted the key — so a letter typed into
+        // the search box never arrives here, and `q` is a shortcut only when it is not
+        // being typed (`TOSH-0011`).
         switch (key.Key)
         {
-            case ConsoleKey.UpArrow:
-                _list.MovePrevious();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.DownArrow:
-                _list.MoveNext();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.PageUp:
-                _list.PageUp();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.PageDown:
-                _list.PageDown();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.Home:
-                _list.Home();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.End:
-                _list.End();
-                return TuiScreenResult.Continue;
-            case ConsoleKey.Spacebar when _request.MultiSelect:
-                ToggleSelection();
-                return TuiScreenResult.Continue;
             case ConsoleKey.Enter:
                 Commit();
                 return TuiScreenResult.Exit;
+
             case ConsoleKey.Escape:
             case ConsoleKey.Q:
-                Cancel();
+                Outcome = new TuiScreenOutcome { Cancelled = true };
                 return TuiScreenResult.Exit;
+
+            case ConsoleKey.Tab:
+                _focus.MoveNext();
+                return TuiScreenResult.Continue;
         }
 
-        if (key.KeyChar == '/')
+        if (key.KeyChar == '/' && !_searchActive)
         {
             _searchActive = true;
-            return TuiScreenResult.Continue;
+            Rebuild();
         }
 
         return TuiScreenResult.Continue;
     }
 
-    private void ToggleSelection()
+    private void CloseSearch(bool keepQuery)
     {
-        if (!_list.TryGetSelected(out var item))
+        _searchActive = false;
+
+        if (!keepQuery)
         {
-            return;
+            _search.Text = string.Empty;
+            ApplyFilter();
         }
 
-        var originalIndex = GetOriginalIndex(item);
+        Rebuild();
+    }
 
-        if (!_selectedIndices.Remove(originalIndex))
+    private void ApplyFilter()
+    {
+        var query = _search.Text.Trim();
+
+        _list.Items = query.Length == 0
+            ? _request.Items
+            : _request.Items.Where(item => FormatItem(item).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+    }
+
+    private void Toggle(object? item)
+    {
+        var index = OriginalIndexOf(item);
+
+        if (index >= 0 && !_ticked.Remove(index))
         {
-            _selectedIndices.Add(originalIndex);
+            _ticked.Add(index);
         }
     }
 
     private void Commit()
     {
-
         if (_request.MultiSelect)
         {
-            var selected = _selectedIndices
-                .OrderBy(i => i)
-                .Select(i => _request.Items[i])
-                .ToArray();
-
             Outcome = new TuiScreenOutcome
             {
-                Selected = selected,
+                Selected = _ticked.OrderBy(index => index).Select(index => _request.Items[index]).ToArray(),
                 Cancelled = false,
             };
+
+            return;
         }
-        else
-        {
-            if (_list.TryGetSelected(out var item))
-            {
-                Outcome = new TuiScreenOutcome
-                {
-                    Selected = [item],
-                    Cancelled = false,
-                };
-            }
-            else
-            {
-                Cancel();
-            }
-        }
+
+        Outcome = _list.SelectedItem is { } selected
+            ? new TuiScreenOutcome { Selected = [selected], Cancelled = false }
+            : new TuiScreenOutcome { Cancelled = true };
     }
 
-    private void Cancel()
+    private int OriginalIndexOf(object? item)
     {
-        Outcome = new TuiScreenOutcome { Cancelled = true };
+        for (var index = 0; index < _request.Items.Count; index += 1)
+        {
+            if (ReferenceEquals(_request.Items[index], item) || Equals(_request.Items[index], item))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
+    /// <summary>
+    /// How an item is labelled: an asked-for property, then the shell's own rendering,
+    /// then a name-like property, then the value itself.
+    /// </summary>
     private string FormatItem(object? item)
     {
         if (item is null)
@@ -258,78 +258,39 @@ internal sealed class TuiPickScreen : ITuiScreen
             return "(null)";
         }
 
-        var type = item.GetType();
-        var flags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase;
-
         if (_request.DisplayProperty is not null)
         {
-            var prop = type.GetProperty(_request.DisplayProperty, flags);
-
-            if (prop is not null)
-            {
-                return prop.GetValue(item)?.ToString() ?? string.Empty;
-            }
+            return TuiList.FormatValue(item, _request.DisplayProperty);
         }
 
-        // Try display profile rendering for known types
-        if (_request.DisplayProperty is null && _formatter is not null)
+        var type = item.GetType();
+
+        if (_formatter is not null)
         {
             var options = new ObjectFormattingOptions(ObjectRenderStyle.Compact);
 
-            if (_formatter.TryRenderProfile(item, options, DisplaySurface.Root, out var text) && !string.IsNullOrWhiteSpace(text))
+            if (_formatter.TryRenderProfile(item, options, DisplaySurface.Root, out var text) &&
+                !string.IsNullOrWhiteSpace(text))
             {
                 return text;
             }
         }
 
-        // For non-primitive types without a display property, try well-known names
-        if (_request.DisplayProperty is null && !type.IsPrimitive && type != typeof(string) && !type.IsEnum)
+        if (!type.IsPrimitive && type != typeof(string) && !type.IsEnum)
         {
-            var label = TryGetPropertyValue(item, type, "Name", flags)
-                     ?? TryGetPropertyValue(item, type, "DisplayName", flags)
-                     ?? TryGetPropertyValue(item, type, "Title", flags)
-                     ?? TryGetPropertyValue(item, type, "Label", flags);
-
-            if (label is not null)
+            foreach (var name in (string[])["Name", "DisplayName", "Title", "Label"])
             {
-                return label;
+                var property = type.GetProperty(
+                    name,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
+                if (property?.GetValue(item)?.ToString() is { } label)
+                {
+                    return label;
+                }
             }
         }
 
         return item.ToString() ?? string.Empty;
-    }
-
-    private static string? TryGetPropertyValue(object item, Type type, string name, System.Reflection.BindingFlags flags)
-    {
-        var prop = type.GetProperty(name, flags);
-        return prop is not null ? prop.GetValue(item)?.ToString() : null;
-    }
-
-    private int GetOriginalIndex(object? item)
-    {
-        for (var i = 0; i < _request.Items.Count; i++)
-        {
-            if (ReferenceEquals(_request.Items[i], item) || Equals(_request.Items[i], item))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private void ApplyFilter()
-    {
-        var query = _search.Text.Trim();
-
-        if (query.Length == 0)
-        {
-            _filteredItems = _request.Items;
-            return;
-        }
-
-        _filteredItems = _request.Items
-            .Where(item => FormatItem(item).Contains(query, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
     }
 }

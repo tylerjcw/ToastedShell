@@ -485,7 +485,7 @@ public sealed class TuiCoreTests
 
         // Re-render and check second item is highlighted
         var frame = screen.Render(new TuiSize(80, 24));
-        Assert.Contains("> beta", frame.Content, StringComparison.Ordinal);
+        Assert.Contains("> beta", GridText(frame), StringComparison.Ordinal);
 
         // Scroll up moves back
         var scrollUp = TuiInputEvent.FromMouse(
@@ -493,7 +493,7 @@ public sealed class TuiCoreTests
         screen.HandleInput(scrollUp);
 
         frame = screen.Render(new TuiSize(80, 24));
-        Assert.Contains("> alpha", frame.Content, StringComparison.Ordinal);
+        Assert.Contains("> alpha", GridText(frame), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -504,16 +504,17 @@ public sealed class TuiCoreTests
             Prompt: "Pick one");
         var screen = new TuiPickScreen(request);
 
-        // Render to initialize _headerLines (title + separator = 2 header lines)
-        screen.Render(new TuiSize(80, 24));
+        // Find where "gamma" was actually drawn rather than assuming a header height:
+        // the layout is the widget tree's business, not this test's.
+        var rendered = screen.Render(new TuiSize(80, 24));
+        var gammaRow = RowOf(rendered, "gamma");
 
-        // Click on row for "gamma" (header=2, so row 2=alpha, 3=beta, 4=gamma)
         var click = TuiInputEvent.FromMouse(
-            new TuiMouseEvent(TuiMouseAction.Press, TuiMouseButton.Left, 5, 4, false, false, false));
+            new TuiMouseEvent(TuiMouseAction.Press, TuiMouseButton.Left, 5, gammaRow, false, false, false));
         screen.HandleInput(click);
 
         var frame = screen.Render(new TuiSize(80, 24));
-        Assert.Contains("> gamma", frame.Content, StringComparison.Ordinal);
+        Assert.Contains("> gamma", GridText(frame), StringComparison.Ordinal);
     }
 
     // ── TuiFilePickerScreen mouse interaction ──
@@ -610,6 +611,30 @@ public sealed class TuiCoreTests
         Assert.Equal(TuiScreenResult.Exit, result);
         Assert.NotNull(screen.Outcome);
         Assert.True(screen.Outcome.Cancelled);
+    }
+
+    /// <summary>The whole rendered grid as plain text, one row per line.</summary>
+    private static string GridText(TuiFrame frame)
+    {
+        Assert.NotNull(frame.Buffer);
+        return string.Join('\n', Enumerable.Range(0, frame.Buffer.Height).Select(frame.Buffer.RowText));
+    }
+
+    /// <summary>The row a piece of text was drawn on.</summary>
+    private static int RowOf(TuiFrame frame, string text)
+    {
+        Assert.NotNull(frame.Buffer);
+
+        for (var row = 0; row < frame.Buffer.Height; row += 1)
+        {
+            if (frame.Buffer.RowText(row).Contains(text, StringComparison.Ordinal))
+            {
+                return row;
+            }
+        }
+
+        Assert.Fail($"'{text}' was not drawn anywhere in the frame.");
+        return -1;
     }
 
     /// <summary>
@@ -755,7 +780,7 @@ public sealed class TuiCoreTests
 
         // Selection should still be on first item
         var frame = screen.Render(new TuiSize(80, 24));
-        Assert.Contains("> alpha", frame.Content, StringComparison.Ordinal);
+        Assert.Contains("> alpha", GridText(frame), StringComparison.Ordinal);
     }
 
     [Fact]

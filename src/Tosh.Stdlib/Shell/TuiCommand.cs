@@ -916,6 +916,15 @@ public sealed class TuiCommand : ShellCommand
             items.Add(item);
         }
 
+        // A pipeline carrying one collection is expanded, exactly as a single collection
+        // argument is. Without this, `["a", "b"] | tui pick` offers one choice reading
+        // "System.String[]": a list is a single pipeline value, so it arrives whole, and
+        // only the argument path had the rule.
+        if (items.Count == 1 && items[0] is System.Collections.IEnumerable pipedCollection and not string)
+        {
+            return pipedCollection.Cast<object?>().ToArray();
+        }
+
         return items;
     }
 
