@@ -104,6 +104,21 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        registry.Register("form", static (spec, context) =>
+        {
+            var children = context.BuildChildren(spec.PrimaryItems());
+
+            var form = new TuiForm(children.Count == 1 ? children[0] : Wrap(children, TuiOrientation.Vertical))
+            {
+                Title = spec.Text("title"),
+            };
+
+            context.OnHandler(spec, "onsubmit", handler => form.Submitted = sender => handler(sender));
+            context.OnHandler(spec, "oncancel", handler => form.Cancelled = sender => handler(sender));
+
+            return form;
+        });
+
         registry.Register("row", static (spec, context) => Stack(spec, context, TuiOrientation.Horizontal));
         registry.Register("column", static (spec, context) => Stack(spec, context, TuiOrientation.Vertical));
 

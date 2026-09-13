@@ -303,7 +303,16 @@ public sealed class TuiList : TuiWidget
                 return true;
 
             case ConsoleKey.Enter:
-                Activated?.Invoke(SelectedItem);
+                // With nothing listening, activation is not this list's business — it
+                // belongs to whatever surrounds it, which is usually a form waiting to be
+                // submitted. Consuming the key regardless would mean Enter did nothing at
+                // all on a screen whose first widget happens to be a list.
+                if (Activated is null)
+                {
+                    return false;
+                }
+
+                Activated(SelectedItem);
                 return true;
 
             default:

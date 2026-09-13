@@ -82,7 +82,11 @@ internal static class TuiRequestDispatcher
                 treeRequest.RefreshInterval);
 
             TuiApplication.Run(new ConsoleTuiHost(), screen);
-            outcomeValues = BuildOutcomeValues(screen.Outcome, treeRequest.ReturnOutcome);
+
+            outcomeValues = screen.HasForm && !treeRequest.ReturnOutcome
+                ? null
+                : BuildOutcomeValues(screen.Outcome, treeRequest.ReturnOutcome);
+
             return true;
         }
 

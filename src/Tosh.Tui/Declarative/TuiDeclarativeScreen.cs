@@ -38,6 +38,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     private readonly IReadOnlyList<TuiBinding> _bindings;
     private readonly Func<IShellCallable, object?, object?>? _invoke;
     private readonly TuiFocus _focus;
+    private readonly TuiForm? _form;
     private readonly string? _title;
     private readonly Action? _tick;
     private TuiBorder? _frame;
@@ -56,15 +57,38 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
         _tick = tick;
         _bindings = bindings;
         _invoke = invoke;
-        _title = title;
+        _form = FindForm(root);
+
+        // A form names its own window, so `tui run $form` needs no `--title`. An explicit
+        // one still wins: the flag is the more specific statement.
+        _title = title ?? _form?.Title;
         RefreshInterval = refreshInterval;
 
-        _root = title is null ? root : _frame = new TuiBorder(root, title)
+        _root = _title is null ? root : _frame = new TuiBorder(root, _title)
         {
             TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold),
         };
 
         _focus = new TuiFocus(_root);
+    }
+
+    /// <summary>The form this screen is showing, if it is showing one.</summary>
+    private static TuiForm? FindForm(TuiWidget widget)
+    {
+        if (widget is TuiForm form)
+        {
+            return form;
+        }
+
+        foreach (var child in widget.Children)
+        {
+            if (FindForm(child) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     /// <inheritdoc />
@@ -73,28 +97,18 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     /// <summary>What the user left in the screen, once it has closed.</summary>
     public TuiScreenOutcome? Outcome { get; private set; }
 
+    /// <summary>
+    /// Whether the tree contains a <see cref="TuiForm"/>, which changes what closing means.
+    /// </summary>
+    /// <remarks>
+    /// A form has already told the script what happened, through its handlers. Yielding the
+    /// widget values a second time would put them on the pipeline behind the script's own
+    /// output, so a caller that wants them still asks with <c>--result</c>.
+    /// </remarks>
+    public bool HasForm => _form is not null;
+
     /// <summary>The current value of every widget that was given an id.</summary>
-    public IDictionary<string, object?> Values()
-    {
-        var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-
-        Collect(_root);
-
-        return values;
-
-        void Collect(TuiWidget widget)
-        {
-            if (widget.Id is { Length: > 0 } id)
-            {
-                values[id] = widget.Value;
-            }
-
-            foreach (var child in widget.Children)
-            {
-                Collect(child);
-            }
-        }
-    }
+    public IDictionary<string, object?> Values() => TuiValues.Collect(_root);
 
     public TuiFrame Render(TuiSize size)
     {
@@ -147,7 +161,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
         // The focused widget first, then its ancestors; the screen acts on what is left.
         if (_focus.Dispatch(input))
         {
-            return Outcome is null ? TuiScreenResult.Continue : TuiScreenResult.Exit;
+            return Closed();
         }
 
         if (!input.IsKey)
@@ -169,21 +183,62 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
 
                 return TuiScreenResult.Continue;
 
-            case ConsoleKey.Enter:
-                Outcome = new TuiScreenOutcome
-                {
-                    Selected = [.. Values().Values],
-                    Cancelled = false,
-                    Values = new Dictionary<string, object?>(Values(), StringComparer.OrdinalIgnoreCase),
-                };
+            // A form owns these keys, and has already been offered them on the way out
+            // from the focused widget. Acting on them again here would submit a form its
+            // own handler had just declined to close.
+            case ConsoleKey.Enter when _form is null:
+                Accept();
                 return TuiScreenResult.Exit;
 
-            case ConsoleKey.Escape:
+            case ConsoleKey.Escape when _form is null:
                 Outcome = new TuiScreenOutcome { Cancelled = true };
                 return TuiScreenResult.Exit;
 
             default:
                 return TuiScreenResult.Continue;
         }
+    }
+
+    /// <summary>
+    /// Ends the screen once the form it is showing has ended.
+    /// </summary>
+    /// <remarks>
+    /// Asked after every dispatched event rather than only after a key, because a form is
+    /// closed by whatever calls <c>Submit</c> — a default button, a list's activation
+    /// handler, a script function reacting to something else entirely.
+    /// </remarks>
+    private TuiScreenResult Closed()
+    {
+        if (Outcome is not null)
+        {
+            return TuiScreenResult.Exit;
+        }
+
+        switch (_form?.Result)
+        {
+            case TuiFormResult.Submitted:
+                Accept();
+                return TuiScreenResult.Exit;
+
+            case TuiFormResult.Cancelled:
+                Outcome = new TuiScreenOutcome { Cancelled = true };
+                return TuiScreenResult.Exit;
+
+            default:
+                return TuiScreenResult.Continue;
+        }
+    }
+
+    /// <summary>Records what every identified widget holds, for a caller that asked for it.</summary>
+    private void Accept()
+    {
+        var values = Values();
+
+        Outcome = new TuiScreenOutcome
+        {
+            Selected = [.. values.Values],
+            Cancelled = false,
+            Values = new Dictionary<string, object?>(values, StringComparer.OrdinalIgnoreCase),
+        };
     }
 }
