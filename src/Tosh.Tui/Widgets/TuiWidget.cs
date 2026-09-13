@@ -85,6 +85,16 @@ public abstract class TuiWidget
     /// <summary>Whether this widget can hold keyboard focus.</summary>
     public virtual bool IsFocusable => false;
 
+    /// <summary>
+    /// Whether this widget currently holds the keyboard. Set by <see cref="TuiFocus"/>.
+    /// </summary>
+    /// <remarks>
+    /// A widget needs this to draw itself — a focused pane with a heavier border, a
+    /// selected button with a marker — and should not otherwise act on it. What happens
+    /// to an event is routing's business, not the widget's.
+    /// </remarks>
+    public bool IsFocused { get; internal set; }
+
     /// <summary>The widget's children, outermost first.</summary>
     public virtual IReadOnlyList<TuiWidget> Children => [];
 

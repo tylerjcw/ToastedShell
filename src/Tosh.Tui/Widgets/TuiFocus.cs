@@ -1,0 +1,206 @@
+namespace Tosh.Tui.Widgets;
+
+/// <summary>
+/// Tracks which widget has the keyboard, and routes input to it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Input used to be handed to a screen, which sorted it out itself, and the order of the
+/// tests inside that method was load-bearing with nothing enforcing it. Both browsers
+/// check the quit key before they check where focus is, so typing <c>q</c> into either
+/// search box quits (<c>TOSH-0011</c>). That is not a slip anyone should be expected to
+/// avoid twice — it is what happens when there is no routing.
+/// </para>
+/// <para>
+/// With routing, the question becomes structural. The focused widget sees an event
+/// first; only if it declines does the event travel outwards to its ancestors and
+/// finally to the screen. A text field consumes printable characters, so a screen-level
+/// shortcut never sees the <c>q</c> someone is typing — without the screen having to know
+/// a text field exists.
+/// </para>
+/// </remarks>
+public sealed class TuiFocus
+{
+    private readonly TuiWidget _root;
+
+    public TuiFocus(TuiWidget root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        _root = root;
+        Focused = Focusable().FirstOrDefault();
+        Apply();
+    }
+
+    /// <summary>The widget currently holding the keyboard, if any.</summary>
+    public TuiWidget? Focused { get; private set; }
+
+    /// <summary>Every focusable widget, in the order they appear in the tree.</summary>
+    public IReadOnlyList<TuiWidget> Focusable()
+    {
+        var found = new List<TuiWidget>();
+        Collect(_root, found);
+        return found;
+
+        static void Collect(TuiWidget widget, List<TuiWidget> into)
+        {
+            if (widget.IsFocusable)
+            {
+                into.Add(widget);
+            }
+
+            foreach (var child in widget.Children)
+            {
+                Collect(child, into);
+            }
+        }
+    }
+
+    /// <summary>Gives the keyboard to a particular widget.</summary>
+    public void Focus(TuiWidget? widget)
+    {
+        Focused = widget;
+        Apply();
+    }
+
+    /// <summary>Moves focus to the next focusable widget, wrapping at the end.</summary>
+    public void MoveNext() => Move(1);
+
+    /// <summary>Moves focus to the previous focusable widget, wrapping at the start.</summary>
+    public void MovePrevious() => Move(-1);
+
+    private void Move(int direction)
+    {
+        var order = Focusable();
+
+        if (order.Count == 0)
+        {
+            Focus(null);
+            return;
+        }
+
+        var current = Focused is null ? -1 : IndexOf(order, Focused);
+        var next = current < 0
+            ? (direction > 0 ? 0 : order.Count - 1)
+            : ((current + direction) % order.Count + order.Count) % order.Count;
+
+        Focus(order[next]);
+    }
+
+    /// <summary>
+    /// Gives the keyboard to the focusable widget under a point, if there is one.
+    /// </summary>
+    /// <remarks>
+    /// A click lands on the deepest widget covering the point, which may not itself take
+    /// focus — clicking the text inside a list should focus the list. So the search walks
+    /// back up from what was hit.
+    /// </remarks>
+    public bool FocusAt(int column, int row)
+    {
+        if (_root.HitTest(column, row) is not { } hit)
+        {
+            return false;
+        }
+
+        foreach (var widget in PathTo(hit).Reverse())
+        {
+            if (widget.IsFocusable)
+            {
+                Focus(widget);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Offers an event to the focused widget, then to each ancestor in turn.
+    /// </summary>
+    /// <returns>Whether anything consumed it.</returns>
+    public bool Dispatch(TuiInputEvent input)
+    {
+        var target = Focused;
+
+        if (!input.IsKey && input.Mouse.Action == TuiMouseAction.Press)
+        {
+            // A click moves focus before it is handled, so the widget clicked is the one
+            // that answers for it.
+            FocusAt(input.Mouse.Column, input.Mouse.Row);
+            target = _root.HitTest(input.Mouse.Column, input.Mouse.Row) ?? Focused;
+        }
+
+        if (target is null)
+        {
+            return _root.OnInput(input);
+        }
+
+        foreach (var widget in PathTo(target).Reverse())
+        {
+            if (widget.OnInput(input))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int IndexOf(IReadOnlyList<TuiWidget> order, TuiWidget target)
+    {
+        for (var index = 0; index < order.Count; index += 1)
+        {
+            if (ReferenceEquals(order[index], target))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>The widgets from the root down to <paramref name="target"/>, inclusive.</summary>
+    private IReadOnlyList<TuiWidget> PathTo(TuiWidget target)
+    {
+        var path = new List<TuiWidget>();
+
+        return Walk(_root, target, path) ? path : [target];
+
+        static bool Walk(TuiWidget widget, TuiWidget target, List<TuiWidget> path)
+        {
+            path.Add(widget);
+
+            if (ReferenceEquals(widget, target))
+            {
+                return true;
+            }
+
+            foreach (var child in widget.Children)
+            {
+                if (Walk(child, target, path))
+                {
+                    return true;
+                }
+            }
+
+            path.RemoveAt(path.Count - 1);
+            return false;
+        }
+    }
+
+    /// <summary>Marks exactly one widget as focused, so it can draw itself that way.</summary>
+    private void Apply()
+    {
+        Mark(_root);
+
+        void Mark(TuiWidget widget)
+        {
+            widget.IsFocused = ReferenceEquals(widget, Focused);
+
+            foreach (var child in widget.Children)
+            {
+                Mark(child);
+            }
+        }
+    }
+}

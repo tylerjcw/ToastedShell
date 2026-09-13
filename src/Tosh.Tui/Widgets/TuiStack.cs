@@ -175,17 +175,4 @@ public sealed class TuiStack : TuiWidget
             child.Draw(surface.Clip(child.Bounds.Offset(-Bounds.Left, -Bounds.Top)));
         }
     }
-
-    public override bool OnInput(TuiInputEvent input)
-    {
-        foreach (var (child, _) in _children)
-        {
-            if (child.OnInput(input))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

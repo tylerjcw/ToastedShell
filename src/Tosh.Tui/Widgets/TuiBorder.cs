@@ -120,8 +120,6 @@ public sealed class TuiBorder : TuiWidget
         var used = surface.DrawText(2, 0, text, TitleStyle);
         surface.DrawText(2 + used, 0, " ", Style);
     }
-
-    public override bool OnInput(TuiInputEvent input) => Child?.OnInput(input) ?? false;
 }
 
 /// <summary>The glyphs a box is drawn with.</summary>

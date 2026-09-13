@@ -226,23 +226,18 @@ public sealed class TuiWidgetTests
     // ── input ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Input_stops_at_the_first_child_that_consumes_it()
+    public void A_container_does_not_hand_input_to_its_children()
     {
-        var first = new ConsumingWidget(consume: false);
-        var second = new ConsumingWidget(consume: true);
-        var third = new ConsumingWidget(consume: true);
-
-        var stack = new TuiStack()
-            .Add(first, TuiLength.Fixed(1))
-            .Add(second, TuiLength.Fixed(1))
-            .Add(third, TuiLength.Fixed(1));
+        // Containers used to offer every event to every child in turn, which let an
+        // unfocused widget consume something meant for the focused one. Delivery is
+        // TuiFocus's job now; a container answers only for itself.
+        var child = new ConsumingWidget(consume: true);
+        var stack = new TuiStack().Add(child, TuiLength.Fixed(1));
 
         var handled = stack.OnInput(TuiInputEvent.FromKey(new ConsoleKeyInfo('q', ConsoleKey.Q, false, false, false)));
 
-        Assert.True(handled);
-        Assert.True(first.Saw);
-        Assert.True(second.Saw);
-        Assert.False(third.Saw);
+        Assert.False(handled);
+        Assert.False(child.Saw);
     }
 
     private sealed class ConsumingWidget(bool consume) : TuiWidget

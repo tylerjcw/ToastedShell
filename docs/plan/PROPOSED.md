@@ -32,7 +32,6 @@
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0101`](items/TOAST-0101.md) | P3 | proposed | 0/5 | A pipeline into a user function does not bind to a parameter, and the arity error misdescribes why |
 | [`TOAST-0103`](items/TOAST-0103.md) | P3 | proposed | 0/5 | unfold cannot terminate: returning null raises instead of ending the sequence |
-| [`TUI-0007`](items/TUI-0007.md) | P3 | proposed | 0/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
 | [`TOAST-0133`](items/TOAST-0133.md) | P3 | proposed | 0/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
@@ -58,7 +57,6 @@
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
-| [`TUI-0006`](items/TUI-0006.md) | P2 | proposed | 0/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | proposed | — | Reverse/static operator hooks |
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
