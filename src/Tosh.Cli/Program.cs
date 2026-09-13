@@ -12,6 +12,7 @@ ConfigureConsoleEncoding();
 var runtime = ToshRuntime.CreateDefault(Console.Out, Console.Error);
 runtime.InlinePrompts = new ConsoleInlinePromptProvider(runtime);
 runtime.TuiScreens = new ConsoleTuiScreenRunner(runtime);
+Tosh.Cli.Tui.DisplayEngineColumns.Install(runtime);
 var engine = new ToshEngine(runtime.Language);
 
 // Strip diagnostic-output overrides before resolving the invocation plan so

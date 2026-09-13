@@ -3499,7 +3499,16 @@ public sealed class DisplayEngine
         return renderedLineCount > maxHeight;
     }
 
-    private string FormatTableCellValue(object? value, DisplayRenderOptions options)
+    /// <summary>
+    /// One table cell as the shell prints it.
+    /// </summary>
+    /// <remarks>
+    /// Public because the TUI's table needs the same text, for the same reason it needs the
+    /// same columns: a reader has learned that a file's size reads "133 kB" and its date
+    /// reads "62 minutes ago", and a second renderer showing "132736 B" and a timestamp is
+    /// a second opinion nobody asked for (<c>TUI-0017</c>).
+    /// </remarks>
+    public string FormatTableCellValue(object? value, DisplayRenderOptions options)
     {
         return ApplyValueStyling(FormatTableCellValueCore(value, options));
     }

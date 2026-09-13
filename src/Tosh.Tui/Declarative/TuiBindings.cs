@@ -1,4 +1,5 @@
 using Tosh.Runtime;
+using Tosh.Tui.Rendering;
 using Tosh.Tui.Widgets;
 
 namespace Tosh.Tui.Declarative;
@@ -27,6 +28,8 @@ public static class TuiBindings
             case TuiTextField field: field.ValueSource = source; return;
             case TuiBorder border: border.TitleSource = source; return;
             case TuiList list: list.ItemsSource = source; return;
+            case TuiTable table: table.RowsSource = source; return;
+            case TuiLines lines: lines.LinesSource = source; return;
             case TuiScroll { Child: TuiList scrolled }: scrolled.ItemsSource = source; return;
         }
 
@@ -66,6 +69,19 @@ public static class TuiBindings
 
             case TuiList { ItemsSource: { } source } list:
                 list.Items = AsItems(invoke(source, values));
+                return;
+
+            case TuiTable { RowsSource: { } source } table:
+                table.Rows = AsItems(invoke(source, values));
+                return;
+
+            case TuiLines { LinesSource: { } source } lines:
+                // Plain text or lines already built as spans: a script writing a live log
+                // returns strings, and one that wants colour returns what it drew.
+                lines.Lines = invoke(source, values) is IEnumerable<TuiSpanLine> spans
+                    ? [.. spans]
+                    : [.. AsItems(invoke(source, values))
+                        .Select(line => new TuiSpanLine([new TuiSpan(line?.ToString() ?? string.Empty)]))];
                 break;
         }
 

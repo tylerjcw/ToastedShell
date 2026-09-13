@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 using Tosh.Tui.Widgets;
 
@@ -95,6 +96,26 @@ public sealed class TuiWidgetRegistry
             return widget;
         });
 
+        registry.Register("table", static (spec, context) =>
+        {
+            var table = new TuiTable(spec.PrimaryItems())
+            {
+                ShowHeader = spec.Flag("header", true),
+                Scrollbar = spec.Flag("scrollbar"),
+            };
+
+            // `Columns = ["Name", "Length"]` names them; a record per column says more.
+            if (spec.TryGet("columns", out var declared) && declared is IEnumerable<object?> columns)
+            {
+                table.Columns = [.. columns.Select(ToColumn).Where(column => column is not null)!];
+            }
+
+            context.OnHandler(spec, "onselect", handler => table.Activated = row => handler(row));
+            context.OnHandler(spec, "onchange", handler => table.SelectionChanged = _ => handler(table.SelectedRow));
+
+            return table;
+        });
+
         registry.Register("button", static (spec, context) =>
         {
             var button = new TuiButton(spec.PrimaryText() ?? "OK") { Style = spec.Style() };
@@ -148,6 +169,46 @@ public sealed class TuiWidgetRegistry
         });
 
         return registry;
+    }
+
+    /// <summary>Reads one column of a table, written as a name or as a record.</summary>
+    private static TuiColumn? ToColumn(object? value)
+    {
+        if (value is TuiColumn already)
+        {
+            return already;
+        }
+
+        if (value is string name)
+        {
+            return new TuiColumn(name);
+        }
+
+        if (!ShellRecordUtilities.TryGetValue(value, "Header", out var header) &&
+            !ShellRecordUtilities.TryGetValue(value, "Name", out header))
+        {
+            return null;
+        }
+
+        var column = new TuiColumn(header?.ToString() ?? string.Empty);
+
+        if (ShellRecordUtilities.TryGetValue(value, "Property", out var property) && property is not null)
+        {
+            column.Property = property.ToString();
+        }
+
+        if (ShellRecordUtilities.TryGetValue(value, "Width", out var width) && width is not null)
+        {
+            column.Width = width is int cells ? TuiLength.Fixed(cells) : TuiLength.Parse(width.ToString());
+        }
+
+        if (ShellRecordUtilities.TryGetValue(value, "Align", out var align) &&
+            Enum.TryParse<TuiAlignment>(align?.ToString(), ignoreCase: true, out var alignment))
+        {
+            column.Align = alignment;
+        }
+
+        return column;
     }
 
     private static TuiWidget Stack(TuiWidgetSpec spec, TuiBuildContext context, TuiOrientation orientation)
