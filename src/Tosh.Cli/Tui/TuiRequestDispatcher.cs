@@ -18,24 +18,25 @@ internal static class TuiRequestDispatcher
 
         outcomeValues = null;
 
-        if (values.Count != 1)
+        // The batch may also carry the screens a builder re-yielded on its way here.
+        if (!TuiRequestProbe.TryGetRequest(values, out var value))
         {
             return false;
         }
 
-        if (values[0] is HelpBrowseRequest request)
+        if (value is HelpBrowseRequest request)
         {
             TuiApplication.Run(new ConsoleTuiHost(), new HelpBrowserScreen(runtime, request));
             return true;
         }
 
-        if (values[0] is ConfigBrowseRequest configRequest)
+        if (value is ConfigBrowseRequest configRequest)
         {
             TuiApplication.Run(new ConsoleTuiHost(), new ConfigBrowserScreen(runtime, configRequest));
             return true;
         }
 
-        if (values[0] is TuiPickRequest pickRequest)
+        if (value is TuiPickRequest pickRequest)
         {
             var screen = new TuiPickScreen(pickRequest, runtime.Formatter);
             TuiApplication.Run(new ConsoleTuiHost(), screen);
@@ -43,7 +44,7 @@ internal static class TuiRequestDispatcher
             return true;
         }
 
-        if (values[0] is TuiConfirmRequest confirmRequest)
+        if (value is TuiConfirmRequest confirmRequest)
         {
             var screen = new TuiConfirmScreen(confirmRequest);
             TuiApplication.Run(new ConsoleTuiHost(), screen);
@@ -51,7 +52,7 @@ internal static class TuiRequestDispatcher
             return true;
         }
 
-        if (values[0] is TuiInputRequest inputRequest)
+        if (value is TuiInputRequest inputRequest)
         {
             var screen = new TuiInputScreen(inputRequest);
             TuiApplication.Run(new ConsoleTuiHost(), screen);
@@ -59,7 +60,7 @@ internal static class TuiRequestDispatcher
             return true;
         }
 
-        if (values[0] is TuiFilePickRequest fileRequest)
+        if (value is TuiFilePickRequest fileRequest)
         {
             var screen = new TuiFilePickerScreen(fileRequest);
             TuiApplication.Run(new ConsoleTuiHost(), screen);
@@ -67,7 +68,7 @@ internal static class TuiRequestDispatcher
             return true;
         }
 
-        if (values[0] is TuiRunRequest runRequest)
+        if (value is TuiRunRequest runRequest)
         {
             var screen = new TuiCustomScreen(runRequest);
             TuiApplication.Run(new ConsoleTuiHost(), screen);

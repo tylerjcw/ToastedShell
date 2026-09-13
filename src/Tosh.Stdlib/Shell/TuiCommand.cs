@@ -1000,7 +1000,12 @@ public sealed class TuiCommand : ShellCommand
                 help: "Create a screen first: tui screen | tui add-list ...");
         }
 
-        return (screen, remaining);
+        // Named options are stripped here rather than being left for the caller to
+        // recognise. Each builder pulls its own options out of its own parse of the
+        // arguments, which is a different list from this one — so without this,
+        // `tui add-list --id Types --display Name $items` offered "id", "Types",
+        // "display" and "Name" as things to choose from.
+        return (screen, FilterNamedArguments(remaining, [.. ValueOptionNames]));
     }
 
     private static IReadOnlyList<object?> CollectPositionalItems(IReadOnlyList<object?> positionals)
