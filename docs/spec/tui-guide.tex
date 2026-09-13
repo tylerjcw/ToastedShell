@@ -669,6 +669,59 @@ There is no update code in a screen built this way, because there is nothing to
 keep in step. A live monitor is two pull bindings and \code{-{}-refresh 1s}.
 \end{tipbox}
 
+A binding is asked for everything it produces, not for the last of it. A function
+returning a collection yields its elements one at a time, so a list, a table, a
+document, a sparkline and a bar chart all get the whole thing.
+
+\section{Feeds}
+\label{sec:feeds}
+
+A refresh interval is polling, and polling is right for a \emph{sample}: CPU usage
+is a measurement, not an event. It is the wrong shape for everything else a shell
+shows. A log being tailed, a build emitting lines, a download reporting progress:
+those arrive when they arrive, and polling them means either a short interval that
+burns work re-reading nothing or a long one that lags the event.
+
+A \code{Feed} says where a screen's changes come from:
+
+\begin{lstlisting}
+var log = channel
+
+async {
+    for step in $steps { channel-send $log $step }
+    channel-close $log
+} | ignore
+
+tui run {|
+    Lines = &Done,
+    Feed  = {| Source = $log, Do = &Arrived, OnEnd = &Finished |}
+|}
+\end{lstlisting}
+
+\begin{lstlisting}
+$pane.Feeds = new TuiFeeds()
+$pane.Feeds.From($log, &Arrived, &Finished) | ignore
+\end{lstlisting}
+
+A source is a channel, an async sequence, a task, or any sequence at all. It is
+read on a task of its own, and each value is handed to \code{Do} \emph{on the render
+loop's own thread}, between frames. So a feed handler is written exactly like one
+answering a keystroke: no lock, no thread to think about, nothing half-drawn, and
+a redraw when it returns.
+
+\code{Feed} hangs on the node it belongs to, the way \code{Keys} does, so a screen
+with several panes fed by several sources says so on each of them.
+
+\begin{aside}[What this costs when you are not using it]
+Nothing. A screen with no feed and no interval blocks on the keyboard exactly as it
+always did. Only a screen that has one waits on both, and redraws coalesce --- a
+thousand values arriving between two frames produce one frame, because the signal
+is a flag rather than a count.
+\end{aside}
+
+Interval and feed compose on one screen, and should: the clock in a corner is a
+sample and the log beneath it is not.
+
 % =============================================================================
 \chapter{Events and Forms}
 \label{ch:events}
@@ -935,6 +988,10 @@ Overlay & page, then modal    & Margin \\
 \bottomrule
 \end{longtable}
 \end{center}
+
+\vspace{0.5em}
+\noindent\textbf{\sffamily On every node:} \code{Id}, \code{Size}, \code{Padding},
+\code{Align}, \code{Valign}, \code{Visible}, \code{When}, \code{Keys}, \code{Feed}.
 
 \vspace{1em}
 \noindent\textbf{\sffamily Style keys:} \code{Foreground}, \code{Background},

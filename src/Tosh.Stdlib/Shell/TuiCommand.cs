@@ -550,9 +550,18 @@ public sealed class TuiCommand : ShellCommand
     /// produced.
     /// </summary>
     /// <remarks>
-    /// A pull binding is a function of the screen's state: it is handed the form's
-    /// current values and returns what to show. The last value the function produces is
-    /// the answer, which matches how a function's result reads everywhere else.
+    /// <para>
+    /// A pull binding is a function of the screen's state: it is handed the form's current
+    /// values and returns what to show.
+    /// </para>
+    /// <para>
+    /// Everything it produces is the answer, not the last of it. A function returning a
+    /// collection yields its elements one at a time, so keeping only the last was keeping
+    /// only the last <em>row</em> — which silently broke every binding that carries more
+    /// than one thing: <c>Lines</c>, <c>List</c>, <c>Table</c>, <c>Spark</c> and
+    /// <c>Bars</c> all showed exactly their final element. One value is still that value,
+    /// so a caption or a title reads exactly as it did.
+    /// </para>
     /// </remarks>
     private static Func<IShellCallable, object?, object?> BuildArgumentInvoker(CommandContext context)
         => (callable, argument) =>
@@ -570,14 +579,29 @@ public sealed class TuiCommand : ShellCommand
                 IsPipelined = false,
             };
 
-            object? last = null;
+            object? single = null;
+            List<object?>? produced = null;
+            var count = 0;
+
             var enumerator = callable.InvokeAsync(inner).GetAsyncEnumerator(context.CancellationToken);
 
             try
             {
                 while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
                 {
-                    last = enumerator.Current;
+                    if (count == 0)
+                    {
+                        single = enumerator.Current;
+                    }
+                    else
+                    {
+                        // Only allocated once a second value shows up, because almost every
+                        // binding on almost every screen produces exactly one.
+                        produced ??= [single];
+                        produced.Add(enumerator.Current);
+                    }
+
+                    count += 1;
                 }
             }
             finally
@@ -585,7 +609,7 @@ public sealed class TuiCommand : ShellCommand
                 enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
 
-            return last;
+            return produced is null ? single : produced.ToArray();
         };
 
     /// <summary>

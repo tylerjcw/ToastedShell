@@ -229,6 +229,35 @@ public sealed class TuiMarkupSurfaceTests
     }
 
     [Fact]
+    public void A_source_written_on_a_node_is_registered_on_that_widget()
+    {
+        var arrived = new List<object?>();
+
+        var widget = TuiTreeBuilder.Build(
+            Node(
+                ("Lines", new object?[] { "waiting" }),
+                ("Feed", Node(("Source", new object?[] { 1, 2 }), ("Do", new Pressed(() => arrived.Add(1)))))),
+            registry: null,
+            invoke: (callable, _) => ((Pressed)callable).Fire(),
+            out _);
+
+        var feeds = Assert.IsType<TuiFeeds>(widget.Feeds);
+        var feed = Assert.Single(feeds.Sources);
+
+        Assert.Equal(new object?[] { 1, 2 }, feed.Source);
+
+        feed.Arrived(null);
+
+        Assert.Single(arrived);
+    }
+
+    [Fact]
+    public void A_node_with_no_source_carries_none()
+    {
+        Assert.Null(TuiTreeBuilder.Build(Node(("Text", "plain"))).Feeds);
+    }
+
+    [Fact]
     public void A_scroll_wraps_what_it_is_given()
     {
         var widget = TuiTreeBuilder.Build(Node(("Scroll", new object?[] { "inside" })));

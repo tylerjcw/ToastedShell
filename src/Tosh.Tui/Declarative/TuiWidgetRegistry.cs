@@ -66,6 +66,7 @@ public sealed class TuiWidgetRegistry
             widget.Align = spec.Alignment("align");
             widget.VerticalAlign = spec.VerticalAlignment("valign");
             widget.Keys = ReadKeys(spec, context);
+            widget.Feeds = ReadFeeds(spec, context);
             widget.IsVisible = spec.Flag("visible", true);
             widget.VisibleSource = spec.Callable("when");
 
@@ -74,6 +75,64 @@ public sealed class TuiWidgetRegistry
 
         widget = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Reads the sources a node is fed by.
+    /// </summary>
+    /// <remarks>
+    /// <code>
+    /// Feed = [ {| Source = $lines, Do = &amp;Append, OnEnd = &amp;Finished |} ]
+    /// </code>
+    /// A channel, an async sequence, a task or a plain sequence. Each is read on a task of
+    /// its own and each value is handed to <c>Do</c> on the loop's thread, so the handler
+    /// is written exactly like one answering a keystroke: no lock, no thread to think
+    /// about, and a redraw when it returns.
+    /// </remarks>
+    private static TuiFeeds? ReadFeeds(TuiWidgetSpec spec, TuiBuildContext context)
+    {
+        if (!spec.TryGet("feed", out var declared))
+        {
+            return null;
+        }
+
+        // One source is written as one record rather than a list of one, because that is
+        // what a reader with one source writes.
+        var nodes = declared is IEnumerable<object?> many ? many : [declared];
+
+        var feeds = new TuiFeeds();
+        var any = false;
+
+        foreach (var node in nodes)
+        {
+            if (node is null)
+            {
+                continue;
+            }
+
+            var source = ShellRecordUtilities.TryGetValue(node, "Source", out var from) ? from : null;
+            var handler = ShellRecordUtilities.TryGetValue(node, "Do", out var action)
+                ? action as IShellCallable
+                : null;
+
+            if (handler is null)
+            {
+                continue;
+            }
+
+            var ended = ShellRecordUtilities.TryGetValue(node, "OnEnd", out var finished)
+                ? finished as IShellCallable
+                : null;
+
+            feeds.From(
+                source,
+                value => context.Invoke(handler, value),
+                ended is null ? null : () => context.Invoke(ended, null));
+
+            any = true;
+        }
+
+        return any ? feeds : null;
     }
 
     /// <summary>

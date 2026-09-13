@@ -1,0 +1,80 @@
+#!/bin/tosh
+## @summary A screen fed by a channel, next to one fed by a clock.
+## @remarks
+##   Two kinds of change on one screen, and the difference between them is the point.
+##
+##     the log     arrives when it arrives, so it is a `Feed`
+##     the clock   is a sample of something that is always true, so it is `--refresh`
+##
+##   A feed is read on a task of its own. Each value is handed to `Do` on the render
+##   loop's thread, between frames — so the handler is written exactly like one answering
+##   a keystroke: no lock, nothing half-drawn, and a redraw when it returns.
+##
+##   Nothing polls the channel. With no feed and no interval the loop blocks on the
+##   keyboard and costs nothing; a screen that has one waits on both.
+
+# ── The work being watched ──────────────────────────────────────────────────────
+#
+# Stands in for anything that produces as it goes: a build, a download, a long
+# pipeline, a log being tailed.
+
+var steps = [
+    "resolving dependencies",
+    "restoring packages",
+    "compiling Tosh.Runtime",
+    "compiling Tosh.Language",
+    "compiling Tosh.Tui",
+    "running tests",
+    "packing"
+]
+
+var log = channel
+
+async {
+    for step in $steps {
+        channel-send $log $step
+        sleep 350`ms
+    }
+
+    channel-close $log
+} | ignore
+
+# ── What the screen shows ───────────────────────────────────────────────────────
+
+var done = []
+var finished = false
+
+## @summary Called once per arriving value, on the render loop's thread.
+func Arrived(step) {
+    $done = $done + [$"  {$step}"]
+}
+
+## @summary Called when the source runs out.
+func Ended() {
+    $finished = true
+}
+
+func Lines()    => $done
+func Progress() => $done.Length * 100.0 / $steps.Length
+func Status()   => $finished
+    ? $"  done — {$done.Length} steps   q quit"
+    : $"  {$done.Length}/{$steps.Length}   {(date now).ToString("HH:mm:ss")}   q quit"
+
+# ── The screen ──────────────────────────────────────────────────────────────────
+#
+# `Feed` hangs on the node it belongs to, the way `Keys` does. A screen with several
+# panes fed by several sources says so on each of them.
+
+tui run --refresh 1s --title "build" {|
+    Keys = [ {| Key = "q", Label = "q", Does = "quit", Exit = true |} ],
+    Column = [
+        {|
+            Title = "Log",
+            Size = "*",
+            Box = [ {| Lines = &Lines, Padding = "1 0" |} ],
+            Feed = {| Source = $log, Do = &Arrived, OnEnd = &Ended |}
+        |},
+        {| Gauge = "", Value = &Progress, Size = "1" |},
+        {| Text = &Status, Size = "1" |}
+    ]
+|}

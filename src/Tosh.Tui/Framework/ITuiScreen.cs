@@ -35,4 +35,16 @@ public interface ITuiScreen
     /// can still be replayed frame by frame in a test.
     /// </remarks>
     TuiScreenResult Tick() => TuiScreenResult.Continue;
+
+    /// <summary>
+    /// The way into this screen from another thread, or <see langword="null"/> if nothing
+    /// outside the loop can change it.
+    /// </summary>
+    /// <remarks>
+    /// A screen with sources hands one over and the loop waits on it as well as on the
+    /// keyboard, so a value arriving draws a frame instead of waiting for an interval that
+    /// may not exist (<c>TUI-0008</c>). A screen without one behaves exactly as before: the
+    /// loop blocks on the keyboard and spins for nobody.
+    /// </remarks>
+    TuiWake? Wake => null;
 }

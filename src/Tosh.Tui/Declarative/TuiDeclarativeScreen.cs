@@ -32,7 +32,7 @@ public sealed record TuiBinding(TuiWidget Widget, IShellCallable Source, Action<
 /// "before every redraw" means once per keystroke rather than at a frame rate.
 /// </para>
 /// </remarks>
-public sealed class TuiDeclarativeScreen : ITuiScreen
+public sealed class TuiDeclarativeScreen : ITuiScreen, IDisposable
 {
     private readonly TuiWidget _root;
     private readonly IReadOnlyList<TuiBinding> _bindings;
@@ -41,6 +41,8 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     private readonly TuiForm? _form;
     private readonly string? _title;
     private readonly Action? _tick;
+    private readonly TuiWake? _wake;
+    private readonly List<TuiFeeds> _feeds = [];
     private TuiBorder? _frame;
 
     public TuiDeclarativeScreen(
@@ -68,6 +70,20 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
         {
             TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold),
         };
+
+        // A tree with sources gets a way in from another thread, and one without stays
+        // exactly as it was: the loop blocks on the keyboard rather than waiting in slices.
+        Collect(_root, _feeds);
+
+        if (_feeds.Count > 0)
+        {
+            _wake = new TuiWake();
+
+            foreach (var feeds in _feeds)
+            {
+                feeds.Start(_wake);
+            }
+        }
 
         // Visibility is settled before focus is seated. A widget hidden by `When` is
         // visible until its predicate has been asked, so seating the keyboard first put it
@@ -259,6 +275,32 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
 
             default:
                 return TuiScreenResult.Continue;
+        }
+    }
+
+    /// <inheritdoc />
+    public TuiWake? Wake => _wake;
+
+    /// <summary>Stops reading every source, once the loop that was drawing them has gone.</summary>
+    public void Dispose()
+    {
+        foreach (var feeds in _feeds)
+        {
+            feeds.Stop();
+        }
+    }
+
+    /// <summary>Finds every source hung anywhere on the tree.</summary>
+    private static void Collect(TuiWidget widget, List<TuiFeeds> into)
+    {
+        if (widget.Feeds is { } feeds)
+        {
+            into.Add(feeds);
+        }
+
+        foreach (var child in widget.Children)
+        {
+            Collect(child, into);
         }
     }
 

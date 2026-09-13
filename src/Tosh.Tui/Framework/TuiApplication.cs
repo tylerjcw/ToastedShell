@@ -14,6 +14,18 @@ public static class TuiApplication
     private const string DisableSgrMouse = "\u001b[?1000l\u001b[?1006l";
     private const int MaxInputBurst = 512;
 
+    /// <summary>
+    /// How long the loop waits for a keystroke before looking at anything else.
+    /// </summary>
+    /// <remarks>
+    /// The console gives no way to wait on the keyboard and on something else at once —
+    /// there is no select(2) behind <c>Console.ReadKey</c> — so a screen with a source or
+    /// an interval waits in slices and checks both ends each time round. Short enough that
+    /// an arriving value is on screen before anyone notices, long enough that an idle
+    /// screen is not a busy loop.
+    /// </remarks>
+    private static readonly TimeSpan WaitSlice = TimeSpan.FromMilliseconds(25);
+
     public static void Run(ITuiHost host, ITuiScreen screen)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -44,8 +56,9 @@ public static class TuiApplication
                 presented = frame.Buffer;
 
                 var refresh = screen.RefreshInterval;
+                var wake = screen.Wake;
 
-                if (refresh is null)
+                if (refresh is null && wake is null)
                 {
                     // Nothing changes without the user, so block rather than spin.
                     if (failure.Guard(() => ProcessInputBatch(host, screen, host.ReadInput()))
@@ -57,19 +70,7 @@ public static class TuiApplication
                     continue;
                 }
 
-                if (host.TryReadInput(refresh.Value, out var timedInput))
-                {
-                    if (failure.Guard(() => ProcessInputBatch(host, screen, timedInput))
-                        == TuiScreenResult.Exit)
-                    {
-                        break;
-                    }
-
-                    continue;
-                }
-
-                // The interval elapsed with no input: let the screen re-sample, then redraw.
-                if (failure.Guard(screen.Tick) == TuiScreenResult.Exit)
+                if (WaitForSomething(host, screen, failure, wake, refresh) == TuiScreenResult.Exit)
                 {
                     break;
                 }
@@ -78,6 +79,56 @@ public static class TuiApplication
         finally
         {
             session.Restore();
+
+            // A screen with sources has tasks reading them, and they outlive the loop
+            // unless the screen is told the loop has gone.
+            (screen as IDisposable)?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Waits for whichever comes first: a keystroke, something posted from another thread,
+    /// or the refresh interval elapsing.
+    /// </summary>
+    private static TuiScreenResult WaitForSomething(
+        ITuiHost host,
+        ITuiScreen screen,
+        TuiHandlerFailureReporter failure,
+        TuiWake? wake,
+        TimeSpan? refresh)
+    {
+        var deadline = refresh is { } every
+            ? Environment.TickCount64 + (long)every.TotalMilliseconds
+            : long.MaxValue;
+
+        while (true)
+        {
+            // Asked before the keyboard, because work posted while the last frame was being
+            // drawn is already waiting and should not sit through a slice first.
+            if (wake is not null && wake.TryTake())
+            {
+                return failure.Guard(() =>
+                {
+                    wake.Drain();
+                    return TuiScreenResult.Continue;
+                });
+            }
+
+            var remaining = deadline - Environment.TickCount64;
+
+            if (remaining <= 0)
+            {
+                // The interval elapsed with nothing else happening: let the screen
+                // re-sample, then redraw.
+                return failure.Guard(screen.Tick);
+            }
+
+            var slice = TimeSpan.FromMilliseconds(Math.Min(remaining, (long)WaitSlice.TotalMilliseconds));
+
+            if (host.TryReadInput(slice, out var input))
+            {
+                return failure.Guard(() => ProcessInputBatch(host, screen, input));
+            }
         }
     }
 

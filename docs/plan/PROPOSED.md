@@ -7,7 +7,6 @@
 | [`TOAST-0097`](items/TOAST-0097.md) | P3 | proposed | 0/6 | A type cannot be given a static member from outside, so `Option::from` has nowhere to live |
 | [`TUI-0002`](items/TUI-0002.md) | P1 | proposed | 0/8 | There is no widget contract: widget state cannot draw itself, and layout is four fixed arrangements |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
-| [`TUI-0008`](items/TUI-0008.md) | P2 | proposed | 0/6 | A live screen can only poll on a timer; it cannot be fed by a job, a channel or a pipeline |
 | [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
 | [`TUI-0010`](items/TUI-0010.md) | P1 | proposed | 5/7 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
@@ -43,6 +42,7 @@
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TUI-0025`](items/TUI-0025.md) | P3 | proposed | 0/8 | A TUI cannot show a picture, so a file browser's preview pane is a hex dump or nothing |
+| [`TUI-0027`](items/TUI-0027.md) | P2 | proposed | 0/5 | A function returning a collection yields it whole under the test engine and element by element under the shell |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
 | [`TUI-0023`](items/TUI-0023.md) | P3 | proposed | 0/8 | There is no menu: a command a screen offers is either a key you have to know or a button taking up room |
 | [`TUI-0012`](items/TUI-0012.md) | P3 | proposed | 0/6 | There is no performance budget, so 'fast enough' is a feeling |

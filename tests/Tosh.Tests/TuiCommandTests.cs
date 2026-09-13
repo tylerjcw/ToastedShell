@@ -203,6 +203,60 @@ public sealed class TuiCommandTests
     }
 
     [Fact]
+    public async Task A_binding_that_produces_several_values_answers_with_all_of_them()
+    {
+        // A function returning a collection yields its elements one at a time, and keeping
+        // only the last kept only the last row — so every binding that carries more than
+        // one thing showed its final element and nothing else: Lines, List, Table, Spark
+        // and Bars all did.
+        var produced = await Invoke(new Yielding("alpha", "beta", "gamma"));
+
+        Assert.Equal(["alpha", "beta", "gamma"], Assert.IsAssignableFrom<IEnumerable<object?>>(produced));
+    }
+
+    [Fact]
+    public async Task A_binding_that_produces_one_value_answers_with_the_value()
+    {
+        // Not a one-element collection: a caption is a caption.
+        Assert.Equal("ready", await Invoke(new Yielding("ready")));
+    }
+
+    [Fact]
+    public async Task A_binding_that_produces_nothing_answers_with_nothing()
+    {
+        Assert.Null(await Invoke(new Yielding()));
+    }
+
+    /// <summary>Runs one callable through the invoker `tui run` hands its bindings.</summary>
+    private static async Task<object?> Invoke(IShellCallable source)
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync("tui run {| Text = \"x\" |}");
+        var request = Assert.IsType<TuiTreeRunRequest>(Assert.Single(results));
+
+        return request.Invoke!(source, null);
+    }
+
+    /// <summary>A callable that produces a known number of values, as a pipeline does.</summary>
+    private sealed class Yielding(params object?[] values) : IShellCallable
+    {
+        public string CallableName => "yielding";
+
+        public int RequiredParameterCount => 0;
+
+        public int? MaximumParameterCount => 0;
+
+        public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
+        {
+            foreach (var value in values)
+            {
+                await Task.Yield();
+                yield return value;
+            }
+        }
+    }
+
+    [Fact]
     public async Task Tui_without_subcommand_throws()
     {
         var engine = CreateEngine();

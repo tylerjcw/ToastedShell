@@ -382,6 +382,16 @@ public abstract class TuiWidget
     }
 
     /// <summary>
+    /// What feeds this widget from outside the render loop, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// Hung on the widget the way <see cref="Keys"/> is, and for the same reason: a key is
+    /// a change the reader causes and a feed is one something else does, and both belong
+    /// where the thing they change is written.
+    /// </remarks>
+    public TuiFeeds? Feeds { get; set; }
+
+    /// <summary>
     /// Set by a handler that has decided the screen is over — a dialog's Discard button,
     /// say.
     /// </summary>
