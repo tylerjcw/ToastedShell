@@ -116,7 +116,7 @@ internal sealed partial class ConfigBrowserScreen
                     GetDetailStyle(entry.Kind, theme).ToStyle()),
             ]))];
 
-        _tui.Draw(new TuiSurface(buffer, bounds));
+        _tui.Paint(new TuiSurface(buffer, bounds));
 
         return new TuiFrame(buffer);
     }

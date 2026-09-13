@@ -245,7 +245,7 @@ public sealed class TuiTable : TuiWidget
     private int PageSize => Math.Max(1, Bounds.Height - (ShowHeader ? 1 : 0) - FrameRows);
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var columns = Columns;
 
@@ -257,9 +257,8 @@ public sealed class TuiTable : TuiWidget
     }
 
     /// <inheritdoc />
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
         EnsureVisible();
     }
 

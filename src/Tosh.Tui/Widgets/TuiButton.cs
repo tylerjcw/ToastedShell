@@ -32,7 +32,7 @@ public sealed class TuiButton : TuiWidget
     public override bool IsFocusable => true;
 
     /// <summary>Two cells for the marker, two for the brackets, and the label.</summary>
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
         => constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(Label) + 4, 1));
 
     public override void Draw(TuiSurface surface)

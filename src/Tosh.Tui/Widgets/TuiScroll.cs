@@ -59,7 +59,7 @@ public sealed class TuiScroll : TuiWidget
 
     public override IReadOnlyList<TuiWidget> Children => Child is null ? [] : [Child];
 
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         // The child is measured with no height limit: how tall it wants to be is exactly
         // what decides whether there is anything to scroll.
@@ -71,9 +71,8 @@ public sealed class TuiScroll : TuiWidget
         return constraints.Constrain(desired);
     }
 
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
 
         if (Child is null)
         {

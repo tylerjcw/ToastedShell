@@ -47,7 +47,14 @@ public sealed class TuiWidgetRegistry
         if (_factories.TryGetValue(spec.Name, out var factory))
         {
             widget = factory(spec, context);
+
+            // Read here rather than in each factory, because these belong to every widget.
+            // A key a factory has to remember is a key half the widgets will not have.
             widget.Id = spec.Text("id");
+            widget.Padding = spec.Thickness("padding");
+            widget.Align = spec.Alignment("align");
+            widget.VerticalAlign = spec.VerticalAlignment("valign");
+
             return true;
         }
 

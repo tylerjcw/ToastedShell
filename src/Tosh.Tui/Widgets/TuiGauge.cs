@@ -72,7 +72,7 @@ public sealed class TuiGauge : TuiWidget
         : Math.Clamp((Amount - Minimum) / (Maximum - Minimum), 0, 1);
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
         => constraints.Constrain(new TuiSize(constraints.MaxWidth == int.MaxValue ? 20 : constraints.MaxWidth, 1));
 
     /// <inheritdoc />

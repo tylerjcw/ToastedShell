@@ -116,7 +116,7 @@ internal sealed class TuiPickScreen : ITuiScreen
 
         _content.Measure(TuiConstraints.From(size));
         _content.Arrange(bounds);
-        _content.Draw(new TuiSurface(buffer, bounds));
+        _content.Paint(new TuiSurface(buffer, bounds));
 
         if (_searchActive)
         {

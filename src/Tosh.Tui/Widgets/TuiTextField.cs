@@ -72,7 +72,7 @@ public sealed class TuiTextField : TuiWidget
 
     private string[] Lines => (Mask ? new string('•', Text.Length) : Text).Split('\n');
 
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var lines = Lines;
 

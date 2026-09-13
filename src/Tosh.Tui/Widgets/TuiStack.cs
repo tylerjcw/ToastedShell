@@ -76,7 +76,7 @@ public sealed class TuiStack : TuiWidget
         return this;
     }
 
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var horizontal = Orientation == TuiOrientation.Horizontal;
         var along = 0;
@@ -119,9 +119,8 @@ public sealed class TuiStack : TuiWidget
             : new TuiSize(measured.Width, fixedLength);
     }
 
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
 
         var horizontal = Orientation == TuiOrientation.Horizontal;
         var total = horizontal ? bounds.Width : bounds.Height;
@@ -239,7 +238,7 @@ public sealed class TuiStack : TuiWidget
         foreach (var child in _children)
         {
             // Each child draws into its own region and cannot reach outside it.
-            child.Draw(surface.Clip(child.Bounds.Offset(-Bounds.Left, -Bounds.Top)));
+            DrawChild(child, surface);
         }
     }
 }

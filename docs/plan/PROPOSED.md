@@ -50,7 +50,6 @@
 | [`TOAST-0080`](items/TOAST-0080.md) | P2 | proposed | 0/10 | Resource safety is a runtime convention, so an owned handle can be copied and used after release |
 | [`TUI-0005`](items/TUI-0005.md) | P1 | proposed | 0/6 | Text width is UTF-16 code units, so any wide or combining character misaligns every box |
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
-| [`TUI-0021`](items/TUI-0021.md) | P3 | proposed | 0/5 | A widget cannot be padded or aligned, so spacing is done with blank text |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |

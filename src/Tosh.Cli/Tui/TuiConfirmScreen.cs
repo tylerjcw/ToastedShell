@@ -82,7 +82,7 @@ internal sealed class TuiConfirmScreen : ITuiScreen
             desired.Height);
 
         _dialog.Arrange(bounds);
-        _dialog.Draw(new TuiSurface(buffer, bounds));
+        _dialog.Paint(new TuiSurface(buffer, bounds));
 
         return new TuiFrame(buffer);
     }

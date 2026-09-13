@@ -61,7 +61,7 @@ public sealed class TuiTextWidget : TuiWidget
         }
     } = true;
 
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var lines = LayOut(constraints.MaxWidth);
         var width = lines.Count == 0 ? 0 : lines.Max(TuiTextMeasure.MeasureWidth);

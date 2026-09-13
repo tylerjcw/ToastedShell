@@ -255,6 +255,7 @@ public sealed class RequiredTypeRegistryScopeTests : IDisposable
         var unit = Lowerer.Lower(parse, runtime.Commands, resolveRequiredTypes: true);
 
         Assert.IsType<UserClassType>(unit.Symbols.Single(symbol => symbol.Name == "visible").DeclaredType);
+        Assert.True(unit.Symbols.Single(symbol => symbol.Name == "hidden").DeclaredType.IsDynamic);
         var diagnostic = Assert.Single(TypeChecker.CheckCompileAnnotations(unit, allowDynamic: false));
         Assert.Equal("tosh.compile.implicit_dynamic", diagnostic.Code);
         Assert.Contains("Shared.Outside", diagnostic.Title, StringComparison.Ordinal);
@@ -280,5 +281,45 @@ public sealed class RequiredTypeRegistryScopeTests : IDisposable
         Assert.Same(registry.Types["Renamed.Item"],
             registry.ResolveMember(registry.Types["Renamed.Factory"], "Original.Item", caller));
         Assert.Equal("7", await RunAsync(source + "\n(new Renamed.Factory()).Create().Value"));
+    }
+
+    [Theory]
+    [InlineData(false, 3)]
+    [InlineData(true, 2)]
+    public void Nested_modules_receive_the_same_compile_annotation_audit(bool allowDynamic, int expectedCount)
+    {
+        var parse = ToshParser.Parse("""
+            module Outer {
+                module Inner {
+                    func Unannotated(value) { return $value }
+                    var unknown = new UnprovidedModuleAuditType()
+                }
+            }
+            """);
+        Assert.Empty(parse.Diagnostics);
+        var runtime = ToshRuntime.CreateDefault();
+        var unit = Lowerer.Lower(parse, runtime.Commands, resolveRequiredTypes: true);
+
+        var diagnostics = TypeChecker.CheckCompileAnnotations(unit, allowDynamic);
+        Assert.Equal(expectedCount, diagnostics.Count);
+        Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Code == "tosh.compile.missing_type_annotation"));
+        Assert.Equal(allowDynamic ? 0 : 1, diagnostics.Count(diagnostic => diagnostic.Code == "tosh.compile.implicit_dynamic"));
+    }
+
+    [Theory]
+    [InlineData("<input>")]
+    [InlineData("repl_entry_1")]
+    public void Compiler_module_scopes_retain_ambient_types_for_virtual_sources(string sourceName)
+    {
+        var ambient = ToshParser.Parse("class AmbientProbeType { }");
+        var parse = ToshParser.Parse("""
+            module Client { var value: AmbientProbeType = new AmbientProbeType() }
+            """, sourceName);
+        Assert.Empty(parse.Diagnostics);
+        var runtime = ToshRuntime.CreateDefault();
+        var unit = Lowerer.Lower(parse, runtime.Commands, ambient.Statement, resolveRequiredTypes: true);
+
+        Assert.IsType<UserClassType>(unit.Symbols.Single(symbol => symbol.Name == "value").DeclaredType);
+        Assert.Empty(TypeChecker.CheckCompileAnnotations(unit, allowDynamic: false));
     }
 }

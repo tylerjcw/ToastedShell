@@ -232,7 +232,7 @@ public sealed class TuiTree : TuiWidget
     }
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         EnsureRows();
 
@@ -242,9 +242,8 @@ public sealed class TuiTree : TuiWidget
     }
 
     /// <inheritdoc />
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
         EnsureRows();
         EnsureVisible();
     }

@@ -74,13 +74,12 @@ public sealed class TuiOverlay : TuiWidget
         => Modal is null ? Children : [Modal];
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
         => Content?.Measure(constraints) ?? constraints.Constrain(new TuiSize(0, 0));
 
     /// <inheritdoc />
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
 
         Content?.Arrange(bounds);
         Modal?.Arrange(ModalBounds(bounds));
@@ -89,7 +88,7 @@ public sealed class TuiOverlay : TuiWidget
     /// <inheritdoc />
     public override void Draw(TuiSurface surface)
     {
-        Content?.Draw(surface);
+        DrawChild(Content, surface);
 
         if (Modal is null)
         {

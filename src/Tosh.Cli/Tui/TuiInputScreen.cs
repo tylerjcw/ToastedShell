@@ -75,7 +75,7 @@ internal sealed class TuiInputScreen : ITuiScreen
             desired.Height);
 
         _dialog.Arrange(bounds);
-        _dialog.Draw(new TuiSurface(buffer, bounds));
+        _dialog.Paint(new TuiSurface(buffer, bounds));
 
         buffer.Cursor = (
             _field.Bounds.Left + _field.CaretColumn,

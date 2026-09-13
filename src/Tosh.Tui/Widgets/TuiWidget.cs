@@ -282,8 +282,35 @@ public abstract class TuiWidget
     /// </remarks>
     public TuiLength Size { get; set; } = TuiLength.Auto;
 
-    /// <summary>Where this widget was last placed, in its parent's coordinates.</summary>
+    /// <summary>
+    /// Where this widget draws, in its parent's coordinates.
+    /// </summary>
+    /// <remarks>
+    /// Inside its padding and after its alignment: the area the widget actually paints,
+    /// not the slot its parent handed it. <see cref="Slot"/> is that.
+    /// </remarks>
     public TuiRect Bounds { get; private set; }
+
+    /// <summary>The whole area the parent gave this widget, padding included.</summary>
+    public TuiRect Slot { get; private set; }
+
+    /// <summary>
+    /// Blank cells between this widget's edge and what it draws.
+    /// </summary>
+    /// <remarks>
+    /// A property of every widget rather than a container to wrap one in, which is why
+    /// Lipgloss layouts read as short as they do. Written as <c>Padding = 1</c> or
+    /// <c>Padding = "1 2"</c> — one number for all sides, two for vertical and
+    /// horizontal, four for top, right, bottom, left.
+    /// </remarks>
+    public TuiThickness Padding { get; set; }
+
+    /// <summary>Where this widget sits when it is narrower than the room it was given.</summary>
+    /// <remarks>Stretch by default: almost everything takes the width it is offered.</remarks>
+    public TuiHorizontalAlignment Align { get; set; } = TuiHorizontalAlignment.Stretch;
+
+    /// <summary>Where this widget sits when it is shorter than the room it was given.</summary>
+    public TuiVerticalAlignment VerticalAlign { get; set; } = TuiVerticalAlignment.Stretch;
 
     /// <summary>Whether this widget can hold keyboard focus.</summary>
     public virtual bool IsFocusable => false;
@@ -312,8 +339,33 @@ public abstract class TuiWidget
     /// </remarks>
     public virtual IReadOnlyList<TuiWidget> FocusChildren => Children;
 
-    /// <summary>How much room this widget would like, given what is on offer.</summary>
-    public abstract TuiSize Measure(TuiConstraints constraints);
+    /// <summary>
+    /// How much room this widget would like, given what is on offer.
+    /// </summary>
+    /// <remarks>
+    /// Padding is added here rather than left to each widget, which is the whole reason
+    /// this is not the overridable member: a padded widget that forgets to account for it
+    /// in its own measure is clipped rather than inset, and that is the bug this ships
+    /// with every time it is left to the caller.
+    /// </remarks>
+    public TuiSize Measure(TuiConstraints constraints)
+    {
+        if (Padding.IsEmpty)
+        {
+            return MeasureCore(constraints);
+        }
+
+        var inner = MeasureCore(new TuiConstraints(
+            Reduce(constraints.MaxWidth, Padding.Horizontal),
+            Reduce(constraints.MaxHeight, Padding.Vertical)));
+
+        return constraints.Constrain(new TuiSize(
+            inner.Width + Padding.Horizontal,
+            inner.Height + Padding.Vertical));
+    }
+
+    /// <summary>How much room this widget's own content would like.</summary>
+    protected abstract TuiSize MeasureCore(TuiConstraints constraints);
 
     /// <summary>
     /// Accepts a final position and size, and places any children within it.
@@ -321,10 +373,89 @@ public abstract class TuiWidget
     /// <remarks>
     /// The size given is not always the size asked for. A widget must cope with less.
     /// </remarks>
-    public virtual void Arrange(TuiRect bounds) => Bounds = bounds;
+    public void Arrange(TuiRect slot)
+    {
+        Slot = slot;
+        Bounds = Place(slot);
+        ArrangeCore(Bounds);
+    }
+
+    /// <summary>Places any children inside the area this widget will draw in.</summary>
+    protected virtual void ArrangeCore(TuiRect bounds)
+    {
+    }
+
+    /// <summary>
+    /// Works out where inside its slot this widget actually draws.
+    /// </summary>
+    /// <remarks>
+    /// Padding comes off first and alignment happens inside what is left, so a centred
+    /// widget is centred within its padding rather than being pushed off by it.
+    /// </remarks>
+    private TuiRect Place(TuiRect slot)
+    {
+        var inner = Padding.IsEmpty ? slot : Padding.Deflate(slot);
+
+        if (Align == TuiHorizontalAlignment.Stretch && VerticalAlign == TuiVerticalAlignment.Stretch)
+        {
+            return inner;
+        }
+
+        var wanted = MeasureCore(TuiConstraints.From(new TuiSize(inner.Width, inner.Height)));
+
+        var width = Align == TuiHorizontalAlignment.Stretch ? inner.Width : Math.Min(wanted.Width, inner.Width);
+        var height = VerticalAlign == TuiVerticalAlignment.Stretch ? inner.Height : Math.Min(wanted.Height, inner.Height);
+
+        return new TuiRect(
+            inner.Left + Offset(Align, inner.Width - width),
+            inner.Top + Offset(VerticalAlign, inner.Height - height),
+            width,
+            height);
+    }
+
+    private static int Offset(TuiHorizontalAlignment align, int slack) => align switch
+    {
+        TuiHorizontalAlignment.Center => Math.Max(0, slack / 2),
+        TuiHorizontalAlignment.Right => Math.Max(0, slack),
+        _ => 0,
+    };
+
+    private static int Offset(TuiVerticalAlignment align, int slack) => align switch
+    {
+        TuiVerticalAlignment.Middle => Math.Max(0, slack / 2),
+        TuiVerticalAlignment.Bottom => Math.Max(0, slack),
+        _ => 0,
+    };
+
+    private static int Reduce(int available, int by)
+        => available == int.MaxValue ? int.MaxValue : Math.Max(0, available - by);
 
     /// <summary>Draws onto a surface already clipped to this widget's bounds.</summary>
     public abstract void Draw(TuiSurface surface);
+
+    /// <summary>
+    /// Draws this widget into a surface covering the slot it was arranged in.
+    /// </summary>
+    /// <remarks>
+    /// The way to draw a widget. <see cref="Draw"/> takes a surface already narrowed to
+    /// what the widget paints, which is inside its padding and after its alignment — so a
+    /// caller handing it the whole slot instead gets a widget that ignores both. This is
+    /// the one place that narrowing happens.
+    /// </remarks>
+    public void Paint(TuiSurface slotSurface)
+        => Draw(slotSurface.Clip(Bounds.Offset(-Slot.Left, -Slot.Top)));
+
+    /// <summary>
+    /// Draws a child into the slot it was arranged in.
+    /// </summary>
+    /// <remarks>
+    /// The child's rectangles are in the screen's coordinates and the surface is in this
+    /// widget's, so the offset comes off here. Doing that in one place is what makes a
+    /// child's padding and alignment work in every container rather than in the ones that
+    /// remembered to allow for it.
+    /// </remarks>
+    protected void DrawChild(TuiWidget? child, TuiSurface surface)
+        => child?.Paint(surface.Clip(child.Slot.Offset(-Bounds.Left, -Bounds.Top)));
 
     /// <summary>
     /// Handles an input event, returning whether it was consumed.

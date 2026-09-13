@@ -272,7 +272,7 @@ public sealed class TuiWidgetTests
     {
         public bool Saw { get; private set; }
 
-        public override TuiSize Measure(TuiConstraints constraints) => new(1, 1);
+        protected override TuiSize MeasureCore(TuiConstraints constraints) => new(1, 1);
 
         public override void Draw(TuiSurface surface)
         {

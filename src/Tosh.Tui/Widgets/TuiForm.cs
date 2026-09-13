@@ -132,18 +132,17 @@ public sealed class TuiForm : TuiWidget
     public override IReadOnlyList<TuiWidget> Children => Content is null ? [] : [Content];
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
         => Content?.Measure(constraints) ?? constraints.Constrain(new TuiSize(0, 0));
 
     /// <inheritdoc />
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
         Content?.Arrange(bounds);
     }
 
     /// <inheritdoc />
-    public override void Draw(TuiSurface surface) => Content?.Draw(surface);
+    public override void Draw(TuiSurface surface) => DrawChild(Content, surface);
 
     /// <inheritdoc />
     /// <remarks>

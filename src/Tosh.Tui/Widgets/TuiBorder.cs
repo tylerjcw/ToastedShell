@@ -42,7 +42,7 @@ public sealed class TuiBorder : TuiWidget
 
     public override IReadOnlyList<TuiWidget> Children => Child is null ? [] : [Child];
 
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var inner = Child?.Measure(constraints.Shrink(2, 2)) ?? new TuiSize(0, 0);
         var titleWidth = Title is null ? 0 : TuiTextMeasure.MeasureWidth(Title) + 4;
@@ -52,9 +52,8 @@ public sealed class TuiBorder : TuiWidget
             inner.Height + 2));
     }
 
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
 
         // A box two cells high has no inside; the child gets nothing rather than a
         // negative size.
@@ -96,7 +95,7 @@ public sealed class TuiBorder : TuiWidget
 
         if (Child is not null)
         {
-            Child.Draw(surface.Clip(new TuiRect(1, 1, Math.Max(0, surface.Width - 2), Math.Max(0, surface.Height - 2))));
+            DrawChild(Child, surface);
         }
     }
 

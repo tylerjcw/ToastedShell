@@ -112,13 +112,12 @@ public sealed class TuiField : TuiWidget
 
     public override IReadOnlyList<TuiWidget> Children => [_row];
 
-    public override TuiSize Measure(TuiConstraints constraints) => _row.Measure(constraints);
+    protected override TuiSize MeasureCore(TuiConstraints constraints) => _row.Measure(constraints);
 
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
         _row.Arrange(bounds);
     }
 
-    public override void Draw(TuiSurface surface) => _row.Draw(surface);
+    public override void Draw(TuiSurface surface) => DrawChild(_row, surface);
 }

@@ -118,7 +118,7 @@ internal sealed partial class HelpBrowserScreen
                     GetDetailStyle(entry.Kind, theme).ToStyle()),
             ]))];
 
-        _tree.Draw(new TuiSurface(buffer, bounds));
+        _tree.Paint(new TuiSurface(buffer, bounds));
 
         return new TuiFrame(buffer);
     }

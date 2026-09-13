@@ -124,7 +124,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
 
         _root.Measure(TuiConstraints.From(size));
         _root.Arrange(bounds);
-        _root.Draw(new TuiSurface(buffer, bounds));
+        _root.Paint(new TuiSurface(buffer, bounds));
 
         if (_focus.Focused is TuiTextField field)
         {

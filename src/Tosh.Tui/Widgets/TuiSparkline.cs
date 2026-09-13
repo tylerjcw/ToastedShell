@@ -126,7 +126,7 @@ public sealed class TuiSparkline : TuiWidget
     public override object? Value => _values.Count == 0 ? null : _values[^1];
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
         => constraints.Constrain(new TuiSize(_values.Count, 1));
 
     /// <inheritdoc />

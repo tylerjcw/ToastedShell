@@ -368,6 +368,43 @@ each clamped to its bounds; only then is the remainder shared between the star
 children. The rounding error goes to a star child that can absorb it rather than
 to one pinned at a bound.
 
+\section{Padding and Alignment}
+
+Every widget carries both. They are properties of a widget rather than containers to
+wrap one in, which is why Lipgloss layouts --- the styling half of Bubbletea --- read
+as short as they do.
+
+\begin{lstlisting}
+{| Text = "inset", Padding = 1 |}
+{| Text = "inset", Padding = "1 2" |}
+{| Text = "inset", Padding = "1 2 3 4" |}
+\end{lstlisting}
+
+Written the way CSS writes it: one number for all four sides, two for vertical and
+horizontal, four for top, right, bottom and left in that order.
+
+\begin{lstlisting}
+{| Text = "over here", Align = "center", VAlign = "middle" |}
+\end{lstlisting}
+
+\code{Align} is \code{left}, \code{center}, \code{right} or \code{stretch};
+\code{VAlign} is \code{top}, \code{middle}, \code{bottom} or \code{stretch}.
+Stretch is the default, because almost everything takes the room it is offered.
+
+Alignment happens \emph{inside} the padding, so a centred widget is centred within
+its padding rather than being pushed off by it. A widget knows both rectangles: its
+\code{Slot} is what the parent gave it, and its \code{Bounds} is what it actually
+paints --- inside the padding and after the alignment.
+
+\begin{notebox}[For anyone writing a widget]
+\code{Measure} and \code{Arrange} are not the overridable members; \code{MeasureCore}
+and \code{ArrangeCore} are. Padding is added to the measure and taken off the arrange
+in the base class, because a widget that forgets to account for it is clipped rather
+than inset --- and that is the bug this ships with every time it is left to the widget.
+Draw a widget with \code{Paint}, which narrows the surface to its bounds;
+\code{Draw} takes a surface already narrowed.
+\end{notebox}
+
 % =============================================================================
 \chapter{The Widgets}
 % =============================================================================
@@ -375,8 +412,9 @@ to one pinned at a bound.
 Each widget is given with its markup name, the value that name carries, and the
 keys it reads. Every key is optional unless stated.
 
-Two keys are common to all of them: \code{Id}, the name a widget's value is
-reported under, and \code{Size}, its length.
+Four keys are common to all of them: \code{Id}, the name a widget's value is reported
+under; \code{Size}, its length; and \code{Padding}, \code{Align} and \code{VAlign},
+covered in the previous chapter.
 
 \section{Text and Documents}
 
@@ -858,7 +896,8 @@ Overlay & page, then modal    & Margin \\
 \code{Bold}, \code{Dim}, \code{Italic}, \code{Underline}.
 
 \vspace{0.5em}
-\noindent\textbf{\sffamily Size keys:} see Chapter~3.
+\noindent\textbf{\sffamily Common to every name:} \code{Id}, \code{Size},
+\code{Padding}, \code{Align}, \code{VAlign} --- see Chapter~3.
 
 \begin{notebox}[Adding a widget]
 The registry is open. \code{TuiWidgetRegistry.Register} adds a name, and a widget

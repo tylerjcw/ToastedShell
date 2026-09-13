@@ -92,15 +92,14 @@ public sealed class TuiLines : TuiWidget
     }
 
     /// <inheritdoc />
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
         => constraints.Constrain(new TuiSize(
             _lines.Count == 0 ? 0 : _lines.Max(line => line.Width),
             _lines.Count));
 
     /// <inheritdoc />
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
 
         // The offset is only meaningful against a height, and the height is only known
         // here. Re-clamping on arrange is what keeps a resized pane in range.

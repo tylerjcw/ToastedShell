@@ -175,6 +175,30 @@ public sealed class TuiWidgetSpec
         };
     }
 
+    /// <summary>Reads a key as blank cells on each side.</summary>
+    /// <remarks>
+    /// <c>Padding = 1</c> or <c>Padding = "1 2"</c> — a number for all sides, or the CSS
+    /// spelling, which is the one most readers already know.
+    /// </remarks>
+    public TuiThickness Thickness(string key)
+        => TryGet(key, out var value) && value is not null
+            ? value is int cells ? TuiThickness.All(cells) : TuiThickness.Parse(value.ToString())
+            : TuiThickness.None;
+
+    /// <summary>Reads a key as where a widget sits across its slot.</summary>
+    public TuiHorizontalAlignment Alignment(string key)
+        => TryGet(key, out var value) &&
+           Enum.TryParse<TuiHorizontalAlignment>(value?.ToString(), ignoreCase: true, out var parsed)
+            ? parsed
+            : TuiHorizontalAlignment.Stretch;
+
+    /// <summary>Reads a key as where a widget sits down its slot.</summary>
+    public TuiVerticalAlignment VerticalAlignment(string key)
+        => TryGet(key, out var value) &&
+           Enum.TryParse<TuiVerticalAlignment>(value?.ToString(), ignoreCase: true, out var parsed)
+            ? parsed
+            : TuiVerticalAlignment.Stretch;
+
     /// <summary>Reads the styling keys a node may carry.</summary>
     public TuiStyle Style()
     {

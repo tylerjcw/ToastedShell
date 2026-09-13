@@ -21,7 +21,7 @@ public sealed class TuiFocusTests
     {
         public bool Quit { get; private set; }
 
-        public override TuiSize Measure(TuiConstraints constraints) => new(0, 0);
+        protected override TuiSize MeasureCore(TuiConstraints constraints) => new(0, 0);
 
         public override void Draw(TuiSurface surface)
         {

@@ -216,7 +216,7 @@ public sealed class TuiList : TuiWidget
         return item.ToString() ?? string.Empty;
     }
 
-    public override TuiSize Measure(TuiConstraints constraints)
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var width = 0;
 
@@ -230,9 +230,8 @@ public sealed class TuiList : TuiWidget
         return constraints.Constrain(new TuiSize(width, Items.Count));
     }
 
-    public override void Arrange(TuiRect bounds)
+    protected override void ArrangeCore(TuiRect bounds)
     {
-        base.Arrange(bounds);
         EnsureVisible();
     }
 
