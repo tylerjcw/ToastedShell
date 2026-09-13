@@ -2361,6 +2361,12 @@ StartupNotify=false
         func PdfPath(root: Types.DirectoryPath) -> string =>
             $root | join -p "docs" "spec" "toastscript-spec.pdf"
 
+        ## The TUI guide is a second document in the same directory and the same style.
+        ## Separate because it describes a library rather than the language, and adding
+        ## seven chapters to a 330 KB specification would bury both.
+        func GuidePath(root: Types.DirectoryPath) -> string =>
+            $root | join -p "docs" "spec" "tui-guide.tex"
+
         ## LaTeX is the one dependency the rest of the pipeline does not carry, so
         ## its absence is reported and skipped rather than failing a release that
         ## was not asking for a PDF.
@@ -2436,6 +2442,30 @@ StartupNotify=false
             return true
         }
 
+        ## Built with the same recovery as the specification, and with the same reason:
+        ## a failed LaTeX run poisons its auxiliary files, and the next run then fails
+        ## naming nothing about the edit that caused it.
+        func WriteGuide(root: Types.DirectoryPath) -> bool {
+            if (not HasLatexmk()) { return false }
+
+            var document = GuidePath($root)
+            var job = spawn latexmk -cd -pdf -interaction=nonstopmode $document | wait-for | first
+
+            if ($job.ExitCode != 0) {
+                Helpers.Warn("latexmk failed on the TUI guide; cleaning and retrying once.")
+                spawn latexmk -C -cd $document | wait-for | first | ignore
+
+                var retry = spawn latexmk -cd -pdf -interaction=nonstopmode $document | wait-for | first
+
+                if ($retry.ExitCode != 0) {
+                    throw $"latexmk failed on the TUI guide (exit {$retry.ExitCode}). See docs/spec/tui-guide.log."
+                }
+            }
+
+            Helpers.Ok("TUI guide PDF written: docs/spec/tui-guide.pdf")
+            return true
+        }
+
         func Run(noDiagnostics: bool, noCommands: bool, noPdf: bool) -> Result {
             var root = Helpers.RepoRoot()
 
@@ -2447,6 +2477,7 @@ StartupNotify=false
             if (not $noPdf) {
                 Helpers.Sep("SPEC · PDF")
                 $built = WritePdf($root)
+                WriteGuide($root) | ignore
             }
 
             return new Result(

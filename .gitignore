@@ -60,6 +60,7 @@ docs/spec/ToastScript.pdf
 docs/spec/toastscript-spec.pdf
 docs/spec/command-reference.pdf
 docs/spec/diagnostic-codes.pdf
+docs/spec/tui-guide.pdf
 
 # Scripts are tracked. This was `scripts/*` plus an allowlist naming three files
 # while thirteen existed — the same trap as the docs block above, and it would have

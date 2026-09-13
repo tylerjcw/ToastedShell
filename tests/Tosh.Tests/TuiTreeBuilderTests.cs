@@ -175,7 +175,7 @@ public sealed class TuiTreeBuilderTests
                 ("Tree", "root"),
                 ("Children", Callable(_ => kids)),
                 ("Display", Callable(node => $"<{node}>")),
-                ("Id", Callable(node => $"id:{node}"))),
+                ("Key", Callable(node => $"key:{node}"))),
             registry: null,
             invoke: (callable, argument) => ((FakeCallable)callable).Body(argument),
             out _);

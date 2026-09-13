@@ -1,0 +1,869 @@
+% =============================================================================
+%  The TōSh TUI
+%  Writing Terminal Interfaces from a Script
+% =============================================================================
+%
+%  A companion to the ToastScript Language Specification. The spec describes the
+%  language; this describes one library written in it and for it.
+%
+%  The preamble deliberately mirrors `toastscript-spec.tex` rather than sharing a
+%  file with it. Factoring the two together is worth doing once the second
+%  document has settled; doing it now would mean editing a 330 KB document that
+%  is under active revision, to save a hundred lines.
+% =============================================================================
+\documentclass[11pt,a4paper,twoside,openany]{book}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage[scaled=0.85]{sourcecodepro}
+\usepackage{microtype}
+
+\usepackage[top=2.5cm, bottom=2.3cm, inner=3cm, outer=2.5cm, headheight=20pt]{geometry}
+\usepackage{parskip}
+
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\definecolor{toshblue}{HTML}{2563EB}
+\definecolor{toshteal}{HTML}{0891B2}
+\definecolor{toshorange}{HTML}{EA580C}
+\definecolor{toshgreen}{HTML}{16A34A}
+\definecolor{toshpurple}{HTML}{7C3AED}
+\definecolor{codebg}{HTML}{F8FAFC}
+\definecolor{codeborder}{HTML}{CBD5E1}
+\definecolor{codecomment}{HTML}{6B7280}
+\definecolor{codestring}{HTML}{059669}
+\definecolor{codekeyword}{HTML}{7C3AED}
+\definecolor{coverblue}{HTML}{1E3A5F}
+\definecolor{covergold}{HTML}{D4A843}
+\definecolor{notebg}{HTML}{FEF9C3}
+\definecolor{noteborder}{HTML}{CA8A04}
+\definecolor{tipbg}{HTML}{DCFCE7}
+\definecolor{tipborder}{HTML}{16A34A}
+\definecolor{warnbg}{HTML}{FEE2E2}
+\definecolor{warnborder}{HTML}{DC2626}
+\definecolor{asidebg}{HTML}{EFF6FF}
+\definecolor{asideborder}{HTML}{2563EB}
+
+\usepackage{graphicx}
+\graphicspath{{assets/}}
+
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.5em}
+
+\usepackage{listings}
+\lstdefinelanguage{tosh}{
+  keywords={var,const,func,class,record,struct,interface,trait,union,enum,module,
+            if,else,for,in,where,while,until,switch,case,default,break,continue,
+            return,yield,throw,try,catch,finally,using,new,shy,export,static,prop,
+            as,from,ref,out,sealed,fixed,lazy,proud,public,nameof,get,set,true,
+            false,null,match,when,subcommand,arg,flag},
+  sensitive=true,
+  comment=[l]{\#},
+  morestring=[b]",
+  morestring=[b]',
+  literate={|}{{{\color{toshorange}|}}}1
+           {=>}{{{\color{toshorange}=>}}}2
+           {->}{{{\color{toshorange}->}}}2
+           {..}{{{\color{toshorange}..}}}2
+           {\$}{{{\color{toshblue}\$}}}1
+           {ō}{{\=o}}1
+           {│}{{\textbar}}1
+           {─}{{-}}1
+           {▁}{{\_}}1
+           {█}{{\rule{0.5em}{1ex}}}1
+           {›}{{>}}1
+           {▾}{{v}}1
+           {▸}{{>}}1
+           {—}{{---}}3
+           {–}{{--}}2
+           {…}{{...}}3
+           {•}{{\textbullet}}1
+           {×}{{x}}1
+           {°}{{\textdegree}}1,
+}
+\lstset{
+  language=tosh,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekeyword}\bfseries,
+  commentstyle=\color{codecomment}\itshape,
+  stringstyle=\color{codestring},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeborder},
+  framesep=6pt,
+  xleftmargin=8pt,
+  xrightmargin=8pt,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  aboveskip=\medskipamount,
+  belowskip=\medskipamount,
+}
+\newcommand{\tosh}[1]{\lstinline[language=tosh]{#1}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\usepackage[most]{tcolorbox}
+\newtcolorbox{notebox}[1][Note]{
+  colback=notebg, colframe=noteborder, coltitle=black,
+  fonttitle=\bfseries\sffamily\small, title=#1,
+  boxrule=0.5pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt}
+\newtcolorbox{tipbox}[1][Tip]{
+  colback=tipbg, colframe=tipborder, coltitle=black,
+  fonttitle=\bfseries\sffamily\small, title=#1,
+  boxrule=0.5pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt}
+\newtcolorbox{warnbox}[1][Warning]{
+  colback=warnbg, colframe=warnborder, coltitle=black,
+  fonttitle=\bfseries\sffamily\small, title=#1,
+  boxrule=0.5pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt}
+\newtcolorbox{aside}[1][]{
+  colback=asidebg, colframe=asideborder, coltitle=black,
+  fonttitle=\bfseries\sffamily\small, title=#1,
+  boxrule=0.5pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt}
+
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\sffamily\color{toshblue}}
+  {\chaptertitlename~\thechapter}{18pt}{\Huge}
+\titleformat{\section}
+  {\normalfont\Large\bfseries\sffamily\color{toshblue!90!black}}{\thesection}{1em}{}
+\titleformat{\subsection}
+  {\normalfont\large\bfseries\sffamily\color{toshteal}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries\sffamily\color{toshpurple}}{\thesubsubsection}{1em}{}
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\sffamily\small\leftmark}
+\fancyhead[RO]{\sffamily\small\rightmark}
+\fancyfoot[C]{\sffamily\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\sffamily\small\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+\usepackage[
+  colorlinks=true, linkcolor=toshblue, urlcolor=toshteal,
+  bookmarks=true, bookmarksnumbered=true, pdfstartview=FitH,
+  pdftitle={The T\=oSh TUI}, pdfauthor={The T\=oSh Project},
+  pdfsubject={Terminal Interface Framework Reference},
+  pdfkeywords={tosh, toastscript, tui, terminal, widgets}
+]{hyperref}
+\usepackage{bookmark}
+
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\sloppy
+\hbadness=10000
+\vbadness=10000
+\raggedbottom
+\usepackage{silence}
+\WarningFilter{longtable}{Column widths have changed}
+\WarningFilter{latexfont}{Font shape}
+
+\newenvironment{signature}{%
+  \par\vspace{4pt}%
+  \noindent\textbf{\sffamily\color{toshblue}Signature}\par\nopagebreak
+  \begin{quote}\ttfamily\small
+}{%
+  \end{quote}\vspace{2pt}%
+}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+\centering
+\vspace*{5cm}
+{\sffamily\Huge\bfseries\color{coverblue} The T\=oSh TUI\par}
+\vspace{0.6cm}
+{\sffamily\Large\color{covergold} Writing Terminal Interfaces from a Script\par}
+\vspace{2.5cm}
+{\sffamily\large A companion to the ToastScript Language Specification\par}
+\vfill
+{\sffamily\small The T\=oSh Project\par}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+
+\frontmatter
+\tableofcontents
+
+\mainmatter
+
+% =============================================================================
+\chapter{What This Is}
+% =============================================================================
+
+T\=oSh ships a terminal interface framework, and it is a library rather than a
+feature of the shell. The same widgets that draw \code{help browse} and
+\code{config browse} are the ones a script builds a window out of, and nothing in
+the framework knows it is being driven from a script rather than from C\#.
+
+That is the whole design goal: a T\=oSh script should build a terminal interface
+the way a program builds a GTK or Windows Forms window --- construct objects, set
+properties, answer events, run it --- and should be able to write the same window
+down as a value instead, when keeping the design in its own file is worth more
+than building it a line at a time.
+
+\section{Two Ways to Say the Same Thing}
+
+Every screen in this document can be written twice. The two forms produce the
+same widget tree and are interchangeable; they are not two frameworks, and one is
+not a reduced version of the other.
+
+\subsection{Object style}
+
+Construct widgets, set properties, put them in containers.
+
+\begin{lstlisting}
+using Tosh.Tui.Widgets
+
+var name = new TuiField("Name", "world")
+var form = new TuiForm(name)
+
+$form.Title = "Greeting"
+$form.Submitted = func() { writeline $"Hello, {$name.Text}!" }
+
+tui run $form
+\end{lstlisting}
+
+\subsection{Markup style}
+
+Write the tree down as a record. The first key of each node names the widget; the
+rest are its properties.
+
+\begin{lstlisting}
+tui run {|
+    Form  = [ {| Field = "Name", Id = "name", Value = "world" |} ],
+    Title = "Greeting",
+    OnSubmit = func(form) { writeline $"Hello, {$form.Values.name}!" }
+|}
+\end{lstlisting}
+
+\begin{notebox}[Why records rather than a file format]
+A record literal already nests, already carries a \code{TimeSpan} from
+\tosh{1s} and a callable from \tosh{&func}, and already reports its mistakes
+through the diagnostics a script author knows. A separate markup language would
+be a second parser and a second error reporter, buying none of that. A tree
+written as a value can still be moved into a file of its own and brought back
+with \tosh{source}, which is the reason to write one this way.
+\end{notebox}
+
+\section{Where a Screen Runs}
+
+A full-screen interface needs a terminal. Run a script whose output is a
+terminal --- not a pipeline and not a redirect. The framework takes the alternate
+screen, hides the cursor, enables mouse reporting, and puts all three back when it
+leaves, including when the process is signalled.
+
+\begin{warnbox}
+\tosh{tui run} inside a pipeline has nowhere to draw. The screen is not shown and
+the command reports that it needs a terminal.
+\end{warnbox}
+
+% =============================================================================
+\chapter{Running a Screen}
+% =============================================================================
+
+\section{\texttt{tui run}}
+
+\begin{signature}
+tui run <tree> [--title <text>] [--refresh <duration>] [--result]
+\end{signature}
+
+The tree is a widget built with \tosh{new}, a record literal, or anything
+record-shaped. It may be passed as an argument or piped in; the first value shaped
+like a tree is the one used, so \code{-{}-title} may sit on either side of it.
+
+\begin{itemize}
+  \item \code{-{}-title} draws a titled border around the whole screen. A
+        \code{Form} names its own window, so a form needs no title flag.
+  \item \code{-{}-refresh} redraws on a timer with nobody touching the keyboard.
+        Accepts \tosh{1s}, \code{500ms} or \code{00:00:01}.
+  \item \code{-{}-result} answers with a \code{TuiScreenOutcome} carrying every
+        identified widget's value and whether the screen was cancelled.
+\end{itemize}
+
+A screen containing a \code{Form} emits nothing unless \code{-{}-result} asks: its
+handlers have already said what happened, and putting the values on the pipeline
+behind the script's own output would be noise.
+
+\section{Asking One Question}
+
+The \code{tui} command has a second job, which is asking a question without
+building a screen for it.
+
+\begin{lstlisting}
+var name    = tui input "Project name?" --default demo --cli
+var go      = tui confirm "Deploy now?" --cli
+var chosen  = ls | tui pick --display Name
+var path    = tui file --directory
+var command = help | tui filter
+\end{lstlisting}
+
+\code{-{}-cli} asks at the cursor instead of taking the whole screen, which is what
+a shell prompt usually wants.
+
+% =============================================================================
+\chapter{Layout}
+% =============================================================================
+
+\section{Lengths}
+
+Every widget has a \code{Size}, and a container divides its space according to
+what its children ask for. There are four kinds and any of them may be bounded.
+
+\begin{center}
+\begin{tabular}{@{}>{\ttfamily\small}l L{9.5cm}@{}}
+\toprule
+\textbf{\normalfont\sffamily Spelling} & \textbf{\sffamily Meaning} \\
+\midrule
+auto      & As big as the content. The default. \\
+12        & Exactly twelve cells. \\
+*         & A share of what is left over. \\
+3*        & Three shares of what is left over. \\
+25\%      & A quarter of the whole container. \\
+1/3       & A third of the whole container, exactly. \\
+1/3 24..40 & A third, but never below 24 nor above 40. \\
+* ..40    & A share of the leftovers, capped at 40. \\
+auto 10.. & As big as the content, but at least 10. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{notebox}[A third is not 33\%]
+118 columns by 33/100 is 38, and by 1/3 is 39. Percentages are the readable
+spelling when the number is round; a ratio is the exact one when it is not.
+\end{notebox}
+
+Bounds are what stop a pane being clamped at the call site. Written as a length,
+\code{1/3 24..40} stays a third when the terminal is resized; computed with
+arithmetic and assigned as a fixed size, it stops being a third the moment either
+bound bites.
+
+\section{Rows and Columns}
+
+\begin{lstlisting}
+var panes = new TuiStack(TuiOrientation.Horizontal) {|
+    Gap   = 1,
+    Items = [
+        new TuiBorder($list,   "Items")  {| Size = "1/3 24..40" |},
+        new TuiBorder($detail, "Detail") {| Size = "*"          |}
+    ]
+|}
+\end{lstlisting}
+
+\begin{lstlisting}
+{| Row = [ ... ], Gap = 1 |}
+{| Column = [ ... ] |}
+\end{lstlisting}
+
+Everything with an answer of its own is settled first, in the order written and
+each clamped to its bounds; only then is the remainder shared between the star
+children. The rounding error goes to a star child that can absorb it rather than
+to one pinned at a bound.
+
+% =============================================================================
+\chapter{The Widgets}
+% =============================================================================
+
+Each widget is given with its markup name, the value that name carries, and the
+keys it reads. Every key is optional unless stated.
+
+Two keys are common to all of them: \code{Id}, the name a widget's value is
+reported under, and \code{Size}, its length.
+
+\section{Text and Documents}
+
+\subsection{\texttt{Text} --- wrapped prose}
+
+\begin{lstlisting}
+{| Text = "some words", Wrap = true, Bold = true, Foreground = "cyan" |}
+\end{lstlisting}
+
+Wraps to the width it is given, keeping the line breaks the author wrote. Set
+\code{Wrap = false} to clip instead.
+
+\subsection{\texttt{Lines} --- a document that scrolls itself}
+
+\begin{lstlisting}
+{| Lines = ["first", "second", "third"], Scrollbar = true |}
+\end{lstlisting}
+
+Lines as written, no wrapping, keeping its own offset. Only the visible rows are
+drawn, so a thousand-line page costs the rows on screen rather than a
+thousand-row buffer. Arrow keys, \code{Page Up}, \code{Page Down}, \code{Home},
+\code{End} and the wheel move it.
+
+\begin{tipbox}
+\code{Text} is a paragraph; \code{Lines} is a document. Use \code{Lines} for a
+log, a help page, a diff --- anything where the line breaks are the author's and
+not the terminal's.
+\end{tipbox}
+
+\section{Choosing}
+
+\subsection{\texttt{List} --- one column of items}
+
+\begin{lstlisting}
+{| List = $items, Display = "Name", Multi = false,
+   OnChange = &Selected, OnSelect = &Opened |}
+\end{lstlisting}
+
+\code{Display} names a property to show instead of the item itself, and works on
+shell records as well as CLR objects. \code{Multi} turns on ticks, toggled with
+\code{Space}. The list keeps its selection in view and scrolls itself.
+
+\subsection{\texttt{Table} --- rows of objects in columns}
+
+\begin{lstlisting}
+{| Table = (ls | collect), Borders = "all", Header = true, Scrollbar = true |}
+\end{lstlisting}
+
+With no \code{Columns}, the columns are taken from the first row --- and from the
+shell's own idea of what is worth showing, so \tosh{ls | tui table} shows the four
+columns \tosh{ls} shows at the prompt, with the same alignment and the same cell
+text.
+
+\begin{lstlisting}
+{| Table = $rows, Columns = [
+      "Name",
+      {| Header = "Size", Property = "Length", Align = "right", Width = "12" |}
+   ] |}
+\end{lstlisting}
+
+\code{Borders} is \code{"none"}, \code{"header"} or \code{"all"}; a bare
+\tosh{true} means the full grid. None by default, because a table inside a
+\code{Box} already has an outline.
+
+\subsection{\texttt{Tree} --- anything with children}
+
+\begin{lstlisting}
+{| Tree = $root, Children = &Kids, Display = &Label, Key = &Path, Root = true |}
+\end{lstlisting}
+
+\code{Children} is asked of a node when it opens, not when the tree is built. A
+visible closed node is asked whether it has a \emph{first} child, which is what
+tells a leaf from an unopened branch.
+
+\code{Key} is a node's stable identity, and expansion is remembered against it ---
+so a tree rebuilt from fresh objects keeps what the reader had open. \code{Right}
+opens and then steps in, \code{Left} closes and then steps out, \code{Enter}
+toggles a branch and activates a leaf.
+
+\begin{warnbox}
+\code{Key} is not \code{Id}. \code{Id} is the name a widget's value is reported
+under; \code{Key} is how a \emph{node} is identified. A tree needs both.
+\end{warnbox}
+
+\section{Input}
+
+\subsection{\texttt{Field} --- a caption and an input on one row}
+
+\begin{lstlisting}
+{| Field = "Width", Id = "width", Value = "80",
+   Placeholder = "columns", Password = false, Multiline = false,
+   OnChange = &Typed, OnSubmit = &Entered |}
+\end{lstlisting}
+
+The caption is not focusable and the input is, so the keyboard lands on the input
+without anything having to say so. The row answers with what its input holds, so
+an \code{Id} on the field is the id its text is reported under.
+
+\subsection{\texttt{Button}}
+
+\begin{lstlisting}
+{| Button = "Save", OnPress = &Save |}
+\end{lstlisting}
+
+\section{Containers}
+
+\subsection{\texttt{Box} --- a titled border}
+
+\begin{lstlisting}
+{| Box = [ {| Text = "inside" |} ], Title = "Details" |}
+\end{lstlisting}
+
+\subsection{\texttt{Row} and \texttt{Column}}
+
+\begin{lstlisting}
+{| Row = [ ... ], Gap = 1 |}
+\end{lstlisting}
+
+\subsection{\texttt{Scroll}}
+
+A window onto a child taller than the space available. A list, a table, a tree and
+a document all scroll themselves; this is for everything else.
+
+\subsection{\texttt{Form} --- a window with a way in and a way out}
+
+\begin{lstlisting}
+{| Form = [ ... ], Title = "Edit", OnSubmit = &Apply, OnCancel = &Bail |}
+\end{lstlisting}
+
+Covered in full in Chapter~\ref{ch:events}.
+
+\subsection{\texttt{Overlay} --- one thing on top of another}
+
+\begin{lstlisting}
+{| Overlay = [ $page, $dialog ], Margin = 4 |}
+\end{lstlisting}
+
+The first child is the page; the second sits on top of it. While something is on
+top it is the only thing the keyboard and the mouse can reach, and the content
+beneath keeps drawing and stops responding --- which is what \emph{modal} means.
+
+\section{Charts}
+
+\subsection{\texttt{Gauge} --- how far along}
+
+\begin{lstlisting}
+{| Gauge = null, Value = 42, Min = 0, Max = 100, Label = "" |}
+\end{lstlisting}
+
+The label is drawn over the bar, so a gauge is one row however long its caption
+is. \code{Label} unset shows the percentage; an empty label shows nothing.
+
+\subsection{\texttt{Spark} --- a series in one row}
+
+\begin{lstlisting}
+{| Spark = $samples, Scale = 100, Capacity = 240, Pad = true |}
+\end{lstlisting}
+
+The chart is a window onto the \emph{tail} of the series, so a monitor pushes
+samples forever and the widget draws the last however-many fit.
+
+\begin{notebox}[\texttt{Scale} is the one to know about]
+\code{Scale} is the lowest the top of the chart will go. Set it to 100 for a
+percentage. Without it, a quiet series of 1--2--1--2 scales to its own maximum and
+draws as a mountain range, which is precisely the reading a monitor must not give.
+\end{notebox}
+
+% =============================================================================
+\chapter{Values and Bindings}
+% =============================================================================
+
+\section{Identifying a Widget}
+
+A widget with an \code{Id} reports its value. A form collects them, and
+\code{-{}-result} hands them back.
+
+\begin{lstlisting}
+$form.Values.Width        # from inside a handler
+$answers.Values["Width"]  # from a --result outcome
+\end{lstlisting}
+
+\section{Pull Bindings}
+
+A property set to a function is a \emph{question} rather than a value. It is asked
+again before every redraw, and a keystroke or a refresh tick is what causes one.
+
+\begin{lstlisting}
+var preview = new TuiTextWidget()
+$preview.TextSource = &Summary
+\end{lstlisting}
+
+\begin{lstlisting}
+{| Text = &Summary |}
+\end{lstlisting}
+
+In markup the binding is written by putting a function reference where a value
+would go; the framework notices that a callable is not content.
+
+A binding is handed the form's current values as a record, so a pane that follows
+another widget is a function of the screen's state rather than something that has
+to go looking for it:
+
+\begin{lstlisting}
+func Summary(values) {
+    return $"{$values.Width} x {$values.Height}"
+}
+\end{lstlisting}
+
+The bindable properties are \code{TextSource} on text, \code{ValueSource} on an
+input, \code{ItemsSource} on a list, \code{RowsSource} on a table,
+\code{LinesSource} on a document, \code{ValuesSource} on a sparkline,
+\code{AmountSource} on a gauge, and \code{TitleSource} on a border.
+
+\begin{tipbox}
+There is no update code in a screen built this way, because there is nothing to
+keep in step. A live monitor is two pull bindings and \code{-{}-refresh 1s}.
+\end{tipbox}
+
+% =============================================================================
+\chapter{Events and Forms}
+\label{ch:events}
+% =============================================================================
+
+\section{Handlers}
+
+A script function assigned where a handler is wanted becomes one. This is a
+language feature rather than a TUI one: a function knows which engine defined it,
+so it can be handed to any .NET type that expects a delegate.
+
+\begin{lstlisting}
+$field.Changed = func(text) { writeline $"now: {$text}" }
+$field.Changed = &Remember
+$button.Pressed = func() { $saved = true }
+\end{lstlisting}
+
+A handler that ignores its arguments need not declare them. A handler that must
+produce a value has what it produced converted rather than cast, so returning
+\tosh{1} where a \code{double} is wanted is not a mistake.
+
+\section{Forms}
+
+A form is a window with a way in and a way out. It owns \code{Enter} and
+\code{Escape}, runs its handler while the widgets still exist, and reports how it
+ended so a script does not have to infer it.
+
+\begin{lstlisting}
+var width = new TuiField("Width", "2")
+var form  = new TuiForm(width) {| Title = "New block" |}
+
+$form.Submitted = func() { $blockWidth = Whole($width.Text, 2) }
+
+tui run $form
+
+if ($form.WasCancelled) { throw "Cancelled." }
+\end{lstlisting}
+
+Handlers are handed the form, the way a Windows Forms event is handed its sender.
+A handler holding the widgets in variables ignores it; one built from markup does
+not have them and reads \code{\$form.Values.Width} instead.
+
+\subsection{Changing its mind}
+
+\code{KeepOpen} is \code{FormClosing} with \code{e.Cancel}. The result is set
+before a handler runs, so a handler can read how the form ended and decide that it
+has not:
+
+\begin{lstlisting}
+$form.Cancelled = func() {
+    $overlay.Modal = $confirm
+    $form.KeepOpen()
+}
+\end{lstlisting}
+
+\subsection{Keys travel outwards}
+
+\code{Enter} and \code{Escape} reach a form only after the focused widget and
+everything between have declined them --- so a multi-line field keeps its
+newlines, and a list with an activation handler keeps its \code{Enter}.
+
+% =============================================================================
+\chapter{Input and Focus}
+% =============================================================================
+
+\section{Routing}
+
+The focused widget sees an event first. If it declines, the event travels outwards
+to its ancestors, and finally to the screen. A text field consumes printable
+characters, so a screen-level shortcut never sees the \code{q} someone is typing
+into a search box --- without the screen having to know a text field exists.
+
+\begin{aside}[Why this is structural]
+Both browsers once checked their quit key before they checked where focus was, so
+\code{q} closed the window mid-search. That is what happens when a shortcut is a
+line of code in the middle of a method: whether it fires depends on where the line
+sits rather than on what it means.
+\end{aside}
+
+\section{Focus Scopes}
+
+An overlay showing something modal answers with that alone when asked what the
+keyboard may reach. \code{Tab} cannot step behind a dialog, and a click aimed past
+one is swallowed rather than landing on a widget the reader cannot currently use.
+
+When a handler puts a dialog up, the keyboard moves into it; when the dialog
+closes, it moves back. Only a widget that has gone out of reach is re-seated ---
+nothing focused is a state a screen can ask for.
+
+\section{Shortcuts}
+
+Screen-level keys belong in a table, asked once after the focused widget has
+declined:
+
+\begin{lstlisting}
+var keys = new TuiShortcuts()
+$keys.On('/', "/", "search", func() { $focus = "search" })
+$keys.Exit(ConsoleKey.Q, "q", "quit")
+\end{lstlisting}
+
+Each binding carries the label and description a footer would print, and
+\code{Describe()} builds that footer --- so the help line cannot claim a key that
+does not work.
+
+\begin{warnbox}[Match punctuation on the character]
+.NET reports \code{ConsoleKey.Divide} for \code{/} on a real terminal, and
+\code{ConsoleKey.None} for \code{[} and \code{]}. A shortcut written against
+\code{Oem2} never fires. Register the character the reader actually pressed.
+\end{warnbox}
+
+% =============================================================================
+\chapter{Styling}
+% =============================================================================
+
+\section{A Style}
+
+\begin{lstlisting}
+using Tosh.Tui.Rendering
+
+var warn = new TuiStyle("red", null, TuiTextAttributes.Bold)
+\end{lstlisting}
+
+In markup a style is written as keys on the node itself:
+
+\begin{lstlisting}
+{| Text = "careful", Foreground = "red", Bold = true, Dim = false |}
+\end{lstlisting}
+
+The keys are \code{Foreground}, \code{Background}, \code{Bold}, \code{Dim},
+\code{Italic} and \code{Underline}.
+
+\section{Styled Runs}
+
+A row is rarely one style all the way across. A \code{TuiSpanLine} is a row of
+\code{TuiSpan} --- text and a style --- and it is what a list or a document draws
+when one style per row is not enough.
+
+\begin{lstlisting}
+var line = new TuiSpanLine()
+$line.Add("› ", $gutter)
+$line.Add("grep", $bold)
+$line.Add("  [BuiltIn]", $dim)
+\end{lstlisting}
+
+\code{SpanSelector} on a list and \code{LineSelector} on a tree hand a caller the
+row and take one of these back. Given either, the widget draws no marker of its
+own: a row that says how to draw itself draws itself entirely.
+
+\section{Following the Theme}
+
+A screen that should look like the rest of the shell reads the user's
+configuration:
+
+\begin{lstlisting}
+using Tosh.Tui.Rendering
+
+var theme = $tosh.Config.Theme.Tui
+$border.Style = $theme.Border.ToStyle()
+\end{lstlisting}
+
+% =============================================================================
+\chapter{A Worked Example}
+% =============================================================================
+
+A live system monitor: a list of processes on the left, meters and a summary on
+the right, redrawn once a second with no update code.
+
+\begin{lstlisting}
+using Tosh.Tui.Widgets = Tui
+using Tosh.Tui.Rendering
+
+var cpuGauge = new Tui.TuiGauge()     {| Label = "", Size = "2*" |}
+var cpuSpark = new Tui.TuiSparkline() {| MinimumScale = 100, Capacity = 240, Size = "3*" |}
+
+func Heat(value: double, ratio: double) -> TuiStyle {
+    if ($ratio >= 0.75) { return new TuiStyle("red") }
+    if ($ratio >= 0.40) { return new TuiStyle("yellow") }
+    return new TuiStyle("cyan")
+}
+
+$cpuSpark.StyleSelector = &Heat
+
+## Asked once per redraw, which is the cadence a chart wants — so the sampling
+## happens here and the meters are fed from it.
+func Summary() {
+    var load = $cpu.Sample()
+
+    $cpuGauge.Amount = $load
+    $cpuSpark.Push($load)
+
+    return $"Load {$load.ToString("F1")} %"
+}
+
+var screen = new Tui.TuiStack(Tui.TuiOrientation.Horizontal) {|
+    Items = [
+        new Tui.TuiBorder(
+            new Tui.TuiList() {| DisplayProperty = "Name", ItemsSource = &TopProcesses |},
+            "Processes") {| Size = "2*" |},
+
+        new Tui.TuiBorder(
+            new Tui.TuiStack(Tui.TuiOrientation.Vertical) {|
+                Items = [
+                    $cpuGauge,
+                    $cpuSpark,
+                    new Tui.TuiTextWidget() {| TextSource = &Summary, Size = "*" |}
+                ]
+            |},
+            "System") {| Size = "3*" |}
+    ]
+|}
+
+tui run $screen --title "System Monitor" --refresh 1s
+\end{lstlisting}
+
+The full version ships as \code{examples/system-monitor.tosh}. Its companion,
+\code{examples/reactor-block.tosh}, is a form with a live preview, and
+\code{examples/reactor-block-markup.tosh} is the same screen written as markup ---
+the two are identical outside the form, so the difference between the styles is
+all that separates them.
+
+% =============================================================================
+\appendix
+\chapter{Markup Reference}
+% =============================================================================
+
+Every markup name, what its own key carries, and the keys it reads. \code{Id} and
+\code{Size} are read by all of them.
+
+\begin{center}
+\small
+\begin{longtable}{@{}>{\ttfamily}l >{\ttfamily\footnotesize}L{3.6cm} >{\ttfamily\footnotesize}L{6.4cm}@{}}
+\toprule
+\textbf{\normalfont\sffamily Name} & \textbf{\normalfont\sffamily Carries} & \textbf{\normalfont\sffamily Keys} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{\normalfont\sffamily Name} & \textbf{\normalfont\sffamily Carries} & \textbf{\normalfont\sffamily Keys} \\
+\midrule
+\endhead
+Text    & the text            & Wrap, + style \\
+Lines   & the lines           & Scrollbar, + style \\
+List    & the items           & Display, Multi, OnChange, OnSelect, + style \\
+Table   & the rows            & Columns, Borders, Header, Scrollbar, OnChange, OnSelect \\
+Tree    & the root            & Children, Display, Key, Root, Scrollbar, OnChange, OnSelect \\
+Field   & the caption         & Value, Placeholder, Password, Multiline, OnChange, OnSubmit \\
+Button  & the label           & OnPress, + style \\
+Gauge   & ---                 & Value, Min, Max, Label, + style \\
+Spark   & the series          & Scale, Capacity, Pad, + style \\
+Row     & the children        & Gap \\
+Column  & the children        & Gap \\
+Box     & the children        & Title, + style \\
+Scroll  & the child           & --- \\
+Form    & the children        & Title, OnSubmit, OnCancel \\
+Overlay & page, then modal    & Margin \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\vspace{1em}
+\noindent\textbf{\sffamily Style keys:} \code{Foreground}, \code{Background},
+\code{Bold}, \code{Dim}, \code{Italic}, \code{Underline}.
+
+\vspace{0.5em}
+\noindent\textbf{\sffamily Size keys:} see Chapter~3.
+
+\begin{notebox}[Adding a widget]
+The registry is open. \code{TuiWidgetRegistry.Register} adds a name, and a widget
+reachable only from the object style is considered a gap --- the test suite
+compares the registry against the widget types and fails when one has no name.
+\end{notebox}
+
+\end{document}

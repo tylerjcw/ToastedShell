@@ -160,7 +160,10 @@ public sealed class TuiWidgetRegistry
                 tree.Display = node => context.Invoke(display, node)?.ToString() ?? string.Empty;
             }
 
-            if (spec.Callable("id") is { } identify)
+            // `Key`, not `Id`: every widget's `Id` is the name its value is reported under,
+            // and a tree needs a second, different identity — the one expansion is
+            // remembered against. Two meanings on one key is a key nobody can read.
+            if (spec.Callable("key") is { } identify)
             {
                 tree.Identify = node => context.Invoke(identify, node)?.ToString() ?? string.Empty;
             }

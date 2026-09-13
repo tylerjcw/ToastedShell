@@ -126,6 +126,35 @@ public sealed class TuiMarkupSurfaceTests
         Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
+    /// <summary>
+    /// The guide's markup reference lists every name the registry knows.
+    /// </summary>
+    /// <remarks>
+    /// Documentation written beside a table drifts from it; documentation checked against
+    /// it cannot. This is the same rule the shortcut footer follows — a help line that can
+    /// claim a key which does not work is worse than no help line.
+    /// </remarks>
+    [Fact]
+    public void The_guide_documents_every_markup_name()
+    {
+        var guide = Path.Combine(ToshCli.RepositoryRoot, "docs", "spec", "tui-guide.tex");
+
+        Assert.True(File.Exists(guide), $"The TUI guide is missing: {guide}");
+
+        var text = File.ReadAllText(guide);
+
+        var undocumented = TuiWidgetRegistry.CreateDefault().Names
+            .Select(name => $"{char.ToUpperInvariant(name[0])}{name[1..]}")
+            .Where(name => !text.Contains($"\\texttt{{{name}}}", StringComparison.Ordinal)
+                        && !text.Contains($"\n{name}    ", StringComparison.Ordinal)
+                        && !text.Contains($"{{| {name} ", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.True(
+            undocumented.Length == 0,
+            $"These markup names are not in docs/spec/tui-guide.tex: {string.Join(", ", undocumented)}.");
+    }
+
     [Fact]
     public void A_document_keeps_the_lines_it_was_given()
     {
