@@ -52,5 +52,20 @@ public sealed class UserDefinedConversionTests
         Assert.False(TypeConversion.TryConvert("42", typeof(ReadOnlySpan<char>), out _));
     }
 
+    [Fact]
+    public void An_operator_that_throws_answers_no_rather_than_failing_the_call()
+    {
+        // Overload resolution asks this of candidates it is about to reject, so a
+        // conversion is a question. An operator that cannot answer must not take down a
+        // call that had a better candidate waiting.
+        Assert.False(TypeConversion.TryConvert("anything", typeof(Unhappy), out _));
+    }
+
     private sealed class NoConversions;
+
+    private sealed class Unhappy
+    {
+        public static implicit operator Unhappy(string text)
+            => throw new InvalidOperationException("never works");
+    }
 }

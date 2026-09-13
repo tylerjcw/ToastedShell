@@ -265,9 +265,17 @@ module Build {
                         $this.Token = CreateOwnerToken()
                         System.IO.File.WriteAllText($this.OwnerFile, $this.Token)
                     } catch ($error) {
+                        # The cause travels with the message. Three things happen inside this
+                        # `try` — opening the sentinel, minting a token, recording the owner —
+                        # and only the first is "another build is running". A failure in either
+                        # of the others was reported as a held lock, which sent the reader to
+                        # look for a process that was never there.
+                        var held = ($this.Handle == null)
                         if ($this.Handle != null) { $this.Handle.Dispose() | ignore }
                         $this.Handle = null
-                        throw $"Could not acquire the build lock for '{$operation}' at '{$lockPath}'. Another build may be running, or the lock path is unavailable."
+                        throw ($held
+                            ? $"Could not acquire the build lock for '{$operation}' at '{$lockPath}'. Another build may be running, or the lock path is unavailable.\n{$error}"
+                            : $"Took the build lock for '{$operation}' but could not record its owner at '{$this.OwnerFile}'.\n{$error}")
                     }
 
                     $this.OwnsLock = true

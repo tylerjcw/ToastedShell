@@ -643,10 +643,20 @@ public static class TypeConversion
                     converted = method.Invoke(null, [value]);
                     return true;
                 }
-                catch (TargetInvocationException)
+                catch (Exception exception) when (exception is not OutOfMemoryException
+                                                      and not StackOverflowException)
                 {
-                    // The operator itself rejected the value; that is an answer, not a
-                    // reason to keep looking.
+                    // Broad on purpose. Overload resolution asks this question of every
+                    // candidate, including ones it is about to reject, so a conversion is
+                    // a question and not a command: an operator that cannot answer is a
+                    // "no", not a reason to fail a call that had other candidates.
+                    //
+                    // `string`'s implicit conversion to `ReadOnlySpan<char>` is what
+                    // taught this. Reflection cannot box a ref struct, so `Invoke` threw
+                    // `NotSupportedException` — not wrapped in `TargetInvocationException`,
+                    // because it never got as far as the operator — and took
+                    // `Int32.Parse("42")` down with it. That case is refused before we get
+                    // here now; this is for the next one.
                     return false;
                 }
             }
