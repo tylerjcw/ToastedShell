@@ -546,7 +546,7 @@ public sealed class TuiCoreTests
             var frame1 = screen.Render(new TuiSize(120, 24));
 
             // The rendered content must change after scrolling (selection moved)
-            Assert.NotEqual(frame0.Content, frame1.Content);
+            Assert.NotEqual(GridText(frame0), GridText(frame1));
 
             // Scroll up should also work
             var scrollUp = TuiInputEvent.FromMouse(
@@ -554,7 +554,7 @@ public sealed class TuiCoreTests
             screen.HandleInput(scrollUp);
 
             var frame2 = screen.Render(new TuiSize(120, 24));
-            Assert.NotEqual(frame1.Content, frame2.Content);
+            Assert.NotEqual(GridText(frame1), GridText(frame2));
         }
         finally
         {

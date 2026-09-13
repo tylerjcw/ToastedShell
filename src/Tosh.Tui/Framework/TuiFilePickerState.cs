@@ -32,6 +32,17 @@ public sealed class TuiFilePickerState
 
     public void SelectIndex(int index) => _entries.SelectIndex(index);
 
+    /// <summary>The labels of the entries in the current directory.</summary>
+    /// <remarks>
+    /// Labels rather than entries, because the entry type is an implementation detail and
+    /// a list only needs something to draw. Navigation stays here — entering a directory
+    /// is this type's business, not a list's.
+    /// </remarks>
+    public IReadOnlyList<string> ItemLabels => _entries.Items.Select(entry => entry.Label).ToArray();
+
+    /// <summary>Which entry is highlighted.</summary>
+    public int SelectedIndex => _entries.SelectedIndex;
+
     public string CurrentDirectory { get; private set; } = string.Empty;
 
     public TuiFilePickerSelectionMode SelectionMode { get; private set; }
