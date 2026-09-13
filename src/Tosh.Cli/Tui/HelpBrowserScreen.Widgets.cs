@@ -53,7 +53,11 @@ internal sealed partial class HelpBrowserScreen
             Size = TuiLength.Fixed(SearchBoxHeight),
         };
 
-        _listFrame = new TuiBorder(_sidebarList);
+        // A third of the window, never narrower than 24 nor wider than 40. Said once, as
+        // one length, rather than clamped per frame and pinned as a fixed size — which is
+        // what stopped it being a third of anything the moment the terminal was resized
+        // past either bound (`TUI-0019`).
+        _listFrame = new TuiBorder(_sidebarList) { Size = "1/3 24..40" };
         _detailFrame = new TuiBorder(_detailLines) { Size = TuiLength.Star() };
 
         _panes = new TuiStack(TuiOrientation.Horizontal) { Gap = 1, Size = TuiLength.Star() };
@@ -77,14 +81,7 @@ internal sealed partial class HelpBrowserScreen
         var theme = _runtime.Config.Theme.Tui;
         var glyphs = BorderGlyphs(theme.BoxStyle);
 
-        // The sidebar is a third of the frame, within reason. Computed here because it is
-        // a function of the width, which is only known at render time.
-        var listWidth = Math.Clamp(width / 3, 24, 40);
-        var detailInner = Math.Max(1, width - listWidth - 1 - 2);
-
         SyncSidebar(Math.Max(1, height - SearchBoxHeight - 1 - 2));
-
-        _listFrame.Size = TuiLength.Fixed(listWidth);
 
         foreach (var frame in (TuiBorder[])[_headerFrame, _listFrame, _detailFrame])
         {
@@ -103,6 +100,17 @@ internal sealed partial class HelpBrowserScreen
         _sidebarList.Items = [.. _sidebar.Items.Cast<object?>()];
         _sidebarList.SelectedIndex = _sidebar.SelectedIndex;
 
+        var buffer = new TuiBuffer(new TuiSize(width, height));
+        var bounds = new TuiRect(0, 0, width, height);
+
+        _tree.Measure(TuiConstraints.From(new TuiSize(width, height)));
+        _tree.Arrange(bounds);
+
+        // The detail pane wraps to the width it was given, which is only settled once the
+        // tree has been arranged — so its lines are built between arrange and draw rather
+        // than from a copy of the layout arithmetic kept alongside it.
+        var detailInner = Math.Max(1, _detailLines.Bounds.Width);
+
         _detailLines.Lines = [.. BuildDetailEntries(detailInner)
             .Select(entry => new TuiSpanLine([
                 new TuiSpan(
@@ -110,11 +118,6 @@ internal sealed partial class HelpBrowserScreen
                     GetDetailStyle(entry.Kind, theme).ToStyle()),
             ]))];
 
-        var buffer = new TuiBuffer(new TuiSize(width, height));
-        var bounds = new TuiRect(0, 0, width, height);
-
-        _tree.Measure(TuiConstraints.From(new TuiSize(width, height)));
-        _tree.Arrange(bounds);
         _tree.Draw(new TuiSurface(buffer, bounds));
 
         return new TuiFrame(buffer);

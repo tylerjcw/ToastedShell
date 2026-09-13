@@ -26,22 +26,42 @@ public readonly record struct TuiConstraints(int MaxWidth, int MaxHeight)
 
 /// <summary>How a container divides space between its children.</summary>
 /// <remarks>
-/// Three kinds, which between them cover what terminal layouts actually ask for: a
-/// status bar that is one row (<see cref="Fixed"/>), a detail pane that takes what is
-/// left (<see cref="Star"/>), and a label that is as wide as its text
-/// (<see cref="Auto"/>).
+/// <para>
+/// Four kinds, which between them cover what terminal layouts ask for: a status bar that
+/// is one row (<see cref="Fixed"/>), a label as wide as its text (<see cref="Auto"/>), a
+/// detail pane taking what is left (<see cref="Star"/>), and a sidebar that is a third of
+/// the window (<see cref="Percent"/>).
+/// </para>
+/// <para>
+/// Any of them can be bounded. "A third of the width, but never less than 24 and never
+/// more than 40" is one length rather than a <c>Math.Clamp</c> at the call site — which
+/// is what the help browser had, and which stopped the pane being a third of anything the
+/// moment the terminal was resized past either bound (<c>TUI-0019</c>).
+/// </para>
 /// </remarks>
 public readonly record struct TuiLength
 {
-    private TuiLength(int value, TuiLengthKind kind)
+    private TuiLength(int value, TuiLengthKind kind, int divisor = 1, int? minimum = null, int? maximum = null)
     {
         Value = value;
         Kind = kind;
+        Divisor = Math.Max(1, divisor);
+        Minimum = minimum;
+        Maximum = maximum;
     }
 
     public int Value { get; }
 
     public TuiLengthKind Kind { get; }
+
+    /// <summary>What <see cref="Value"/> is out of, for a <see cref="TuiLengthKind.Fraction"/>.</summary>
+    public int Divisor { get; }
+
+    /// <summary>The fewest cells this may take, whatever its kind works out to.</summary>
+    public int? Minimum { get; }
+
+    /// <summary>The most cells this may take.</summary>
+    public int? Maximum { get; }
 
     /// <summary>As big as the child asks to be.</summary>
     public static TuiLength Auto => new(0, TuiLengthKind.Auto);
@@ -53,29 +73,127 @@ public readonly record struct TuiLength
     public static TuiLength Star(int weight = 1) => new(Math.Max(1, weight), TuiLengthKind.Star);
 
     /// <summary>
+    /// A share of the whole container, rather than of what is left of it.
+    /// </summary>
+    /// <remarks>
+    /// The difference from <see cref="Star"/> is what it is measured against. Two star
+    /// children split the leftovers between them; two 30% children take 30% each of
+    /// everything, and whatever is left goes to the star children beside them.
+    /// </remarks>
+    public static TuiLength Percent(int percent) => Ratio(Math.Clamp(percent, 0, 100), 100);
+
+    /// <summary>
+    /// A share of the whole container, written as the fraction it actually is.
+    /// </summary>
+    /// <remarks>
+    /// A third is not 33%. Rounding 118 columns by 33/100 gives 38 and by 1/3 gives 39, and
+    /// the author who wrote <c>width / 3</c> meant the second. Percentages are the readable
+    /// spelling when the number is round; this is the exact one when it is not.
+    /// </remarks>
+    public static TuiLength Ratio(int numerator, int denominator)
+        => new(Math.Max(0, numerator), TuiLengthKind.Fraction, denominator);
+
+    /// <summary>The same length, but never smaller than this.</summary>
+    public TuiLength AtLeast(int cells) => new(Value, Kind, Divisor, Math.Max(0, cells), Maximum);
+
+    /// <summary>The same length, but never larger than this.</summary>
+    public TuiLength AtMost(int cells) => new(Value, Kind, Divisor, Minimum, Math.Max(0, cells));
+
+    /// <summary>The same length, bounded at both ends.</summary>
+    public TuiLength Between(int minimum, int maximum) => AtLeast(minimum).AtMost(maximum);
+
+    /// <summary>Applies whatever bounds were asked for.</summary>
+    public int Clamp(int cells)
+    {
+        if (Minimum is { } minimum)
+        {
+            cells = Math.Max(cells, minimum);
+        }
+
+        if (Maximum is { } maximum)
+        {
+            cells = Math.Min(cells, maximum);
+        }
+
+        return Math.Max(0, cells);
+    }
+
+    /// <summary>
     /// Reads a length written the way a layout author writes one.
     /// </summary>
     /// <remarks>
-    /// <c>"*"</c> and <c>"2*"</c> are the spellings a layout uses, <c>"auto"</c> means as
-    /// big as the content, and a bare number is cells. Anything unrecognised is auto,
-    /// which is the safe answer: a widget sized to its content is always drawable.
+    /// <c>"*"</c> and <c>"2*"</c> are the spellings a layout uses, <c>"33%"</c> is a share
+    /// of the container, <c>"auto"</c> means as big as the content, and a bare number is
+    /// cells. Bounds follow after a space as a range — <c>"33% 24..40"</c>, <c>"* ..40"</c>,
+    /// <c>"auto 10.."</c> — because that is how a range reads everywhere else in the
+    /// language. Anything unrecognised is auto, which is the safe answer: a widget sized to
+    /// its content is always drawable.
     /// </remarks>
     public static TuiLength Parse(string? text)
     {
         var trimmed = text?.Trim() ?? string.Empty;
 
-        if (trimmed.Length == 0 || trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        if (trimmed.Length == 0)
         {
             return Auto;
         }
 
-        if (trimmed.EndsWith('*'))
+        var space = trimmed.IndexOf(' ', StringComparison.Ordinal);
+        var bounds = space < 0 ? string.Empty : trimmed[(space + 1)..].Trim();
+        var head = space < 0 ? trimmed : trimmed[..space];
+
+        var length = ParseKind(head);
+
+        if (bounds.Length == 0)
         {
-            var weight = trimmed[..^1].Trim();
+            return length;
+        }
+
+        var range = bounds.Split("..", StringSplitOptions.TrimEntries);
+
+        if (range.Length == 2)
+        {
+            if (int.TryParse(range[0], out var minimum))
+            {
+                length = length.AtLeast(minimum);
+            }
+
+            if (int.TryParse(range[1], out var maximum))
+            {
+                length = length.AtMost(maximum);
+            }
+        }
+
+        return length;
+    }
+
+    private static TuiLength ParseKind(string text)
+    {
+        if (text.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return Auto;
+        }
+
+        if (text.EndsWith('*'))
+        {
+            var weight = text[..^1].Trim();
             return Star(weight.Length == 0 ? 1 : int.TryParse(weight, out var parsed) ? parsed : 1);
         }
 
-        return int.TryParse(trimmed, out var cells) ? Fixed(cells) : Auto;
+        if (text.EndsWith('%'))
+        {
+            return int.TryParse(text[..^1].Trim(), out var percent) ? Percent(percent) : Auto;
+        }
+
+        if (text.Split('/', StringSplitOptions.TrimEntries) is [var top, var bottom] &&
+            int.TryParse(top, out var numerator) &&
+            int.TryParse(bottom, out var denominator) &&
+            denominator > 0)
+        {
+            return Ratio(numerator, denominator);
+        }
+
+        return int.TryParse(text, out var cells) ? Fixed(cells) : Auto;
     }
 
     /// <summary>So a layout can be written as <c>Size = "2*"</c>.</summary>
@@ -84,12 +202,22 @@ public readonly record struct TuiLength
     /// <summary>So a layout can be written as <c>Size = 12</c>.</summary>
     public static implicit operator TuiLength(int cells) => Fixed(cells);
 
-    public override string ToString() => Kind switch
+    public override string ToString()
     {
-        TuiLengthKind.Auto => "auto",
-        TuiLengthKind.Fixed => Value.ToString(),
-        _ => Value == 1 ? "*" : $"{Value}*",
-    };
+        var head = Kind switch
+        {
+            TuiLengthKind.Auto => "auto",
+            TuiLengthKind.Fixed => Value.ToString(),
+            TuiLengthKind.Fraction => Divisor == 100 ? $"{Value}%" : $"{Value}/{Divisor}",
+            _ => Value == 1 ? "*" : $"{Value}*",
+        };
+
+        return (Minimum, Maximum) switch
+        {
+            (null, null) => head,
+            var (minimum, maximum) => $"{head} {minimum}..{maximum}",
+        };
+    }
 }
 
 public enum TuiLengthKind
@@ -97,6 +225,9 @@ public enum TuiLengthKind
     Auto,
     Fixed,
     Star,
+
+    /// <summary>A share of the whole container: a percentage, or an exact ratio.</summary>
+    Fraction,
 }
 
 /// <summary>

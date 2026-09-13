@@ -198,8 +198,13 @@ public sealed class TuiBrowserGoldenTests : IDisposable
         // right-hand side. Scrubbing the git span alone was not enough; the whole preview
         // has to go. Nothing in these screens is under test here except that the preview
         // is drawn where it is drawn.
+        //
+        // The escape prefix is optional because the same frame is also recorded with its
+        // escapes stripped, and a rule that only matches the styled form leaves the plain
+        // twin carrying the git ahead count — which moves on the next commit, which is the
+        // thing this rule exists to stop.
         frame = Regex.Replace(
-            frame, @"\x1b\[1;34m<path>.*$", "<prompt preview>", RegexOptions.Multiline);
+            frame, @"(\x1b\[1;34m)?<path>.*$", "<prompt preview>", RegexOptions.Multiline);
 
         // A belt-and-braces rule for an elapsed-time segment rendered anywhere else.
         frame = Regex.Replace(frame, @"\b\d+\.\d+(ms|s)\b", "<elapsed>");

@@ -43,6 +43,7 @@
 | [`TOAST-0049`](items/TOAST-0049.md) | P2 | complete | 5/5 | Recursion is capped at 128 frames, and the cap is a stack size nobody can change |
 | [`TOSH-0011`](items/TOSH-0011.md) | P2 | complete | 5/5 | Both TUI browsers test for `q` before they test for focus, so searching for anything with a q in it quits |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | complete | 9/9 | The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways |
+| [`TUI-0019`](items/TUI-0019.md) | P3 | complete | 5/5 | A layout can say fixed, auto or star, and the callers that want min or max do arithmetic |
 | [`TOSH-0007`](items/TOSH-0007.md) | P1 | complete | 4/4 | The marshalled struct statvfs was 24 bytes short, corrupting memory on every call |
 | [`TOAST-0093`](items/TOAST-0093.md) | P1 | complete | — | A compiled unit claims its type names process-wide, so a bare name resolves to another script's compiled output |
 | [`TOAST-0112`](items/TOAST-0112.md) | P3 | complete | 7/7 | A refinement type cannot name its base with `:`, and omitting the base reports the wrong error |

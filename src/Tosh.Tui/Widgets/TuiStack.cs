@@ -157,15 +157,22 @@ public sealed class TuiStack : TuiWidget
         var remaining = available;
         var totalWeight = 0;
 
+        // Everything with an answer of its own is settled first, in the order written, and
+        // each is clamped to whatever bounds it carries. Only then is the leftover shared,
+        // which is what "a share of what is left" has to mean if it is to mean anything.
         for (var index = 0; index < _children.Count; index += 1)
         {
             var child = _children[index];
+            var length = child.Size;
 
-            switch (child.Size.Kind)
+            switch (length.Kind)
             {
                 case TuiLengthKind.Fixed:
-                    sizes[index] = Math.Min(child.Size.Value, Math.Max(0, remaining));
-                    remaining -= sizes[index];
+                    sizes[index] = Take(length, length.Value, ref remaining);
+                    break;
+
+                case TuiLengthKind.Fraction:
+                    sizes[index] = Take(length, available * length.Value / length.Divisor, ref remaining);
                     break;
 
                 case TuiLengthKind.Auto:
@@ -173,12 +180,11 @@ public sealed class TuiStack : TuiWidget
                         ? new TuiConstraints(Math.Max(0, remaining), bounds.Height)
                         : new TuiConstraints(bounds.Width, Math.Max(0, remaining));
                     var desired = child.Measure(constraints);
-                    sizes[index] = Math.Min(horizontal ? desired.Width : desired.Height, Math.Max(0, remaining));
-                    remaining -= sizes[index];
+                    sizes[index] = Take(length, horizontal ? desired.Width : desired.Height, ref remaining);
                     break;
 
                 case TuiLengthKind.Star:
-                    totalWeight += child.Size.Value;
+                    totalWeight += length.Value;
                     break;
             }
         }
@@ -190,26 +196,42 @@ public sealed class TuiStack : TuiWidget
 
         var share = Math.Max(0, remaining);
         var handedOut = 0;
-        var lastStar = -1;
+        var lastUnbounded = -1;
 
         for (var index = 0; index < _children.Count; index += 1)
         {
-            if (_children[index].Size.Kind != TuiLengthKind.Star)
+            var length = _children[index].Size;
+
+            if (length.Kind != TuiLengthKind.Star)
             {
                 continue;
             }
 
-            sizes[index] = share * _children[index].Size.Value / totalWeight;
+            sizes[index] = length.Clamp(share * length.Value / totalWeight);
             handedOut += sizes[index];
-            lastStar = index;
+
+            // The rounding error goes to a star child that can absorb it. One pinned by a
+            // bound cannot, and giving it the remainder anyway is how a bounded pane ends
+            // up one column wider than it asked to be.
+            if (length is { Minimum: null, Maximum: null })
+            {
+                lastUnbounded = index;
+            }
         }
 
-        if (lastStar >= 0)
+        if (lastUnbounded >= 0)
         {
-            sizes[lastStar] += share - handedOut;
+            sizes[lastUnbounded] = Math.Max(0, sizes[lastUnbounded] + share - handedOut);
         }
 
         return sizes;
+
+        static int Take(TuiLength length, int wanted, ref int remaining)
+        {
+            var size = Math.Clamp(length.Clamp(wanted), 0, Math.Max(0, remaining));
+            remaining -= size;
+            return size;
+        }
     }
 
     public override void Draw(TuiSurface surface)

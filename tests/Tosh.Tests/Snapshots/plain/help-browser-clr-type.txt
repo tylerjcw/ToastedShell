@@ -3,40 +3,40 @@
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
 ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ue ───
@@ -44,40 +44,40 @@ ue ───
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
   ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 inue ───
@@ -85,40 +85,40 @@ inue ───
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
 ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after page down → Continue ───
@@ -126,40 +126,40 @@ ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
 ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after page down → Continue ───
@@ -167,40 +167,40 @@ ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
 ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after end → Continue ───
@@ -208,40 +208,40 @@ ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
 ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 ─── after home → Continue ───
@@ -249,39 +249,39 @@ ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
 F4 CLR/.NET                                                                  │
                                                                              │
 ─────────────────────────────────────────────────────────────────────────────╯
- StringBuilder [Type] ───────────────────────────────────────────────────────╮
-Type • CLR                                                                   │
+StringBuilder [Type] ────────────────────────────────────────────────────────╮
+ype • CLR                                                                    │
                                                                              │
-CLR type System.Text.StringBuilder from assembly System.Private.CoreLib.     │
+LR type System.Text.StringBuilder from assembly System.Private.CoreLib.      │
                                                                              │
-Identity                                                                     │
-  Path: CLR / .NET / System.Text / System.Text.StringBuilder                 │
-  Full Name: System.Text.StringBuilder                                       │
-  Namespace: System.Text                                                     │
-  Assembly: System.Private.CoreLib                                           │
-  Base: System.Object                                                        │
-  Kind: Class                                                                │
-  Interfaces: System.Runtime.Serialization.ISerializable                     │
+dentity                                                                      │
+ Path: CLR / .NET / System.Text / System.Text.StringBuilder                  │
+ Full Name: System.Text.StringBuilder                                        │
+ Namespace: System.Text                                                      │
+ Assembly: System.Private.CoreLib                                            │
+ Base: System.Object                                                         │
+ Kind: Class                                                                 │
+ Interfaces: System.Runtime.Serialization.ISerializable                      │
                                                                              │
-Usage                                                                        │
-  new System.Text.StringBuilder(...)                                         │
+sage                                                                         │
+ new System.Text.StringBuilder(...)                                          │
                                                                              │
-Constructors                                                                 │
-  System.Text.StringBuilder()                                                │
-  System.Text.StringBuilder(System.Int32 capacity)                           │
-  System.Text.StringBuilder(System.String value)                             │
-  System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity) │
-  System.Text.StringBuilder(System.String value, System.Int32 capacity)      │
-  System.Text.StringBuilder(System.String value, System.Int32 startIndex,    │
-    System.Int32 length, System.Int32 capacity)                              │
+onstructors                                                                  │
+ System.Text.StringBuilder()                                                 │
+ System.Text.StringBuilder(System.Int32 capacity)                            │
+ System.Text.StringBuilder(System.String value)                              │
+ System.Text.StringBuilder(System.Int32 capacity, System.Int32 maxCapacity)  │
+ System.Text.StringBuilder(System.String value, System.Int32 capacity)       │
+ System.Text.StringBuilder(System.String value, System.Int32 startIndex,     │
+   System.Int32 length, System.Int32 capacity)                               │
                                                                              │
-Properties & Fields                                                          │
-  property Capacity: System.Int32                                            │
-  property Length: System.Int32                                              │
-  property MaxCapacity: System.Int32 readonly                                │
+roperties & Fields                                                           │
+ property Capacity: System.Int32                                             │
+ property Length: System.Int32                                               │
+ property MaxCapacity: System.Int32 readonly                                 │
                                                                              │
-Methods                                                                      │
-  System.Text.StringBuilder Append(System.String value)                      │
-  System.Text.StringBuilder Append(System.Text.StringBuilder value)          │
+ethods                                                                       │
+ System.Text.StringBuilder Append(System.String value)                       │
+ System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
 ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related

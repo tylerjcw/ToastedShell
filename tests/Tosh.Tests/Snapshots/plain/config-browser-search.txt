@@ -377,11 +377,11 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │      • Bold                          │ │Prompt Left: ExitCode, Name, Indicator                                       │
 │      • Italic                        │ │                                                                             │
 │      • Underline                     │ │Sample Success Preview                                                       │
-│      • Dim                           │ │<path> master* ↑92  <user>@<host>│
+│      • Dim                           │ │<prompt preview>
 │    ▾ Git                             │ │tosh  ❯                                                                      │
 │      • Foreground                    │ │                                                                             │
 │      • Background                    │ │Sample Failure Preview                                                       │
-│      • Bold                          │ │<path> master* ↑92  <user>@<host>│
+│      • Bold                          │ │<prompt preview>
 │      • Italic                        │ │✘ 7 tosh  ❯                                                                  │
 │      • Underline                     │ │                                                                             │
 │      • Dim                           │ │Members                                                                      │
@@ -425,11 +425,11 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │      • Italic                        │ │Prompt Left: ExitCode, Name, Indicator                                       │
 │      • Underline                     │ │                                                                             │
 │      • Dim                           │ │Sample Success Preview                                                       │
-│    ▾ User Host                       │ │<path> master* ↑92  <user>@<host>│
+│    ▾ User Host                       │ │<prompt preview>
 │      • Foreground                    │ │tosh  ❯                                                                      │
 │      • Background                    │ │                                                                             │
 │      • Bold                          │ │Sample Failure Preview                                                       │
-│      • Italic                        │ │<path> master* ↑92  <user>@<host>│
+│      • Italic                        │ │<prompt preview>
 │      • Underline                     │ │✘ 7 tosh  ❯                                                                  │
 │      • Dim                           │ │                                                                             │
 │    ▾ History Id                      │ │Style Editor                                                                 │

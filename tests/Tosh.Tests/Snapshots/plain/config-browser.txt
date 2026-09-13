@@ -57,11 +57,11 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  ▸ Time Only                         │ │Prompt Left: ExitCode, Name, Indicator                                       │
 │  ▸ Time Span                         │ │                                                                             │
 │  ▸ Storage Size                      │ │Sample Success Preview                                                       │
-│  ▸ Permissions                       │ │<path> master* ↑92  <user>@<host>│
+│  ▸ Permissions                       │ │<prompt preview>
 │  ▸ File Attributes                   │ │tosh  ❯                                                                      │
 │  ▸ Paging                            │ │                                                                             │
 │  ▸ Profiles                          │ │Sample Failure Preview                                                       │
-│▾ Repl                                │ │<path> master* ↑92  <user>@<host>│
+│▾ Repl                                │ │<prompt preview>
 │  • Continuation Prompt               │ │✘ 7 tosh  ❯                                                                  │
 │  • Syntax Highlighting Enabled       │ │                                                                             │
 │  • Ghost Text Enabled                │ │Members                                                                      │
