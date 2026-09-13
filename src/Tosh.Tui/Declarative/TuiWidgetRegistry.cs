@@ -65,7 +65,7 @@ public sealed class TuiWidgetRegistry
             Wrap = spec.Flag("wrap", true),
         });
 
-        registry.Register("list", static (spec, _) =>
+        registry.Register("list", static (spec, context) =>
         {
             var list = new TuiList(spec.PrimaryItems())
             {
@@ -74,6 +74,9 @@ public sealed class TuiWidgetRegistry
                 Style = spec.Style(),
             };
 
+            context.OnHandler(spec, "onselect", handler => list.Activated = item => handler(item));
+            context.OnHandler(spec, "onchange", handler => list.SelectionChanged = _ => handler(list.SelectedItem));
+
             // A list is nearly always taller than its pane, so it arrives scrollable.
             // Asking every author to remember that is the kind of ritual this replaces.
             TuiList.Scrollable(list);
@@ -81,7 +84,7 @@ public sealed class TuiWidgetRegistry
             return list.Viewport!;
         });
 
-        registry.Register("field", static (spec, _) =>
+        registry.Register("field", static (spec, context) =>
         {
             // A labelled input, because a bare field with no label is not what anyone
             // means when they ask for one.
@@ -92,6 +95,9 @@ public sealed class TuiWidgetRegistry
                 Multiline = spec.Flag("multiline"),
                 Id = spec.Text("id"),
             };
+
+            context.OnHandler(spec, "onchange", handler => field.Changed = text => handler(text));
+            context.OnHandler(spec, "onsubmit", handler => field.Submitted = text => handler(text));
 
             var label = spec.Primary?.ToString();
 
@@ -105,9 +111,13 @@ public sealed class TuiWidgetRegistry
                 .Add(field, TuiLength.Star());
         });
 
-        registry.Register("button", static (spec, _) => new TuiButton(spec.Primary?.ToString() ?? "OK")
+        registry.Register("button", static (spec, context) =>
         {
-            Style = spec.Style(),
+            var button = new TuiButton(spec.Primary?.ToString() ?? "OK") { Style = spec.Style() };
+
+            context.OnHandler(spec, "onpress", handler => button.Pressed = () => handler(null));
+
+            return button;
         });
 
         registry.Register("row", static (spec, context) => Stack(spec, context, TuiOrientation.Horizontal));

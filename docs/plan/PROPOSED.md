@@ -37,7 +37,6 @@
 | [`TOAST-0133`](items/TOAST-0133.md) | P3 | proposed | 0/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
 | [`TUI-0011`](items/TUI-0011.md) | P3 | proposed | 0/5 | Nothing checks that the TUI surface survives compilation to a Tōast program |
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
-| [`TUI-0004`](items/TUI-0004.md) | P2 | proposed | 0/7 | Building a screen from a script is seven lines of scaffolding, string ids and `| ignore` |
 | [`TOAST-0094`](items/TOAST-0094.md) | P3 | proposed | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |

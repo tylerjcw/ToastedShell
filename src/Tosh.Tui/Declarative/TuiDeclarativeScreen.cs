@@ -39,6 +39,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     private readonly Func<IShellCallable, object?, object?>? _invoke;
     private readonly TuiFocus _focus;
     private readonly string? _title;
+    private readonly Action? _tick;
     private TuiBorder? _frame;
 
     public TuiDeclarativeScreen(
@@ -46,11 +47,13 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
         IReadOnlyList<TuiBinding> bindings,
         Func<IShellCallable, object?, object?>? invoke = null,
         string? title = null,
-        TimeSpan? refreshInterval = null)
+        TimeSpan? refreshInterval = null,
+        Action? tick = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(bindings);
 
+        _tick = tick;
         _bindings = bindings;
         _invoke = invoke;
         _title = title;
@@ -113,7 +116,13 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     }
 
     /// <inheritdoc />
-    public TuiScreenResult Tick() => TuiScreenResult.Continue;
+    public TuiScreenResult Tick()
+    {
+        // A live screen's own sampling, separate from the pull bindings that run on every
+        // redraw: this is what a refresh interval is for.
+        _tick?.Invoke();
+        return TuiScreenResult.Continue;
+    }
 
     /// <summary>
     /// Re-reads every bound property, passing the form's current values.

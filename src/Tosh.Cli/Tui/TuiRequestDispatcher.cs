@@ -72,7 +72,7 @@ internal static class TuiRequestDispatcher
         if (value is TuiTreeRunRequest treeRequest)
         {
             // A record tree: built here, where the widget registry lives.
-            var root = TuiTreeBuilder.Build(treeRequest.Node, registry: null, out var bindings);
+            var root = TuiTreeBuilder.Build(treeRequest.Node, null, treeRequest.Invoke, out var bindings);
 
             var screen = new TuiDeclarativeScreen(
                 root,
@@ -88,9 +88,18 @@ internal static class TuiRequestDispatcher
 
         if (value is TuiRunRequest runRequest)
         {
-            var screen = new TuiCustomScreen(runRequest);
-            TuiApplication.Run(new ConsoleTuiHost(), screen);
-            outcomeValues = BuildOutcomeValues(screen.Outcome, runRequest.ReturnOutcome);
+            // A screen assembled by the builder subcommands takes the same path as a
+            // record tree: one screen implementation rather than two (TUI-0015).
+            var built = new TuiDeclarativeScreen(
+                TuiScreenAdapter.BuildTree(runRequest.Screen),
+                [],
+                invoke: null,
+                runRequest.Screen.ScreenTitle,
+                runRequest.Screen.RefreshInterval,
+                runRequest.Tick);
+
+            TuiApplication.Run(new ConsoleTuiHost(), built);
+            outcomeValues = BuildOutcomeValues(built.Outcome, runRequest.ReturnOutcome);
             return true;
         }
 
