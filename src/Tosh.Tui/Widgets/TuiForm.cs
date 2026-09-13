@@ -101,6 +101,26 @@ public sealed class TuiForm : TuiWidget
     /// <summary>Abandons the form, as a cancel button would.</summary>
     public void Cancel() => Close(TuiFormResult.Cancelled, Cancelled);
 
+    /// <summary>Changes the form's mind about closing, from inside a handler.</summary>
+    /// <remarks>
+    /// <para>
+    /// The result is set before a handler runs, so a handler can read how the form ended —
+    /// and, having read it, decide it has not. This is what lets Escape put a confirmation
+    /// up instead of abandoning what the reader typed:
+    /// </para>
+    /// <code>
+    /// $form.Cancelled = func() {
+    ///     $overlay.Modal = $confirm
+    ///     $form.KeepOpen()
+    /// }
+    /// </code>
+    /// <para>
+    /// Outside a handler this does nothing worth doing: the screen has already read the
+    /// result and gone.
+    /// </para>
+    /// </remarks>
+    public void KeepOpen() => Result = TuiFormResult.Open;
+
     /// <summary>The value of one identified widget in the form.</summary>
     public object? Value(string id) => TuiValues.Collect(this).TryGetValue(id, out var value) ? value : null;
 

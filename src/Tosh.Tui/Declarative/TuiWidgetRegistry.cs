@@ -119,6 +119,20 @@ public sealed class TuiWidgetRegistry
             return form;
         });
 
+        registry.Register("overlay", static (spec, context) =>
+        {
+            var children = context.BuildChildren(spec.PrimaryItems());
+
+            // The first child is the page and the second is what sits on top of it, which
+            // is the order they are written in and the order they are drawn in.
+            return new TuiOverlay(
+                children.Count > 0 ? children[0] : null,
+                children.Count > 1 ? children[1] : null)
+            {
+                Margin = spec.Number("margin", 2),
+            };
+        });
+
         registry.Register("row", static (spec, context) => Stack(spec, context, TuiOrientation.Horizontal));
         registry.Register("column", static (spec, context) => Stack(spec, context, TuiOrientation.Vertical));
 

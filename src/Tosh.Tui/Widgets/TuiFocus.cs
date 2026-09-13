@@ -49,11 +49,36 @@ public sealed class TuiFocus
                 into.Add(widget);
             }
 
-            foreach (var child in widget.Children)
+            // `FocusChildren`, not `Children`: a container showing a modal answers with the
+            // modal alone, so Tab cannot walk into what is behind it.
+            foreach (var child in widget.FocusChildren)
             {
                 Collect(child, into);
             }
         }
+    }
+
+    /// <summary>
+    /// Moves the keyboard back into scope if what held it has gone out of reach.
+    /// </summary>
+    /// <remarks>
+    /// A focus scope can change without anything being typed: a handler puts a dialog up,
+    /// a tick replaces a pane, a widget is removed. The keyboard was seated when the tree
+    /// was built, and if nothing re-seats it, Enter goes to a form the reader can no
+    /// longer see while the dialog in front of them does nothing.
+    /// </remarks>
+    public void Revalidate()
+    {
+        // Only a widget that has gone out of reach is rescued. Nothing focused is a state
+        // a caller can ask for — a screen that wants every key for itself sets it — and
+        // seating the keyboard somewhere it was deliberately taken from would override
+        // that silently.
+        if (Focused is null || IndexOf(Focusable(), Focused) >= 0)
+        {
+            return;
+        }
+
+        Focus(Focusable().FirstOrDefault());
     }
 
     /// <summary>Gives the keyboard to a particular widget.</summary>
@@ -120,6 +145,8 @@ public sealed class TuiFocus
     /// <returns>Whether anything consumed it.</returns>
     public bool Dispatch(TuiInputEvent input)
     {
+        Revalidate();
+
         var target = Focused;
 
         if (!input.IsKey && input.Mouse.Action == TuiMouseAction.Press)

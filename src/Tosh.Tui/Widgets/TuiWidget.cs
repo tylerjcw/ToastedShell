@@ -170,6 +170,17 @@ public abstract class TuiWidget
     /// <summary>The widget's children, outermost first.</summary>
     public virtual IReadOnlyList<TuiWidget> Children => [];
 
+    /// <summary>
+    /// The children the keyboard is allowed to reach, when that is fewer than all of them.
+    /// </summary>
+    /// <remarks>
+    /// A focus scope. Almost every container answers with its children, because almost
+    /// every container shows all of them at once; a <see cref="TuiOverlay"/> with a dialog
+    /// up answers with the dialog alone, which is what stops Tab walking into a form the
+    /// reader cannot currently see.
+    /// </remarks>
+    public virtual IReadOnlyList<TuiWidget> FocusChildren => Children;
+
     /// <summary>How much room this widget would like, given what is on offer.</summary>
     public abstract TuiSize Measure(TuiConstraints constraints);
 

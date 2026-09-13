@@ -23,5 +23,5 @@
 | [`TOAST-0104`](items/TOAST-0104.md) | P2 | partial | 4/5 | A refinement type derived from a sibling in the same module silently fails to register |
 | [`TOAST-0035`](items/TOAST-0035.md) | P2 | partial | 1/5 | Source replay and implicit dynamic are how the compiler handles what it cannot emit |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
-| [`TUI-0006`](items/TUI-0006.md) | P2 | partial | 4/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
+| [`TUI-0006`](items/TUI-0006.md) | P2 | partial | 5/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
 | [`TOAST-0083`](items/TOAST-0083.md) | P2 | partial | 9/10 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |

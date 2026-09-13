@@ -114,6 +114,11 @@ public sealed class TuiDeclarativeScreen : ITuiScreen
     {
         ApplyBindings();
 
+        // Asked before drawing as well as before dispatching, so the caret is drawn where
+        // the next keystroke will go even when the scope changed on a tick rather than on
+        // a key.
+        _focus.Revalidate();
+
         var buffer = new TuiBuffer(size);
         var bounds = new TuiRect(0, 0, size.Width, size.Height);
 
