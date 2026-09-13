@@ -1,5 +1,6 @@
 using Tosh.Cli.Tui;
 using Tosh.Tui.Requests;
+using Tosh.Tui;
 
 namespace Tosh.Tests;
 

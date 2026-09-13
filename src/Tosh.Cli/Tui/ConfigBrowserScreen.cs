@@ -3,6 +3,7 @@ using System.Text;
 using Tosh.Runtime;
 using Tosh.Cli;
 using Tosh.Tui.Requests;
+using Tosh.Tui;
 
 namespace Tosh.Cli.Tui;
 

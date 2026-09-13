@@ -1,3 +1,5 @@
+using Tosh.Tui;
+
 namespace Tosh.Cli.Tui;
 
 internal sealed class ConsoleTuiHost : ITuiHost

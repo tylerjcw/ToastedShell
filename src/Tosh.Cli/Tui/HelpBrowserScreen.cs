@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text;
 using Tosh.Runtime;
 using Tosh.Tui.Requests;
+using Tosh.Tui;
 
 namespace Tosh.Cli.Tui;
 

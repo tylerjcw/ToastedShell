@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Tosh.Cli.Tui;
 using Tosh.Runtime;
 using Tosh.Tui.Requests;
+using Tosh.Tui;
 
 namespace Tosh.Tests;
 
@@ -11,12 +12,18 @@ namespace Tosh.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <c>HelpBrowserScreen</c> and <c>ConfigBrowserScreen</c> are ~6,800 lines carrying no
-/// test of any kind, and they are about to be split up. These do not assert the screens
-/// are <em>right</em> — nobody has written down what right is — only that they do not
-/// change. That is the property a refactor actually needs, and it is cheap here because
-/// <see cref="ITuiScreen"/> is already pure: <c>Render</c> returns a string and
-/// <c>HandleInput</c> takes a value, so a screen runs with no terminal attached.
+/// <c>HelpBrowserScreen</c> and <c>ConfigBrowserScreen</c> are ~6,800 lines, and they are
+/// about to be split up. They are not untested — <see cref="HelpBrowserScreenTests"/> and
+/// <see cref="ConfigBrowserScreenTests"/> carry 56 tests between them — but those assert
+/// on extracted label lists and detail lines, and only five of them touch <c>Render</c>.
+/// Splitting up rendering code is the change that slips past assertions shaped like that,
+/// so what is added here is the rendered frame itself.
+/// </para>
+/// <para>
+/// These do not assert the screens are <em>right</em> — nobody has written down what right
+/// is — only that they do not change. That is the property a refactor actually needs, and
+/// it is cheap here because <see cref="ITuiScreen"/> is already pure: <c>Render</c> returns
+/// a string and <c>HandleInput</c> takes a value, so a screen runs with no terminal.
 /// </para>
 /// <para>
 /// The scripts deliberately cover the two regions slated for extraction — the CLR

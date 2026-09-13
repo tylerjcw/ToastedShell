@@ -1,6 +1,7 @@
 using Tosh.Cli.Tui;
 using Tosh.Runtime;
 using Tosh.Language;
+using Tosh.Tui;
 
 namespace Tosh.Tests;
 
