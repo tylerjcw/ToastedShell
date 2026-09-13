@@ -479,6 +479,10 @@ text.
 \tosh{true} means the full grid. None by default, because a table inside a
 \code{Box} already has an outline.
 
+Left and right move along the columns when there are more than fit --- whole columns
+dropped off the left rather than cells shifted sideways, so every column on screen is
+intact and its header still sits above it.
+
 \subsection{\texttt{Tree} --- anything with children}
 
 \begin{lstlisting}
@@ -488,6 +492,10 @@ text.
 \code{Children} is asked of a node when it opens, not when the tree is built. A
 visible closed node is asked whether it has a \emph{first} child, which is what
 tells a leaf from an unopened branch.
+
+The guides and markers follow \code{Theme.Tui.TreeStyle}: \code{Clean} draws
+indentation and markers alone, \code{Dense} draws connectors between them. A tree that
+wants something else says so.
 
 \code{Key} is a node's stable identity, and expansion is remembered against it ---
 so a tree rebuilt from fresh objects keeps what the reader had open. \code{Right}

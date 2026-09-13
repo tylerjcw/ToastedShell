@@ -201,6 +201,9 @@ public static class TypeChecker
             case BoundBlock b:
                 foreach (var st in b.Statements) WalkAnnotations(st, unit, diagnostics, allowDynamic);
                 break;
+            case BoundModuleDefinition module:
+                WalkAnnotations(module.Body, unit, diagnostics, allowDynamic);
+                break;
             case BoundIfStatement i:
                 WalkAnnotations(i.ThenBlock, unit, diagnostics, allowDynamic);
                 if (i.ElseBlock is not null) WalkAnnotations(i.ElseBlock, unit, diagnostics, allowDynamic);

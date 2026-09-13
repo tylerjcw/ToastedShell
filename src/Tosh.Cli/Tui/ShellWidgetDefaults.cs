@@ -4,21 +4,36 @@ using Tosh.Tui.Widgets;
 namespace Tosh.Cli.Tui;
 
 /// <summary>
-/// Gives a TUI table the columns the shell would print for the same object.
+/// Teaches the widgets what this shell's answers are.
 /// </summary>
 /// <remarks>
-/// Reflection over a <see cref="System.IO.FileInfo"/> yields forty-nine properties. `ls`
-/// shows four, because the display engine has already made that decision — which columns
-/// matter, how wide, which way they align — and it is the decision a reader has already
-/// learned. `ls | tui table` showing something else would be a second opinion nobody asked
-/// for (<c>TUI-0017</c>).
+/// <para>
+/// The widgets know nothing about a shell — they are a library, and a script or a C\#
+/// program can use them without one. So the decisions a shell has already made, and that
+/// a reader has already learned, are installed rather than assumed.
+/// </para>
+/// <para>
+/// Reflection over a <see cref="System.IO.FileInfo"/> yields forty-nine properties; `ls`
+/// shows four, because the display engine decided which matter, how wide and which way
+/// they align. A table showing something else would be a second opinion nobody asked for
+/// (<c>TUI-0017</c>). A tree drawing guides the user turned off in their theme is the same
+/// mistake (<c>TUI-0018</c>).
+/// </para>
 /// </remarks>
-internal static class DisplayEngineColumns
+internal static class ShellWidgetDefaults
 {
-    /// <summary>Installs the shell's column choice as the table's default.</summary>
+    /// <summary>Installs the shell's own answers as the widgets' defaults.</summary>
     public static void Install(ToshRuntime runtime)
     {
         ArgumentNullException.ThrowIfNull(runtime);
+
+        // Asked on every draw rather than read once, so a theme changed while a screen is
+        // up takes effect on the next frame.
+        TuiTree.DefaultGlyphs = () => runtime.Config.Theme.Tui.TreeStyle switch
+        {
+            ToshTuiTreeStyle.Clean => TuiTreeGlyphs.Clean,
+            _ => TuiTreeGlyphs.Default,
+        };
 
         var engine = new DisplayEngine(runtime.Formatter);
 

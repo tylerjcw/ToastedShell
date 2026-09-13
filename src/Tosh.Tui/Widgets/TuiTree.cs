@@ -19,8 +19,14 @@ public readonly record struct TuiTreeGlyphs(
     /// <summary>What both browsers draw today.</summary>
     public static TuiTreeGlyphs Default => new("▾", "▸", "─", "├", "└", "│ ", "  ");
 
-    /// <summary>Guides only, with no connectors — quieter for a shallow tree.</summary>
-    public static TuiTreeGlyphs Plain => new("▾", "▸", " ", " ", " ", "  ", "  ");
+    /// <summary>
+    /// Indentation and markers, with no connectors drawn between them.
+    /// </summary>
+    /// <remarks>
+    /// Named for the theme setting it answers: <c>Theme.Tui.TreeStyle</c> is
+    /// <c>Clean</c> or <c>Dense</c>, and this is what <c>Clean</c> asks for.
+    /// </remarks>
+    public static TuiTreeGlyphs Clean => new("▾", "▸", " ", " ", " ", "  ", "  ");
 
     /// <summary>Drawable where the terminal cannot manage box characters.</summary>
     public static TuiTreeGlyphs Ascii => new("-", "+", " ", "|", "`", "| ", "  ");
@@ -122,8 +128,29 @@ public sealed class TuiTree : TuiWidget
     /// <summary>Whether the root is drawn, or only what is under it.</summary>
     public bool ShowRoot { get; set; } = true;
 
-    /// <summary>The characters the guides and markers are drawn with.</summary>
-    public TuiTreeGlyphs Glyphs { get; set; } = TuiTreeGlyphs.Default;
+    /// <summary>
+    /// The glyph set a tree uses when its own is not set. Installed by the host.
+    /// </summary>
+    /// <remarks>
+    /// A tree cannot read the user's configuration — it is a widget, and the widgets know
+    /// nothing about a shell. The host that does installs this, the same way it installs
+    /// <see cref="TuiTable.ColumnSource"/>, and a tree then follows
+    /// <c>Theme.Tui.TreeStyle</c> without being told to. A host that installs nothing gets
+    /// <see cref="TuiTreeGlyphs.Default"/>.
+    /// </remarks>
+    public static Func<TuiTreeGlyphs>? DefaultGlyphs { get; set; }
+
+    /// <summary>
+    /// The characters the guides and markers are drawn with.
+    /// </summary>
+    /// <remarks>
+    /// Asked for on every draw rather than captured when the tree was built, so a theme
+    /// changed while a screen is up takes effect on the next frame.
+    /// </remarks>
+    public TuiTreeGlyphs? Glyphs { get; set; }
+
+    /// <summary>The glyph set actually used to draw, once defaults have been applied.</summary>
+    private TuiTreeGlyphs Marks => Glyphs ?? DefaultGlyphs?.Invoke() ?? TuiTreeGlyphs.Default;
 
     /// <summary>How a row is drawn.</summary>
     public TuiStyle Style { get; set; }
@@ -481,16 +508,16 @@ public sealed class TuiTree : TuiWidget
         // carries that and the trunks are drawn plain.
         for (var level = 1; level < row.Depth; level += 1)
         {
-            line.Add(Glyphs.Trunk, GuideStyle);
+            line.Add(Marks.Trunk, GuideStyle);
         }
 
         if (row.Depth > 0)
         {
-            line.Add(row.IsLast ? Glyphs.LastBranch : Glyphs.Branch, GuideStyle);
+            line.Add(row.IsLast ? Marks.LastBranch : Marks.Branch, GuideStyle);
         }
 
         line.Add(
-            row.HasChildren ? (row.IsExpanded ? Glyphs.Expanded : Glyphs.Collapsed) : Glyphs.Leaf,
+            row.HasChildren ? (row.IsExpanded ? Marks.Expanded : Marks.Collapsed) : Marks.Leaf,
             GuideStyle);
 
         line.Add(" ", GuideStyle);

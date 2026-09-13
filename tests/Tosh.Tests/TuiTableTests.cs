@@ -295,6 +295,53 @@ public sealed class TuiTableTests
     }
 
     [Fact]
+    public void More_columns_than_fit_can_be_scrolled_along()
+    {
+        // Truncated with no way to move along them, the rightmost columns are data the
+        // reader simply cannot see.
+        var table = Focused(new TuiTable([
+            Record(("A", "aaa"), ("B", "bbb"), ("C", "ccc"), ("D", "ddd")),
+        ]));
+
+        table.Arrange(new TuiRect(0, 0, 9, 2));
+
+        Assert.False(table.AllColumnsFit);
+
+        // What matters is which column is leftmost: scrolling drops whole columns off the
+        // left, and whatever then fits on the right fills the room.
+        Assert.StartsWith("A", Render(table, 9, 2)[0], StringComparison.Ordinal);
+        Assert.StartsWith("aaa", Render(table, 9, 2)[1], StringComparison.Ordinal);
+
+        table.OnInput(Key(ConsoleKey.RightArrow));
+        Assert.Equal(1, table.ColumnOffset);
+        Assert.StartsWith("B", Render(table, 9, 2)[0], StringComparison.Ordinal);
+        Assert.StartsWith("bbb", Render(table, 9, 2)[1], StringComparison.Ordinal);
+
+        table.OnInput(Key(ConsoleKey.RightArrow));
+        table.OnInput(Key(ConsoleKey.RightArrow));
+        Assert.Equal(["D", "ddd"], Render(table, 9, 2));
+
+        // The last column stays put rather than scrolling off into nothing.
+        table.OnInput(Key(ConsoleKey.RightArrow));
+        Assert.Equal(3, table.ColumnOffset);
+
+        table.OnInput(Key(ConsoleKey.LeftArrow));
+        Assert.Equal(2, table.ColumnOffset);
+    }
+
+    [Fact]
+    public void A_table_that_fits_says_so_and_does_not_move()
+    {
+        var table = Focused(Processes());
+        table.Arrange(new TuiRect(0, 0, 40, 4));
+
+        Assert.True(table.AllColumnsFit);
+
+        table.OnInput(Key(ConsoleKey.LeftArrow));
+        Assert.Equal(0, table.ColumnOffset);
+    }
+
+    [Fact]
     public void A_table_with_no_rows_draws_nothing_and_answers_nothing()
     {
         var table = new TuiTable();

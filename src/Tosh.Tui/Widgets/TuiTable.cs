@@ -226,6 +226,21 @@ public sealed class TuiTable : TuiWidget
     /// <summary>The first row shown.</summary>
     public int Offset => _offset;
 
+    /// <summary>The first column shown.</summary>
+    /// <remarks>
+    /// A table with more columns than fit truncates the ones on the right, and a reader
+    /// with no way to move along them cannot see the data at all. Whole columns rather
+    /// than cells: half a column is not a reading of anything.
+    /// </remarks>
+    public int ColumnOffset
+    {
+        get => field;
+        private set => field = Math.Clamp(value, 0, Math.Max(0, Columns.Count - 1));
+    }
+
+    /// <summary>Moves the view along by whole columns.</summary>
+    public void ScrollColumns(int by) => ColumnOffset += by;
+
     /// <summary>Raised when the selection moves.</summary>
     public Action<int>? SelectionChanged { get; set; }
 
@@ -269,7 +284,7 @@ public sealed class TuiTable : TuiWidget
             ? outer.Clip(new TuiRect(0, 0, Math.Max(0, outer.Width - 1), outer.Height))
             : outer;
 
-        var columns = Columns;
+        var columns = Visible();
         var widths = Distribute(columns, surface.Width);
 
         // Cells are drawn inside whatever the grid left them; with no grid that is
@@ -331,6 +346,22 @@ public sealed class TuiTable : TuiWidget
                 new TuiStyle(Attributes: TuiTextAttributes.Dim),
                 new TuiStyle(Attributes: TuiTextAttributes.Dim));
         }
+    }
+
+    /// <summary>
+    /// The columns from <see cref="ColumnOffset"/> onwards.
+    /// </summary>
+    /// <remarks>
+    /// Scrolling drops columns from the left rather than shifting cells sideways, so every
+    /// column on screen is whole and its header still sits above it.
+    /// </remarks>
+    private IReadOnlyList<TuiColumn> Visible()
+    {
+        var columns = Columns;
+
+        return ColumnOffset <= 0 || ColumnOffset >= columns.Count
+            ? columns
+            : [.. columns.Skip(ColumnOffset)];
     }
 
     /// <summary>Draws whatever grid <see cref="Borders"/> asked for.</summary>
@@ -433,6 +464,11 @@ public sealed class TuiTable : TuiWidget
             case ConsoleKey.PageDown: SelectedIndex += PageSize; return true;
             case ConsoleKey.Home: SelectedIndex = 0; return true;
             case ConsoleKey.End: SelectedIndex = _rows.Count - 1; return true;
+
+            // Left and right move along the columns, which is the only thing they could
+            // mean in a grid and the only way to reach a column that does not fit.
+            case ConsoleKey.LeftArrow: ScrollColumns(-1); return true;
+            case ConsoleKey.RightArrow: ScrollColumns(1); return true;
 
             case ConsoleKey.Enter:
                 // With nothing listening, activation belongs to whatever surrounds this.
@@ -580,6 +616,19 @@ public sealed class TuiTable : TuiWidget
     }
 
     /// <summary>How wide a column would like to be: its header, or its widest cell.</summary>
+    /// <summary>Whether every column fits in the width the table was given.</summary>
+    public bool AllColumnsFit
+    {
+        get
+        {
+            var columns = Columns;
+
+            return columns.Sum(NaturalWidth)
+                + (Separator * Math.Max(0, columns.Count - 1))
+                + FrameColumns <= Bounds.Width;
+        }
+    }
+
     private int NaturalWidth(TuiColumn column)
     {
         var width = ShowHeader ? TuiTextMeasure.MeasureWidth(column.Header) : 0;

@@ -5,7 +5,6 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
-| [`TUI-0017`](items/TUI-0017.md) | P2 | partial | 8/9 | There is no table widget, in a shell whose pipeline is objects |
 | [`TOAST-0090`](items/TOAST-0090.md) | P2 | partial | 8/9 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
 | [`TOAST-0053`](items/TOAST-0053.md) | P1 | partial | 10/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
@@ -20,7 +19,6 @@
 | [`TUI-0007`](items/TUI-0007.md) | P3 | partial | 4/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TUI-0020`](items/TUI-0020.md) | P3 | partial | 4/6 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
-| [`TUI-0018`](items/TUI-0018.md) | P2 | partial | 6/7 | Both browsers hand-render a tree, and a script cannot show one at all |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0104`](items/TOAST-0104.md) | P2 | partial | 4/5 | A refinement type derived from a sibling in the same module silently fails to register |

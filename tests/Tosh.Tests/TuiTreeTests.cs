@@ -226,6 +226,33 @@ public sealed class TuiTreeTests
     }
 
     [Fact]
+    public void A_host_can_say_what_a_tree_draws_with_when_nobody_else_does()
+    {
+        // The widgets know nothing about a shell, so the shell installs its theme's answer
+        // rather than the tree going looking for one.
+        var previous = TuiTree.DefaultGlyphs;
+
+        try
+        {
+            TuiTree.DefaultGlyphs = () => TuiTreeGlyphs.Clean;
+
+            var tree = Tree();
+            tree.Expand(tree.Root);
+
+            // Clean mirrors Default's widths with blanks, so rows line up either way.
+            Assert.Equal(["▾ root", " ▸ alpha", "   beta"], Render(tree, 20, 3));
+
+            // A tree that says what it wants still gets it.
+            tree.Glyphs = TuiTreeGlyphs.Default;
+            Assert.Equal(["▾ root", "├▸ alpha", "└─ beta"], Render(tree, 20, 3));
+        }
+        finally
+        {
+            TuiTree.DefaultGlyphs = previous;
+        }
+    }
+
+    [Fact]
     public void The_glyphs_can_be_swapped_for_a_terminal_that_cannot_draw_boxes()
     {
         var tree = Tree();
