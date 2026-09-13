@@ -96,6 +96,34 @@ public sealed class TuiWidgetRegistry
             return widget;
         });
 
+        registry.Register("lines", static (spec, _) =>
+        {
+            // A document rather than a paragraph: the lines a caller wrote, kept as written,
+            // scrolling themselves. `Text` wraps; this does not.
+            var lines = new TuiLines
+            {
+                Scrollbar = spec.Flag("scrollbar"),
+            };
+
+            lines.Lines = [.. spec.PrimaryItems().Select(item => item switch
+            {
+                TuiSpanLine already => already,
+                _ => new TuiSpanLine([new TuiSpan(item?.ToString() ?? string.Empty, spec.Style())]),
+            })];
+
+            return lines;
+        });
+
+        registry.Register("scroll", static (spec, context) =>
+        {
+            // For a child that draws itself at full height and has no scrolling of its own.
+            // A list, a table, a tree and a document all scroll themselves; this is for
+            // everything else.
+            var children = context.BuildChildren(spec.PrimaryItems());
+
+            return new TuiScroll(children.Count == 1 ? children[0] : Wrap(children, TuiOrientation.Vertical));
+        });
+
         registry.Register("spark", static (spec, _) => new TuiSparkline(spec.Numbers())
         {
             Style = spec.Style(),

@@ -92,6 +92,42 @@ public sealed class ConfigBrowserScreenTests
         Assert.DoesNotContain(appliedLines, line => line.Contains("Staged Value", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The confirmation is a layer over the browser, not a replacement for its detail pane.
+    /// </summary>
+    /// <remarks>
+    /// Spliced into the detail pane, it hid whatever the reader was looking at when they
+    /// pressed the key that raised it — which is the one thing they need in order to answer
+    /// it (<c>TUI-0003</c>).
+    /// </remarks>
+    [Fact]
+    public void A_confirmation_draws_over_the_browser_rather_than_replacing_a_pane()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var screen = new ConfigBrowserScreen(runtime, new ConfigBrowseRequest("ghost text", null));
+
+        Assert.True(screen.SelectSidebarEntryContaining("Ghost Text Enabled"));
+        screen.HandleKey(new ConsoleKeyInfo(' ', ConsoleKey.Spacebar, shift: false, alt: false, control: false));
+
+        // A staged change makes quitting ask rather than quit.
+        Assert.Equal(
+            TuiScreenResult.Continue,
+            screen.HandleKey(new ConsoleKeyInfo('q', ConsoleKey.Q, shift: false, alt: false, control: false)));
+
+        var rows = screen.Render(new TuiSize(100, 30)).ToPlainText().Split('\n');
+
+        Assert.Contains(rows, row => row.Contains("Discard Staged Changes?", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.Contains("Discard & Quit", StringComparison.Ordinal));
+
+        // The tree is still there beside it, and the detail pane still says what it said.
+        Assert.Contains(rows, row => row.Contains("Ghost Text", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.Contains("Configuration", StringComparison.Ordinal));
+
+        // Centred rather than filling a pane: the dialog starts well inside the frame.
+        var dialogRow = rows.First(row => row.Contains("Discard Staged Changes?", StringComparison.Ordinal));
+        Assert.True(dialogRow.IndexOf('╭', StringComparison.Ordinal) > 10, dialogRow);
+    }
+
     [Fact]
     public void Config_browser_can_stage_and_apply_enum_changes()
     {
@@ -429,7 +465,17 @@ public sealed class ConfigBrowserScreenTests
 
         var firstQuit = screen.HandleKey(new ConsoleKeyInfo('q', ConsoleKey.Q, shift: false, alt: false, control: false));
         Assert.Equal(TuiScreenResult.Continue, firstQuit);
-        Assert.Contains(screen.BuildDetailLines(90), line => line.Contains("Discard them and quit", StringComparison.Ordinal));
+
+        // Asked of the frame rather than of the detail pane: the confirmation is a layer
+        // over the browser now, and the detail pane goes on saying what it said.
+        Assert.Contains(
+            "Discard them and quit",
+            screen.Render(new TuiSize(100, 30)).ToPlainText(),
+            StringComparison.Ordinal);
+
+        Assert.DoesNotContain(
+            screen.BuildDetailLines(90),
+            line => line.Contains("Discard them and quit", StringComparison.Ordinal));
 
         var cancelledQuit = screen.HandleKey(new ConsoleKeyInfo('n', ConsoleKey.N, shift: false, alt: false, control: false));
         Assert.Equal(TuiScreenResult.Continue, cancelledQuit);

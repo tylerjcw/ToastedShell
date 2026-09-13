@@ -1,0 +1,146 @@
+using System.Dynamic;
+using Tosh.Tui;
+using Tosh.Tui.Declarative;
+using Tosh.Tui.Rendering;
+using Tosh.Tui.Widgets;
+
+namespace Tosh.Tests;
+
+/// <summary>
+/// Every widget is reachable from markup, and every widget markup names exists.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Markup is a first-class way to write a screen rather than a reduced one, so a widget
+/// that only the object style can reach is a gap. Two of them had opened up — a document
+/// pane and a scroll container — because a widget lands in <c>Widgets/</c> and registering
+/// it is a separate step nothing was watching.
+/// </para>
+/// <para>
+/// This watches it. The registry is compared against the widget types themselves, so
+/// adding a widget without a name fails here rather than being discovered by someone
+/// writing markup against it.
+/// </para>
+/// </remarks>
+public sealed class TuiMarkupSurfaceTests
+{
+    /// <summary>Widgets a markup tree has no business naming, and why.</summary>
+    private static readonly Dictionary<string, string> NotNamed = new(StringComparer.Ordinal)
+    {
+        ["TuiBorder"] = "written as `Box`, which is what a titled border is called in markup",
+        ["TuiTextField"] = "written as `Field`, which is the labelled row anyone actually wants",
+        ["TuiStack"] = "written as `Row` or `Column`, which say which way it runs",
+    };
+
+    private static IDictionary<string, object?> Node(params (string Key, object? Value)[] fields)
+    {
+        var record = new ExpandoObject();
+        var dictionary = (IDictionary<string, object?>)record;
+
+        foreach (var (key, value) in fields)
+        {
+            dictionary[key] = value;
+        }
+
+        return dictionary;
+    }
+
+    public static TheoryData<string, object?> EveryName()
+    {
+        var data = new TheoryData<string, object?>();
+
+        // The primary value each name expects: children, items, a number, or text.
+        foreach (var (name, primary) in ((string, object?)[])
+                 [
+                     ("Text", "hello"),
+                     ("Lines", new object?[] { "one", "two" }),
+                     ("List", new object?[] { "a", "b" }),
+                     ("Table", new object?[] { "a", "b" }),
+                     ("Tree", "root"),
+                     ("Field", "Name"),
+                     ("Button", "OK"),
+                     ("Gauge", null),
+                     ("Spark", new object?[] { 1, 2, 3 }),
+                     ("Row", new object?[] { "a" }),
+                     ("Column", new object?[] { "a" }),
+                     ("Box", new object?[] { "a" }),
+                     ("Scroll", new object?[] { "a" }),
+                     ("Form", new object?[] { "a" }),
+                     ("Overlay", new object?[] { "a" }),
+                 ])
+        {
+            data.Add(name, primary);
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryName))]
+    public void Every_registered_name_builds_and_draws(string name, object? primary)
+    {
+        var widget = TuiTreeBuilder.Build(Node((name, primary)));
+
+        var buffer = new TuiBuffer(new TuiSize(30, 8));
+        var bounds = new TuiRect(0, 0, 30, 8);
+
+        widget.Measure(TuiConstraints.From(new TuiSize(30, 8)));
+        widget.Arrange(bounds);
+        widget.Draw(new TuiSurface(buffer, bounds));
+    }
+
+    [Fact]
+    public void Every_widget_has_a_name_in_markup_or_a_reason_not_to()
+    {
+        var widgets = typeof(TuiWidget).Assembly
+            .GetTypes()
+            .Where(type => type.IsPublic && !type.IsAbstract && typeof(TuiWidget).IsAssignableFrom(type))
+            .Select(type => type.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        var registered = TuiWidgetRegistry.CreateDefault().Names;
+
+        // A markup name is the readable half of the type name — `spark` for `TuiSparkline`,
+        // `text` for `TuiTextWidget` — so the match is a prefix rather than an equality.
+        var missing = widgets
+            .Where(widget => !NotNamed.ContainsKey(widget))
+            .Where(widget => !registered.Any(name =>
+                widget.StartsWith($"Tui{name}", StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        Assert.True(
+            missing.Length == 0,
+            $"These widgets cannot be written as markup: {string.Join(", ", missing)}. "
+            + "Register a name in TuiWidgetRegistry.CreateDefault, or record in NotNamed why markup "
+            + "should not have one.");
+    }
+
+    [Fact]
+    public void A_name_that_is_registered_twice_would_be_caught()
+    {
+        // The registry replaces by name, so a second registration is silent. Counting them
+        // is how a duplicate turns into a failure rather than into whichever won.
+        var names = TuiWidgetRegistry.CreateDefault().Names;
+
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public void A_document_keeps_the_lines_it_was_given()
+    {
+        var widget = TuiTreeBuilder.Build(Node(("Lines", new object?[] { "first", "second" })));
+
+        var lines = Assert.IsType<TuiLines>(widget);
+
+        Assert.Equal(["first", "second"], lines.Lines.Select(line => line.Text));
+    }
+
+    [Fact]
+    public void A_scroll_wraps_what_it_is_given()
+    {
+        var widget = TuiTreeBuilder.Build(Node(("Scroll", new object?[] { "inside" })));
+
+        Assert.IsType<TuiTextWidget>(Assert.IsType<TuiScroll>(widget).Child);
+    }
+}

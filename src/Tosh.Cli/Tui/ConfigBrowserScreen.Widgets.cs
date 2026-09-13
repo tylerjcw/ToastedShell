@@ -33,7 +33,10 @@ internal sealed partial class ConfigBrowserScreen
     private TuiBorder _treeFrame = null!;
     private TuiBorder _detailFrame = null!;
     private TuiStack _panes = null!;
-    private TuiStack _tui = null!;
+    private TuiStack _panels = null!;
+    private TuiOverlay _tui = null!;
+    private readonly TuiLines _dialogLines = new();
+    private TuiBorder _dialogFrame = null!;
 
     /// <summary>Assembles the frame. Called from the constructor, once.</summary>
     private void BuildTree()
@@ -52,10 +55,16 @@ internal sealed partial class ConfigBrowserScreen
         _panes.Add(_treeFrame);
         _panes.Add(_detailFrame);
 
-        _tui = new TuiStack(TuiOrientation.Vertical)
+        _panels = new TuiStack(TuiOrientation.Vertical)
             .Add(_headerFrame)
             .Add(_panes)
             .Add(_footerLine, TuiLength.Fixed(1));
+
+        // The confirmation is a layer over the browser, not a substitution for its detail
+        // pane. Spliced in, it hid whatever the reader was looking at when they pressed the
+        // key that raised it — which is the one thing they need to see to answer it.
+        _dialogFrame = new TuiBorder(_dialogLines);
+        _tui = new TuiOverlay(_panels) { Margin = 4 };
     }
 
     /// <summary>Draws the current model into a grid of cells.</summary>
@@ -74,6 +83,9 @@ internal sealed partial class ConfigBrowserScreen
         }
 
         _detailFrame.Title = DetailTitle();
+        _dialogFrame.Glyphs = BorderGlyphs(theme.BoxStyle);
+        _dialogFrame.Style = theme.Border.ToStyle();
+        _dialogFrame.TitleStyle = theme.Title.ToStyle();
 
         SyncTree(Math.Max(1, height - SearchBoxHeight - 1 - 2));
 
@@ -84,6 +96,8 @@ internal sealed partial class ConfigBrowserScreen
 
         _treeList.Items = [.. _tree.Items.Cast<object?>()];
         _treeList.SelectedIndex = _tree.SelectedIndex;
+
+        ShowDialog(theme, width);
 
         var buffer = new TuiBuffer(new TuiSize(width, height));
         var bounds = new TuiRect(0, 0, width, height);
@@ -107,11 +121,33 @@ internal sealed partial class ConfigBrowserScreen
         return new TuiFrame(buffer);
     }
 
+    /// <summary>Puts the confirmation up, or takes it down.</summary>
+    private void ShowDialog(ToshTuiThemeConfig theme, int width)
+    {
+        if (!_confirmDialog.IsOpen)
+        {
+            _tui.Modal = null;
+            return;
+        }
+
+        // Sized to the message rather than to the screen: a confirmation that fills the
+        // window is a screen, and the reader loses the thing they are deciding about.
+        var inner = Math.Clamp(width / 2, 24, 72);
+
+        _dialogFrame.Title = _confirmDialog.Title;
+        _dialogFrame.Size = TuiLength.Fixed(inner + 2);
+
+        _dialogLines.Lines = [.. _confirmDialog.BuildEntries(inner)
+            .Select(text => new TuiSpanLine([
+                new TuiSpan(TuiRenderHelpers.TrimOrPadPlain(text, inner), theme.DetailText.ToStyle()),
+            ]))];
+
+        _tui.Modal = _dialogFrame;
+    }
+
     /// <summary>What the detail pane is currently showing.</summary>
     private string DetailTitle()
-        => _confirmDialog.IsOpen
-            ? _confirmDialog.Title
-            : _pathEditor.IsBrowsing
+        => _pathEditor.IsBrowsing
                 ? "Filesystem Picker"
                 : _tree.TryGetSelected(out var selected)
                     ? selected.Node.DisplayName

@@ -32,16 +32,6 @@ internal sealed partial class ConfigBrowserScreen
             return [new ConfigDetailEntry("Select a config node from the tree.", ConfigDetailEntryKind.Meta)];
         }
 
-        if (_confirmDialog.IsOpen)
-        {
-            return
-            [
-                new ConfigDetailEntry("Confirmation", ConfigDetailEntryKind.SectionHeading),
-                new ConfigDetailEntry(string.Empty, ConfigDetailEntryKind.Body),
-                .. _confirmDialog.BuildEntries(width).Select(text => new ConfigDetailEntry(text, ConfigDetailEntryKind.Body)),
-            ];
-        }
-
         var lines = new List<ConfigDetailEntry>();
         var node = selected.Node;
         var currentValue = GetCurrentValue(node);
