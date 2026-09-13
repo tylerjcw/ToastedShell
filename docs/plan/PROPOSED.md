@@ -11,6 +11,7 @@
 | [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
 | [`TUI-0010`](items/TUI-0010.md) | P1 | proposed | 5/7 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
+| [`TUI-0017`](items/TUI-0017.md) | P2 | proposed | 0/7 | There is no table widget, in a shell whose pipeline is objects |
 | [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
 | [`TOAST-0056`](items/TOAST-0056.md) | P2 | proposed | 0/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
 | [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
@@ -25,6 +26,7 @@
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
 | [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
+| [`TUI-0019`](items/TUI-0019.md) | P3 | proposed | 0/5 | A layout can say fixed, auto or star, and the callers that want min or max do arithmetic |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
 | [`TOAST-0123`](items/TOAST-0123.md) | P2 | proposed | 0/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
@@ -35,6 +37,9 @@
 | [`TOAST-0133`](items/TOAST-0133.md) | P3 | proposed | 0/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
 | [`TUI-0011`](items/TUI-0011.md) | P3 | proposed | 0/5 | Nothing checks that the TUI surface survives compilation to a Tōast program |
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
+| [`TUI-0022`](items/TUI-0022.md) | P3 | proposed | 0/5 | A keybinding's help text is written twice, and the two drift |
+| [`TUI-0020`](items/TUI-0020.md) | P3 | proposed | 0/6 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
+| [`TUI-0018`](items/TUI-0018.md) | P2 | proposed | 0/6 | Both browsers hand-render a tree, and a script cannot show one at all |
 | [`TOAST-0094`](items/TOAST-0094.md) | P3 | proposed | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
@@ -50,6 +55,7 @@
 | [`TOAST-0080`](items/TOAST-0080.md) | P2 | proposed | 0/10 | Resource safety is a runtime convention, so an owned handle can be copied and used after release |
 | [`TUI-0005`](items/TUI-0005.md) | P1 | proposed | 0/6 | Text width is UTF-16 code units, so any wide or combining character misaligns every box |
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
+| [`TUI-0021`](items/TUI-0021.md) | P3 | proposed | 0/5 | A widget cannot be padded or aligned, so spacing is done with blank text |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
