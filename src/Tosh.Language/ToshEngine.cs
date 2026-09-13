@@ -4026,6 +4026,32 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
+    /// Runs a callable to completion on the calling thread, for a CLR delegate wrapping one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Blocking is correct here rather than merely convenient. The caller is a .NET type
+    /// raising an event — a widget reporting a keystroke — and it is mid-operation: it has
+    /// nowhere to await and nothing useful to do until the handler has run. The TUI's pull
+    /// bindings already call script functions from inside the render loop this way.
+    /// </para>
+    /// <para>
+    /// The engine is single-threaded, and this keeps it so: the handler runs on whichever
+    /// thread raised the event, which is the thread the engine is already on whenever the
+    /// event came from something the script itself set running.
+    /// </para>
+    /// </remarks>
+    internal object? InvokeCallableOnThisThread(IShellCallable callable, IReadOnlyList<object?> arguments)
+    {
+        var result = InvokeHeldCallableAsync(callable, arguments, CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+
+        return result.ReturnedVoid ? null : result.Value;
+    }
+
+    /// <summary>
     /// Invokes a callable in expression position, where exactly one value is
     /// expected.
     /// </summary>

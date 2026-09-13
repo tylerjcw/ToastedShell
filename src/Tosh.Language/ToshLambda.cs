@@ -2,7 +2,7 @@ using Tosh.Runtime;
 
 namespace Tosh.Language;
 
-internal sealed class ToshLambda : IShellCallable, IShellRecordObject
+internal sealed class ToshLambda : IShellCallable, ISelfHostedCallable, IShellRecordObject
 {
     private readonly FunctionDefinition _definition;
     private readonly ToshEngine _engine;
@@ -37,6 +37,11 @@ internal sealed class ToshLambda : IShellCallable, IShellRecordObject
 
         return _engine.ExecuteFunctionAsync(_definition, context);
     }
+
+    /// <inheritdoc />
+    /// <remarks>A lambda holds the engine that defined it, so it needs nothing from its caller.</remarks>
+    public object? InvokeWithoutContext(IReadOnlyList<object?> arguments)
+        => _engine.InvokeCallableOnThisThread(this, arguments);
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {

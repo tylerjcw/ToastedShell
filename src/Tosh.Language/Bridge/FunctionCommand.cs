@@ -2,7 +2,7 @@ using Tosh.Runtime;
 
 namespace Tosh.Language.Bridge;
 
-public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable, IDocumentedCommand
+public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable, ISelfHostedCallable, IDocumentedCommand
 {
     private readonly FunctionDefinition _definition;
     private readonly ToshEngine _engine;
@@ -48,6 +48,11 @@ public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata,
     public string CallableName => Name;
 
     internal FunctionDefinition Definition => _definition;
+
+    /// <inheritdoc />
+    /// <remarks>A function holds the engine that defined it, so it needs nothing from its caller.</remarks>
+    public object? InvokeWithoutContext(IReadOnlyList<object?> arguments)
+        => _engine.InvokeCallableOnThisThread(this, arguments);
 
     public int RequiredParameterCount => _definition.Parameters.Count(parameter => !parameter.IsOptional && !parameter.IsRest);
 

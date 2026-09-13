@@ -577,6 +577,15 @@ public static class TypeConversion
             }
         }
 
+        // A function assigned where a delegate is wanted becomes one, which is what lets a
+        // script write `$field.Changed = func(text) => (…)` and have a widget raise it.
+        if (typeof(Delegate).IsAssignableFrom(effectiveType) &&
+            ShellCallableDelegates.TryCreate(value, effectiveType, out var handler))
+        {
+            converted = handler;
+            return true;
+        }
+
         // A type may declare how to make one of itself from something else. Honouring that
         // is what lets a layout be written `Size = "2*"` rather than
         // `Size = TuiLength.Star(2)`, and it costs nothing anywhere else: a type with no
