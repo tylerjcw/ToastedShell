@@ -1,7 +1,7 @@
 ---
 id: TOAST-0091
 title: "A value whose state is not entirely constructor arguments has no literal form"
-status: complete
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -65,7 +65,7 @@ justify it alone.
 - [x] Required state a literal omits is a diagnostic rather than a default-initialised surprise
 - [x] Untyped `{| … |}` is unchanged
 - [x] Formatter, LSP completion and hover understand the form
-- [~] Interpreter and compiler agree — **compiled backend diverges, recorded not fixed**
+- [ ] Interpreter and compiler agree — **compiled backend diverges, recorded not fixed**
 
 ## Decisions and progress (2026-08-28)
 

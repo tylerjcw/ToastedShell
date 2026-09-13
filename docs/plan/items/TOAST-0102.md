@@ -1,7 +1,7 @@
 ---
 id: TOAST-0102
 title: "A capitalised command name stops parsing as a command when its first argument is parenthesised"
-status: complete
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-30
@@ -66,7 +66,7 @@ The workaround is to write the call in comma form — `Scale(($s.Points[0].X), $
 - [x] `(Upper ($x.Y) 1 2 3)` and `(lower ($x.Y) 1 2 3)` parse the same way
 - [x] Case does not change how an identifier in command position is parsed
 - [x] A callee defined in another file parses like one defined above the call
-- [~] If the ambiguity is genuine, the diagnostic names it rather than reporting a missing pipe
+- [ ] If the ambiguity is genuine, the diagnostic names it rather than reporting a missing pipe
       — **moot.** Whitespace decides it outright, so there is no residual ambiguity to report.
 - [x] Corpus covers: unknown callee, capitalised, parenthesised first argument, in a module
 

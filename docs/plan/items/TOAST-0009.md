@@ -35,12 +35,12 @@ rewrite.
 
 ## Acceptance
 
-- [~] Each bound node type carries its own evaluate method; dispatch is a virtual call, not a
+- [ ] Each bound node type carries its own evaluate method; dispatch is a virtual call, not a
       thirty-nine-case switch — **each case is now its own method**, so the shared state
       machine is gone. Dispatch is still a switch over syntax nodes, not a virtual call
       over bound nodes; that is the remaining half.
 - [ ] Shapes that cannot suspend are synchronous by construction rather than special-cased
-- [~] A differential harness compares old evaluator against new over the conformance corpus,
+- [ ] A differential harness compares old evaluator against new over the conformance corpus,
       and both agree exactly — **the harness exists and is green**; it compares the two
       evaluators that exist *today*, and is where a bound-tree evaluator will hang.
 - [ ] Streaming laziness preserved — `TS-P2-113` and `TS-P2-89` both have scars here

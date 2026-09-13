@@ -1,7 +1,7 @@
 ---
 id: TOAST-0092
 title: "A value cannot be written to a file and read back as itself, in any format"
-status: complete
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -454,7 +454,7 @@ all ten shapes side by side found it.
       a structural reason stated below rather than a missing feature
 - [x] `--typed` for json, toml and xml; csv refuses a nested value rather than flattening it
 - [x] A conformance corpus that a third-party implementation can run
-- [~] Interpreter and compiler **do not** agree; recorded, with the reason
+- [ ] Interpreter and compiler **do not** agree; recorded, with the reason
 
 ## Dependencies
 

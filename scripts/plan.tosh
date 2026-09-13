@@ -32,7 +32,7 @@ var PLAN_DIR = $"{RepoRoot()}/docs/plan"
 var ITEMS_DIR = $"{RepoRoot()}/docs/plan/items"
 
 var STATES   = [ "proposed", "open" , "research", "in-progress", "partial" , "complete", "deferred", "withdrawn" ]
-var AREAS    = [ "toast"   , "tosh" , "tome"    , "crumb"      , "plan"    , "legacy" ]
+var AREAS    = [ "toast"   , "tosh" , "tome"    , "crumb"      , "plan"    , "legacy" , "tui" ]
 var REQUIRED = [ "id"      , "title", "status"  , "area"       , "priority" ]
 
 ## Which index a status appears on.

@@ -418,3 +418,39 @@ is what both modes actually implement.
   which matters because a heterogeneous stream has no single target to supply — the reason the
   item rejects a `--as <type>` flag as the general answer.
 - This settles the serialised contract `TOAST-0083` deferred here.
+
+### September 12, 2026 — TUI framework shape
+
+The terminal UI becomes a framework usable from the shell, from Tōast scripts and
+eventually from compiled Tōast programs, rather than a set of built-in full-screen
+commands. The shape is settled as follows.
+
+- **Retained widget tree, not immediate mode.** Immediate mode is terser to write but
+  calls user drawing code every frame, which here means an `IShellCallable` through an
+  async enumerable per frame. A retained tree keeps script code off the frame path, and
+  `ITuiScreen.Render` is already a pure projection, which is what a retained tree wants.
+- **A widget owns its drawing, and widgets nest.** This is the part worth taking from
+  GTK. The ceremony around it — subclassing, property registration, `connect`, manual
+  box packing — is not taken: it is the ritual the framework is meant to avoid.
+- **Declarative surface over the same tree.** A screen may be written as a record
+  literal or built imperatively; both produce one widget tree. Bindings may *pull* — a
+  property set to a callable is re-evaluated on refresh — so a live screen needs no ids
+  and no update handler. Pushing into a held object stays available.
+- **No separate markup format.** Record literals are the markup. They already carry
+  nested structure, a `TimeSpan` from `1s` and an `IShellCallable` from `&func`, they
+  can be computed, and they report errors through existing diagnostics. GtkBuilder XML
+  exists because C cannot express nested literals; ToastScript can. A `.tui` file, if
+  ever wanted, deserialises into the same tree and is not built before someone asks.
+- **Built-in widgets are C#; the set is open through one `Custom` widget.** Script code
+  may supply drawing through `Custom`, which is called on the refresh path and never on
+  the frame path. This keeps a script callable out of the hot loop while leaving the
+  widget set extensible. Chosen over both a closed enum and a fully open registry with
+  script drawing per frame.
+- **Cells, not strings.** A frame becomes a grid of styled grapheme clusters composited
+  and diffed, rather than one concatenated string repainted in whole. This is the only
+  part of the design that cannot be added later without redoing the work above it, so
+  it is sequenced first.
+
+Filed as `TUI-0001` through `TUI-0012`. `tui` becomes a plan area, because an item
+about how a widget lays itself out belongs to neither the language nor the shell.
+

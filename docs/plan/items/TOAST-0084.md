@@ -116,7 +116,7 @@ and exhaustive matches contribute reachability facts.
 ## Acceptance
 
 - [ ] `x is null` / `x is-not null` narrows `T?` in the true and false paths
-- [~] `x is T` narrows in the true path, for `if` and for a match arm; `x is-not T` and
+- [ ] `x is T` narrows in the true path, for `if` and for a match arm; `x is-not T` and
       `not (x is T)` narrow the **else** path. Subtracting `T` from the other branch of a
       positive test is still not done — it needs a type the model cannot spell.
 - [x] A union variant pattern gives every payload binding its declared substituted type —

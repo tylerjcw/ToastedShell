@@ -50,7 +50,7 @@ control was weak. This is the part that is expensive to rediscover.
 | `id` | `<AREA>-NNNN`, or a legacy `TS-P<n>-NN` |
 | `title` | One line, no trailing full stop |
 | `status` | `proposed` `open` `research` `in-progress` `partial` `complete` `deferred` `withdrawn` |
-| `area` | `toast` `tosh` `tome` `crumb` `plan` `legacy` |
+| `area` | `toast` `tosh` `tome` `crumb` `tui` `plan` `legacy` |
 | `priority` | `0`–`3` |
 | `opened` | `YYYY-MM-DD` |
 | `closed` | `YYYY-MM-DD`, once resolved |
@@ -59,7 +59,13 @@ control was weak. This is the part that is expensive to rediscover.
 ### IDs
 
 New items take an **area prefix**: `TOAST-0001` for the language, `TOSH-0001` for the
-shell, then `TOME-`, `CRUMB-`, and `PLAN-` for work on this system itself.
+shell, then `TOME-`, `CRUMB-`, `TUI-`, and `PLAN-` for work on this system itself.
+
+`TUI-` is the terminal UI framework. It earned its own area when it stopped being a
+feature of the shell and became a component with its own consumers: the shell, Tōast
+scripts, and eventually compiled Tōast programs. An item about how a widget lays
+itself out belongs to none of `toast` or `tosh`, which is the test the area prefix is
+supposed to apply.
 
 Area is in the identity because it is stable — an item rarely changes which component
 it belongs to, while priority changes often. The old scheme put the priority tier in

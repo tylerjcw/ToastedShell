@@ -5,8 +5,11 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOAST-0097`](items/TOAST-0097.md) | P3 | proposed | 0/6 | A type cannot be given a static member from outside, so `Option::from` has nowhere to live |
+| [`TUI-0002`](items/TUI-0002.md) | P1 | proposed | 0/8 | There is no widget contract: widget state cannot draw itself, and layout is four fixed arrangements |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
+| [`TUI-0008`](items/TUI-0008.md) | P2 | proposed | 0/6 | A live screen can only poll on a timer; it cannot be fed by a job, a channel or a pipeline |
 | [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
+| [`TUI-0010`](items/TUI-0010.md) | P1 | proposed | 0/6 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
 | [`TOAST-0056`](items/TOAST-0056.md) | P2 | proposed | 0/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
@@ -14,36 +17,46 @@
 | [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
 | [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/7 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
 | [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
-| [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 1/4 | Replace the switch-based evaluator with a bound-tree evaluator |
+| [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 1/6 | Replace the switch-based evaluator with a bound-tree evaluator |
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
+| [`TUI-0009`](items/TUI-0009.md) | P3 | proposed | 0/6 | The TUI assumes truecolor and a terminal, with no degradation and no plain-text path |
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
-| [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/9 | A successful null, type or variant test does not narrow later uses of the value |
+| [`TOSH-0011`](items/TOSH-0011.md) | P2 | proposed | 0/5 | Both TUI browsers test for `q` before they test for focus, so searching for anything with a q in it quits |
+| [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
 | [`TOAST-0123`](items/TOAST-0123.md) | P2 | proposed | 0/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0101`](items/TOAST-0101.md) | P3 | proposed | 0/5 | A pipeline into a user function does not bind to a parameter, and the arity error misdescribes why |
 | [`TOAST-0103`](items/TOAST-0103.md) | P3 | proposed | 0/5 | unfold cannot terminate: returning null raises instead of ending the sequence |
+| [`TUI-0007`](items/TUI-0007.md) | P3 | proposed | 0/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
 | [`TOAST-0133`](items/TOAST-0133.md) | P3 | proposed | 0/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
+| [`TUI-0011`](items/TUI-0011.md) | P3 | proposed | 0/5 | Nothing checks that the TUI surface survives compilation to a Tōast program |
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
+| [`TUI-0004`](items/TUI-0004.md) | P2 | proposed | 0/7 | Building a screen from a script is seven lines of scaffolding, string ids and `| ignore` |
 | [`TOAST-0094`](items/TOAST-0094.md) | P3 | proposed | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
+| [`TUI-0001`](items/TUI-0001.md) | P1 | proposed | 0/8 | A frame is a string, so there is no compositing, no partial redraw and no hit testing |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
+| [`TUI-0012`](items/TUI-0012.md) | P3 | proposed | 0/6 | There is no performance budget, so 'fast enough' is a feeling |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
 | [`TS-P3-21`](items/TS-P3-21.md) | P3 | proposed | — | Native runtime: GC, object layout, and startup budget |
+| [`TUI-0003`](items/TUI-0003.md) | P2 | proposed | 0/6 | The two browsers hand-render what should be widgets, and are the proof the widget layer works |
 | [`TOSH-0002`](items/TOSH-0002.md) | P2 | proposed | 0/4 | Tosh.DevCompanion floats its Microsoft.Data.Sqlite reference, so its dependency set is whatever restore last chose |
 | [`TOAST-0080`](items/TOAST-0080.md) | P2 | proposed | 0/10 | Resource safety is a runtime convention, so an owned handle can be copied and used after release |
+| [`TUI-0005`](items/TUI-0005.md) | P1 | proposed | 0/6 | Text width is UTF-16 code units, so any wide or combining character misaligns every box |
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | proposed | 0/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
+| [`TUI-0006`](items/TUI-0006.md) | P2 | proposed | 0/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | proposed | — | Reverse/static operator hooks |
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |

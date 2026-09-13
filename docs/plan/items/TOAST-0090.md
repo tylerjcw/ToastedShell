@@ -1,7 +1,7 @@
 ---
 id: TOAST-0090
 title: "Static member access and instance member access are the same operator, so a path cannot be told from a lookup"
-status: complete
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -61,7 +61,7 @@ validator can admit it.
 - [x] `::` resolves a name inside a type: enum members, union variants, static members, nested types
 - [x] `.` continues to resolve members of a value; the two are distinguishable in the AST
 - [x] Existing `Type.Member` source keeps working
-- [~] A stated migration and a `prefer-path` analysis — **deferred by decision, 2026-08-28.**
+- [ ] A stated migration and a `prefer-path` analysis — **deferred by decision, 2026-08-28.**
       Neither spelling is preferred; `.` on a type is not being deprecated. Revisit only when
       `TOAST-0092`'s notation needs the distinction enforced.
 - [x] Formatter, LSP, hover, completion and syntax highlighting treat the two distinctly

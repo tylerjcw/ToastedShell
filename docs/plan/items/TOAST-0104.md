@@ -1,7 +1,7 @@
 ---
 id: TOAST-0104
 title: "A refinement type derived from a sibling in the same module silently fails to register"
-status: complete
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-30
@@ -58,7 +58,7 @@ They may share a cause. This one is the worst of the three because it is silent.
 ## Acceptance
 
 - [x] `export type Derived = Base where …` inside a module resolves Base to the sibling
-- [~] A base that genuinely cannot be resolved is a diagnostic — **at the use site, not the
+- [ ] A base that genuinely cannot be resolved is a diagnostic — **at the use site, not the
       declaration.** See below: bases resolve lazily and forward references are legal, so an
       eager check would refuse working code.
 - [x] The diagnostic names the declaration and the unresolved base

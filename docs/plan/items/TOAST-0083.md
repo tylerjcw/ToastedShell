@@ -1,7 +1,7 @@
 ---
 id: TOAST-0083
 title: "Generic unions can spell `Option` and `Result`, but the core library does not provide their contract"
-status: complete
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -58,7 +58,7 @@ wrapped using the existing portable `Error` policy rather than losing their iden
 - [x] Pattern destructuring uses `TOAST-0053`, and exhaustiveness uses `TOAST-0054`
 - [x] Compiler-facing parsing/checking fixtures accumulate diagnostics in `Result` while invariant
       failures still throw
-- [~] Interpreter, docs, help and type metadata share one contract; **compiled .NET does not**,
+- [ ] Interpreter, docs, help and type metadata share one contract; **compiled .NET does not**,
       and `no_clr` is future — see below
 
 ## Decisions (2026-08-29)
