@@ -1,5 +1,6 @@
 using System.Text;
 using Tosh.Runtime;
+using Tosh.Tui;
 
 namespace Tosh.Cli;
 
@@ -190,14 +191,14 @@ internal sealed partial class ConsoleInlinePromptProvider
                     var mouse = input.Mouse;
                     const int inspectHeaderLines = 6;
 
-                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    if (mouse.Action == TuiMouseAction.Scroll)
                     {
-                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp)
+                        if (mouse.Button == TuiMouseButton.ScrollUp)
                             state.MoveUp();
-                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown)
+                        else if (mouse.Button == TuiMouseButton.ScrollDown)
                             state.MoveDown();
                     }
-                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    else if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
                     {
                         var (_, bottomRow) = Console.GetCursorPosition();
                         var listStartRow = bottomRow - totalLines + 1 + inspectHeaderLines;

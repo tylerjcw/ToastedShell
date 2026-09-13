@@ -1,8 +1,8 @@
-using Tosh.Cli;
+using Tosh.Tui.Editing;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiTextInputResult
+public enum TuiTextInputResult
 {
     None,
     Changed,
@@ -10,7 +10,7 @@ internal enum TuiTextInputResult
     Cancel,
 }
 
-internal sealed class TuiTextInputState
+public sealed class TuiTextInputState
 {
     private readonly LineEditorBuffer _buffer = new();
 

@@ -1,3 +1,4 @@
+using Tosh.Tui;
 namespace Tosh.Cli;
 
 internal static class TuiRequestProbe

@@ -1,5 +1,6 @@
 using System.Text;
 using Tosh.Runtime;
+using Tosh.Tui.Editing;
 
 namespace Tosh.Cli;
 

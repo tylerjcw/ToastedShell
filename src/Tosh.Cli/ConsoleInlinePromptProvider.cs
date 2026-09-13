@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Tosh.Runtime;
+using Tosh.Tui;
 
 namespace Tosh.Cli;
 
@@ -20,7 +21,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
     private readonly ToshRuntime? _runtime;
     private readonly ObjectFormatter? _formatter;
     private readonly DisplayEngine? _display;
-    private readonly Tui.TuiInputReader _inputReader = new();
+    private readonly TuiInputReader _inputReader = new();
 
     [GeneratedRegex(@"\x1b\[[0-9;]*[a-zA-Z]")]
     private static partial Regex AnsiEscapePattern();
@@ -152,14 +153,14 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                 {
                     var mouse = input.Mouse;
 
-                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    if (mouse.Action == TuiMouseAction.Scroll)
                     {
-                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp && cursor > 0)
+                        if (mouse.Button == TuiMouseButton.ScrollUp && cursor > 0)
                             cursor--;
-                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown && cursor < items.Count - 1)
+                        else if (mouse.Button == TuiMouseButton.ScrollDown && cursor < items.Count - 1)
                             cursor++;
                     }
-                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    else if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
                     {
                         var clickedRow = mouse.Row - dataStartRow;
 
@@ -643,14 +644,14 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                 {
                     const int filterHeaderLines = 5;
 
-                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    if (mouse.Action == TuiMouseAction.Scroll)
                     {
-                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp && cursor > 0)
+                        if (mouse.Button == TuiMouseButton.ScrollUp && cursor > 0)
                             cursor--;
-                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown && cursor < filtered.Count - 1)
+                        else if (mouse.Button == TuiMouseButton.ScrollDown && cursor < filtered.Count - 1)
                             cursor++;
                     }
-                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    else if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
                     {
                         var (_, bottomRow) = Console.GetCursorPosition();
                         var listStartRow = bottomRow - totalLines + 1 + filterHeaderLines;

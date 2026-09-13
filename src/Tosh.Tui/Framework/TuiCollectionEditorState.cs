@@ -1,13 +1,13 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiCollectionEditorInputMode
+public enum TuiCollectionEditorInputMode
 {
     None,
     AddItem,
     EditItem,
 }
 
-internal enum TuiCollectionEditorActionKind
+public enum TuiCollectionEditorActionKind
 {
     None,
     SubmitInput,
@@ -20,19 +20,19 @@ internal enum TuiCollectionEditorActionKind
     RemoveUnavailable,
 }
 
-internal readonly record struct TuiCollectionEditorAction<TItem>(
+public readonly record struct TuiCollectionEditorAction<TItem>(
     TuiCollectionEditorActionKind Kind,
     TItem? Item = default,
     string? Key = null,
     string? Text = null,
     TuiCollectionEditorInputMode InputMode = TuiCollectionEditorInputMode.None);
 
-internal readonly record struct TuiCollectionEditorVisibleItem<TItem>(
+public readonly record struct TuiCollectionEditorVisibleItem<TItem>(
     TItem Item,
     int Index,
     bool IsSelected);
 
-internal sealed class TuiCollectionEditorState<TItem>
+public sealed class TuiCollectionEditorState<TItem>
 {
     private readonly TuiListState<TItem> _items = new();
     private readonly TuiTextInputState _textInput = new();

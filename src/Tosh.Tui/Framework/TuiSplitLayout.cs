@@ -1,8 +1,7 @@
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal static class TuiSplitLayout
+public static class TuiSplitLayout
 {
     public static (TuiRect First, TuiRect Second) SplitColumns(TuiRect bounds, int firstWidth, int gap = 1)
     {

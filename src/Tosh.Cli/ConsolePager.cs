@@ -1,5 +1,6 @@
 using System.Text;
 using Tosh.Runtime;
+using Tosh.Tui;
 
 namespace Tosh.Cli;
 
@@ -36,7 +37,7 @@ internal static class ConsolePager
         Console.Write(EnterAlternateScreen);
         Console.Write(EnableSgrMouse);
 
-        var inputReader = new Tui.TuiInputReader();
+        var inputReader = new TuiInputReader();
 
         try
         {
@@ -49,11 +50,11 @@ internal static class ConsolePager
                 {
                     var mouse = input.Mouse;
 
-                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    if (mouse.Action == TuiMouseAction.Scroll)
                     {
-                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp)
+                        if (mouse.Button == TuiMouseButton.ScrollUp)
                             state.PreviousLine();
-                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown)
+                        else if (mouse.Button == TuiMouseButton.ScrollDown)
                             state.NextLine();
                     }
 

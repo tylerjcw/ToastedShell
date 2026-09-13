@@ -1,18 +1,18 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiConfirmationDialogResultKind
+public enum TuiConfirmationDialogResultKind
 {
     None,
     Confirmed,
     Cancelled,
 }
 
-internal readonly record struct TuiConfirmationDialogResult(
+public readonly record struct TuiConfirmationDialogResult(
     TuiConfirmationDialogResultKind Kind,
     string? ConfirmLabel = null,
     string? CancelLabel = null);
 
-internal sealed class TuiConfirmationDialogState
+public sealed class TuiConfirmationDialogState
 {
     public bool IsOpen { get; private set; }
 
@@ -24,7 +24,7 @@ internal sealed class TuiConfirmationDialogState
 
     public string CancelLabel { get; private set; } = "Cancel";
 
-    public bool ConfirmSelected { get; internal set; } = true;
+    public bool ConfirmSelected { get; set; } = true;
 
     public void Open(
         string title,

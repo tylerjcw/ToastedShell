@@ -36,19 +36,27 @@ public static class Lowerer
     /// Optional because this entry point has a great many callers, and one that supplies nothing
     /// should keep behaving exactly as it did.
     /// </param>
+    /// <param name="resolveRequiredTypes">
+    /// Opt in to parse-only discovery of statically required script exports. Compiler hosts
+    /// enable this; ordinary interpreter/editor lowering performs no dependency file I/O.
+    /// </param>
     public static BoundUnit Lower(
         ParseResult parseResult,
         ICommandTable commands,
-        StatementSyntax? ambientTypes = null)
+        StatementSyntax? ambientTypes = null,
+        bool resolveRequiredTypes = false)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
 
+        var requiredTypes = resolveRequiredTypes ? new RequiredTypeRegistry(parseResult, ambientTypes) : null;
+        var userTypes = requiredTypes?.Types ?? BuildUserTypeRegistry(parseResult.Statement, ambientTypes);
         var ctx = new LowerContext(
             commands,
-            BuildUserTypeRegistry(parseResult.Statement, ambientTypes),
+            userTypes,
             BuildLocalFunctionOverloads(parseResult.Statement),
-            BuildLocalFunctionReturns(parseResult.Statement));
+            BuildLocalFunctionReturns(parseResult.Statement),
+            requiredTypes);
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
         return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList())
         {
@@ -378,12 +386,7 @@ public static class Lowerer
             LowerEventDefinition(eventDef, ctx),
 
         ModuleDefinitionStatementSyntax moduleDef =>
-            new BoundModuleDefinition(
-                Name: moduleDef.Name,
-                Body: LowerBlock(moduleDef.Body, ctx),
-                Modifier: moduleDef.Modifier,
-                Span: moduleDef.Span,
-                IsPartial: moduleDef.IsPartial),
+            LowerModuleDefinition(moduleDef, ctx),
 
         SubcommandStatementSyntax subcmd =>
             new BoundSubcommandStatement(
@@ -1129,7 +1132,7 @@ public static class Lowerer
         if (UserTypeMembers.TryGetProperty(targetType, memberPath, out var property) &&
             !string.IsNullOrWhiteSpace(property.TypeName))
         {
-            var resolved = ctx.ResolveType(property.TypeName);
+            var resolved = ctx.ResolveMemberType(targetType, property.TypeName);
             if (resolved is not null && !resolved.IsDynamic) return resolved;
         }
 
@@ -1167,7 +1170,7 @@ public static class Lowerer
 
             if (!string.IsNullOrWhiteSpace(first))
             {
-                var resolved = ctx.ResolveType(first);
+                var resolved = ctx.ResolveMemberType(targetType, first);
                 if (resolved is not null && !resolved.IsDynamic) return resolved;
             }
         }
@@ -2504,6 +2507,17 @@ public static class Lowerer
         }
     }
 
+    private static BoundModuleDefinition LowerModuleDefinition(ModuleDefinitionStatementSyntax module, LowerContext ctx)
+    {
+        var previous = ctx.ModuleTypeResolver;
+        ctx.ModuleTypeResolver = ctx.RequiredTypes?.ResolverFor(module);
+        try
+        {
+            return new BoundModuleDefinition(module.Name, LowerBlock(module.Body, ctx), module.Modifier, module.Span, module.IsPartial);
+        }
+        finally { ctx.ModuleTypeResolver = previous; }
+    }
+
     private static BoundClassDefinition LowerClassDefinition(
         ClassDefinitionStatementSyntax classDef,
         LowerContext ctx)
@@ -2885,9 +2899,11 @@ public static class Lowerer
             ICommandTable commands,
             IReadOnlyDictionary<string, BoundType>? userTypes = null,
             IReadOnlyDictionary<string, List<int>>? localFunctionOverloads = null,
-            IReadOnlyDictionary<string, string?>? localFunctionReturns = null)
+            IReadOnlyDictionary<string, string?>? localFunctionReturns = null,
+            RequiredTypeRegistry? requiredTypes = null)
         {
             Commands = commands;
+            RequiredTypes = requiredTypes;
             LocalFunctionOverloads = localFunctionOverloads
                 ?? new Dictionary<string, List<int>>(StringComparer.Ordinal);
             LocalFunctionReturns = localFunctionReturns
@@ -2929,7 +2945,16 @@ public static class Lowerer
         /// </summary>
         public TypeNameResolver TypeResolver { get; }
 
-        public BoundType ResolveType(string? typeName) => TypeResolver.Resolve(typeName);
+        public RequiredTypeRegistry? RequiredTypes { get; }
+        public TypeNameResolver? ModuleTypeResolver { get; set; }
+
+        // A scoped resolver already includes visible parents and ambient types. Falling
+        // back to the root for an unknown name would undo a nearer module's shadowing.
+        public BoundType ResolveType(string? typeName) =>
+            (ModuleTypeResolver ?? TypeResolver).Resolve(typeName);
+
+        public BoundType ResolveMemberType(BoundType owner, string typeName) =>
+            RequiredTypes?.ResolveMember(owner, typeName, ModuleTypeResolver ?? TypeResolver) ?? ResolveType(typeName);
 
         public List<BoundSymbol> Symbols { get; } = new();
 

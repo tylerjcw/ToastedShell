@@ -1,6 +1,6 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiOptionPickerActionKind
+public enum TuiOptionPickerActionKind
 {
     None,
     Commit,
@@ -8,12 +8,12 @@ internal enum TuiOptionPickerActionKind
     SelectionUnavailable,
 }
 
-internal readonly record struct TuiOptionPickerAction<TItem>(
+public readonly record struct TuiOptionPickerAction<TItem>(
     TuiOptionPickerActionKind Kind,
     TItem? Item = default,
     string? Key = null);
 
-internal sealed class TuiOptionPickerState<TItem>
+public sealed class TuiOptionPickerState<TItem>
 {
     private readonly TuiListState<TItem> _items = new();
     private Func<TItem, string>? _keySelector;

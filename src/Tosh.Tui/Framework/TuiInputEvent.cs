@@ -1,11 +1,11 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
 /// <summary>
 /// Represents a unified input event from the terminal — either a key press or a mouse action.
 /// Replaces the previous <see cref="ConsoleKeyInfo"/>-only input path so every screen
 /// and widget can respond to both keyboard and mouse in a single dispatch.
 /// </summary>
-internal readonly struct TuiInputEvent
+public readonly struct TuiInputEvent
 {
     private TuiInputEvent(ConsoleKeyInfo key)
     {
@@ -36,7 +36,7 @@ internal readonly struct TuiInputEvent
     public static TuiInputEvent FromMouse(TuiMouseEvent mouse) => new(mouse);
 }
 
-internal enum TuiInputEventKind
+public enum TuiInputEventKind
 {
     Key,
     Mouse,

@@ -3,6 +3,7 @@ using Tosh.Language;
 using Tosh.Cli.Tui;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Tosh.Tui.Editing;
 
 namespace Tosh.Cli;
 

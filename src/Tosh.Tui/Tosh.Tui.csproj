@@ -12,4 +12,15 @@
     <Description>Terminal UI primitives (rendering, layout, input) used by TōSh's runtime and shell.</Description>
   </PropertyGroup>
 
+
+  <ItemGroup>
+    <!-- The TUI themes off shell configuration: ToshTuiThemeConfig, ToshTextStyleConfig
+         and ToshTableBoxStyle live in Tosh.Runtime, and the render helpers take them
+         directly. Tosh.Runtime references neither this project nor Tosh.Stdlib, so this
+         adds no cycle. If Tosh.Tui ever needs to ship standalone, the alternative is to
+         invert it: declare a theme interface here and have the config types implement it.
+         Not done now because those types appear in 8 files' signatures. -->
+    <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,8 +1,7 @@
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal sealed class ConsoleTuiHost : ITuiHost
+public sealed class ConsoleTuiHost : ITuiHost
 {
     private readonly TuiInputReader _inputReader = new();
 

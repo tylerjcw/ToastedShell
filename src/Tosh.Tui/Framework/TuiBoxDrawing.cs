@@ -1,8 +1,8 @@
 using Tosh.Runtime;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal static class TuiBoxDrawing
+public static class TuiBoxDrawing
 {
     public static TuiBoxCharacters GetBoxCharacters(ToshTableBoxStyle style)
     {
@@ -19,7 +19,7 @@ internal static class TuiBoxDrawing
     }
 }
 
-internal readonly record struct TuiBoxCharacters(
+public readonly record struct TuiBoxCharacters(
     char TopLeft,
     char TopRight,
     char BottomLeft,

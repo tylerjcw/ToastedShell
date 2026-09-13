@@ -1,13 +1,13 @@
 using System.Text;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
 /// <summary>
 /// Reads raw bytes from stdin and decodes them into <see cref="TuiInputEvent"/> values,
 /// handling both regular key presses (via <see cref="Console.ReadKey"/>) and SGR extended
 /// mouse protocol escape sequences (<c>CSI &lt; Pb ; Pc ; Pr M/m</c>).
 /// </summary>
-internal sealed class TuiInputReader
+public sealed class TuiInputReader
 {
     /// <summary>Escape sequence introducer for SGR mouse: <c>\x1b[&lt;</c>.</summary>
     private const char Escape = '\x1b';
@@ -132,7 +132,7 @@ internal sealed class TuiInputReader
     /// <summary>
     /// Parse a full SGR mouse sequence string: <c>\x1b[&lt;Pb;Pc;PrM</c> or <c>\x1b[&lt;Pb;Pc;Prm</c>.
     /// </summary>
-    internal static bool TryParseSgrMouse(string sequence, out TuiMouseEvent result)
+    public static bool TryParseSgrMouse(string sequence, out TuiMouseEvent result)
     {
         result = default;
 

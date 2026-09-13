@@ -1,8 +1,8 @@
 using System.Text;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal static class TextDocumentFormatter
+public static class TextDocumentFormatter
 {
     public static IReadOnlyList<string> WrapParagraph(string text, int width, string indent = "", string subsequentIndent = "")
     {

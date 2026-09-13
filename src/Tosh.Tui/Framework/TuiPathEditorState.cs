@@ -1,6 +1,6 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiPathEditorActionKind
+public enum TuiPathEditorActionKind
 {
     None,
     TextChanged,
@@ -11,12 +11,12 @@ internal enum TuiPathEditorActionKind
     PickerClosed,
 }
 
-internal readonly record struct TuiPathEditorAction(
+public readonly record struct TuiPathEditorAction(
     TuiPathEditorActionKind Kind,
     string? Text = null,
     string? Path = null);
 
-internal sealed class TuiPathEditorState
+public sealed class TuiPathEditorState
 {
     private readonly TuiTextInputState _textInput = new();
     private readonly TuiFilePickerState _picker = new();

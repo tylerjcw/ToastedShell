@@ -1,21 +1,21 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiFormRowKind
+public enum TuiFormRowKind
 {
     Body,
     Meta,
     Preview,
 }
 
-internal sealed record TuiFormRow(
+public sealed record TuiFormRow(
     string Label,
     string? Value = null,
     TuiFormRowKind Kind = TuiFormRowKind.Body,
     bool IsSelected = false);
 
-internal readonly record struct TuiFormEntry(string Text, TuiFormRowKind Kind);
+public readonly record struct TuiFormEntry(string Text, TuiFormRowKind Kind);
 
-internal static class TuiFormLayout
+public static class TuiFormLayout
 {
     public static IReadOnlyList<TuiFormEntry> BuildEntries(
         IReadOnlyList<TuiFormRow> rows,

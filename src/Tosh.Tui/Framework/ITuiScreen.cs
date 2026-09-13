@@ -1,8 +1,7 @@
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal interface ITuiScreen
+public interface ITuiScreen
 {
     TuiFrame Render(TuiSize size);
 

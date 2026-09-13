@@ -1,6 +1,6 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal sealed class TuiListState<T>
+public sealed class TuiListState<T>
 {
     private IReadOnlyList<T> _items = Array.Empty<T>();
 

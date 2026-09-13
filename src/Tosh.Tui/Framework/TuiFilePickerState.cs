@@ -1,24 +1,24 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiFilePickerSelectionMode
+public enum TuiFilePickerSelectionMode
 {
     Any,
     File,
     Directory,
 }
 
-internal enum TuiFilePickerResultKind
+public enum TuiFilePickerResultKind
 {
     None,
     Selected,
     Cancelled,
 }
 
-internal readonly record struct TuiFilePickerResult(
+public readonly record struct TuiFilePickerResult(
     TuiFilePickerResultKind Kind,
     string? Path = null);
 
-internal sealed class TuiFilePickerState
+public sealed class TuiFilePickerState
 {
     private readonly TuiListState<TuiFilePickerEntry> _entries = new();
 

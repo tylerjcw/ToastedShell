@@ -1,6 +1,6 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal sealed class TuiScrollState
+public sealed class TuiScrollState
 {
     public int ItemCount { get; private set; }
 

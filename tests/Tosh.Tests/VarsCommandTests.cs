@@ -3,6 +3,7 @@ using Tosh.Stdlib;
 using Tosh.Stdlib.Sys;
 using Tosh.Language;
 using Tosh.Tui.Requests;
+using Tosh.Tui;
 
 namespace Tosh.Tests;
 

@@ -1,8 +1,7 @@
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal static class TuiApplication
+public static class TuiApplication
 {
     private const string EnterAlternateScreen = "\u001b[?1049h";
     private const string ExitAlternateScreen = "\u001b[?1049l";
@@ -52,7 +51,7 @@ internal static class TuiApplication
         }
     }
 
-    internal static TuiScreenResult ProcessInputBatch(
+    public static TuiScreenResult ProcessInputBatch(
         ITuiHost host,
         ITuiScreen screen,
         TuiInputEvent firstInput,

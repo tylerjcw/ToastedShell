@@ -1,12 +1,11 @@
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
 /// <summary>
 /// Describes a single mouse event decoded from SGR extended mouse protocol sequences.
 /// Coordinates are 0-based (column, row) relative to the terminal screen origin.
 /// </summary>
-internal readonly record struct TuiMouseEvent(
+public readonly record struct TuiMouseEvent(
     TuiMouseAction Action,
     TuiMouseButton Button,
     int Column,
@@ -27,7 +26,7 @@ internal readonly record struct TuiMouseEvent(
             : null;
 }
 
-internal enum TuiMouseAction
+public enum TuiMouseAction
 {
     /// <summary>A button was pressed down.</summary>
     Press,
@@ -42,7 +41,7 @@ internal enum TuiMouseAction
     Scroll,
 }
 
-internal enum TuiMouseButton
+public enum TuiMouseButton
 {
     Left,
     Middle,

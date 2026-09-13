@@ -1,8 +1,7 @@
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal interface ITuiHost
+public interface ITuiHost
 {
     bool IsInteractive { get; }
 

@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Tosh.Cli;
+namespace Tosh.Tui.Editing;
 
 public sealed class LineEditorBuffer
 {

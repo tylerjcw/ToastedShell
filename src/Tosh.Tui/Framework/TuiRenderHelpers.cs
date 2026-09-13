@@ -1,13 +1,12 @@
 using System.Text;
 using Tosh.Runtime;
-using Tosh.Tui;
 
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
 /// <summary>
 /// Shared rendering helpers for TUI screens that draw bordered box layouts.
 /// </summary>
-internal static class TuiRenderHelpers
+public static class TuiRenderHelpers
 {
     public static string RenderTopBorder(int width, string title, ToshTuiThemeConfig theme, TuiBoxCharacters box)
     {

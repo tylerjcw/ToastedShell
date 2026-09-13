@@ -166,7 +166,7 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             return false;
         }
 
-        var unit = Lowerer.Lower(parsed, runtime.Commands);
+        var unit = Lowerer.Lower(parsed, runtime.Commands, resolveRequiredTypes: true);
 
         var annotationDiags = TypeChecker.CheckCompileAnnotations(unit, allowDynamic: AllowDynamic);
         if (annotationDiags.Count > 0)
@@ -316,19 +316,7 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             var src = Path.Combine(sourceDir, name);
             if (!File.Exists(src)) continue;
             var dst = Path.Combine(outDir, name);
-            try
-            {
-                if (File.Exists(dst) &&
-                    File.GetLastWriteTimeUtc(dst) >= File.GetLastWriteTimeUtc(src))
-                {
-                    continue;
-                }
-                File.Copy(src, dst, overwrite: true);
-            }
-            catch
-            {
-                // Best-effort.
-            }
+            ToshPublisher.StageRuntimeDependency(src, dst);
         }
     }
 

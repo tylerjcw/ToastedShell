@@ -1,6 +1,6 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiOrderedToggleEditorActionKind
+public enum TuiOrderedToggleEditorActionKind
 {
     None,
     Toggled,
@@ -11,12 +11,12 @@ internal enum TuiOrderedToggleEditorActionKind
     SelectionUnavailable,
 }
 
-internal readonly record struct TuiOrderedToggleEditorAction<TItem>(
+public readonly record struct TuiOrderedToggleEditorAction<TItem>(
     TuiOrderedToggleEditorActionKind Kind,
     TItem? Item = default,
     string? Key = null);
 
-internal sealed class TuiOrderedToggleEditorState<TItem>
+public sealed class TuiOrderedToggleEditorState<TItem>
 {
     private readonly List<TItem> _items = [];
     private Func<TItem, string>? _keySelector;

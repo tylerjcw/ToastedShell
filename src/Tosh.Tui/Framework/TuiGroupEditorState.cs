@@ -1,6 +1,6 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiGroupEditorActionKind
+public enum TuiGroupEditorActionKind
 {
     None,
     ToggleSelected,
@@ -10,17 +10,17 @@ internal enum TuiGroupEditorActionKind
     SelectionUnavailable,
 }
 
-internal readonly record struct TuiGroupEditorAction<TItem>(
+public readonly record struct TuiGroupEditorAction<TItem>(
     TuiGroupEditorActionKind Kind,
     TItem? Item = default,
     string? Key = null);
 
-internal readonly record struct TuiGroupEditorVisibleItem<TItem>(
+public readonly record struct TuiGroupEditorVisibleItem<TItem>(
     TItem Item,
     int Index,
     bool IsSelected);
 
-internal sealed class TuiGroupEditorState<TItem>
+public sealed class TuiGroupEditorState<TItem>
 {
     private readonly TuiListState<TItem> _items = new();
     private Func<TItem, string>? _keySelector;

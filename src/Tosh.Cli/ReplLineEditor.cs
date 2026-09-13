@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
+using Tosh.Tui.Editing;
 
 namespace Tosh.Cli;
 

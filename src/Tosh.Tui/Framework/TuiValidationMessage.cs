@@ -1,15 +1,15 @@
-namespace Tosh.Cli.Tui;
+namespace Tosh.Tui;
 
-internal enum TuiValidationSeverity
+public enum TuiValidationSeverity
 {
     Info,
     Warning,
     Error,
 }
 
-internal sealed record TuiValidationMessage(string Path, TuiValidationSeverity Severity, string Text);
+public sealed record TuiValidationMessage(string Path, TuiValidationSeverity Severity, string Text);
 
-internal static class TuiValidationFormatter
+public static class TuiValidationFormatter
 {
     public static string BuildSummary(IReadOnlyList<TuiValidationMessage> messages)
     {

@@ -3,6 +3,7 @@ using Tosh.Language;
 using Tosh.Runtime;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Tosh.Tui.Editing;
 
 namespace Tosh.Tests;
 

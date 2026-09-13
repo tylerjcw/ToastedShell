@@ -1,3 +1,4 @@
+using Tosh.Tui.Editing;
 namespace Tosh.Cli;
 
 internal sealed class LineEditorHistorySearchState

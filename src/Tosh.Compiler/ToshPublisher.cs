@@ -7,7 +7,7 @@ using Microsoft.NET.HostModel.Bundle;
 
 namespace Tosh.Compiler;
 
-public static class ToshPublisher
+public static partial class ToshPublisher
 {
     private static readonly string[] RuntimeDependencyFileNames =
     [
