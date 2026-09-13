@@ -18,7 +18,7 @@
 | [`TOAST-0102`](items/TOAST-0102.md) | P2 | partial | 4/5 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TUI-0007`](items/TUI-0007.md) | P3 | partial | 4/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
-| [`TUI-0020`](items/TUI-0020.md) | P3 | partial | 4/6 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
+| [`TUI-0020`](items/TUI-0020.md) | P3 | partial | 5/7 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0104`](items/TOAST-0104.md) | P2 | partial | 4/5 | A refinement type derived from a sibling in the same module silently fails to register |

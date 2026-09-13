@@ -61,6 +61,7 @@ public sealed class TuiMarkupSurfaceTests
                      ("Button", "OK"),
                      ("Gauge", null),
                      ("Spark", new object?[] { 1, 2, 3 }),
+                     ("Bars", new object?[] { Node(("Label", "a"), ("Value", 1)) }),
                      ("Row", new object?[] { "a" }),
                      ("Column", new object?[] { "a" }),
                      ("Box", new object?[] { "a" }),

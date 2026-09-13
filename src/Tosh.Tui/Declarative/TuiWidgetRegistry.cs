@@ -150,6 +150,45 @@ public sealed class TuiWidgetRegistry
             PadLeft = spec.Flag("pad", true),
         });
 
+        registry.Register("bars", static (spec, _) =>
+        {
+            // `{| Label = …, Value = … |}` per row, or a record whose fields are the rows:
+            // `{| Bars = {% "disk" => 40, "swap" => 5 %} |}` reads better for a fixed set.
+            var bars = new List<TuiBar>();
+
+            foreach (var item in spec.PrimaryItems())
+            {
+                if (ShellRecordUtilities.TryGetValue(item, "Label", out var label) &&
+                    ShellRecordUtilities.TryGetValue(item, "Value", out var value) &&
+                    TypeConversion.TryConvert(value, typeof(double), out var amount))
+                {
+                    bars.Add(new TuiBar(label?.ToString() ?? string.Empty, (double)amount!));
+                }
+            }
+
+            if (bars.Count == 0 && ShellRecordUtilities.TryGetFields(spec.Primary, out var rows))
+            {
+                // Written as a loop rather than a query because `out _` inside one of these
+                // factories does not discard: the factory's second parameter is named `_`,
+                // so the discard binds to it and the call fails to compile with a message
+                // about a build context nobody wrote.
+                foreach (var field in rows)
+                {
+                    if (TypeConversion.TryConvert(field.Value, typeof(double), out var amount))
+                    {
+                        bars.Add(new TuiBar(field.Key, (double)amount!));
+                    }
+                }
+            }
+
+            return new TuiBars(bars)
+            {
+                MinimumScale = spec.Number("scale", 0),
+                ShowValues = spec.Flag("values", true),
+                FilledStyle = spec.Style(),
+            };
+        });
+
         registry.Register("gauge", static (spec, _) => new TuiGauge(spec.Number("value", 0))
         {
             Minimum = spec.Number("min", 0),

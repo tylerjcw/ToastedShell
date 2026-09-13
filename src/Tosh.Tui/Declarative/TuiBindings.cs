@@ -30,6 +30,7 @@ public static class TuiBindings
             case TuiList list: list.ItemsSource = source; return;
             case TuiSparkline spark: spark.ValuesSource = source; return;
             case TuiGauge gauge: gauge.AmountSource = source; return;
+            case TuiBars bars: bars.BarsSource = source; return;
             case TuiTable table: table.RowsSource = source; return;
             case TuiLines lines: lines.LinesSource = source; return;
             case TuiScroll { Child: TuiList scrolled }: scrolled.ItemsSource = source; return;
@@ -82,6 +83,16 @@ public static class TuiBindings
                     .Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
                         ? (double)number!
                         : 0d)];
+                return;
+
+            case TuiBars { BarsSource: { } source } bars:
+                bars.Bars = [.. AsItems(invoke(source, values))
+                    .Select(item =>
+                        ShellRecordUtilities.TryGetValue(item, "Label", out var label) &&
+                        ShellRecordUtilities.TryGetValue(item, "Value", out var amount) &&
+                        TypeConversion.TryConvert(amount, typeof(double), out var number)
+                            ? new TuiBar(label?.ToString() ?? string.Empty, (double)number!)
+                            : new TuiBar(item?.ToString() ?? string.Empty, 0))];
                 return;
 
             case TuiGauge { AmountSource: { } source } gauge:

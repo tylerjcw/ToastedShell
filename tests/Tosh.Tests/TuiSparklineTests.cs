@@ -13,6 +13,18 @@ namespace Tosh.Tests;
 /// </remarks>
 public sealed class TuiSparklineTests
 {
+    private static string[] Render(TuiWidget widget, int width, int height)
+    {
+        var buffer = new TuiBuffer(new TuiSize(width, height));
+        var bounds = new TuiRect(0, 0, width, height);
+
+        widget.Measure(TuiConstraints.From(new TuiSize(width, height)));
+        widget.Arrange(bounds);
+        widget.Paint(new TuiSurface(buffer, bounds));
+
+        return [.. Enumerable.Range(0, height).Select(row => buffer.RowText(row))];
+    }
+
     private static string Row(TuiWidget widget, int width)
     {
         var buffer = new TuiBuffer(new TuiSize(width, 1));
@@ -129,6 +141,33 @@ public sealed class TuiSparklineTests
     {
         Assert.Equal("████████busy········", Row(new TuiGauge(40) { Label = "busy" }, 20));
         Assert.Equal("████████············", Row(new TuiGauge(40) { Label = string.Empty }, 20));
+    }
+
+    [Fact]
+    public void Bars_share_a_label_column_and_a_scale()
+    {
+        var bars = new TuiBars([new TuiBar("disk", 40), new TuiBar("swap", 5)]) { Maximum = 100 };
+
+        var rows = Render(bars, 24, 2);
+
+        // Labels padded to the same width so the bars start together, values flush right
+        // so they end together, and both bars measured against 100 so their lengths mean
+        // something next to each other.
+        Assert.Equal("disk ██████·········· 40", rows[0]);
+        Assert.Equal("swap █···············  5", rows[1]);
+    }
+
+    [Fact]
+    public void Bars_share_a_scale_with_a_floor_under_it()
+    {
+        var loud = new TuiBars([new TuiBar("a", 1), new TuiBar("b", 2)]);
+        var quiet = new TuiBars([new TuiBar("a", 1), new TuiBar("b", 2)]) { MinimumScale = 100 };
+
+        // Scaled to themselves, the larger of two small numbers fills its bar; scaled
+        // against 100, neither of them registers.
+        Assert.Contains("██████", Render(loud, 10, 2)[1], StringComparison.Ordinal);
+        Assert.DoesNotContain('█', Render(quiet, 10, 2)[0]);
+        Assert.DoesNotContain('█', Render(quiet, 10, 2)[1]);
     }
 
     [Fact]

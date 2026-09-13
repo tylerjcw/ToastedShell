@@ -575,6 +575,24 @@ beneath keeps drawing and stops responding --- which is what \emph{modal} means.
 The label is drawn over the bar, so a gauge is one row however long its caption
 is. \code{Label} unset shows the percentage; an empty label shows nothing.
 
+\subsection{\texttt{Bars} --- several values compared}
+
+\begin{lstlisting}
+{| Bars = [ {| Label = "disk", Value = 40 |}, {| Label = "swap", Value = 5 |} ],
+   Scale = 100, Values = true |}
+\end{lstlisting}
+
+Where a \code{Gauge} says how far along one thing is, this says how several compare.
+The labels share a column so the bars start at the same place, and every bar is
+measured against the same maximum --- otherwise comparing them says nothing.
+
+A record whose fields are numbers works as well as a list of rows, which reads better
+for a fixed set:
+
+\begin{lstlisting}
+{| Bars = {| disk = 40, swap = 5, tmp = 12 |} |}
+\end{lstlisting}
+
 \subsection{\texttt{Spark} --- a series in one row}
 
 \begin{lstlisting}
@@ -889,6 +907,7 @@ Field   & the caption         & Value, Placeholder, Password, Multiline, OnChang
 Button  & the label           & OnPress, + style \\
 Gauge   & ---                 & Value, Min, Max, Label, + style \\
 Spark   & the series          & Scale, Capacity, Pad, + style \\
+Bars    & the values          & Scale, Values, + style \\
 Row     & the children        & Gap \\
 Column  & the children        & Gap \\
 Box     & the children        & Title, + style \\
