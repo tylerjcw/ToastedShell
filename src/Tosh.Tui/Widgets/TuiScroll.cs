@@ -37,7 +37,25 @@ public sealed class TuiScroll : TuiWidget
     /// <summary>How far the offset can go before the last row is at the bottom.</summary>
     public int MaxOffset => Math.Max(0, _contentHeight - Bounds.Height);
 
-    public override bool IsFocusable => true;
+    /// <summary>
+    /// Focusable only when its child is not.
+    /// </summary>
+    /// <remarks>
+    /// A scroll container around a document takes the keyboard, because scrolling is the
+    /// only thing to do with a document. Around a list it must not: both would be
+    /// focusable, the wrapper comes first in tree order, and an arrow key would scroll
+    /// the view instead of moving the selection. The child takes focus and asks to be
+    /// kept visible through <see cref="ScrollIntoView"/>.
+    /// </remarks>
+    public override bool IsFocusable => Child is null || !Child.IsFocusable;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A scroll container holds nothing of its own; it shows what its child holds. A list
+    /// wrapped in one for scrolling should still answer for its selection, or naming the
+    /// wrapper would lose the value the author was asking for.
+    /// </remarks>
+    public override object? Value => Child?.Value;
 
     public override IReadOnlyList<TuiWidget> Children => Child is null ? [] : [Child];
 

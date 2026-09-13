@@ -155,11 +155,24 @@ public sealed class TuiTextField : TuiWidget
         switch (_state.HandleKey(input.Key, Multiline))
         {
             case TuiTextInputResult.Submit:
-                Submitted?.Invoke(Text);
+                // With nothing listening, submission is not this field's business —
+                // it belongs to whatever surrounds it. Consuming the key here instead
+                // would mean Enter did nothing at all on a form.
+                if (Submitted is null)
+                {
+                    return false;
+                }
+
+                Submitted(Text);
                 return true;
 
             case TuiTextInputResult.Cancel:
-                Cancelled?.Invoke();
+                if (Cancelled is null)
+                {
+                    return false;
+                }
+
+                Cancelled();
                 return true;
 
             case TuiTextInputResult.Changed:

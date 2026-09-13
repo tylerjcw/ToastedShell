@@ -695,6 +695,32 @@ public sealed class TuiCommand : ShellCommand
 
         TuiScreen? screen = null;
 
+        // A record tree is the declarative form: `tui run {| Column = [ ... ] |}`.
+        // Anything shaped like a record that is not already a built screen is one.
+        foreach (var positional in parsed.Positionals)
+        {
+            if (positional is TuiScreen or null)
+            {
+                continue;
+            }
+
+            if (positional is IDictionary<string, object?> || ShellRecordUtilities.IsRecordLike(positional))
+            {
+                foreach (var produced in RunOrYield(context, new TuiTreeRunRequest(
+                    positional,
+                    returnOutcome,
+                    BuildArgumentInvoker(context),
+                    ExtractNamedArgument(parsed.Positionals, "refresh") is { } refresh &&
+                        TimeSpan.TryParse(refresh, out var interval) ? interval : null,
+                    ExtractNamedArgument(parsed.Positionals, "title"))))
+                {
+                    yield return produced;
+                }
+
+                yield break;
+            }
+        }
+
         // Check positional argument first
         if (parsed.Positionals.Count > 0 && parsed.Positionals[0] is TuiScreen argScreen)
         {
@@ -773,6 +799,43 @@ public sealed class TuiCommand : ShellCommand
             }
         };
     }
+
+    /// <summary>
+    /// Wraps a script function so the TUI can call it with one argument and read what it
+    /// produced.
+    /// </summary>
+    /// <remarks>
+    /// A pull binding is a function of the screen's state: it is handed the form's
+    /// current values and returns what to show. The last value the function produces is
+    /// the answer, which matches how a function's result reads everywhere else.
+    /// </remarks>
+    private static Func<IShellCallable, object?, object?> BuildArgumentInvoker(CommandContext context)
+        => (callable, argument) =>
+        {
+            var inner = context with
+            {
+                Arguments = argument is null ? [] : [argument],
+                Input = AsyncEnumerableExtensions.Empty<object?>(),
+                IsPipelined = false,
+            };
+
+            object? last = null;
+            var enumerator = callable.InvokeAsync(inner).GetAsyncEnumerator(context.CancellationToken);
+
+            try
+            {
+                while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+                {
+                    last = enumerator.Current;
+                }
+            }
+            finally
+            {
+                enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            return last;
+        };
 
     /// <summary>
     /// Runs a screen and yields its result, or yields the request for a display sink to

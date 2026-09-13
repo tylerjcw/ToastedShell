@@ -7,11 +7,18 @@ namespace Tosh.Tui.Declarative;
 public sealed class TuiBuildContext
 {
     private readonly TuiWidgetRegistry _registry;
+    private readonly List<TuiBinding> _bindings = [];
 
     internal TuiBuildContext(TuiWidgetRegistry registry)
     {
         _registry = registry;
     }
+
+    /// <summary>The properties that are re-read from a script function each redraw.</summary>
+    public IReadOnlyList<TuiBinding> Bindings => _bindings;
+
+    internal void Bind(TuiWidget widget, IShellCallable source, Action<TuiWidget, object?> apply)
+        => _bindings.Add(new TuiBinding(widget, source, apply));
 
     /// <summary>Builds a node's children.</summary>
     public IReadOnlyList<TuiWidget> BuildChildren(IReadOnlyList<object?> nodes)
@@ -70,6 +77,13 @@ public static class TuiTreeBuilder
     /// <param name="node">A record, as a dictionary.</param>
     /// <param name="registry">The widgets that may be named, or the default set.</param>
     public static TuiWidget Build(object? node, TuiWidgetRegistry? registry = null)
+        => Build(node, registry, out _);
+
+    /// <summary>Builds the tree, and reports the properties bound to script functions.</summary>
+    public static TuiWidget Build(
+        object? node,
+        TuiWidgetRegistry? registry,
+        out IReadOnlyList<TuiBinding> bindings)
     {
         var effective = registry ?? TuiWidgetRegistry.CreateDefault();
         var context = new TuiBuildContext(effective);
@@ -81,6 +95,7 @@ public static class TuiTreeBuilder
                 nameof(node));
         }
 
+        bindings = context.Bindings;
         return widget;
     }
 
@@ -116,8 +131,81 @@ public static class TuiTreeBuilder
 
         spec = ToSpec(fields, registry);
 
-        return spec is not null && registry.TryCreate(spec, context, out widget);
+        if (spec is null || !registry.TryCreate(spec, context, out widget))
+        {
+            return false;
+        }
+
+        RecordBindings(spec, widget, context);
+        return true;
     }
+
+    /// <summary>
+    /// Notes every property written as a script function, so it can be re-read.
+    /// </summary>
+    /// <remarks>
+    /// The bindable keys are the ones that carry content: a node's own name, and the
+    /// value, items or title it was given. A handler like <c>OnSelect</c> is a callable
+    /// too and is deliberately not bound — it is called when something happens, not read
+    /// when something is drawn.
+    /// </remarks>
+    private static void RecordBindings(TuiWidgetSpec spec, TuiWidget widget, TuiBuildContext context)
+    {
+        foreach (var key in (string[])[spec.Name, "value", "items", "title", "content"])
+        {
+            if (spec.Callable(key) is { } source)
+            {
+                context.Bind(widget, source, Assign);
+                return;
+            }
+        }
+    }
+
+    /// <summary>Puts a re-read value back into whichever widget asked for it.</summary>
+    private static void Assign(TuiWidget widget, object? value)
+    {
+        switch (widget)
+        {
+            case TuiTextWidget text:
+                text.Text = value?.ToString() ?? string.Empty;
+                return;
+
+            case TuiTextField field:
+                field.Text = value?.ToString() ?? string.Empty;
+                return;
+
+            case TuiBorder border:
+                border.Title = value?.ToString();
+                return;
+
+            case TuiList list:
+                list.Items = AsItems(value);
+                return;
+
+            case TuiScroll { Child: TuiList scrolled }:
+                scrolled.Items = AsItems(value);
+                return;
+        }
+
+        // A labelled field is a row around an input; the input is what was meant.
+        foreach (var child in widget.Children)
+        {
+            if (child is TuiTextField nested)
+            {
+                nested.Text = value?.ToString() ?? string.Empty;
+                return;
+            }
+        }
+    }
+
+    private static IReadOnlyList<object?> AsItems(object? value)
+        => value switch
+        {
+            null => [],
+            string text => [text],
+            System.Collections.IEnumerable sequence => sequence.Cast<object?>().ToArray(),
+            _ => [value],
+        };
 
     /// <summary>Finds the key that names a widget, and treats the rest as its properties.</summary>
     private static TuiWidgetSpec? ToSpec(IDictionary<string, object?> fields, TuiWidgetRegistry registry)

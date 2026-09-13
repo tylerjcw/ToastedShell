@@ -18,6 +18,7 @@ internal static class TuiRequestProbe
         "TuiInputRequest",
         "TuiPickRequest",
         "TuiRunRequest",
+        "TuiTreeRunRequest",
     };
 
     public static bool IsTuiRequestBatch(IReadOnlyList<object?> values)

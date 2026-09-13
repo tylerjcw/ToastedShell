@@ -71,6 +71,85 @@ class ReactorBlock(reactorType: Reactor, width: int = 2, height: int = 2, buffer
     prop FuelPerMin: double       => (60`s / $this.BurnTime) * $this.ReactorCount
 }
 
+## @summary Resolves a reactor type by name.
+## @remarks
+##   Folded here rather than at each call site, so a type supplied on the command line is
+##   matched the same way as one chosen in the form — and so the live preview and the
+##   final answer cannot disagree about what "MOX" means.
+func ReactorFor(name: string) -> Reactor {
+    return match($name.ToLower()) {
+        "nuclear"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
+        "uranium"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
+        "plutonium" => new Reactor("Nuclear", 40`MW, 100, Fuel.Plutonium)
+        "mox"       => new Reactor("MOX",     20`MW, 150, Fuel.Mox      )
+        "breeder"   => new Reactor("Breeder", 20`MW, 50,  Fuel.Breeder  )
+        default     => throw $"Unknown reactor type '{$name}'. Valid: nuclear, uranium, plutonium, mox, breeder"
+    }
+}
+
+## @summary The right-hand pane of the form: the block as the numbers currently stand.
+## @remarks
+##   A pull binding. The form hands it every field's current value and it returns what to
+##   show, so there is nothing to wire up and nothing to keep in step — editing a field
+##   redraws the screen, and redrawing calls this again.
+##
+##   It is also the one place in the script that runs on half-typed input, so every field
+##   is read defensively: a width of "" is a number the user is in the middle of writing,
+##   not a mistake worth an error message.
+func Preview(values) {
+    try {
+        var w = Whole($values.Width,    1)
+        var h = Whole($values.Height,   1)
+        var s = Whole($values.Seconds,  1)
+        var c = Whole($values.Capacity, 1)
+
+        var rb = new ReactorBlock(ReactorFor($"{$values.ReactorType}"), $w, $h, $s * 1`s, $c * 1`L)
+
+        return $"""
+{$rb.ReactorCount}x {$rb.Type.Name} ({$rb.Type.Heat})
+    Dimensions  {$rb.Width}x{$rb.Height}, {$rb.Links} links
+    Bonus       {$rb.Type.NeighborPercent}% ({$rb.Type.NeighborPower})
+    Fuel        {$rb.FuelPerMin} {$rb.Type.FuelName}/min
+
+Power
+    Heat        {$rb.OutputPower}
+    Electrical  {$rb.ElectricalPower}
+
+Plumbing
+    {$rb.Pumps}x offshore pump(s)
+    {$rb.Exchangers}x exchangers, {$rb.WaterPerSecond}
+    {$rb.Turbines}x turbines, {$rb.SteamPerSecond}
+    {$rb.Tanks}x tanks, {$rb.BufferDuration.TimeSpan}
+"""
+    } catch (e) {
+        return "..."
+    }
+}
+
+## @summary Reads a form field as a whole number, tolerating what half-typed input looks like.
+func Whole(value, fallback: int) -> int {
+    var text = $"{$value}"
+    var trimmed = $text.Trim()
+
+    if ($trimmed == "") {
+        return $fallback
+    }
+
+    ## `as` is the safe cast: it yields null rather than throwing, which is what makes it
+    ## usable against a field someone is still typing into.
+    var parsed = $trimmed as int
+
+    if ($parsed == null) {
+        return $fallback
+    }
+
+    if ($parsed < 1) {
+        return $fallback
+    }
+
+    return $parsed
+}
+
 ## @summary Calculates the statistics of a Factorio Reactor Block
 ## @param=ReactorType Valid types: Nuclear/Uranium, Plutonium, MOX, or Breeder
 ## @param=Width Number of reactors wide
@@ -112,8 +191,12 @@ subcommand calc {
 
     ## The form is the fallback, not the only way in: passing the type keeps the
     ## script runnable non-interactively. It asks for everything rather than only the
-    ## type, because one screen costs the reader no more than one question does and
-    ## the four numbers already have defaults sitting in the arguments.
+    ## type, with the block itself alongside the fields — the numbers move as they are
+    ## typed, so the shape of the answer is visible before committing to it.
+    ##
+    ## The screen is a value. There are no widget ids to wire handlers to and no update
+    ## code: `Text = &Preview` is a pull binding, re-read whenever the screen redraws,
+    ## and a redraw is what a keystroke causes.
     ##
     ## A TUI needs a terminal, which a pipeline does not have. That is a fine thing to
     ## happen at a prompt and a useless thing to print from a pipe, so it is caught and
@@ -123,16 +206,19 @@ subcommand calc {
 
     if ($ReactorType == "") {
         try {
-            var screen = tui screen --title "Reactor Block"
+            $answers = tui run {|
+                Row = [
+                    {| Box = [
+                         {| List  = ["Nuclear", "Plutonium", "MOX", "Breeder"], Id = "ReactorType" |},
+                         {| Field = "Wide",     Id = "Width",    Value = $"{$Width}"    |},
+                         {| Field = "High",     Id = "Height",   Value = $"{$Height}"   |},
+                         {| Field = "Seconds",  Id = "Seconds",  Value = $"{$Seconds}"  |},
+                         {| Field = "Capacity", Id = "Capacity", Value = $"{$Capacity}" |}
+                       ], Title = "Inputs", Size = "2*" |},
 
-            $screen | tui add-list ["Nuclear", "Plutonium", "MOX", "Breeder"] --id ReactorType --prompt "Reactor type" | ignore
-            $screen | tui add-input --id Width    --prompt "Reactors wide"          --default $"{$Width}"    | ignore
-            $screen | tui add-input --id Height   --prompt "Reactors high"          --default $"{$Height}"   | ignore
-            $screen | tui add-input --id Seconds  --prompt "Steam buffer (seconds)" --default $"{$Seconds}"  | ignore
-            $screen | tui add-input --id Capacity --prompt "Tank capacity (litres)" --default $"{$Capacity}" | ignore
-            $screen | tui layout stacked | ignore
-
-            $answers = $screen | tui run --result
+                    {| Box = [ {| Text = &Preview |} ], Title = "Block", Size = "3*" |}
+                ]
+            |} --title "Reactor Block" --result
         } catch (e) {
             throw "No reactor type was given and the form needs a terminal. " +
                   "Pass one: calc <nuclear|plutonium|mox|breeder> [width] [height] [seconds] [capacity]"
@@ -144,22 +230,13 @@ subcommand calc {
 
         ## Every field comes back as text, keyed by the id its widget was given.
         $ReactorType = $"{$answers.Values["ReactorType"]}"
-        $Width       = $"{$answers.Values["Width"]}"    as int
-        $Height      = $"{$answers.Values["Height"]}"   as int
-        $Seconds     = $"{$answers.Values["Seconds"]}"  as int
-        $Capacity    = $"{$answers.Values["Capacity"]}" as int
+        $Width       = Whole($answers.Values["Width"],    2)
+        $Height      = Whole($answers.Values["Height"],   2)
+        $Seconds     = Whole($answers.Values["Seconds"],  300)
+        $Capacity    = Whole($answers.Values["Capacity"], 25000)
     }
 
-    ## Folded here rather than at each call site, so a type supplied on the command
-    ## line is matched the same way as one returned by the picker.
-    var reactor = match($ReactorType.ToLower()) {
-        "nuclear"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
-        "uranium"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
-        "plutonium" => new Reactor("Nuclear", 40`MW, 100, Fuel.Plutonium)
-        "mox"       => new Reactor("MOX",     20`MW, 150, Fuel.Mox      )
-        "breeder"   => new Reactor("Breeder", 20`MW, 50,  Fuel.Breeder  )
-        default     => throw $"Unknown reactor type '{$ReactorType}'. Valid: nuclear, uranium, plutonium, mox, breeder"
-    }
+    var reactor = ReactorFor($ReactorType)
 
     var rb = new ReactorBlock($reactor, $Width, $Height, $Seconds * 1`s, $Capacity * 1`L)
 

@@ -1,5 +1,6 @@
 using Tosh.Runtime;
 using Tosh.Tui;
+using Tosh.Tui.Declarative;
 using Tosh.Tui.Requests;
 
 namespace Tosh.Cli.Tui;
@@ -65,6 +66,23 @@ internal static class TuiRequestDispatcher
             var screen = new TuiFilePickerScreen(fileRequest);
             TuiApplication.Run(new ConsoleTuiHost(), screen);
             outcomeValues = BuildOutcomeValues(screen.Outcome, fileRequest.ReturnOutcome);
+            return true;
+        }
+
+        if (value is TuiTreeRunRequest treeRequest)
+        {
+            // A record tree: built here, where the widget registry lives.
+            var root = TuiTreeBuilder.Build(treeRequest.Node, registry: null, out var bindings);
+
+            var screen = new TuiDeclarativeScreen(
+                root,
+                bindings,
+                treeRequest.Invoke,
+                treeRequest.Title,
+                treeRequest.RefreshInterval);
+
+            TuiApplication.Run(new ConsoleTuiHost(), screen);
+            outcomeValues = BuildOutcomeValues(screen.Outcome, treeRequest.ReturnOutcome);
             return true;
         }
 
