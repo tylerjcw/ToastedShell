@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 583 diagnostic codes currently emitted by the
+This chapter lists all 584 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -686,6 +686,7 @@ Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 \item[\texttt{\small tosh.tui.missing\_subcommand}] The 'tui' command requires a subcommand.
 \item[\texttt{\small tosh.tui.no\_inline\_provider}] Inline prompts (--cli) are not available in this environment.
 \item[\texttt{\small tosh.tui.no\_screen}] Expected a TuiScreen from pipeline input.
+\item[\texttt{\small tosh.tui.no\_terminal}] A full-screen TUI needs a terminal.
 \item[\texttt{\small tosh.tui.pick.no\_items}] No items provided for 'tui pick'.
 \item[\texttt{\small tosh.tui.run.no\_screen}] No TuiScreen provided to 'tui run'.
 \item[\texttt{\small tosh.tui.unknown\_flag}] Unknown flag '--\{flag\}' for 'tui \{subcommand\}'.

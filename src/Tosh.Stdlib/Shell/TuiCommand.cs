@@ -135,7 +135,10 @@ public sealed class TuiCommand : ShellCommand
         }
         else
         {
-            yield return new TuiPickRequest(items, display, prompt, multi, returnOutcome);
+            foreach (var produced in RunOrYield(context, new TuiPickRequest(items, display, prompt, multi, returnOutcome)))
+            {
+                yield return produced;
+            }
         }
     }
 
@@ -178,7 +181,10 @@ public sealed class TuiCommand : ShellCommand
         }
         else
         {
-            yield return new TuiConfirmRequest(message, DefaultConfirm: defaultConfirm, ReturnOutcome: returnOutcome);
+            foreach (var produced in RunOrYield(context, new TuiConfirmRequest(message, DefaultConfirm: defaultConfirm, ReturnOutcome: returnOutcome)))
+            {
+                yield return produced;
+            }
         }
     }
 
@@ -226,7 +232,10 @@ public sealed class TuiCommand : ShellCommand
         }
         else
         {
-            yield return new TuiInputRequest(prompt, defaultValue, multiline, returnOutcome, password);
+            foreach (var produced in RunOrYield(context, new TuiInputRequest(prompt, defaultValue, multiline, returnOutcome, password)))
+            {
+                yield return produced;
+            }
         }
     }
 
@@ -265,7 +274,10 @@ public sealed class TuiCommand : ShellCommand
         }
         else
         {
-            yield return new TuiFilePickRequest(initialPath, filter, directoryOnly, returnOutcome);
+            foreach (var produced in RunOrYield(context, new TuiFilePickRequest(initialPath, filter, directoryOnly, returnOutcome)))
+            {
+                yield return produced;
+            }
         }
     }
 
@@ -400,7 +412,10 @@ public sealed class TuiCommand : ShellCommand
         // picker with its search bar already open, not a second screen.
         if (parsed.HasFlag("fullscreen"))
         {
-            yield return new TuiPickRequest(items, display, prompt, multi, returnOutcome, StartInSearch: true);
+            foreach (var produced in RunOrYield(context, new TuiPickRequest(items, display, prompt, multi, returnOutcome, StartInSearch: true)))
+            {
+                yield return produced;
+            }
             yield break;
         }
 
@@ -707,7 +722,10 @@ public sealed class TuiCommand : ShellCommand
                 help: "Pipe a TuiScreen into 'tui run' or provide one as an argument.");
         }
 
-        yield return new TuiRunRequest(screen, returnOutcome, BuildTickInvoker(screen, context));
+        foreach (var produced in RunOrYield(context, new TuiRunRequest(screen, returnOutcome, BuildTickInvoker(screen, context))))
+            {
+                yield return produced;
+            }
     }
 
     /// <summary>
@@ -754,6 +772,46 @@ public sealed class TuiCommand : ShellCommand
                 enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
         };
+    }
+
+    /// <summary>
+    /// Runs a screen and yields its result, or yields the request for a display sink to
+    /// pick up when no terminal is available.
+    /// </summary>
+    /// <remarks>
+    /// Running here is what lets a result be assigned, passed to a function, or used in
+    /// a condition. Yielding a request only works when the value happens to flow to the
+    /// display, which is why `var answer = tui confirm "..."` used to store a
+    /// `TuiConfirmRequest` and show no dialog (`TUI-0013`).
+    ///
+    /// The fallback is kept rather than removed: with no runner — a headless process, a
+    /// test host — behaviour is exactly what it was.
+    /// </remarks>
+    private static IEnumerable<object?> RunOrYield(CommandContext context, object request)
+    {
+        if (context.Shell().TuiScreens is not { } runner)
+        {
+            // No host that can run screens — a headless or test process. Leave the
+            // request for a display sink, which is what happened before there was a
+            // runner at all.
+            return [request];
+        }
+
+        if (!runner.CanRun)
+        {
+            // Yielding the request here is worse than failing: it lands in whatever the
+            // caller assigned it to, and the next thing they touch reports that
+            // `Cancelled` is not a member of `TuiRunRequest`, which says nothing about
+            // the actual problem.
+            throw context.CreateDiagnostic(
+                code: "tosh.tui.no_terminal",
+                title: "A full-screen TUI needs a terminal.",
+                help: "Output is redirected, so there is nothing to draw on. Run this "
+                    + "from a terminal, or use --cli for an inline prompt where the "
+                    + "subcommand supports one.");
+        }
+
+        return runner.TryRun(request, out var results) ? results ?? [] : [request];
     }
 
     // ── Helpers ───────────────────────────────────────────────

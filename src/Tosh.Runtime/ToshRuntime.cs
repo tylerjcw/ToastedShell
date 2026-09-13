@@ -330,6 +330,17 @@ public sealed class ToshRuntime :
 
     public IInlinePromptProvider? InlinePrompts { get; set; }
 
+    /// <summary>
+    /// Runs full-screen TUI requests, when a terminal is available to draw on.
+    /// </summary>
+    /// <remarks>
+    /// Set by the CLI host alongside <see cref="InlinePrompts"/>. Without it the
+    /// <c>tui</c> command yields request objects for a display sink to pick up, which is
+    /// the older path and the reason a result could not be assigned to a variable
+    /// (<c>TUI-0013</c>).
+    /// </remarks>
+    public ITuiScreenRunner? TuiScreens { get; set; }
+
     public ICommandLineInsertionSink? CommandLineInsertion { get; set; }
 
     public ShellEventBus Events => Language.Events;

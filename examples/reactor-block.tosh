@@ -110,18 +110,44 @@ subcommand calc {
         $ReactorType = ""
     }
 
-    ## The picker is the fallback, not the only way in: passing the type keeps the
-    ## script runnable non-interactively. `tui` is shell-only and raises when there
-    ## is no interactive session, which is a fine thing to happen at a prompt and a
-    ## useless thing to print from a pipeline — so it is caught and turned into the
-    ## advice the reader can act on.
+    ## The form is the fallback, not the only way in: passing the type keeps the
+    ## script runnable non-interactively. It asks for everything rather than only the
+    ## type, because one screen costs the reader no more than one question does and
+    ## the four numbers already have defaults sitting in the arguments.
+    ##
+    ## A TUI needs a terminal, which a pipeline does not have. That is a fine thing to
+    ## happen at a prompt and a useless thing to print from a pipe, so it is caught and
+    ## turned into advice the reader can act on. The cancellation check sits outside the
+    ## `try` so that walking away from the form is not reported as a missing terminal.
+    var answers = null
+
     if ($ReactorType == "") {
         try {
-            $ReactorType = (tui pick "Uranium" "Plutonium" "MOX" "Breeder" --cli)
-        } catch {
-            throw "No reactor type was given and the picker needs an interactive shell. " +
+            var screen = tui screen --title "Reactor Block"
+
+            $screen | tui add-list ["Nuclear", "Plutonium", "MOX", "Breeder"] --id ReactorType --prompt "Reactor type" | ignore
+            $screen | tui add-input --id Width    --prompt "Reactors wide"          --default $"{$Width}"    | ignore
+            $screen | tui add-input --id Height   --prompt "Reactors high"          --default $"{$Height}"   | ignore
+            $screen | tui add-input --id Seconds  --prompt "Steam buffer (seconds)" --default $"{$Seconds}"  | ignore
+            $screen | tui add-input --id Capacity --prompt "Tank capacity (litres)" --default $"{$Capacity}" | ignore
+            $screen | tui layout stacked | ignore
+
+            $answers = $screen | tui run --result
+        } catch (e) {
+            throw "No reactor type was given and the form needs a terminal. " +
                   "Pass one: calc <nuclear|plutonium|mox|breeder> [width] [height] [seconds] [capacity]"
         }
+
+        if ($answers.Cancelled) {
+            throw "Cancelled."
+        }
+
+        ## Every field comes back as text, keyed by the id its widget was given.
+        $ReactorType = $"{$answers.Values["ReactorType"]}"
+        $Width       = $"{$answers.Values["Width"]}"    as int
+        $Height      = $"{$answers.Values["Height"]}"   as int
+        $Seconds     = $"{$answers.Values["Seconds"]}"  as int
+        $Capacity    = $"{$answers.Values["Capacity"]}" as int
     }
 
     ## Folded here rather than at each call site, so a type supplied on the command

@@ -723,7 +723,7 @@ value & String, byte sequence, enum, primitive, pointer-sized value, or struct-l
 
 \begin{lstlisting}
 native-write $buffer "hello"  # Write a C string
-native-write $buffer [72 105 0]  # Write explicit bytes
+native-write $buffer [72, 105, 0]  # Write explicit bytes
 native-write $buffer 42 --at 8  # Write at an offset
 native-write $buffer $n --as int32 --at 8  # Write four bytes whatever $n is
 \end{lstlisting}
@@ -1069,7 +1069,7 @@ channel & The channel to receive from. Omit to read from pipeline input. \\
 \textbf{Output:} Streams every value from the channel until it is closed.
 
 \begin{lstlisting}
-channel-recv $ch | each { |v| echo $v }  # Stream all values from a channel
+channel-recv $ch | each { echo $_ }  # Stream all values from a channel
 \end{lstlisting}
 
 \begin{notebox}
@@ -3675,7 +3675,7 @@ callable & Additional callables to chain. (optional) \\
 
 \begin{lstlisting}
 compose func(x) => ($x + 1) func(x) => ($x * 2)  # Compose increment and double
-$f = compose $parse $validate $transform; $f $input  # Build a processing pipeline
+$f = compose $parse $validate $transform; $f($input)  # Build a processing pipeline
 \end{lstlisting}
 
 \end{cmdbox}
@@ -3763,7 +3763,7 @@ Infinitely repeats the pipeline items in order.
 
 \begin{lstlisting}
 echo 1 2 3 | cycle | first 9  # Cycle a sequence
-[a b c] | cycle | first 7  # Cycle an array
+[a, b, c] | cycle | first 7  # Cycle an array
 \end{lstlisting}
 
 \begin{notebox}
@@ -4009,8 +4009,8 @@ callable|\allowbreak block & A function that receives state and returns [value, 
 \textbf{Output:} A sequence of values produced by the callable until it returns null.
 
 \begin{lstlisting}
-unfold 1 func(n) => if ($n <= 5) { [$n ($n + 1)] } else { null }  # Generate 1 through 5
-unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]  # Fibonacci sequence
+unfold 1 func(n) => (($n <= 5) ? [$n, ($n + 1)] : null)  # Generate 1 through 5
+unfold [0, 1] func(s) => [($s[0]), [($s[1]), ($s[0] + $s[1])]]  # Fibonacci sequence
 \end{lstlisting}
 
 \end{cmdbox}
@@ -4371,9 +4371,9 @@ callable|\allowbreak block & Optional combiner. Receives each pair as arguments.
 \textbf{Output:} All combinations of items from the pipeline and the other sequence.
 
 \begin{lstlisting}
-[1 2] | cartesian-product [a b]  # All pairs: [1,a],[1,b],[2,a],[2,b]
+[1, 2] | cartesian-product [a, b]  # All pairs: [1,a],[1,b],[2,a],[2,b]
 1.. | cartesian-product (1..) | first 10  # Diagonal enumeration of infinite sources
-echo 1 2 3 | cartesian-product [10 20] func(a, b) => ($a * $b)  # With combiner
+echo 1 2 3 | cartesian-product [10, 20] func(a, b) => ($a * $b)  # With combiner
 \end{lstlisting}
 
 \begin{notebox}
@@ -4409,9 +4409,9 @@ sequences & One or more arrays, lists, or ranges to concatenate after the pipeli
 \textbf{Output:} All items from the pipeline (if any) followed by all items from each argument sequence.
 
 \begin{lstlisting}
-echo 1 2 | chain [3 4] [5 6]  # Concatenate multiple sequences
-echo a b c | chain [d e f]  # Append to pipeline
-chain [1 2] [3 4] [5 6]  # Concatenate without pipeline input
+echo 1 2 | chain [3, 4] [5, 6]  # Concatenate multiple sequences
+echo a b c | chain [d, e, f]  # Append to pipeline
+chain [1, 2] [3, 4] [5, 6]  # Concatenate without pipeline input
 \end{lstlisting}
 
 \end{cmdbox}
@@ -4502,7 +4502,7 @@ k & The number of elements in each combination. \\
 \textbf{Output:} Arrays of k elements from the pipeline in lexicographic order.
 
 \begin{lstlisting}
-[1 2 3] | combinations 2  # All 2-element subsets
+[1, 2, 3] | combinations 2  # All 2-element subsets
 echo a b c d | combinations 3  # All 3-element subsets
 \end{lstlisting}
 
@@ -4830,7 +4830,7 @@ callable|\allowbreak block & A transform that returns a sequence for each input 
 \textbf{Output:} The flattened results of applying the transform to each pipeline item.
 
 \begin{lstlisting}
-echo 1 2 3 | flat-map { [_ (_ * 10)] }  # Expand each item into two
+echo 1 2 3 | flat-map { [_, (_ * 10)] }  # Expand each item into two
 ls | flat-map { ls $_.FullName }  # List contents of each subdirectory
 \end{lstlisting}
 
@@ -4855,7 +4855,7 @@ flatten
 \textbf{Output:} Individual items from each expanded enumerable in the pipeline.
 
 \begin{lstlisting}
-echo [1 2] [3 4] | flatten  # Flatten nested arrays
+echo [1, 2] [3, 4] | flatten  # Flatten nested arrays
 ls /tmp /var | flatten  # Flatten directory listings into one stream
 \end{lstlisting}
 
@@ -5064,7 +5064,7 @@ other-sequence & An array or list to alternate with the pipeline items. \\
 \textbf{Output:} Items from the pipeline and the other sequence in alternating order.
 
 \begin{lstlisting}
-echo 1 2 3 | interleave [a b c]  # Alternate numbers and letters
+echo 1 2 3 | interleave [a, b, c]  # Alternate numbers and letters
 \end{lstlisting}
 
 \end{cmdbox}
@@ -5476,7 +5476,7 @@ k & The number of elements in each permutation. Defaults to the full length if o
 \textbf{Output:} Arrays of k elements representing each permutation.
 
 \begin{lstlisting}
-[1 2 3] | permutations  # All 6 permutations of 3 elements
+[1, 2, 3] | permutations  # All 6 permutations of 3 elements
 echo a b c | permutations 2  # All 2-element orderings
 \end{lstlisting}
 
@@ -6218,8 +6218,8 @@ callable|\allowbreak block & Optional combiner. Receives each pair as arguments.
 \textbf{Output:} One result per pair. Without a combiner, yields two-element arrays.
 
 \begin{lstlisting}
-echo a b c | zip [1 2 3]  # Pair pipeline with an array
-echo 1 2 3 | zip [10 20 30] func(a, b) => ($a + $b)  # Zip with a combiner
+echo a b c | zip [1, 2, 3]  # Pair pipeline with an array
+echo 1 2 3 | zip [10, 20, 30] func(a, b) => ($a + $b)  # Zip with a combiner
 \end{lstlisting}
 
 \end{cmdbox}
@@ -7765,14 +7765,12 @@ Metrics include wall time, user/system CPU, memory, and page faults.
 
 \textit{Library: \code{Tosh.Stdlib.Shell}}
 
-\textbf{[shell-only]} — only available inside an interactive TōSh session.
-
 \begin{cmdbox}{tui}
-Interactive TUI components for scripts. Provides list pickers, confirmations, text input, file pickers, and custom screens. Use --cli for inline (non-fullscreen) prompts.
+Interactive TUI components. Provides list pickers, confirmations, text input, file pickers, and composed screens. Use --cli for inline (non-fullscreen) prompts. It needs a live terminal: run from a script whose output is a terminal, not from a pipeline or a redirect.
 
 \begin{signature}
 tui \\
-\quad pick|\allowbreak confirm|\allowbreak input|\allowbreak file|\allowbreak filter|\allowbreak screen|\allowbreak add-list|\allowbreak add-text|\allowbreak add-input|\allowbreak add-picker|\allowbreak layout|\allowbreak run \\
+\quad pick|\allowbreak confirm|\allowbreak input|\allowbreak file|\allowbreak filter|\allowbreak screen|\allowbreak add-list|\allowbreak add-text|\allowbreak add-input|\allowbreak add-picker|\allowbreak add-confirm|\allowbreak add-file|\allowbreak layout|\allowbreak run \\
 \quad [options]
 \end{signature}
 
@@ -7785,7 +7783,7 @@ confirm <message> & Ask for a yes/no confirmation. (optional) \\
 input [prompt] & Read text input, optionally multiline or password-style. (optional) \\
 file & Open a file or directory picker. (optional) \\
 filter [items...] & Open a fuzzy filter picker. (optional) \\
-screen|\allowbreak add-*|\allowbreak layout|\allowbreak run & Build and run composed TUI screens from pipeline-carried screen definitions. (optional) \\
+screen|\allowbreak add-*|\allowbreak layout|\allowbreak run & Build and run composed TUI screens from pipeline-carried screen definitions. Widgets: add-list, add-text, add-input, add-picker, add-confirm, add-file. (optional) \\
 \bottomrule
 \end{tabular}
 
@@ -7809,17 +7807,20 @@ screen|\allowbreak add-*|\allowbreak layout|\allowbreak run & Build and run comp
 --searchable, -s & Make a list widget searchable. \\
 --bind <widget.property> & Bind a text widget to another widget property. \\
 --no-wrap & Disable text wrapping for `add-text`. \\
+--fullscreen & Run `filter` as a fullscreen picker with search open, instead of its inline default. \\
 --ratio <a:b> & Layout split ratio for `layout`. \\
 --gap <n> & Gap between layout regions. \\
+--title <text> & Screen title shown in the header bar, for `screen`. \\
 \bottomrule
 \end{tabular}
 
-\textbf{Output:} Emits nothing; drives the interactive TUI session as a side effect.
+\textbf{Output:} The user's selection: picked item(s) for `pick`/`filter`, a bool for `confirm`, the text for `input`, the path for `file`, or a TuiScreenOutcome when `--result` is given. Nothing is emitted when the prompt is cancelled and `--result` was not asked for. The screen-builder subcommands emit the TuiScreen being composed; without `--cli`, the modal subcommands emit a request object for the shell host to run.
 
 \begin{lstlisting}
 tui confirm "Deploy now?" --cli  # Inline confirmation
 ls | tui pick --display Name --result  # Pick from pipeline values
 tui input "Project name:" --default demo --cli  # Inline text input
+tui screen --title Deploy | tui add-confirm "Deploy now?" | tui run --result  # Composed screen with a confirmation
 \end{lstlisting}
 
 \end{cmdbox}
