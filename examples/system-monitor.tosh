@@ -142,22 +142,29 @@ func Bar(percent: double, width: int) -> string {
 }
 
 # ── The screen ──────────────────────────────────────────────────────────────────
+#
+# The screen is a value, and the two panes are functions. `List = &TopProcesses` and
+# `Text = &Summary` are pull bindings: they are re-read whenever the screen redraws, and
+# `--refresh 1s` is what makes it redraw with nobody touching it.
+#
+# There is no update code. The earlier version of this file built the screen a line at a
+# time, gave every widget an id so a handler could find it again, and wrote a `Refresh`
+# function that reached into both widgets and assigned to them. All of that was
+# bookkeeping to keep two copies of the truth in step; a pull binding has one copy.
 
 var cpu = new CpuMeter()
-var processes = ReadProcesses(40)
 
-var screen = tui screen --title "System Monitor"
-$screen | tui add-list $processes --id processes --display Name --prompt "Processes by memory" | ignore
-$screen | tui add-text --id summary | ignore
-$screen | tui layout horizontal --ratio "1:1" | ignore
+## @summary The process list, heaviest first. Re-read on every refresh.
+func TopProcesses() {
+    return ReadProcesses(40)
+}
 
-## @summary Re-samples the machine and rewrites both widgets.
+## @summary Everything the right-hand pane shows.
 ## @remarks
-##   Called by the runtime each time the refresh interval elapses. It mutates the widgets
-##   the screen already holds; there is no separate update channel. Assigning to a list's
-##   Items keeps the selection by index, so the row under the cursor does not jump while
-##   the user is reading it.
-func Refresh() {
+##   Takes the form's values — which this screen has none of — and returns text. The CPU
+##   meter is held outside because a percentage is a change between two readings, so it
+##   has to remember the last one.
+func Summary(values) {
     var load = $cpu.Sample()
     var memory = System.IO.File.ReadAllLines("/proc/meminfo")
     var totalKb = MemoryFieldKb($memory, "MemTotal:")
@@ -168,11 +175,7 @@ func Refresh() {
     var uptime = System.Double.Parse((System.IO.File.ReadAllText("/proc/uptime")).Split(" ", System.StringSplitOptions.None)[0])
     var uptimeSpan = System.TimeSpan.FromSeconds($uptime)
 
-    var list = $screen.GetWidget("processes")
-    var summary = $screen.GetWidget("summary")
-
-    $list.Items = ReadProcesses(40)
-    $summary.Content = $"
+    return $"""
 CPU   {$load.ToString("F1").PadLeft(5)} %  {Bar($load, 28)}
 Memory{$memoryPercent.ToString("F1").PadLeft(5)} %  {Bar($memoryPercent, 28)}
 
@@ -185,13 +188,12 @@ Memory{$memoryPercent.ToString("F1").PadLeft(5)} %  {Bar($memoryPercent, 28)}
   Processes  {ProcessCount()}
 
   Updated    {(date).ToString("HH:mm:ss")}
-
-Arrows move   Tab switches panes   Escape quits"
+"""
 }
 
-Refresh()
-
-$screen.RefreshInterval = 1s
-$screen.OnTick = &Refresh
-
-$screen | tui run
+tui run {|
+    Row = [
+        {| Box = [ {| List = &TopProcesses, Display = "Name" |} ], Title = "Processes by memory", Size = "2*" |},
+        {| Box = [ {| Text = &Summary |} ],                        Title = "System",              Size = "3*" |}
+    ]
+|} --title "System Monitor" --refresh 1s

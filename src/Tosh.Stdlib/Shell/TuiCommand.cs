@@ -32,7 +32,8 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--fullscreen", "Run `filter` as a fullscreen picker with search open, instead of its inline default.")]
 [CommandOption("--ratio <a:b>", "Layout split ratio for `layout`.")]
 [CommandOption("--gap <n>", "Gap between layout regions.")]
-[CommandOption("--title <text>", "Screen title shown in the header bar, for `screen`.")]
+[CommandOption("--title <text>", "Screen title shown in the header bar, for `screen` and `run`.")]
+[CommandOption("--refresh <duration>", "Redraw this often with no input, for `run`. Accepts 1s, 500ms or 00:00:01.")]
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
 [CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
@@ -710,8 +711,7 @@ public sealed class TuiCommand : ShellCommand
                     positional,
                     returnOutcome,
                     BuildArgumentInvoker(context),
-                    ExtractNamedArgument(parsed.Positionals, "refresh") is { } refresh &&
-                        TimeSpan.TryParse(refresh, out var interval) ? interval : null,
+                    ParseInterval(ExtractNamedArgument(parsed.Positionals, "refresh")),
                     ExtractNamedArgument(parsed.Positionals, "title"))))
                 {
                     yield return produced;
@@ -801,6 +801,48 @@ public sealed class TuiCommand : ShellCommand
     }
 
     /// <summary>
+    /// Reads a refresh interval, in the spellings a script would write.
+    /// </summary>
+    /// <remarks>
+    /// A duration literal like <c>1s</c> reaches a command as its text rather than as a
+    /// <see cref="TimeSpan"/>, and <c>TimeSpan.TryParse("1s")</c> fails — it wants
+    /// <c>"00:00:01"</c>. Accepting both, plus <c>ms</c>, <c>m</c> and <c>h</c>, costs a
+    /// dozen lines and saves every caller from discovering that.
+    /// </remarks>
+    private static TimeSpan? ParseInterval(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var trimmed = text.Trim();
+
+        if (TimeSpan.TryParse(trimmed, out var parsed))
+        {
+            return parsed;
+        }
+
+        foreach (var (suffix, scale) in ((string Suffix, double Scale)[])
+                 [("ms", 1), ("s", 1000), ("m", 60_000), ("h", 3_600_000)])
+        {
+            if (!trimmed.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var number = trimmed[..^suffix.Length].Trim();
+
+            if (double.TryParse(number, out var value))
+            {
+                return TimeSpan.FromMilliseconds(value * scale);
+            }
+        }
+
+        return double.TryParse(trimmed, out var seconds) ? TimeSpan.FromSeconds(seconds) : null;
+    }
+
+    /// <summary>
     /// Wraps a script function so the TUI can call it with one argument and read what it
     /// produced.
     /// </summary>
@@ -812,9 +854,15 @@ public sealed class TuiCommand : ShellCommand
     private static Func<IShellCallable, object?, object?> BuildArgumentInvoker(CommandContext context)
         => (callable, argument) =>
         {
+            // A binding that does not need the form's values should not have to declare a
+            // parameter it ignores, so the argument is offered only to something that can
+            // take one.
+            var wantsArgument = argument is not null &&
+                (callable.MaximumParameterCount is null || callable.MaximumParameterCount > 0);
+
             var inner = context with
             {
-                Arguments = argument is null ? [] : [argument],
+                Arguments = wantsArgument ? [argument] : [],
                 Input = AsyncEnumerableExtensions.Empty<object?>(),
                 IsPipelined = false,
             };
@@ -885,7 +933,7 @@ public sealed class TuiCommand : ShellCommand
     private static readonly HashSet<string> ValueOptionNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "prompt", "display", "page-size", "default", "path", "filter",
-        "id", "bind", "ratio", "gap", "title",
+        "id", "bind", "ratio", "gap", "title", "refresh",
     };
 
     /// <summary>
