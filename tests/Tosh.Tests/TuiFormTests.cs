@@ -67,8 +67,8 @@ public sealed class TuiFormTests
         Screen(form).HandleInput(Key(ConsoleKey.Enter));
 
         Assert.Same(form, sender);
-        Assert.Equal("3", sender!.Value("Width"));
-        Assert.Equal("4", sender.Value("Height"));
+        Assert.Equal("3", sender!.ValueOf("Width"));
+        Assert.Equal("4", sender.ValueOf("Height"));
     }
 
     [Fact]

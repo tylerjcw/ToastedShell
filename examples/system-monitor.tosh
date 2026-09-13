@@ -123,24 +123,6 @@ func FormatKb(kb: long) -> string {
     return $"{$kb} KB"
 }
 
-## @summary Repeats a string. `PadRight` fills with a char, which these glyphs are not,
-## and the `repeat` builtin yields a list rather than a joined string.
-func RepeatGlyph(text: string, count: int) -> string {
-    var builder = ""
-
-    for index in 1..$count {
-        $builder = $builder + $text
-    }
-
-    return $builder
-}
-
-## @summary A fixed-width bar, so the eye can track a changing number.
-func Bar(percent: double, width: int) -> string {
-    var filled = System.Math.Clamp(System.Convert.ToInt32($percent / 100.0 * $width), 0, $width)
-    return $"[{RepeatGlyph("█", $filled)}{RepeatGlyph("·", $width - $filled)}]"
-}
-
 # ── The screen ──────────────────────────────────────────────────────────────────
 #
 # Built the way a Windows Forms or GTK window is: construct the widgets, set their
@@ -153,7 +135,41 @@ func Bar(percent: double, width: int) -> string {
 
 using Tosh.Tui.Widgets = Tui
 
+## Styles live beside the widgets rather than among them, so a script that colours
+## anything wants both. Imported wholesale because `TuiStyle` needs no prefix to be clear.
+using Tosh.Tui.Rendering
+
 var cpu = new CpuMeter()
+
+## The live meters, held outside the screen so `Summary` can feed them. A gauge says where
+## a number is now; a sparkline says where it has been. `MinimumScale = 100` is what keeps
+## a quiet machine looking quiet: scaled to whatever it happened to observe, a series of
+## 1-2-1-2 draws as a mountain range.
+var cpuGauge = new Tui.TuiGauge() {| Label = "", Size = "2*" |}
+var cpuSpark = new Tui.TuiSparkline() {| MinimumScale = 100, Capacity = 240, Size = "3*" |}
+var memGauge = new Tui.TuiGauge() {| Label = "", Size = "2*" |}
+var memSpark = new Tui.TuiSparkline() {| MinimumScale = 100, Capacity = 240, Size = "3*" |}
+
+## @summary Colours the busy end of a chart, as `pidwatch` does.
+func Heat(value: double, ratio: double) -> TuiStyle {
+    if ($ratio >= 0.75) { return new TuiStyle("red") }
+    if ($ratio >= 0.40) { return new TuiStyle("yellow") }
+    return new TuiStyle("cyan")
+}
+
+$cpuSpark.StyleSelector = &Heat
+$memSpark.StyleSelector = &Heat
+$cpuGauge.StyleSelector = func(ratio: double) => Heat(0.0, $ratio)
+$memGauge.StyleSelector = func(ratio: double) => Heat(0.0, $ratio)
+
+## @summary One labelled row of meters.
+func Meter(label: string, gauge, spark) -> Tui.TuiWidget {
+    return new Tui.TuiStack(Tui.TuiOrientation.Horizontal) {|
+        Gap = 1,
+        Size = "1",
+        Items = [ new Tui.TuiTextWidget($label) {| Size = "7" |}, $gauge, $spark ]
+    |}
+}
 
 ## @summary The process list, heaviest first. Re-read on every refresh.
 func TopProcesses() {
@@ -175,10 +191,15 @@ func Summary() {
     var uptime = System.Double.Parse((System.IO.File.ReadAllText("/proc/uptime")).Split(" ", System.StringSplitOptions.None)[0])
     var uptimeSpan = System.TimeSpan.FromSeconds($uptime)
 
-    return $"""
-CPU   {$load.ToString("F1").PadLeft(5)} %  {Bar($load, 28)}
-Memory{$memoryPercent.ToString("F1").PadLeft(5)} %  {Bar($memoryPercent, 28)}
+    ## A pull binding is asked once per redraw, which is exactly the cadence a chart wants
+    ## — so the sampling happens here and the meters are fed from it. Reading `/proc` twice
+    ## a second to keep two widgets in step would be the alternative.
+    $cpuGauge.Amount = $load
+    $memGauge.Amount = $memoryPercent
+    $cpuSpark.Push($load)
+    $memSpark.Push($memoryPercent)
 
+    return $"""
   Used       {FormatKb($usedKb)}
   Available  {FormatKb($availableKb)}
   Total      {FormatKb($totalKb)}
@@ -202,7 +223,13 @@ var screen = new Tui.TuiStack(Tui.TuiOrientation.Horizontal) {|
             "Processes by memory") {| Size = "2*" |},
 
         new Tui.TuiBorder(
-            new Tui.TuiTextWidget() {| TextSource = &Summary |},
+            new Tui.TuiStack(Tui.TuiOrientation.Vertical) {|
+                Items = [
+                    Meter("CPU",    $cpuGauge, $cpuSpark),
+                    Meter("Memory", $memGauge, $memSpark),
+                    new Tui.TuiTextWidget() {| TextSource = &Summary, Size = "*" |}
+                ]
+            |},
             "System") {| Size = "3*" |},
     ]
 |}

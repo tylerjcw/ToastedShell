@@ -28,6 +28,8 @@ public static class TuiBindings
             case TuiTextField field: field.ValueSource = source; return;
             case TuiBorder border: border.TitleSource = source; return;
             case TuiList list: list.ItemsSource = source; return;
+            case TuiSparkline spark: spark.ValuesSource = source; return;
+            case TuiGauge gauge: gauge.AmountSource = source; return;
             case TuiTable table: table.RowsSource = source; return;
             case TuiLines lines: lines.LinesSource = source; return;
             case TuiScroll { Child: TuiList scrolled }: scrolled.ItemsSource = source; return;
@@ -73,6 +75,19 @@ public static class TuiBindings
 
             case TuiTable { RowsSource: { } source } table:
                 table.Rows = AsItems(invoke(source, values));
+                return;
+
+            case TuiSparkline { ValuesSource: { } source } spark:
+                spark.Values = [.. AsItems(invoke(source, values))
+                    .Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
+                        ? (double)number!
+                        : 0d)];
+                return;
+
+            case TuiGauge { AmountSource: { } source } gauge:
+                gauge.Amount = TypeConversion.TryConvert(invoke(source, values), typeof(double), out var amount)
+                    ? (double)amount!
+                    : 0d;
                 return;
 
             case TuiLines { LinesSource: { } source } lines:

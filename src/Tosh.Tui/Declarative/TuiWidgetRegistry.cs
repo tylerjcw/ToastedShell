@@ -96,6 +96,22 @@ public sealed class TuiWidgetRegistry
             return widget;
         });
 
+        registry.Register("spark", static (spec, _) => new TuiSparkline(spec.Numbers())
+        {
+            Style = spec.Style(),
+            MinimumScale = spec.Number("scale", 0),
+            Capacity = spec.Number("capacity", 0),
+            PadLeft = spec.Flag("pad", true),
+        });
+
+        registry.Register("gauge", static (spec, _) => new TuiGauge(spec.Number("value", 0))
+        {
+            Minimum = spec.Number("min", 0),
+            Maximum = spec.Number("max", 100),
+            Label = spec.Text("label"),
+            FilledStyle = spec.Style(),
+        });
+
         registry.Register("tree", static (spec, context) =>
         {
             var tree = new TuiTree(spec.Primary)

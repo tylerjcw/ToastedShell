@@ -122,7 +122,11 @@ public sealed class TuiForm : TuiWidget
     public void KeepOpen() => Result = TuiFormResult.Open;
 
     /// <summary>The value of one identified widget in the form.</summary>
-    public object? Value(string id) => TuiValues.Collect(this).TryGetValue(id, out var value) ? value : null;
+    /// <remarks>
+    /// Not <c>Value</c>: that is what a widget answers a form with, and a method of the
+    /// same name hides it.
+    /// </remarks>
+    public object? ValueOf(string id) => TuiValues.Collect(this).TryGetValue(id, out var value) ? value : null;
 
     /// <inheritdoc />
     public override IReadOnlyList<TuiWidget> Children => Content is null ? [] : [Content];

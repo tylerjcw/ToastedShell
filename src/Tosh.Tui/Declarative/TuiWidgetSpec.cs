@@ -80,6 +80,19 @@ public sealed class TuiWidgetSpec
         => Primary is null or IShellCallable ? fallback : Primary.ToString();
 
     /// <summary>Reads a key as a whole number, however it was written.</summary>
+    /// <summary>The primary value read as a series of numbers.</summary>
+    /// <remarks>
+    /// A chart's data arrives from a pipeline, so anything countable that converts is
+    /// taken; a value that does not becomes zero rather than ending the screen, because a
+    /// gap in a series is a gap and not a failure.
+    /// </remarks>
+    public IReadOnlyList<double> Numbers()
+        => Primary is IEnumerable<object?> items
+            ? [.. items.Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
+                ? (double)number!
+                : 0d)]
+            : [];
+
     public int Number(string key, int fallback)
     {
         if (!TryGet(key, out var value) || value is null)
