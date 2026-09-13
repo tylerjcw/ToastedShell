@@ -28,7 +28,7 @@ public sealed class TuiField : TuiWidget
         _input = new TuiTextField(text);
 
         _row = new TuiStack(TuiOrientation.Horizontal)
-            .Add(_caption, TuiLength.Auto)
+            .Add(_caption)
             .Add(_input, TuiLength.Star());
 
         Label = label;
@@ -44,7 +44,14 @@ public sealed class TuiField : TuiWidget
 
             // The separator lives here rather than in the caller's string, so every form
             // in every script lines up the same way.
-            _caption.Text = field.Length == 0 ? string.Empty : $"{field}: ";
+            _caption.Text = field.Length == 0 ? string.Empty : $"{field}:";
+
+            // Measured rather than left to the caption: a text widget reports the width
+            // of what it would draw, and trailing blanks are not drawn — so a caption
+            // sized to its content loses the gap that separates it from the input.
+            _caption.Size = field.Length == 0
+                ? TuiLength.Auto
+                : TuiLength.Fixed(TuiTextMeasure.MeasureWidth(field) + 2);
         }
     } = string.Empty;
 

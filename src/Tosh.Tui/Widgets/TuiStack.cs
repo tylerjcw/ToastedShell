@@ -85,10 +85,13 @@ public sealed class TuiStack : TuiWidget
         foreach (var child in _children)
         {
             var length = child.Size;
+
+            // A fixed length settles one dimension, not both. Reporting the full offered
+            // size across the stack's axis made a row containing anything fixed claim
+            // every row on the screen: a labelled field is such a row, so a column of
+            // them left nothing for the second one onwards.
             var desired = length.Kind == TuiLengthKind.Fixed
-                ? new TuiSize(
-                    horizontal ? length.Value : constraints.MaxWidth,
-                    horizontal ? constraints.MaxHeight : length.Value)
+                ? Fix(child, length.Value, horizontal, constraints)
                 : child.Measure(constraints);
 
             along += horizontal ? desired.Width : desired.Height;
@@ -100,6 +103,20 @@ public sealed class TuiStack : TuiWidget
         return constraints.Constrain(horizontal
             ? new TuiSize(along, across)
             : new TuiSize(across, along));
+    }
+
+    /// <summary>Measures a child that has already been told one of its dimensions.</summary>
+    private static TuiSize Fix(TuiWidget child, int fixedLength, bool horizontal, TuiConstraints constraints)
+    {
+        var offered = horizontal
+            ? new TuiConstraints(fixedLength, constraints.MaxHeight)
+            : new TuiConstraints(constraints.MaxWidth, fixedLength);
+
+        var measured = child.Measure(offered);
+
+        return horizontal
+            ? new TuiSize(fixedLength, measured.Height)
+            : new TuiSize(measured.Width, fixedLength);
     }
 
     public override void Arrange(TuiRect bounds)

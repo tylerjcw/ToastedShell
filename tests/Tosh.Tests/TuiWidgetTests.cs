@@ -240,6 +240,34 @@ public sealed class TuiWidgetTests
         Assert.False(child.Saw);
     }
 
+    [Fact]
+    public void A_fixed_size_settles_one_dimension_not_both()
+    {
+        // A row containing anything fixed used to report the full offered height, because
+        // a fixed length was read as the whole size rather than as one of its two numbers.
+        // A labelled field is such a row, so a column of them gave everything to the first.
+        var rows = Render(
+            new TuiStack(TuiOrientation.Vertical)
+                .Add(new TuiStack(TuiOrientation.Horizontal)
+                    .Add(new TuiTextWidget("a:"), TuiLength.Fixed(3))
+                    .Add(new TuiTextWidget("one"), TuiLength.Star()))
+                .Add(new TuiStack(TuiOrientation.Horizontal)
+                    .Add(new TuiTextWidget("b:"), TuiLength.Fixed(3))
+                    .Add(new TuiTextWidget("two"), TuiLength.Star())),
+            width: 8,
+            height: 4);
+
+        Assert.Equal(["a: one  ", "b: two  ", "        ", "        "], rows);
+    }
+
+    [Fact]
+    public void A_labelled_field_is_one_row_tall_however_much_room_it_is_offered()
+    {
+        var field = new TuiField("Capacity", "25000");
+
+        Assert.Equal(1, field.Measure(TuiConstraints.From(new TuiSize(40, 24))).Height);
+    }
+
     private sealed class ConsumingWidget(bool consume) : TuiWidget
     {
         public bool Saw { get; private set; }
