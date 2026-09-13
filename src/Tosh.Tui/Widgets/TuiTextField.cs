@@ -37,6 +37,11 @@ public sealed class TuiTextField : TuiWidget
     /// <summary>Draws the characters as dots.</summary>
     public bool Mask { get; set; }
 
+    /// <summary>
+    /// Accepts newlines, growing downwards, with submission moved to Ctrl+Enter.
+    /// </summary>
+    public bool Multiline { get; set; }
+
     public TuiStyle Style { get; set; }
 
     public TuiStyle PlaceholderStyle { get; set; } = new(Attributes: TuiTextAttributes.Dim);
@@ -52,10 +57,20 @@ public sealed class TuiTextField : TuiWidget
 
     public override bool IsFocusable => true;
 
+    private string[] Lines => (Mask ? new string('•', Text.Length) : Text).Split('\n');
+
     public override TuiSize Measure(TuiConstraints constraints)
-        => constraints.Constrain(new TuiSize(
-            Math.Max(TuiTextMeasure.MeasureWidth(Text) + 1, TuiTextMeasure.MeasureWidth(Placeholder ?? string.Empty)),
-            1));
+    {
+        var lines = Lines;
+
+        // One column wider than the text, so there is somewhere for the caret to sit at
+        // the end of the longest line.
+        var width = Math.Max(
+            lines.Max(TuiTextMeasure.MeasureWidth) + 1,
+            TuiTextMeasure.MeasureWidth(Placeholder ?? string.Empty));
+
+        return constraints.Constrain(new TuiSize(width, Multiline ? lines.Length : 1));
+    }
 
     public override void Draw(TuiSurface surface)
     {
@@ -65,8 +80,12 @@ public sealed class TuiTextField : TuiWidget
             return;
         }
 
-        var text = Mask ? new string('•', Text.Length) : Text;
-        surface.DrawText(0, 0, text, Style);
+        var lines = Lines;
+
+        for (var row = 0; row < lines.Length && row < surface.Height; row += 1)
+        {
+            surface.DrawText(0, row, lines[row], Style);
+        }
     }
 
     /// <summary>Where the caret belongs, in this field's own coordinates.</summary>
@@ -74,18 +93,63 @@ public sealed class TuiTextField : TuiWidget
     /// Reported rather than drawn: the terminal draws a better caret than a reversed cell
     /// does, and only the screen knows the absolute position to give it.
     /// </remarks>
-    public int CaretColumn => TuiTextMeasure.MeasureWidth(Text[..Math.Min(_state.CursorIndex, Text.Length)]);
+    public int CaretColumn
+    {
+        get
+        {
+            var before = Text[..Math.Min(_state.CursorIndex, Text.Length)];
+            var lastBreak = before.LastIndexOf('\n');
+
+            return TuiTextMeasure.MeasureWidth(lastBreak < 0 ? before : before[(lastBreak + 1)..]);
+        }
+    }
+
+    /// <summary>Which line the caret is on, for a multiline field.</summary>
+    public int CaretRow => Text[..Math.Min(_state.CursorIndex, Text.Length)].Count(character => character == '\n');
+
+    /// <summary>The offset in the text at a position within this field.</summary>
+    private int IndexAt(int row, int column)
+    {
+        var lines = Text.Split('\n');
+        var index = 0;
+
+        for (var line = 0; line < Math.Min(row, lines.Length - 1); line += 1)
+        {
+            index += lines[line].Length + 1;
+        }
+
+        var target = lines[Math.Clamp(row, 0, lines.Length - 1)];
+
+        return index + Math.Clamp(column, 0, target.Length);
+    }
 
     public override bool OnInput(TuiInputEvent input)
     {
-        if (!input.IsKey || !IsFocused)
+        if (!input.IsKey)
+        {
+            var mouse = input.Mouse;
+
+            // A click puts the caret where it was clicked, which is the one thing a
+            // mouse is unambiguously for in a text field.
+            if (mouse.Action != TuiMouseAction.Press ||
+                mouse.Button != TuiMouseButton.Left ||
+                !Bounds.Contains(mouse.Column, mouse.Row))
+            {
+                return false;
+            }
+
+            _state.SetCursorIndex(IndexAt(mouse.Row - Bounds.Top, mouse.Column - Bounds.Left));
+            return true;
+        }
+
+        if (!IsFocused)
         {
             return false;
         }
 
         var before = Text;
 
-        switch (_state.HandleKey(input.Key))
+        switch (_state.HandleKey(input.Key, Multiline))
         {
             case TuiTextInputResult.Submit:
                 Submitted?.Invoke(Text);

@@ -1,105 +1,101 @@
-using System.Text;
 using Tosh.Tui;
+using Tosh.Tui.Rendering;
 using Tosh.Tui.Requests;
+using Tosh.Tui.Widgets;
 
 namespace Tosh.Cli.Tui;
 
+/// <summary>
+/// The text prompt behind <c>tui input</c>.
+/// </summary>
+/// <remarks>
+/// Built from widgets (<c>TUI-0002</c>). The field owns the text and the caret; the
+/// border sizes itself to the prompt and the value, so a multiline entry grows the box
+/// downwards instead of running into the footer.
+/// </remarks>
 internal sealed class TuiInputScreen : ITuiScreen
 {
-    private readonly TuiInputRequest _request;
-    private readonly TuiTextInputState _input = new();
-    private int _inputRow;
+    private const int MaxDialogWidth = 70;
+
+    private readonly TuiTextField _field;
+    private readonly TuiBorder _dialog;
+    private readonly TuiFocus _focus;
 
     public TuiInputScreen(TuiInputRequest request)
     {
-        _request = request;
-        _input.SetText(request.DefaultValue);
+        _field = new TuiTextField(request.DefaultValue ?? string.Empty)
+        {
+            Mask = request.Password,
+            Multiline = request.Multiline,
+            Submitted = text => Finish(new TuiScreenOutcome
+            {
+                Selected = [text],
+                Cancelled = false,
+                Values = new Dictionary<string, object?> { ["text"] = text },
+            }),
+            Cancelled = () => Finish(new TuiScreenOutcome { Cancelled = true }),
+        };
+
+        var body = new TuiStack(TuiOrientation.Vertical)
+            .Add(_field, TuiLength.Auto)
+            .Add(new TuiTextWidget(string.Empty), TuiLength.Fixed(1))
+            .Add(
+                new TuiTextWidget(request.Multiline
+                    ? "Ctrl+Enter submits   Enter adds a line   Esc cancels"
+                    : "Enter submits   Esc cancels")
+                {
+                    Style = new TuiStyle(Attributes: TuiTextAttributes.Dim),
+                },
+                TuiLength.Auto);
+
+        _dialog = new TuiBorder(body, request.Prompt ?? "Enter text")
+        {
+            TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold),
+        };
+
+        _focus = new TuiFocus(_dialog);
+        _focus.Focus(_field);
     }
 
     public TuiScreenOutcome? Outcome { get; private set; }
 
     public TuiFrame Render(TuiSize size)
     {
-        var sb = new StringBuilder();
-        var width = size.Width;
-        var height = size.Height;
+        var buffer = new TuiBuffer(size);
 
-        // Center content vertically. A multiline value occupies one row per line, so the
-        // block grows with the text rather than overlapping the footer.
-        var contentLines = 4 + _input.Text.Count(static c => c == '\n');
-        var startRow = Math.Max(0, (height - contentLines) / 2);
+        var width = Math.Min(size.Width, MaxDialogWidth);
+        var desired = _dialog.Measure(new TuiConstraints(width, size.Height));
 
-        for (var i = 0; i < startRow; i++)
-        {
-            sb.AppendLine();
-        }
+        // Wide enough for the prompt and the value, tall enough for however many lines
+        // the value currently has — the widgets work that out, not this screen.
+        var bounds = new TuiRect(
+            Math.Max(0, (size.Width - desired.Width) / 2),
+            Math.Max(0, (size.Height - desired.Height) / 2),
+            desired.Width,
+            desired.Height);
 
-        var prompt = _request.Prompt ?? "Enter text:";
-        sb.AppendLine(prompt.Length > width ? prompt[..width] : prompt);
-        sb.AppendLine();
+        _dialog.Arrange(bounds);
+        _dialog.Draw(new TuiSurface(buffer, bounds));
 
-        _inputRow = startRow + 2;
+        buffer.Cursor = (
+            _field.Bounds.Left + _field.CaretColumn,
+            _field.Bounds.Top + _field.CaretRow);
 
-        // Multiline text arrives with newlines in it, so each line is emitted on its own
-        // row; a single-line field still renders exactly one row as before.
-        var rendered = _input.RenderWithCursor(_request.Password);
-
-        foreach (var line in rendered.Split('\n'))
-        {
-            sb.AppendLine(line.Length > width ? line[..width] : line);
-        }
-
-        sb.AppendLine();
-        sb.Append(_request.Multiline
-            ? "Ctrl+Enter: submit | Enter: newline | Esc: cancel"
-            : "Enter: submit | Esc: cancel");
-
-        return new TuiFrame(sb.ToString());
+        return new TuiFrame(buffer);
     }
 
     public TuiScreenResult HandleInput(TuiInputEvent input)
     {
-        if (input.IsKey)
-            return HandleKey(input.Key);
-
-        var mouse = input.Mouse;
-
-        // Click on the input line to position cursor
-        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left &&
-            mouse.Row == _inputRow)
+        if (_focus.Dispatch(input))
         {
-            var newIndex = Math.Clamp(mouse.Column, 0, _input.Text.Length);
-            _input.SetCursorIndex(newIndex);
-            return TuiScreenResult.Continue;
+            return Outcome is null ? TuiScreenResult.Continue : TuiScreenResult.Exit;
         }
 
         return TuiScreenResult.Continue;
     }
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
-    {
-        var result = _input.HandleKey(key, _request.Multiline);
+        => HandleInput(TuiInputEvent.FromKey(key));
 
-        switch (result)
-        {
-            case TuiTextInputResult.Submit:
-                Outcome = new TuiScreenOutcome
-                {
-                    Selected = [_input.Text],
-                    Cancelled = false,
-                    Values = new Dictionary<string, object?> { ["text"] = _input.Text },
-                };
-                return TuiScreenResult.Exit;
-
-            case TuiTextInputResult.Cancel:
-                Outcome = new TuiScreenOutcome
-                {
-                    Cancelled = true,
-                };
-                return TuiScreenResult.Exit;
-
-            default:
-                return TuiScreenResult.Continue;
-        }
-    }
+    private void Finish(TuiScreenOutcome outcome) => Outcome = outcome;
 }

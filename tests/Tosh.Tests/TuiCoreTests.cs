@@ -673,24 +673,14 @@ public sealed class TuiCoreTests
         // Render to set _inputRow
         var frame = screen.Render(new TuiSize(80, 24));
 
-        // Find the row with the input text
-        var lines = frame.Content.Split('\n');
-        var inputRow = -1;
-
-        for (var row = 0; row < lines.Length; row++)
-        {
-            if (lines[row].Contains("hello world", StringComparison.Ordinal))
-            {
-                inputRow = row;
-                break;
-            }
-        }
-
+        // Find where the value was actually drawn. The dialog is centred and framed, so
+        // its column is the layout's business rather than this test's.
+        var (inputRow, textStart) = FindLabel(frame, "hello world");
         Assert.True(inputRow >= 0, "Could not find input row");
 
-        // Click at column 5 to position cursor there
+        // Click five characters in, to put the caret after "hello".
         var click = TuiInputEvent.FromMouse(
-            new TuiMouseEvent(TuiMouseAction.Press, TuiMouseButton.Left, 5, inputRow, false, false, false));
+            new TuiMouseEvent(TuiMouseAction.Press, TuiMouseButton.Left, textStart - 1 + 5, inputRow, false, false, false));
         screen.HandleInput(click);
 
         // Now type a character — it should insert at position 5
@@ -698,9 +688,10 @@ public sealed class TuiCoreTests
             new ConsoleKeyInfo('X', ConsoleKey.X, false, false, false)));
 
         frame = screen.Render(new TuiSize(80, 24));
-        // RenderWithCursor() inserts a cursor marker, so just check the characters are in the right order
-        Assert.Contains("helloX", frame.Content, StringComparison.Ordinal);
-        Assert.Contains(" world", frame.Content, StringComparison.Ordinal);
+
+        // The caret is the terminal's now rather than a marker in the text, so the value
+        // reads plainly.
+        Assert.Contains("helloX world", GridText(frame), StringComparison.Ordinal);
     }
 
     // ── TuiTextInputState.SetCursorIndex ──
@@ -832,7 +823,7 @@ public sealed class TuiCoreTests
         screen.HandleInput(TuiInputEvent.FromKey(
             new ConsoleKeyInfo('Z', ConsoleKey.Z, false, false, false)));
         var frame = screen.Render(new TuiSize(80, 24));
-        Assert.Contains("testZ", frame.Content, StringComparison.Ordinal);
+        Assert.Contains("testZ", GridText(frame), StringComparison.Ordinal);
     }
 
     private sealed record TestCollectionItem(string Key, string Label, string EditValue);
