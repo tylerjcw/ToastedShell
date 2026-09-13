@@ -13,7 +13,6 @@
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
 | [`TOAST-0113`](items/TOAST-0113.md) | P2 | complete | 6/6 | A qualified refinement type in a type test is evaluated as module member access |
-| [`TOAST-0090`](items/TOAST-0090.md) | P2 | complete | 8/8 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
 | [`TOAST-0089`](items/TOAST-0089.md) | P2 | complete | 4/4 | A declared record's collection fields vanish from a table, but an anonymous record's do not |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TOAST-0130`](items/TOAST-0130.md) | P1 | complete | 6/6 | A module-qualified generic annotation never matched, so every generic type in a library was unusable in one |
@@ -28,7 +27,6 @@
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOAST-0072`](items/TOAST-0072.md) | P2 | complete | 5/5 | A rune's block argument ran in the current scope, so a macro calling a macro never worked |
 | [`TOAST-0120`](items/TOAST-0120.md) | P3 | complete | 7/7 | Every file in a library repeats its module path as wrapping, two levels deep |
-| [`TOAST-0091`](items/TOAST-0091.md) | P2 | complete | 6/6 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0064`](items/TOAST-0064.md) | P2 | complete | 7/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0077`](items/TOAST-0077.md) | P2 | complete | 7/7 | Native writes take their width from the value, so a buffer's layout depends on its data |
 | [`TOAST-0117`](items/TOAST-0117.md) | P3 | complete | 7/7 | A missing unary or indexer operator is reported as a binary mismatch against an operand nobody wrote |
@@ -49,7 +47,6 @@
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 7/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TOAST-0038`](items/TOAST-0038.md) | P2 | complete | 6/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
-| [`TOAST-0092`](items/TOAST-0092.md) | P2 | complete | 9/9 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | complete | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
@@ -60,7 +57,6 @@
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | complete | 8/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOAST-0119`](items/TOAST-0119.md) | P2 | complete | 4/4 | The argument-cost guard measures a body the fast-path flag does not control, so its two budgets are vacuous |
-| [`TOAST-0102`](items/TOAST-0102.md) | P2 | complete | 4/4 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0114`](items/TOAST-0114.md) | P3 | complete | 7/7 | A struct is invisible to the editor: no outline entry, no hover, no completion |
 | [`TOAST-0128`](items/TOAST-0128.md) | P2 | complete | 8/8 | The specification's own code listings did not parse, in four places where the parser was narrower than the language it documents |
@@ -80,7 +76,7 @@
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | complete | 6/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
 | [`TOAST-0067`](items/TOAST-0067.md) | P2 | complete | 4/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
-| [`TOAST-0095`](items/TOAST-0095.md) | P2 | complete | 5/5 | `is` answers false for a nested type, and a qualified variant pattern never matches |
+| [`TOAST-0011`](items/TOAST-0011.md) | P2 | complete | 6/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0052`](items/TOAST-0052.md) | P1 | complete | 8/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |
 | [`TOAST-0109`](items/TOAST-0109.md) | P3 | complete | 3/3 | Any `|` or `>` within three characters of the cursor produces a pipeline hover |
@@ -98,7 +94,6 @@
 | [`TOAST-0054`](items/TOAST-0054.md) | P1 | complete | 8/8 | A `match` over a closed union is not checked for exhaustiveness |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
-| [`TOAST-0104`](items/TOAST-0104.md) | P2 | complete | 4/4 | A refinement type derived from a sibling in the same module silently fails to register |
 | [`TOAST-0105`](items/TOAST-0105.md) | P2 | complete | 5/5 | `is` silently returns false for a declared type when the type name is qualified |
 | [`TOAST-0044`](items/TOAST-0044.md) | P1 | complete | 5/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
 | [`TOAST-0050`](items/TOAST-0050.md) | P2 | complete | 8/8 | A tuple type resolves but cannot be written in an annotation |
@@ -116,6 +111,5 @@
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | complete | — | A lexical scope allocated ten collections it almost never used |
 | [`TOAST-0045`](items/TOAST-0045.md) | P2 | complete | 4/4 | A compiled function returning `record` cannot return a record literal |
 | [`TOAST-0124`](items/TOAST-0124.md) | P2 | complete | 6/6 | A value bound to a type parameter is checked for an exact type, so an integer literal cannot fill a double |
-| [`TOAST-0083`](items/TOAST-0083.md) | P2 | complete | 9/9 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).

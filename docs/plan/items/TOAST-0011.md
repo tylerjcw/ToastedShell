@@ -1,7 +1,7 @@
 ---
 id: TOAST-0011
 title: "A TōSh closure cannot be passed where C wants a function pointer"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-16
@@ -78,7 +78,68 @@ it as the proof, but it is an application of a finished feature, not a gap in on
 - [x] A callback that outlives the call that registered it works — GLFW in `Gl.tosh`, and thunk reuse after a full GC. `on_exit` at process teardown is the one boundary; see above
 - [x] Exceptions thrown inside a callback are handled without unwinding across native frames — a `try` around the native call catches, and the process continues
 - [x] `qsort` works end to end as the canonical test
-- [ ] sd-bus is reachable well enough for `Bluetooth.tosh` to stop spawning a process per property read — the only box left, and it is a binding to write in the author's own library rather than language work
+- [x] sd-bus is reachable well enough for `Bluetooth.tosh` to stop spawning a process per
+      property read — **done 2026-09-12**, measured against live hardware
+
+## The binding — 2026-09-12
+
+`~/.config/tosh/lib/Net/SdBus.tosh` is a general sd-bus binding, not a Bluetooth one:
+string, boolean and byte property reads, method calls, writable-property sets, and
+errors that carry the D-Bus error *name* rather than only an errno.
+`Net/Bluetooth.tosh` is rewritten on it and no longer spawns anything.
+
+**No varargs were needed, which is what made this safe.** `sd_bus_call_method` is
+variadic and calling one through a fixed signature is the kind of thing that works
+until it does not. The message API is not variadic — `sd_bus_message_new_method_call`,
+`sd_bus_message_append_basic`, `sd_bus_message_open_container`, `sd_bus_call` — so the
+whole surface is built from prototyped calls.
+
+### Measured, against a connected Stealth 600X
+
+| | before | after |
+|---|---|---|
+| `Snapshot()` — every property | 8.24 ms | **4.01 ms** |
+| one property, read fresh | 8.24 ms | **0.44 ms** |
+| processes spawned for a snapshot | 1 | **0** |
+
+`strace -e execve` over a full snapshot counts **one** `execve` — the shell itself.
+
+The cache is gone with the spawn. It existed only to stop a status display running
+`bluetoothctl` ten times, and it cost staleness: `Refresh()` had to be called and
+remembered. Values are live now, and `Refresh()` remains as a no-op for compatibility.
+
+### `GetAll` was measured and rejected
+
+The obvious next step — one round trip for every property instead of nine — is wrong
+here, and the measurement says why: a bus round trip is **~230 µs** while each FFI call
+costs **~35 µs**. Walking the returned `a{sv}` takes roughly four calls per property, so
+parsing seventeen of them would cost more than the nine round trips it saved. Recorded
+so nobody optimises it the wrong way later.
+
+### Two things found on the way
+
+**`write-buffer` emits a pipeline value.** Zeroing a slot before a trivial read made the
+function return *two* values, and the caller's `!= 0` answered against the wrong one —
+so every boolean came back inverted while every string was fine. `| ignore` fixes it.
+The same shape as the void-call rule, in a place that produced a plausible wrong answer
+rather than an error.
+
+**`sd_bus_message_append_basic` means two different things by its pointer.** For a
+numeric type it points *at* the value; for `s`, `o` and `g` it is the characters
+themselves. One signature cannot express both, so the symbol is bound twice and each
+call site picks the marshalling its type code needs.
+
+### What is not covered
+
+`Connect`, `Disconnect`, `Pair` and `Remove` are written against the bus but were not
+run against the hardware — disconnecting a headset someone is listening to is not a
+test worth running. The *call path* they use is proven: `CancelPairing` on an
+unpairing device reaches BlueZ and comes back as `org.bluez.Error.DoesNotExist`, name
+and message intact, which exercises message construction, `sd_bus_call` and the error
+extraction end to end. `Trust`/`Untrust` were round-tripped for real and restored.
+
+ToastLib's own suite stays at 431/431 and the login profile loads. The library is not
+version controlled, so this row is the record of it.
 
 ## Notes
 
