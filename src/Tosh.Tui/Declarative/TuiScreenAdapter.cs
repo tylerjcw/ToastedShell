@@ -102,10 +102,7 @@ public static class TuiScreenAdapter
                     MultiSelect = list.MultiSelect,
                 };
 
-                var scroll = TuiList.Scrollable(widget);
-                scroll.Id = list.Id;
-
-                return Titled(scroll, list.Prompt);
+                return Titled(widget, list.Prompt);
             }
 
             case TuiTextWidgetConfig text:
@@ -134,10 +131,7 @@ public static class TuiScreenAdapter
                     DisplayProperty = picker.DisplayProperty,
                 };
 
-                var scroll = TuiList.Scrollable(widget);
-                scroll.Id = picker.Id;
-
-                return Titled(scroll, picker.Prompt);
+                return Titled(widget, picker.Prompt);
             }
 
             case TuiConfirmationConfig confirm:

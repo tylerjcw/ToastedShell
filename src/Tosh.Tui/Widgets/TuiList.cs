@@ -21,6 +21,7 @@ public sealed class TuiList : TuiWidget
 {
     private readonly HashSet<int> _checked = [];
     private int _selectedIndex;
+    private int _offset;
 
     public TuiList(IReadOnlyList<object?>? items = null)
     {
@@ -52,9 +53,6 @@ public sealed class TuiList : TuiWidget
 
     /// <summary>Allows more than one item to be ticked.</summary>
     public bool MultiSelect { get; set; }
-
-    /// <summary>The scroll container to keep the selection visible in.</summary>
-    public TuiScroll? Viewport { get; set; }
 
     public TuiStyle Style { get; set; }
 
@@ -107,7 +105,7 @@ public sealed class TuiList : TuiWidget
             }
 
             _selectedIndex = clamped;
-            Viewport?.ScrollIntoView(clamped);
+            EnsureVisible();
             SelectionChanged?.Invoke(clamped);
         }
     }
@@ -127,15 +125,38 @@ public sealed class TuiList : TuiWidget
             ? _checked.Where(index => index < Items.Count).OrderBy(index => index).Select(index => Items[index]).ToArray()
             : Items.Where(item => IsChecked(item)).ToArray();
 
-    /// <summary>Wraps a list in a scroll container, wired so the selection stays visible.</summary>
-    public static TuiScroll Scrollable(TuiList list)
+    /// <summary>The first row shown, when there are more items than room.</summary>
+    /// <remarks>
+    /// A list scrolls itself rather than being wrapped in a scroll container. The two are
+    /// not separable in practice: moving the selection has to move the window, so a
+    /// wrapper needs the list to reach into it and the list needs a reference back. That
+    /// coupling produced three defects — the wrapper taking focus ahead of the list, the
+    /// wrapper reporting no value, and clicks landing on the wrong row — and none of them
+    /// were possible once the list owned the offset. <see cref="TuiScroll"/> remains for
+    /// documents, where scrolling really is the container's business.
+    /// </remarks>
+    public int Offset => _offset;
+
+    /// <summary>Moves the window so the selected row is inside it.</summary>
+    private void EnsureVisible()
     {
-        ArgumentNullException.ThrowIfNull(list);
+        var height = Bounds.Height;
 
-        var scroll = new TuiScroll(list);
-        list.Viewport = scroll;
+        if (height <= 0)
+        {
+            return;
+        }
 
-        return scroll;
+        if (_selectedIndex < _offset)
+        {
+            _offset = _selectedIndex;
+        }
+        else if (_selectedIndex >= _offset + height)
+        {
+            _offset = _selectedIndex - height + 1;
+        }
+
+        _offset = Math.Clamp(_offset, 0, Math.Max(0, Items.Count - height));
     }
 
     /// <summary>How an item is shown.</summary>
@@ -194,15 +215,30 @@ public sealed class TuiList : TuiWidget
             width = Math.Max(width, TuiTextMeasure.MeasureWidth(Format(item)) + MarkerWidth);
         }
 
+        // As tall as its contents, but never taller than the room on offer: what does not
+        // fit is scrolled to rather than drawn past the edge.
         return constraints.Constrain(new TuiSize(width, Items.Count));
+    }
+
+    public override void Arrange(TuiRect bounds)
+    {
+        base.Arrange(bounds);
+        EnsureVisible();
     }
 
     private int MarkerWidth => MultiSelect ? 6 : 2;
 
     public override void Draw(TuiSurface surface)
     {
-        for (var index = 0; index < Items.Count && index < surface.Height; index += 1)
+        for (var row = 0; row < surface.Height; row += 1)
         {
+            var index = row + _offset;
+
+            if (index >= Items.Count)
+            {
+                break;
+            }
+
             var isSelected = index == _selectedIndex;
             var style = isSelected ? SelectedStyle : Style;
 
@@ -214,8 +250,8 @@ public sealed class TuiList : TuiWidget
                 marker += ticked ? "[x] " : "[ ] ";
             }
 
-            var used = surface.DrawText(0, index, marker, style);
-            surface.DrawText(used, index, Format(Items[index]), style);
+            var used = surface.DrawText(0, row, marker, style);
+            surface.DrawText(used, row, Format(Items[index]), style);
         }
     }
 
@@ -284,26 +320,12 @@ public sealed class TuiList : TuiWidget
             return false;
         }
 
-        // Inside a scroll container this widget is arranged in content coordinates — at
-        // its own full height, starting from zero — while the event carries the position
-        // on screen. The viewport is what knows the difference between the two.
-        if (Viewport is { } viewport)
-        {
-            if (!viewport.Bounds.Contains(mouse.Column, mouse.Row))
-            {
-                return false;
-            }
-
-            SelectedIndex = mouse.Row - viewport.Bounds.Top + viewport.Offset;
-            return true;
-        }
-
         if (!Bounds.Contains(mouse.Column, mouse.Row))
         {
             return false;
         }
 
-        SelectedIndex = mouse.Row - Bounds.Top;
+        SelectedIndex = mouse.Row - Bounds.Top + _offset;
         return true;
     }
 }

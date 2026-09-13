@@ -26,7 +26,6 @@ internal sealed class TuiFilePickerScreen : ITuiScreen
 
     private readonly TuiFilePickerState _picker = new();
     private readonly TuiList _list;
-    private readonly TuiScroll _scrolledList;
     private readonly TuiTextWidget _status;
     private readonly TuiBorder _frame;
     private readonly TuiStack _root;
@@ -49,9 +48,8 @@ internal sealed class TuiFilePickerScreen : ITuiScreen
             SelectionChanged = _picker.SelectIndex,
         };
 
-        _scrolledList = TuiList.Scrollable(_list);
         _status = new TuiTextWidget { Style = new TuiStyle(Attributes: TuiTextAttributes.Dim) };
-        _frame = new TuiBorder(_scrolledList) { TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold) };
+        _frame = new TuiBorder(_list) { TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold) };
 
         _root = new TuiStack(TuiOrientation.Vertical)
             .Add(_frame, TuiLength.Star())
@@ -132,8 +130,7 @@ internal sealed class TuiFilePickerScreen : ITuiScreen
                 return TuiScreenResult.Exit;
 
             default:
-                // Keep the highlighted row on screen after the state moved it.
-                _scrolledList.ScrollIntoView(_picker.SelectedIndex);
+                // The list keeps the highlighted row on screen itself.
                 return TuiScreenResult.Continue;
         }
     }

@@ -122,14 +122,13 @@ public sealed class TuiTreeBuilderTests
     }
 
     [Fact]
-    public void A_list_arrives_scrollable_without_being_asked()
+    public void A_list_needs_no_wrapper_to_scroll()
     {
-        // A list is nearly always taller than its pane; making every author wrap one is
-        // the ritual this is meant to remove.
+        // A list scrolls itself. Wrapping one was the ritual this is meant to remove, and
+        // the wrapper caused more trouble than it saved — see TuiList.Offset.
         var widget = TuiTreeBuilder.Build(Node(("List", new object?[] { "a", "b", "c" })));
 
-        Assert.IsType<TuiScroll>(widget);
-        Assert.IsType<TuiList>(((TuiScroll)widget).Child);
+        Assert.IsType<TuiList>(widget);
     }
 
     [Fact]

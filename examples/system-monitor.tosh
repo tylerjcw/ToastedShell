@@ -143,14 +143,15 @@ func Bar(percent: double, width: int) -> string {
 
 # ── The screen ──────────────────────────────────────────────────────────────────
 #
-# The screen is a value, and the two panes are functions. `List = &TopProcesses` and
-# `Text = &Summary` are pull bindings: they are re-read whenever the screen redraws, and
-# `--refresh 1s` is what makes it redraw with nobody touching it.
+# Built the way a Windows Forms or GTK window is: construct the widgets, set their
+# properties, put them in a container, run it.
 #
-# There is no update code. The earlier version of this file built the screen a line at a
-# time, gave every widget an id so a handler could find it again, and wrote a `Refresh`
-# function that reached into both widgets and assigned to them. All of that was
-# bookkeeping to keep two copies of the truth in step; a pull binding has one copy.
+# `ItemsSource` and `TextSource` are what make the panes live. Setting `Items` puts a
+# value there once; setting `ItemsSource` puts a question there, asked again every time
+# the screen is drawn — and `--refresh 1s` is what makes it redraw with nobody touching
+# it. There is no update code in this file because there is nothing to keep in step.
+
+using Tosh.Tui.Widgets = Tui
 
 var cpu = new CpuMeter()
 
@@ -161,10 +162,9 @@ func TopProcesses() {
 
 ## @summary Everything the right-hand pane shows.
 ## @remarks
-##   Takes the form's values — which this screen has none of — and returns text. The CPU
-##   meter is held outside because a percentage is a change between two readings, so it
-##   has to remember the last one.
-func Summary(values) {
+##   The CPU meter is held outside because a percentage is a change between two readings,
+##   so it has to remember the last one.
+func Summary() {
     var load = $cpu.Sample()
     var memory = System.IO.File.ReadAllLines("/proc/meminfo")
     var totalKb = MemoryFieldKb($memory, "MemTotal:")
@@ -191,9 +191,25 @@ Memory{$memoryPercent.ToString("F1").PadLeft(5)} %  {Bar($memoryPercent, 28)}
 """
 }
 
-tui run {|
-    Row = [
-        {| Box = [ {| List = &TopProcesses, Display = "Name" |} ], Title = "Processes by memory", Size = "2*" |},
-        {| Box = [ {| Text = &Summary |} ],                        Title = "System",              Size = "3*" |}
-    ]
-|} --title "System Monitor" --refresh 1s
+var processes = new Tui.TuiList()
+$processes.DisplayProperty = "Name"
+$processes.ItemsSource     = &TopProcesses
+
+var summary = new Tui.TuiTextWidget()
+$summary.TextSource = &Summary
+
+var left = new Tui.TuiBorder()
+$left.Title = "Processes by memory"
+$left.Child = $processes
+$left.Size  = Tui.TuiLength.Star(2)
+
+var right = new Tui.TuiBorder()
+$right.Title = "System"
+$right.Child = $summary
+$right.Size  = Tui.TuiLength.Star(3)
+
+var screen = new Tui.TuiStack(Tui.TuiOrientation.Horizontal)
+$screen.Add($left)
+$screen.Add($right)
+
+tui run $screen --title "System Monitor" --refresh 1s

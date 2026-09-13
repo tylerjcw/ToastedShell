@@ -77,11 +77,7 @@ public sealed class TuiWidgetRegistry
             context.OnHandler(spec, "onselect", handler => list.Activated = item => handler(item));
             context.OnHandler(spec, "onchange", handler => list.SelectionChanged = _ => handler(list.SelectedItem));
 
-            // A list is nearly always taller than its pane, so it arrives scrollable.
-            // Asking every author to remember that is the kind of ritual this replaces.
-            TuiList.Scrollable(list);
-
-            return list.Viewport!;
+            return list;
         });
 
         registry.Register("field", static (spec, context) =>

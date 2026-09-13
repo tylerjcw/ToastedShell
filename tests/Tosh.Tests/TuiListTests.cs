@@ -191,14 +191,13 @@ public sealed class TuiListTests
     }
 
     [Fact]
-    public void A_scrollable_list_keeps_its_selection_in_view()
+    public void A_list_keeps_its_selection_in_view_without_being_wrapped()
     {
-        var list = new TuiList(Enumerable.Range(1, 40).Select(number => (object?)$"item{number}").ToArray());
-        var scroll = TuiList.Scrollable(list);
+        var list = Focused(new TuiList(
+            Enumerable.Range(1, 40).Select(number => (object?)$"item{number}").ToArray()));
 
-        scroll.Measure(TuiConstraints.From(new TuiSize(20, 5)));
-        scroll.Arrange(new TuiRect(0, 0, 20, 5));
-        new TuiFocus(scroll).Focus(list);
+        list.Measure(TuiConstraints.From(new TuiSize(20, 5)));
+        list.Arrange(new TuiRect(0, 0, 20, 5));
 
         for (var press = 0; press < 10; press += 1)
         {
@@ -208,10 +207,30 @@ public sealed class TuiListTests
         Assert.Equal(10, list.SelectedIndex);
 
         // The selected row is inside the window, not below it.
-        Assert.InRange(list.SelectedIndex, scroll.Offset, scroll.Offset + 4);
+        Assert.InRange(list.SelectedIndex, list.Offset, list.Offset + 4);
 
-        var rows = Render(scroll, 20, 5);
+        var rows = Render(list, 20, 5);
         Assert.Contains(rows, row => row.Contains("> item11", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_click_lands_on_the_row_it_looks_like_even_when_scrolled()
+    {
+        var list = Focused(new TuiList(
+            Enumerable.Range(1, 40).Select(number => (object?)$"item{number}").ToArray()));
+
+        list.Measure(TuiConstraints.From(new TuiSize(20, 5)));
+        list.Arrange(new TuiRect(0, 0, 20, 5));
+        list.OnInput(Key(ConsoleKey.End));
+
+        var click = TuiInputEvent.FromMouse(
+            new TuiMouseEvent(TuiMouseAction.Press, TuiMouseButton.Left, 3, 0, false, false, false));
+
+        list.OnInput(click);
+
+        // Row zero of a list scrolled to the end is not item one.
+        Assert.Equal(list.Offset, list.SelectedIndex);
+        Assert.Equal("item36", list.SelectedItem);
     }
 
     [Fact]

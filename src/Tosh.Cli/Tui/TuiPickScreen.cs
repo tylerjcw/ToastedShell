@@ -28,7 +28,6 @@ internal sealed class TuiPickScreen : ITuiScreen
     private readonly ObjectFormatter? _formatter;
     private readonly HashSet<int> _ticked = [];
     private readonly TuiList _list;
-    private readonly TuiScroll _scrolledList;
     private readonly TuiTextField _search;
     private readonly TuiBorder _frame;
     private readonly TuiTextWidget _footer;
@@ -50,7 +49,6 @@ internal sealed class TuiPickScreen : ITuiScreen
             Activated = _ => Commit(),
         };
 
-        _scrolledList = TuiList.Scrollable(_list);
 
         _search = new TuiTextField
         {
@@ -79,7 +77,7 @@ internal sealed class TuiPickScreen : ITuiScreen
         // The list sits in a titled box, which is what the separator line and the header
         // text were approximating before — a border says the same thing and frames the
         // scrolling region properly.
-        _frame.Child = _scrolledList;
+        _frame.Child = _list;
 
         var stack = new TuiStack(TuiOrientation.Vertical);
 

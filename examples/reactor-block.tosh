@@ -71,6 +71,8 @@ class ReactorBlock(reactorType: Reactor, width: int = 2, height: int = 2, buffer
     prop FuelPerMin: double       => (60`s / $this.BurnTime) * $this.ReactorCount
 }
 
+using Tosh.Tui.Widgets = Tui
+
 ## @summary Resolves a reactor type by name.
 ## @remarks
 ##   Folded here rather than at each call site, so a type supplied on the command line is
@@ -85,6 +87,24 @@ func ReactorFor(name: string) -> Reactor {
         "breeder"   => new Reactor("Breeder", 20`MW, 50,  Fuel.Breeder  )
         default     => throw $"Unknown reactor type '{$name}'. Valid: nuclear, uranium, plutonium, mox, breeder"
     }
+}
+
+## @summary A labelled input row, which the form needs four of.
+func Field(label: string, id: string, value) -> Tui.TuiWidget {
+    var input = new Tui.TuiTextField($"{$value}")
+    $input.Id = $id
+
+    var caption = new Tui.TuiTextWidget($"{$label}: ")
+    $caption.Size = Tui.TuiLength.Auto
+
+    ## `Add` returns the stack so calls can be chained, and a function emits every value
+    ## it produces — so without `| ignore` this returns three stacks and cannot be used as
+    ## an argument.
+    var row = new Tui.TuiStack(Tui.TuiOrientation.Horizontal)
+    $row.Add($caption) | ignore
+    $row.Add($input, Tui.TuiLength.Star(1)) | ignore
+
+    return $row
 }
 
 ## @summary The right-hand pane of the form: the block as the numbers currently stand.
@@ -194,37 +214,47 @@ subcommand calc {
     ## type, with the block itself alongside the fields — the numbers move as they are
     ## typed, so the shape of the answer is visible before committing to it.
     ##
-    ## The screen is a value. There are no widget ids to wire handlers to and no update
-    ## code: `Text = &Preview` is a pull binding, re-read whenever the screen redraws,
-    ## and a redraw is what a keystroke causes.
+    ## Built the way a Windows Forms window is: construct the widgets, set their
+    ## properties, put them in containers. `TextSource` is what makes the right pane
+    ## live — a property set to a function is re-read whenever the screen redraws, and a
+    ## keystroke is what causes a redraw. There is no update code and nothing to wire.
     ##
-    ## A TUI needs a terminal, which a pipeline does not have. That is a fine thing to
-    ## happen at a prompt and a useless thing to print from a pipe, so it is caught and
-    ## turned into advice the reader can act on. The cancellation check sits outside the
-    ## `try` so that walking away from the form is not reported as a missing terminal.
+    ## A TUI needs a terminal, which a pipeline does not have. That is caught and turned
+    ## into advice, with the real cause carried through. The cancellation check sits
+    ## outside the `try` so that walking away is not reported as a missing terminal.
     var answers = null
 
     if ($ReactorType == "") {
         try {
-            $answers = tui run {|
-                Row = [
-                    {| Box = [
-                         {| List  = ["Nuclear", "Plutonium", "MOX", "Breeder"], Id = "ReactorType" |},
-                         {| Field = "Wide",     Id = "Width",    Value = $"{$Width}"    |},
-                         {| Field = "High",     Id = "Height",   Value = $"{$Height}"   |},
-                         {| Field = "Seconds",  Id = "Seconds",  Value = $"{$Seconds}"  |},
-                         {| Field = "Capacity", Id = "Capacity", Value = $"{$Capacity}" |}
-                       ], Title = "Inputs", Size = "2*" |},
+            var kinds = new Tui.TuiList(["Nuclear", "Plutonium", "MOX", "Breeder"])
+            $kinds.Id = "ReactorType"
 
-                    {| Box = [ {| Text = &Preview |} ], Title = "Block", Size = "3*" |}
-                ]
-            |} --title "Reactor Block" --result
+            var inputs = new Tui.TuiStack(Tui.TuiOrientation.Vertical)
+            $inputs.Add($kinds)
+            $inputs.Add(Field("Wide",     "Width",    $Width))
+            $inputs.Add(Field("High",     "Height",   $Height))
+            $inputs.Add(Field("Seconds",  "Seconds",  $Seconds))
+            $inputs.Add(Field("Capacity", "Capacity", $Capacity))
+
+            var preview = new Tui.TuiTextWidget()
+            $preview.TextSource = &Preview
+
+            var left = new Tui.TuiBorder()
+            $left.Title = "Inputs"
+            $left.Child = $inputs
+            $left.Size  = Tui.TuiLength.Star(2)
+
+            var right = new Tui.TuiBorder()
+            $right.Title = "Block"
+            $right.Child = $preview
+            $right.Size  = Tui.TuiLength.Star(3)
+
+            var screen = new Tui.TuiStack(Tui.TuiOrientation.Horizontal)
+            $screen.Add($left)
+            $screen.Add($right)
+
+            $answers = tui run $screen --title "Reactor Block" --result
         } catch (e) {
-            ## The cause is carried through rather than replaced. An earlier version of
-            ## this said "the form needs a terminal" for *any* failure, which is a
-            ## confident lie when the real problem is something else — an older `tosh`
-            ## that does not know the screen syntax, say. A fallback message should
-            ## narrow the search, not end it.
             throw $"The form could not open: {$e}\n" +
                   "Pass a type instead: calc <nuclear|plutonium|mox|breeder> [width] [height] [seconds] [capacity]"
         }

@@ -22,7 +22,7 @@ require ToastLib.Gtk from "/home/komrad/.config/tosh/lib/ToastLib.Gtk.tosh" as G
 using System.Drawing
 
 ## @summary The Notepad application.
-class Notepad {
+export class Notepad {
     # ── the document ────────────────────────────────────────────────
     shy prop path_ = null                      # null while the file is Untitled
     shy prop saved_ = ""                       # the text as it was last saved
@@ -1063,8 +1063,8 @@ class Notepad {
 
 # A file named on the command line is opened at startup, the way
 # `notepad.exe notes.txt` does.
-var requested = null
-var passed = $tosh.Script.Args
-if (($passed | count) > 0) { $requested = $passed[0] }
-
-(new Notepad()).Start($requested)
+# var requested = null
+# var passed = $tosh.Script.Args
+# if (($passed | count) > 0) { $requested = $passed[0] }
+# 
+# (new Notepad()).Start($requested)

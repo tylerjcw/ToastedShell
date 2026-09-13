@@ -10,8 +10,8 @@
 ##   body ends — closed window, error, or frames spent. That matters because
 ##   `defer` does not run at top-level script scope.
 ## @example examples/sdl_test.tosh
-require ToastLib.Sdl      from "/home/komrad/.config/tosh/lib/Sdl.tosh"      as Sdl
-require ToastLib.Graphics from "/home/komrad/.config/tosh/lib/Graphics.tosh" as Gfx
+require ToastLib.Sdl      from "/home/komrad/.config/tosh/lib/ToastLib.Sdl.tosh"      as Sdl
+require ToastLib.Graphics from "/home/komrad/.config/tosh/lib/ToastLib.Graphics.tosh" as Gfx
 
 using System.Drawing
 
