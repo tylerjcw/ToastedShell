@@ -78,6 +78,10 @@ public sealed class TuiList : TuiWidget
     /// <summary>Told that an item was ticked or unticked, when the owner holds the ticks.</summary>
     public Action<object?>? CheckedToggled { get; set; }
 
+    /// <inheritdoc />
+    /// <remarks>Ticked items when multi-select is on, otherwise the highlighted one.</remarks>
+    public override object? Value => MultiSelect ? CheckedItems : SelectedItem;
+
     public override bool IsFocusable => true;
 
     /// <summary>Which item the keyboard is on.</summary>

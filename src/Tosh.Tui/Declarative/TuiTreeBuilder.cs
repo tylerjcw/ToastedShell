@@ -1,0 +1,174 @@
+using Tosh.Runtime;
+using Tosh.Tui.Widgets;
+
+namespace Tosh.Tui.Declarative;
+
+/// <summary>What a node is allowed to ask for while it is being built.</summary>
+public sealed class TuiBuildContext
+{
+    private readonly TuiWidgetRegistry _registry;
+
+    internal TuiBuildContext(TuiWidgetRegistry registry)
+    {
+        _registry = registry;
+    }
+
+    /// <summary>Builds a node's children.</summary>
+    public IReadOnlyList<TuiWidget> BuildChildren(IReadOnlyList<object?> nodes)
+        => [.. BuildChildrenWithLengths(nodes).Select(child => child.Widget)];
+
+    /// <summary>Builds a node's children, each with the size its parent should give it.</summary>
+    public IReadOnlyList<(TuiWidget Widget, TuiLength Length)> BuildChildrenWithLengths(
+        IReadOnlyList<object?> nodes)
+    {
+        ArgumentNullException.ThrowIfNull(nodes);
+
+        var built = new List<(TuiWidget, TuiLength)>();
+
+        foreach (var node in nodes)
+        {
+            if (TuiTreeBuilder.TryBuildNode(node, _registry, this, out var widget, out var spec))
+            {
+                // A child says how much room it wants; a stack of things with no opinion
+                // shares the space evenly, which is what a list of panes usually means.
+                built.Add((widget, spec?.Length("size", TuiLength.Star()) ?? TuiLength.Star()));
+            }
+        }
+
+        return built;
+    }
+}
+
+/// <summary>
+/// Turns a record tree into a widget tree.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is the whole of the "markup" idea. A record literal already nests, already
+/// carries a <see cref="TimeSpan"/> from <c>1s</c> and an <see cref="IShellCallable"/>
+/// from <c>&amp;func</c>, and already reports its errors through the diagnostics a script
+/// author knows. A separate file format would have been a second parser and a second
+/// error reporter buying none of that (<c>TUI-0004</c>).
+/// </para>
+/// <para>
+/// The key that names a widget carries its main argument, so a node reads as the thing
+/// it makes:
+/// </para>
+/// <code>
+/// {|
+///     Title  = "Reactor Block"
+///     Column = [
+///         {| List  = $types, Id = "ReactorType", Display = "Name" |},
+///         {| Field = "Reactors wide", Id = "Width", Value = "2" |}
+///     ]
+/// |}
+/// </code>
+/// </remarks>
+public static class TuiTreeBuilder
+{
+    /// <summary>Builds the widget tree a record describes.</summary>
+    /// <param name="node">A record, as a dictionary.</param>
+    /// <param name="registry">The widgets that may be named, or the default set.</param>
+    public static TuiWidget Build(object? node, TuiWidgetRegistry? registry = null)
+    {
+        var effective = registry ?? TuiWidgetRegistry.CreateDefault();
+        var context = new TuiBuildContext(effective);
+
+        if (!TryBuildNode(node, effective, context, out var widget, out _))
+        {
+            throw new ArgumentException(
+                Describe(node, effective),
+                nameof(node));
+        }
+
+        return widget;
+    }
+
+    internal static bool TryBuildNode(
+        object? node,
+        TuiWidgetRegistry registry,
+        TuiBuildContext context,
+        out TuiWidget widget,
+        out TuiWidgetSpec? spec)
+    {
+        spec = null;
+        widget = null!;
+
+        if (node is TuiWidget already)
+        {
+            // A tree may mix records with widgets built in code. Both are the same tree.
+            widget = already;
+            return true;
+        }
+
+        if (node is null)
+        {
+            return false;
+        }
+
+        if (!TryReadFields(node, out var fields))
+        {
+            // A bare value in a list of children is text. `Column = ["one", "two"]` means
+            // what it looks like.
+            widget = new TuiTextWidget(node.ToString() ?? string.Empty);
+            return true;
+        }
+
+        spec = ToSpec(fields, registry);
+
+        return spec is not null && registry.TryCreate(spec, context, out widget);
+    }
+
+    /// <summary>Finds the key that names a widget, and treats the rest as its properties.</summary>
+    private static TuiWidgetSpec? ToSpec(IDictionary<string, object?> fields, TuiWidgetRegistry registry)
+    {
+        foreach (var entry in fields)
+        {
+            if (registry.Knows(entry.Key))
+            {
+                return new TuiWidgetSpec(entry.Key, entry.Value, fields);
+            }
+        }
+
+        // A node with no widget name but with children is a column, which is what a bare
+        // screen body means.
+        foreach (var name in (string[])["column", "row"])
+        {
+            if (fields.Keys.Any(key => string.Equals(key, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return new TuiWidgetSpec(name, fields[name], fields);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Reads a record, a dictionary, or anything else shaped like one.</summary>
+    private static bool TryReadFields(object node, out IDictionary<string, object?> fields)
+    {
+        if (node is IDictionary<string, object?> dictionary)
+        {
+            fields = dictionary;
+            return true;
+        }
+
+        if (ShellRecordUtilities.TryGetFields(node, out var record))
+        {
+            fields = record.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
+            return true;
+        }
+
+        fields = null!;
+        return false;
+    }
+
+    private static string Describe(object? node, TuiWidgetRegistry registry)
+    {
+        if (node is null)
+        {
+            return "A screen needs a widget tree; nothing was given.";
+        }
+
+        return $"No widget was named in this node. Name one of: {string.Join(", ", registry.Names)}.";
+    }
+}

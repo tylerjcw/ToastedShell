@@ -79,6 +79,25 @@ public enum TuiLengthKind
 /// </remarks>
 public abstract class TuiWidget
 {
+    /// <summary>
+    /// A name for this widget, used to address it and to key its value in a result.
+    /// </summary>
+    /// <remarks>
+    /// Optional. Most widgets in a tree never need naming — a border, a label, a row —
+    /// and a declarative screen should not force ids on things nobody refers to.
+    /// </remarks>
+    public string? Id { get; set; }
+
+    /// <summary>
+    /// What this widget holds, for widgets that hold something.
+    /// </summary>
+    /// <remarks>
+    /// A text field holds its text, a list its selection. Everything else holds nothing,
+    /// which is why the default is null rather than an abstract member: a border has no
+    /// value and should not have to say so.
+    /// </remarks>
+    public virtual object? Value => null;
+
     /// <summary>Where this widget was last placed, in its parent's coordinates.</summary>
     public TuiRect Bounds { get; private set; }
 

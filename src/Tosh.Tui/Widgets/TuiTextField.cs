@@ -55,6 +55,9 @@ public sealed class TuiTextField : TuiWidget
     /// <summary>Raised when Escape is pressed.</summary>
     public Action? Cancelled { get; set; }
 
+    /// <inheritdoc />
+    public override object? Value => Text;
+
     public override bool IsFocusable => true;
 
     private string[] Lines => (Mask ? new string('•', Text.Length) : Text).Split('\n');
