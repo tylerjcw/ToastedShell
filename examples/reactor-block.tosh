@@ -220,8 +220,13 @@ subcommand calc {
                 ]
             |} --title "Reactor Block" --result
         } catch (e) {
-            throw "No reactor type was given and the form needs a terminal. " +
-                  "Pass one: calc <nuclear|plutonium|mox|breeder> [width] [height] [seconds] [capacity]"
+            ## The cause is carried through rather than replaced. An earlier version of
+            ## this said "the form needs a terminal" for *any* failure, which is a
+            ## confident lie when the real problem is something else — an older `tosh`
+            ## that does not know the screen syntax, say. A fallback message should
+            ## narrow the search, not end it.
+            throw $"The form could not open: {$e}\n" +
+                  "Pass a type instead: calc <nuclear|plutonium|mox|breeder> [width] [height] [seconds] [capacity]"
         }
 
         if ($answers.Cancelled) {
