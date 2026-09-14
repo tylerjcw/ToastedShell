@@ -52,6 +52,7 @@
 | [`TOAST-0073`](items/TOAST-0073.md) | P2 | complete | 5/5 | A compiled subexpression argument is not held to the one-value rule the interpreter enforces |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 7/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TOAST-0038`](items/TOAST-0038.md) | P2 | complete | 6/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
+| [`TUI-0024`](items/TUI-0024.md) | P3 | complete | 6/6 | A status bar is a hand-built string, so it cannot be aligned, segmented or styled per part |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | complete | — | Type highlighting misses real contexts, differently per surface |

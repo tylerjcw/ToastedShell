@@ -165,6 +165,76 @@ public sealed class TuiLengthTests
             12,
             1);
 
-        Assert.Equal("aaaabbbbbbbb", rows[0]);
+        // Both panes are cut, and both say so: four columns of a ten-column word is
+        // "aaa…", not "aaaa". The row is still exactly filled, which is what this is for.
+        Assert.Equal("aaa\u2026bbbbbbb\u2026", rows[0]);
+    }
+
+    [Fact]
+    public void A_long_child_shrinks_rather_than_starving_the_ones_after_it()
+    {
+        // A status bar is the case: the path on the left grew past the terminal, took the
+        // whole row, and the position indicator on the right was arranged at zero width
+        // and simply vanished — with no mark to say anything had been cut.
+        var position = new TuiTextWidget("Ln 12, Col 4") { Size = "auto" };
+
+        var row = new TuiStack(TuiOrientation.Horizontal)
+            .Add(new TuiTextWidget("/a/very/long/path/that/will/not/fit.cs") { Size = "auto" })
+            .Add(position);
+
+        var rows = Render(row, 24, 1);
+
+        Assert.True(position.Bounds.Width > 0, "The right-hand segment was starved.");
+        Assert.Contains("\u2026", rows[0]);
+        Assert.Equal(24, rows[0].Length);
+    }
+
+    [Fact]
+    public void Everyone_gives_up_the_same_proportion_of_what_they_asked_for()
+    {
+        var left = new TuiTextWidget("aaaaaaaaaaaaaaaaaaaa") { Size = "auto" };
+        var right = new TuiTextWidget("bbbbbbbbbb") { Size = "auto" };
+
+        var row = new TuiStack(TuiOrientation.Horizontal).Add(left).Add(right);
+
+        Render(row, 15, 1);
+
+        // Nobody can ask for more than the row, so the twenty-column word asks for fifteen
+        // and the ten-column one for ten. Twenty-five wanted against fifteen to give is
+        // three fifths each: nine and six, and the row exactly full.
+        Assert.Equal(9, left.Bounds.Width);
+        Assert.Equal(6, right.Bounds.Width);
+    }
+
+    [Fact]
+    public void A_declared_minimum_survives_a_narrow_row()
+    {
+        // Which is how an author says "this one matters": the position indicator keeps its
+        // twelve columns and the path gives up the rest.
+        var path = new TuiTextWidget("/a/very/long/path/that/will/not/fit.cs") { Size = "auto" };
+        var position = new TuiTextWidget("Ln 12, Col 4") { Size = "auto 12.." };
+
+        Render(new TuiStack(TuiOrientation.Horizontal).Add(path).Add(position), 24, 1);
+
+        Assert.Equal(12, position.Bounds.Width);
+        Assert.Equal(12, path.Bounds.Width);
+    }
+
+    [Fact]
+    public void One_row_of_text_is_a_label_it_is_cut_rather_than_folded()
+    {
+        // Wrapping onto a second row that will never be drawn shows the first N characters
+        // and stops, which reads as a shorter path rather than as a cut one.
+        var label = new TuiTextWidget("/home/komrad/projects/tosh/notes.md") { Wrap = true };
+
+        Assert.Equal(["/home/komrad/\u2026"], Render(label, 14, 1));
+    }
+
+    [Fact]
+    public void More_than_one_row_still_wraps()
+    {
+        var block = new TuiTextWidget("one two three four") { Wrap = true };
+
+        Assert.Equal(["one two", "three", "four"], Render(block, 8, 3).Select(row => row.TrimEnd()));
     }
 }

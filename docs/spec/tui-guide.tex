@@ -368,6 +368,53 @@ each clamped to its bounds; only then is the remainder shared between the star
 children. The rounding error goes to a star child that can absorb it rather than
 to one pinned at a bound.
 
+\section{A Status Bar}
+\label{sec:statusbar}
+
+There is no status-bar widget, because a row already is one. \code{auto} on the
+outer two and \code{*} in the middle puts one group hard left, one hard right, and
+one centred between them:
+
+\begin{lstlisting}
+{| Row = [
+       {| Text = &Name,  Size = "auto" |},
+       {| Text = &Clock, Size = "*", Align = "center" |},
+       {| Text = &Where, Size = "auto" |}
+   ], Size = "1" |}
+\end{lstlisting}
+
+Each segment is an ordinary node, so each carries its own style, and each can be
+bound --- a clock updates without anything rebuilding the row. Nobody has to know
+the terminal's width or measure what they wrote.
+
+\begin{warnbox}[Say \texttt{auto} or share the row]
+A child with no \code{Size} shares the row evenly with its siblings, which is right
+for panes and wrong for a status bar: the right-hand group ends up floating in the
+middle of its third. Write \code{auto} on the segments that should be their own
+size.
+\end{warnbox}
+
+When the segments do not all fit, every one of them gives up the same proportion of
+what it asked for, and what it gives up is marked with an ellipsis. Satisfying them
+in written order instead would mean the order decided who got \emph{nothing} --- a
+path long enough to fill the row would take all of it and the position indicator at
+the other end would silently disappear.
+
+A minimum is how a segment says it matters:
+
+\begin{lstlisting}
+{| Text = &Where, Size = "auto 12.." |}
+\end{lstlisting}
+
+That one keeps its twelve columns on a narrow terminal and the path gives up the
+rest.
+
+\begin{tipbox}
+One row of text is a \emph{label}: it is cut and marked rather than wrapped,
+whatever \code{Wrap} says, because folding onto a second row that will never be
+drawn shows the first few characters and calls that the answer.
+\end{tipbox}
+
 \section{Padding and Alignment}
 
 Every widget carries both. They are properties of a widget rather than containers to

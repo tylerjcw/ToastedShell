@@ -81,4 +81,25 @@ public sealed class TuiTextMeasureTests
         Assert.Equal(string.Empty, TuiTextMeasure.Truncate("anything", 0));
         Assert.Equal(string.Empty, TuiTextMeasure.Truncate("anything", -3));
     }
+
+    [Theory]
+    [InlineData("hello", 10, "hello")]
+    [InlineData("hello", 5, "hello")]
+    [InlineData("hello", 4, "hel\u2026")]
+    [InlineData("hello", 1, "\u2026")]
+    [InlineData("hello", 0, "")]
+    [InlineData("", 4, "")]
+    public void Text_that_does_not_fit_is_cut_and_says_so(string text, int columns, string expected)
+        => Assert.Equal(expected, TuiTextMeasure.Elide(text, columns));
+
+    [Fact]
+    public void A_cut_counts_columns_rather_than_characters()
+    {
+        // Two columns for the emoji, one for the mark: three columns of "ab" is
+        // exactly what a cell grid can show, and the mark has to be paid for out of them.
+        var elided = TuiTextMeasure.Elide("\U0001F680ab", 3);
+
+        Assert.Equal(3, TuiTextMeasure.MeasureWidth(elided));
+        Assert.EndsWith("\u2026", elided, StringComparison.Ordinal);
+    }
 }

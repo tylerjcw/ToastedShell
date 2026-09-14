@@ -161,20 +161,32 @@ public sealed class TuiStack : TuiWidget
     /// Works out each child's size along the stack's axis.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Fixed and auto children are satisfied first, then whatever is left is split
     /// between the star children by weight — so "this pane is 30 columns, that one takes
     /// the rest" needs no arithmetic from the caller. The last star child absorbs the
     /// rounding error rather than leaving a blank column at the edge.
+    /// </para>
+    /// <para>
+    /// When they do not all fit, everyone gives up the same proportion of what they asked
+    /// for above whatever minimum they declared. Satisfying them in written order instead
+    /// meant the order decided who got <em>nothing</em>: one long auto child filled the row
+    /// and every later sibling was arranged at zero width, so a status bar whose path grew
+    /// past the terminal lost the position indicator at the other end of it entirely,
+    /// without a mark to say anything had been cut.
+    /// </para>
     /// </remarks>
     private int[] Distribute(int available, bool horizontal, TuiRect bounds)
     {
         var sizes = new int[_children.Count];
-        var remaining = available;
+        var wanted = new int[_children.Count];
+        var floors = new int[_children.Count];
+        var claimed = 0;
         var totalWeight = 0;
 
-        // Everything with an answer of its own is settled first, in the order written, and
-        // each is clamped to whatever bounds it carries. Only then is the leftover shared,
-        // which is what "a share of what is left" has to mean if it is to mean anything.
+        // What each child that has an answer of its own asks for, each measured against the
+        // whole line rather than against what earlier siblings happened to leave: how big a
+        // thing naturally is should not depend on who was written before it.
         for (var index = 0; index < _children.Count; index += 1)
         {
             var child = _children[index];
@@ -190,26 +202,31 @@ public sealed class TuiStack : TuiWidget
             switch (length.Kind)
             {
                 case TuiLengthKind.Fixed:
-                    sizes[index] = Take(length, length.Value, ref remaining);
+                    wanted[index] = length.Clamp(length.Value);
                     break;
 
                 case TuiLengthKind.Fraction:
-                    sizes[index] = Take(length, available * length.Value / length.Divisor, ref remaining);
+                    wanted[index] = length.Clamp(available * length.Value / length.Divisor);
                     break;
 
                 case TuiLengthKind.Auto:
                     var constraints = horizontal
-                        ? new TuiConstraints(Math.Max(0, remaining), bounds.Height)
-                        : new TuiConstraints(bounds.Width, Math.Max(0, remaining));
+                        ? new TuiConstraints(Math.Max(0, available), bounds.Height)
+                        : new TuiConstraints(bounds.Width, Math.Max(0, available));
                     var desired = child.Measure(constraints);
-                    sizes[index] = Take(length, horizontal ? desired.Width : desired.Height, ref remaining);
+                    wanted[index] = length.Clamp(horizontal ? desired.Width : desired.Height);
                     break;
 
                 case TuiLengthKind.Star:
                     totalWeight += length.Value;
-                    break;
+                    continue;
             }
+
+            floors[index] = Math.Min(length.Minimum ?? 0, wanted[index]);
+            claimed += wanted[index];
         }
+
+        var remaining = available - Fit(sizes, wanted, floors, claimed, available);
 
         if (totalWeight == 0)
         {
@@ -251,13 +268,58 @@ public sealed class TuiStack : TuiWidget
         }
 
         return sizes;
+    }
 
-        static int Take(TuiLength length, int wanted, ref int remaining)
+    /// <summary>
+    /// Hands out what each child asked for, or, when that is more than there is, the same
+    /// proportion of it to each.
+    /// </summary>
+    /// <returns>How much was handed out in total.</returns>
+    /// <remarks>
+    /// A declared minimum is protected before anything is shared, so "this column is at
+    /// least twelve wide" survives a narrow terminal. What is above the minimums is what
+    /// shrinks.
+    /// </remarks>
+    private static int Fit(int[] sizes, int[] wanted, int[] floors, int claimed, int available)
+    {
+        if (claimed <= available)
         {
-            var size = Math.Clamp(length.Clamp(wanted), 0, Math.Max(0, remaining));
-            remaining -= size;
-            return size;
+            Array.Copy(wanted, sizes, wanted.Length);
+            return claimed;
         }
+
+        var protectedTotal = floors.Sum();
+        var room = Math.Max(0, available - protectedTotal);
+        var flexible = claimed - protectedTotal;
+        var given = 0;
+
+        for (var index = 0; index < sizes.Length; index += 1)
+        {
+            sizes[index] = flexible <= 0
+                ? floors[index]
+                : floors[index] + ((wanted[index] - floors[index]) * room / flexible);
+
+            given += sizes[index];
+        }
+
+        // Everything asked for more than there is, and the minimums alone are already too
+        // much. Nothing fair is left to do, so the ones written first are the ones drawn.
+        if (given <= available)
+        {
+            return given;
+        }
+
+        var over = given - available;
+
+        for (var index = sizes.Length - 1; index >= 0 && over > 0; index -= 1)
+        {
+            var taken = Math.Min(over, sizes[index]);
+
+            sizes[index] -= taken;
+            over -= taken;
+        }
+
+        return available;
     }
 
     public override void Draw(TuiSurface surface)

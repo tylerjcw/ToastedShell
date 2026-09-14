@@ -25,7 +25,6 @@
 | [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
 | [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/8 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/6 | A bottom type, so an expression that never returns stops poisoning inference |
-| [`TUI-0024`](items/TUI-0024.md) | P3 | proposed | 0/7 | A status bar is a hand-built string, so it cannot be aligned, segmented or styled per part |
 | [`TOAST-0123`](items/TOAST-0123.md) | P2 | proposed | 0/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0101`](items/TOAST-0101.md) | P3 | proposed | 0/5 | A pipeline into a user function does not bind to a parameter, and the arity error misdescribes why |
@@ -35,7 +34,7 @@
 | [`TOAST-0133`](items/TOAST-0133.md) | P3 | proposed | 0/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
 | [`TUI-0011`](items/TUI-0011.md) | P3 | proposed | 0/5 | Nothing checks that the TUI surface survives compilation to a Tōast program |
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
-| [`TUI-0022`](items/TUI-0022.md) | P3 | proposed | 0/5 | A keybinding's help text is written twice, and the two drift |
+| [`TUI-0022`](items/TUI-0022.md) | P3 | proposed | 0/6 | A keybinding's help text is written twice, and the two drift |
 | [`TOAST-0094`](items/TOAST-0094.md) | P3 | proposed | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |

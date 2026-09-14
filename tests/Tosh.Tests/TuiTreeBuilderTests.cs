@@ -104,7 +104,7 @@ public sealed class TuiTreeBuilderTests
             Node(("Text", "ij"), ("Size", 2)),
         })));
 
-        Assert.Equal(["abcdefij"], Render(widget, 8, 1));
+        Assert.Equal(["abcde\u2026ij"], Render(widget, 8, 1));
     }
 
     [Fact]

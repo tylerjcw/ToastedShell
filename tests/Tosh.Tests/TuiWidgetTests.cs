@@ -79,7 +79,7 @@ public sealed class TuiWidgetTests
 
         var rows = Render(stack, width: 12, height: 1);
 
-        Assert.Equal("aaabbbbbbbbb", rows[0]);
+        Assert.Equal("aa\u2026bbbbbbbb\u2026", rows[0]);
     }
 
     [Fact]
@@ -91,7 +91,10 @@ public sealed class TuiWidgetTests
 
         var rows = Render(stack, width: 10, height: 1);
 
-        Assert.Equal("id:vvvvvvv", rows[0]);
+        // The value is cut and says so: the auto label took what it asked for and the
+        // star child got the rest, which is what this pins. The mark is the renderer
+        // refusing to let a cut read as text that happened to end there.
+        Assert.Equal("id:vvvvvv\u2026", rows[0]);
     }
 
     [Fact]

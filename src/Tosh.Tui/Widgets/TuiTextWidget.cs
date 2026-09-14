@@ -63,20 +63,60 @@ public sealed class TuiTextWidget : TuiWidget
 
     protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
+        // One row is a label, whatever the wrap setting says, so it asks for the room its
+        // whole line would take. Answering with the wrapped width instead said a path
+        // fitted when only its first line did.
+        if (constraints.MaxHeight == 1)
+        {
+            return constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(FirstLine()), 1));
+        }
+
         var lines = LayOut(constraints.MaxWidth);
         var width = lines.Count == 0 ? 0 : lines.Max(TuiTextMeasure.MeasureWidth);
 
         return constraints.Constrain(new TuiSize(width, lines.Count));
     }
 
+    /// <summary>The first line as written, before any wrapping.</summary>
+    private string FirstLine()
+    {
+        var text = Text.Replace("\r\n", "\n");
+        var breakAt = text.IndexOf('\n', StringComparison.Ordinal);
+
+        return breakAt < 0 ? text : text[..breakAt];
+    }
+
     public override void Draw(TuiSurface surface)
     {
+        if (surface.Height == 1)
+        {
+            DrawLabel(surface);
+            return;
+        }
+
         var lines = LayOut(surface.Width);
 
         for (var row = 0; row < lines.Count && row < surface.Height; row += 1)
         {
-            surface.DrawText(0, row, lines[row], Style);
+            // Wrapped text that does not fit is folded, not cut, so there is nothing to
+            // mark. Unwrapped text that does not fit is cut, and a cut with no mark reads
+            // as text that happened to end there.
+            surface.DrawText(
+                0,
+                row,
+                Wrap ? lines[row] : TuiTextMeasure.Elide(lines[row], surface.Width),
+                Style);
         }
+    }
+
+    /// <summary>Draws a label: one line, cut rather than folded, and marked where it cut.</summary>
+    /// <remarks>
+    /// Folding onto rows that will never be drawn is how a status bar shows the first
+    /// thirty-eight characters of a path and stops, with nothing to say the rest exists.
+    /// </remarks>
+    private void DrawLabel(TuiSurface surface)
+    {
+        surface.DrawText(0, 0, TuiTextMeasure.Elide(FirstLine(), surface.Width), Style);
     }
 
     /// <summary>

@@ -120,6 +120,31 @@ public static class TuiTextMeasure
         return builder.ToString();
     }
 
+    /// <summary>Truncates, and says so where it cut.</summary>
+    /// <remarks>
+    /// A cut with nothing to mark it is indistinguishable from text that happened to end
+    /// there, which is how a status bar can lose half a path and read as though the file
+    /// were called something else.
+    /// </remarks>
+    public static string Elide(string text, int maxColumns)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (maxColumns <= 0)
+        {
+            return string.Empty;
+        }
+
+        if (MeasureWidth(text) <= maxColumns)
+        {
+            return text;
+        }
+
+        // One column is only enough for the mark itself, and the mark is the more useful
+        // half: a single letter of a path says nothing, "…" says there is more.
+        return maxColumns == 1 ? "\u2026" : Truncate(text, maxColumns - 1) + "\u2026";
+    }
+
     private static bool IsZeroWidth(int codePoint)
     {
         // Zero-width joiner and the variation selectors, which modify their neighbour.
