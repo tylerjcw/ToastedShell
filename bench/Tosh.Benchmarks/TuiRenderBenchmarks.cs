@@ -2,6 +2,7 @@ using BenchmarkDotNet.Attributes;
 using Tosh.Cli.Tui;
 using Tosh.Runtime;
 using Tosh.Tui;
+using Tosh.Tui.Rendering;
 using Tosh.Tui.Requests;
 
 namespace Tosh.Benchmarks;
@@ -50,24 +51,24 @@ public class TuiRenderBenchmarks
     }
 
     [Benchmark(Description = "help browser, 80x24")]
-    public int HelpSmall() => _help.Render(new TuiSize(80, 24)).Content.Length;
+    public int HelpSmall() => _help.Render(new TuiSize(80, 24)).Buffer.Height;
 
     [Benchmark(Description = "help browser, 120x40")]
-    public int HelpMedium() => _help.Render(new TuiSize(120, 40)).Content.Length;
+    public int HelpMedium() => _help.Render(new TuiSize(120, 40)).Buffer.Height;
 
     [Benchmark(Description = "help browser, 200x60")]
-    public int HelpLarge() => _help.Render(new TuiSize(200, 60)).Content.Length;
+    public int HelpLarge() => _help.Render(new TuiSize(200, 60)).Buffer.Height;
 
     /// <summary>A CLR type page: the heaviest detail pane the help browser draws.</summary>
     [Benchmark(Description = "CLR type page, 120x40")]
-    public int ClrTypePage() => _clr.Render(new TuiSize(120, 40)).Content.Length;
+    public int ClrTypePage() => _clr.Render(new TuiSize(120, 40)).Buffer.Height;
 
     /// <summary>
     /// The config browser draws a live preview of the user's theme and prompt, so its
     /// detail pane does more work per frame than the help browser's.
     /// </summary>
     [Benchmark(Description = "config browser, 120x40")]
-    public int ConfigMedium() => _config.Render(new TuiSize(120, 40)).Content.Length;
+    public int ConfigMedium() => _config.Render(new TuiSize(120, 40)).Buffer.Height;
 
     /// <summary>
     /// Clipping one long line to a pane width.
@@ -88,15 +89,31 @@ public class TuiRenderBenchmarks
     /// (<c>TUI-0014</c>).
     /// </remarks>
     [Benchmark(Description = "config browser on Prompt, 120x40")]
-    public int ConfigPromptNode() => _configPrompt.Render(new TuiSize(120, 40)).Content.Length;
+    public int ConfigPromptNode() => _configPrompt.Render(new TuiSize(120, 40)).Buffer.Height;
 
     [Benchmark(Description = "ClipPlain, 1200 chars to 80")]
     public string ClipLongLine() => TuiRenderHelpers.ClipPlain(_longLine, 80);
 
     /// <summary>
-    /// Not a timing: the bytes a single frame writes to the terminal, reported so the
-    /// diffing renderer has a figure to beat.
+    /// Not a timing: the bytes a single frame writes to the terminal.
     /// </summary>
+    /// <remarks>
+    /// This was the figure the diffing renderer had to beat, measured back when a frame
+    /// was a string and every one of them was a full repaint. It is now what the renderer
+    /// actually emits for a first frame, and <see cref="FrameBytesUnchanged"/> beside it is
+    /// what it emits for a frame where nothing moved — which is the comparison that says
+    /// whether the diff is doing anything.
+    /// </remarks>
     [Benchmark(Description = "frame bytes, 120x40 (size, not time)")]
-    public int FrameBytes() => _help.Render(new TuiSize(120, 40)).Content.Length;
+    public int FrameBytes()
+        => TuiTerminalWriter.Present(_help.Render(new TuiSize(120, 40)).Buffer).Length;
+
+    /// <summary>The bytes a frame writes when nothing on it changed.</summary>
+    [Benchmark(Description = "frame bytes unchanged, 120x40 (size, not time)")]
+    public int FrameBytesUnchanged()
+    {
+        var previous = _help.Render(new TuiSize(120, 40)).Buffer;
+
+        return TuiTerminalWriter.Present(previous, _help.Render(new TuiSize(120, 40)).Buffer).Length;
+    }
 }
