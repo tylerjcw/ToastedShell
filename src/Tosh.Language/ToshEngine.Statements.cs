@@ -906,6 +906,57 @@ public sealed partial class ToshEngine
         }
     }
 
+    /// <summary>
+    /// What one turn of a loop puts in scope: the loop variable, and <c>_</c> beside it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An annotated loop variable converts each value the way an annotated declaration
+    /// converts the one it is given — <c>for (int n) in $lines</c> means the same as
+    /// <c>var n: int = …</c>, once per turn, and fails the same way when a value will not
+    /// go.
+    /// </para>
+    /// <para>
+    /// The annotation is carried into the scope as well as applied, so an assignment inside
+    /// the body is checked too. Seeding a bare value would have made the type a claim about
+    /// the first line of the loop rather than about the variable.
+    /// </para>
+    /// <para>
+    /// <c>_</c> is deliberately left as it came. It is the current item, and the current
+    /// item is what it is: the reader annotated a name, not the pipeline.
+    /// </para>
+    /// </remarks>
+    private Dictionary<string, object?> LoopScope(
+        string sourceName,
+        string sourceText,
+        ForStatementSyntax statement,
+        object? current)
+    {
+        var scope = new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = current };
+
+        if (statement.TypeName is not { } typeName)
+        {
+            scope[statement.VariableName] = current;
+            return scope;
+        }
+
+        var converted = ConvertAnnotatedValue(
+            typeName,
+            current,
+            statement.Span,
+            sourceName,
+            sourceText,
+            statement.VariableName);
+
+        scope[statement.VariableName] = new VariableBinding(
+            converted,
+            ReplayAsPipeline: ShouldReplayAsPipeline(converted),
+            IsAllocatedOnly: false,
+            DeclaredTypeName: typeName);
+
+        return scope;
+    }
+
     private async IAsyncEnumerable<object?> EvaluateForStatementAsync(
         string sourceName,
         string sourceText,
@@ -913,6 +964,15 @@ public sealed partial class ToshEngine
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, statement.VariableName, statement.Span, "reserved runtime namespace");
+
+        // Asked once, before anything is iterated. A conversion only reports an unknown type
+        // when it fails, so `for (Nonexitent x) in []` would otherwise run happily over
+        // nothing and say the annotation was fine.
+        if (statement.TypeName is { } declaredTypeName)
+        {
+            ThrowIfUnknownAnnotatedType(
+                declaredTypeName, statement.Span, sourceName, sourceText, statement.VariableName);
+        }
 
         // `for line in curl -s … { … }` consumes the values, so the child's stdout must be
         // captured even at a terminal. The loop still streams — the flag changes how the
@@ -970,11 +1030,7 @@ public sealed partial class ToshEngine
                                  sourceText,
                                  statement.Body,
                                  cancellationToken,
-                                 new Dictionary<string, object?>(StringComparer.Ordinal)
-                                 {
-                                     [statement.VariableName] = current,
-                                     ["_"] = current,
-                                 })
+                                 LoopScope(sourceName, sourceText, statement, current))
                                  .GetAsyncEnumerator(cancellationToken))
                 {
                     while (true)

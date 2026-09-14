@@ -482,6 +482,8 @@ public sealed record IfStatementSyntax(
 
 public sealed record ForStatementSyntax(
     string VariableName,
+    string? TypeName,
+    bool UsesVar,
     PipelineSyntax Source,
     BlockSyntax Body,
     TextSpan Span) : StatementSyntax(Span);

@@ -349,10 +349,145 @@ public static partial class ToshParser
         private StatementSyntax ParseForStatement()
         {
             var forToken = NextToken();
-            var nameToken = ExpectVariableName();
+            string variableName = string.Empty;
+            string? typeName = null;
+            bool usesVar = false;
 
-            if (!(Current.Kind == SyntaxTokenKind.Bareword &&
-                  string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase)))
+            // Set only when the parenthesis turned out to wrap the whole clause, in which
+            // case the source has already been read and there is no separate `in` to find.
+            PipelineSyntax? clause = null;
+
+            if (Current.Kind == SyntaxTokenKind.OpenParen)
+            {
+                NextToken(); // consume '('
+                
+                if (Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, "var", StringComparison.Ordinal))
+                {
+                    usesVar = true;
+                    NextToken(); // consume 'var'
+                    
+                    var nameToken = Current.Kind == SyntaxTokenKind.Bareword ? NextToken() : ExpectVariableName();
+                    ParseTypedIdentifierToken(nameToken.Text, out variableName, out var inlineTypeName, out var expectsFollowingTypeName);
+                    
+                    if (!IsValidIdentifier(variableName))
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.expected_variable_name",
+                            Title: "Expected a variable name.",
+                            Span: nameToken.Span,
+                            Label: "variables need a C#-style identifier like 'answer' or 'fileList'"));
+                        variableName = string.Empty;
+                    }
+                    
+                    typeName = inlineTypeName;
+                    if (expectsFollowingTypeName)
+                    {
+                        typeName = ParseTypeName("variable type");
+                    }
+                }
+                else if (IsForIn(Peek(1)) || Peek(1).Kind == SyntaxTokenKind.CloseParen)
+                {
+                    // `for (i in $items)` and `for (i) in $items`: one word and then the end
+                    // of the declaration, so the word is the name. Without this it took the
+                    // `for (int i)` route and read `i` as the *type*, then looked for a name
+                    // and found `in`.
+                    var nameToken = NextToken();
+
+                    variableName = nameToken.Text;
+
+                    if (!IsValidIdentifier(variableName))
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.expected_variable_name",
+                            Title: "Expected a variable name.",
+                            Span: nameToken.Span,
+                            Label: "variables need a C#-style identifier like 'answer' or 'fileList'"));
+                        variableName = string.Empty;
+                    }
+                }
+                else
+                {
+                    var firstToken = NextToken();
+                    ParseTypedIdentifierToken(firstToken.Text, out var parsedName, out var inlineTypeName, out var expectsFollowingTypeName);
+
+                    if (expectsFollowingTypeName || inlineTypeName is not null)
+                    {
+                        variableName = parsedName;
+                        if (!IsValidIdentifier(variableName))
+                        {
+                            _diagnostics.Add(new SyntaxDiagnostic(
+                                Code: "tosh.parser.expected_variable_name",
+                                Title: "Expected a variable name.",
+                                Span: firstToken.Span,
+                                Label: "variables need a C#-style identifier like 'answer' or 'fileList'"));
+                            variableName = string.Empty;
+                        }
+
+                        typeName = inlineTypeName;
+                        if (expectsFollowingTypeName)
+                        {
+                            typeName = ParseTypeName("variable type");
+                        }
+                    }
+                    else
+                    {
+                        typeName = ParseTypeNameSuffix(firstToken.Text);
+                        var nameToken = ExpectVariableName();
+                        variableName = nameToken.Text;
+                    }
+                }
+                
+                if (Current.Kind == SyntaxTokenKind.CloseParen)
+                {
+                    NextToken();
+                }
+                else if (IsForIn(Current))
+                {
+                    // `for (var i in $items)` — the parenthesis wraps the whole clause
+                    // rather than just the declaration. Both spellings read naturally and
+                    // neither is ambiguous, because what follows the declaration says which
+                    // one was written: `)` closes a declaration, `in` continues a clause.
+                    NextToken();
+
+                    var wrapped = ParsePipeline(
+                        untilCloseParen: true,
+                        untilCloseBrace: false,
+                        untilSemicolon: false,
+                        allowExpressionStart: true);
+
+                    if (Current.Kind == SyntaxTokenKind.CloseParen)
+                    {
+                        NextToken();
+                    }
+                    else
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.missing_closing_parenthesis",
+                            Title: "A closing ')' is required here.",
+                            Span: Current.Span,
+                            Label: "this parenthesized loop clause never closes",
+                            Help: "close the clause with ')' before the block."));
+                    }
+
+                    clause = wrapped;
+                }
+                else
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.expected_close_paren",
+                        Title: "Expected ')' or 'in' after the loop variable.",
+                        Span: Current.Span,
+                        Label: "close the parenthesis, or continue with 'in'",
+                        Help: "write 'for (var i) in $items { ... }' or 'for (var i in $items) { ... }'."));
+                }
+            }
+            else
+            {
+                var nameToken = ExpectVariableName();
+                variableName = nameToken.Text;
+            }
+
+            if (clause is null && !IsForIn(Current))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_for_in",
@@ -360,19 +495,26 @@ public static partial class ToshParser
                     Span: Current.Span,
                     Label: "insert 'in' between the loop variable and source"));
             }
-            else
+            else if (clause is null)
             {
                 NextToken();
             }
 
-            var source = ParseParenthesizedPipeline("for");
+            var source = clause ?? ParseParenthesizedPipeline("for");
             var body = ParseRequiredBlock("for");
             return new ForStatementSyntax(
-                nameToken.Text,
+                variableName,
+                typeName,
+                usesVar,
                 source,
                 body,
                 TextSpan.FromBounds(forToken.Span.Start, body.Span.End));
         }
+
+        /// <summary>Whether this token is the <c>in</c> that separates a loop's parts.</summary>
+        private static bool IsForIn(SyntaxToken token)
+            => token.Kind == SyntaxTokenKind.Bareword &&
+               string.Equals(token.Text, "in", StringComparison.OrdinalIgnoreCase);
 
         private StatementSyntax ParseWhileStatement()
         {

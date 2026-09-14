@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 581 diagnostic codes currently emitted by the
+This chapter lists all 582 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -145,6 +145,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.expected\_catch\_variable}] Catch clauses require a variable name when parentheses are used.
 \item[\texttt{\small tosh.parser.expected\_class\_body}] Class definitions require a body.
 \item[\texttt{\small tosh.parser.expected\_class\_member}] Expected a member inside class '\{className\}'.
+\item[\texttt{\small tosh.parser.expected\_close\_paren}] Expected ')' or 'in' after the loop variable.
 \item[\texttt{\small tosh.parser.expected\_closing\_paren}] A closing ')' is required after the computed property name.
 \item[\texttt{\small tosh.parser.expected\_command\_name}] Expected a function name.
 \item[\texttt{\small tosh.parser.expected\_comprehension\_for}] Comprehensions require a 'for' clause after '<|'.

@@ -670,10 +670,14 @@ public static class Lowerer
         ctx.PushScope();
         try
         {
+            var varType = forStmt.TypeName is not null
+                ? ctx.ResolveType(forStmt.TypeName)
+                : BoundType.Dynamic;
+
             var loopVar = ctx.DeclareLocal(
                 forStmt.VariableName,
                 BoundSymbolKind.LoopVariable,
-                BoundType.Dynamic);
+                varType);
 
             var statements = new List<BoundStatement>(forStmt.Body.Statements.Count);
             foreach (var inner in forStmt.Body.Statements)

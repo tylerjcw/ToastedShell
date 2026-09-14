@@ -3567,6 +3567,43 @@ for i in 1..10 {
 }
 \end{lstlisting}
 
+\subsection{Declaring the loop variable}
+
+The loop variable may be declared rather than merely named, in which case it takes
+the parentheses a declaration reads with. Either the declaration alone is wrapped,
+or the whole clause is --- both read naturally and neither is ambiguous, because
+the token after the name says which was written: \code{)} closes a declaration,
+\code{in} continues a clause.
+
+\begin{lstlisting}
+for (var i) in 1..10 { ... }
+for (int i) in $lines { ... }
+for (i: int) in $lines { ... }
+
+for (var i in 1..10) { ... }
+for (int i in $lines) { ... }
+for (i: int in $lines) { ... }
+\end{lstlisting}
+
+\noindent The sigil is absent for the same reason it is absent from \code{var i = 1}
+and \code{func f(a)}: a name is declared bare and used with \code{\$}.
+
+An annotation is not a comment. It converts each value the way it would on a
+declaration --- \code{for (int n) in \$lines} means \code{var n: int = ...} once per
+turn --- and it stays with the variable, so an assignment inside the body is checked
+against it too:
+
+\begin{lstlisting}
+for (int n) in ["1", "2"] { echo ($n + 1) }   # 2, 3: added, not concatenated
+for (int n) in ["a"] { ... }                  # error: cannot convert 'a' to 'int'
+for (int n) in 1..2 { $n = "nope" }           # error: the annotation outlives line one
+\end{lstlisting}
+
+\noindent An unknown type is reported even when the loop never runs, so
+\code{for (Widgit w) in []} does not pass for want of a value to fail on.
+
+\code{\_} is left as it came: the reader annotated a name, not the pipeline.
+
 \section{While}
 \ikw{while}
 
