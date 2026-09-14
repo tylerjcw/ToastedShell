@@ -13,6 +13,12 @@ var runtime = ToshRuntime.CreateDefault(Console.Out, Console.Error);
 runtime.InlinePrompts = new ConsoleInlinePromptProvider(runtime);
 runtime.TuiScreens = new ConsoleTuiScreenRunner(runtime);
 Tosh.Cli.Tui.ShellWidgetDefaults.Install(runtime);
+
+// A TōSh that was killed outright — SIGKILL, or a machine that lost power — never got to
+// hand the terminal back, and the reader is sitting in the alternate screen with no cursor.
+// Only when a note from that session is still here for this terminal: a shell should not
+// write escapes at every start on the chance that something is broken (TUI-0010).
+Tosh.Tui.TuiTerminalRepair.RepairIfNeeded(Console.Out.Write);
 var engine = new ToshEngine(runtime.Language);
 
 // Strip diagnostic-output overrides before resolving the invocation plan so

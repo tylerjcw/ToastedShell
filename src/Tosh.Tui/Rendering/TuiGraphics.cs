@@ -40,6 +40,16 @@ public static class TuiGraphics
     /// </remarks>
     private const int ChunkSize = 4096;
 
+    /// <summary>
+    /// What this terminal speaks. Set once by the host, read by anything that needs to know
+    /// whether pictures are in play.
+    /// </summary>
+    /// <remarks>
+    /// Half blocks until told otherwise, because they are the thing that always works and a
+    /// toolkit with no host cannot know any better.
+    /// </remarks>
+    public static TuiGraphicsProtocol Protocol { get; set; } = TuiGraphicsProtocol.HalfBlocks;
+
     /// <summary>Asks the terminal to draw a picture, and to remember it by id.</summary>
     public static string Transmit(TuiPlacement placement)
     {

@@ -46,6 +46,9 @@ public sealed class TuiTerminalSession : IDisposable
         _host.Write(HideCursor);
         _host.Write(EnableSgrMouse);
 
+        // A note for whoever comes next, in case this process never gets to clear it.
+        TuiTerminalRepair.Taken();
+
         _cancelHandler = (_, eventArgs) =>
         {
             Restore();
@@ -117,7 +120,14 @@ public sealed class TuiTerminalSession : IDisposable
         {
             // One write rather than four: a signal can arrive between them, and half a
             // restoration is worse than none.
-            _host.WriteUrgent(DisableSgrMouse + ResetStyles + ShowCursor + ExitAlternateScreen);
+            // A picture the terminal was asked to draw outlives the program that asked, so
+            // it is taken back here too: a crash during a preview would otherwise leave it
+            // painted over the shell the reader is handed back.
+            var pictures = Rendering.TuiGraphics.Protocol == Rendering.TuiGraphicsProtocol.Kitty
+                ? Rendering.TuiGraphics.DeleteAll()
+                : string.Empty;
+
+            _host.WriteUrgent(pictures + DisableSgrMouse + ResetStyles + ShowCursor + ExitAlternateScreen);
         }
         catch (IOException)
         {
@@ -127,6 +137,9 @@ public sealed class TuiTerminalSession : IDisposable
         catch (ObjectDisposedException)
         {
         }
+
+        // After the write, so a crash between the two leaves the note rather than losing it.
+        TuiTerminalRepair.Given();
     }
 
     public void Dispose()

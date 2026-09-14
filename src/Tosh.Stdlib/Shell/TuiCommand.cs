@@ -48,7 +48,7 @@ public sealed class TuiCommand : ShellCommand
             throw context.CreateDiagnostic(
                 code: "tosh.tui.missing_subcommand",
                 title: "The 'tui' command requires a subcommand.",
-                help: "Available subcommands: pick, confirm, input, file, filter, run");
+                help: "Available subcommands: pick, confirm, input, file, filter, run, reset");
         }
 
         var subcommand = CommandArguments.RequireString(context.Arguments, 0, "subcommand");
@@ -71,11 +71,12 @@ public sealed class TuiCommand : ShellCommand
             "file" => ExecuteFileAsync(context),
             "filter" => ExecuteFilterAsync(context),
             "run" => ExecuteRunAsync(context),
+            "reset" => ExecuteResetAsync(context),
             _ => throw context.CreateDiagnostic(
                 code: "tosh.tui.unknown_subcommand",
                 title: $"Unknown tui subcommand '{subcommand}'.",
                 argumentIndex: 0,
-                help: "Available subcommands: pick, confirm, input, file, filter, run"),
+                help: "Available subcommands: pick, confirm, input, file, filter, run, reset"),
         };
     }
 
@@ -483,6 +484,35 @@ public sealed class TuiCommand : ShellCommand
         {
             yield return produced;
         }
+    }
+
+    /// <summary>
+    /// Puts the terminal back after something left it in full-screen mode.
+    /// </summary>
+    /// <remarks>
+    /// A session restores on every path it can reach, including the signals a process can
+    /// be asked to die from — but not <c>SIGKILL</c>, and not a machine that lost power.
+    /// TōSh repairs that by itself the next time it starts on the same terminal; this is
+    /// for the reader who can already see that theirs is wrong and should not have to
+    /// convince anything of it (<c>TUI-0010</c>).
+    /// </remarks>
+    private static async IAsyncEnumerable<object?> ExecuteResetAsync(CommandContext context)
+    {
+        RejectUnknownFlags(context, ParsedCommandArguments.Parse(context.Arguments), "reset");
+
+        // Not through `RunOrYield`: that refuses when there is no terminal to draw a screen
+        // on, and this is the one subcommand you would reach for *because* the terminal is
+        // in a state nothing can draw on. It needs a file descriptor, not a screen.
+        var runner = context.Shell().TuiScreens;
+
+        foreach (var produced in runner is not null && runner.TryRun(new TuiResetRequest(), out var results)
+            ? results ?? []
+            : [new TuiResetRequest()])
+        {
+            yield return produced;
+        }
+
+        await Task.CompletedTask;
     }
 
     /// <summary>

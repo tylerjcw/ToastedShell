@@ -69,6 +69,15 @@ internal static class TuiRequestDispatcher
             return true;
         }
 
+        if (value is TuiResetRequest)
+        {
+            // Straight to the terminal rather than through a screen: there is no screen,
+            // and the point is to undo what a screen left behind.
+            TuiTerminalRepair.Repair(Console.Out.Write);
+            outcomeValues = null;
+            return true;
+        }
+
         if (value is TuiTreeRunRequest treeRequest)
         {
             // A record tree: built here, where the widget registry lives.

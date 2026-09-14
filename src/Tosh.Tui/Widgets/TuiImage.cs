@@ -65,7 +65,11 @@ public sealed class TuiImage : TuiWidget
     /// Half blocks by default, because they are the thing that always works and a toolkit
     /// with no host is a toolkit that cannot know any better.
     /// </remarks>
-    public static TuiGraphicsProtocol Protocol { get; set; } = TuiGraphicsProtocol.HalfBlocks;
+    public static TuiGraphicsProtocol Protocol
+    {
+        get => TuiGraphics.Protocol;
+        set => TuiGraphics.Protocol = value;
+    }
 
     /// <summary>The next id to hand a picture that needs one.</summary>
     private static int _nextId;

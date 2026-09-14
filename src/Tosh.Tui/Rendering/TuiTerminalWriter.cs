@@ -108,7 +108,11 @@ public static class TuiTerminalWriter
         // Pictures after the cells, because a placement lands at the cursor and the cursor
         // is wherever the last cell written left it — and before the caret, because the
         // caret is the last thing said about a frame.
-        AppendPictures(builder, reusable ? previous!.Placements : [], next.Placements);
+        //
+        // The previous frame's pictures are passed even when its cells cannot be reused. A
+        // resize repaints every cell and repaints no pixels: the terminal is still holding
+        // every picture it was given, and something has to say otherwise.
+        AppendPictures(builder, previous?.Placements ?? [], next.Placements, reusable);
 
         AppendCursor(builder, reusable ? previous!.Cursor : null, next.Cursor, reusable);
 
@@ -158,11 +162,17 @@ public static class TuiTerminalWriter
     private static void AppendPictures(
         StringBuilder builder,
         IReadOnlyList<TuiPlacement> previous,
-        IReadOnlyList<TuiPlacement> next)
+        IReadOnlyList<TuiPlacement> next,
+        bool reusable)
     {
+        // Kept only if this frame asks for exactly the same picture in exactly the same
+        // place. Matching on the id alone was the bug: a preview pane showing a new file
+        // reuses its widget and therefore its id, so the old picture was never taken back
+        // and the new one was drawn over it — leaving the taller one's edges showing above
+        // and below, stacked, until something else repainted.
         foreach (var was in previous)
         {
-            if (!next.Any(now => now.Id == was.Id))
+            if (!reusable || !next.Any(now => now.SameAs(was)))
             {
                 builder.Append(TuiGraphics.Delete(was.Id));
             }
@@ -170,7 +180,7 @@ public static class TuiTerminalWriter
 
         foreach (var now in next)
         {
-            if (!previous.Any(was => was.SameAs(now)))
+            if (!reusable || !previous.Any(was => was.SameAs(now)))
             {
                 builder.Append(TuiGraphics.Transmit(now));
             }

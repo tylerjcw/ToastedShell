@@ -15,6 +15,7 @@ internal static class TuiRequestProbe
         "TuiFilePickRequest",
         "TuiInputRequest",
         "TuiPickRequest",
+        "TuiResetRequest",
         "TuiTreeRunRequest",
     };
 

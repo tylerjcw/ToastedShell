@@ -114,6 +114,45 @@ public sealed class TuiGraphicsTests
     }
 
     [Fact]
+    public void A_picture_replaced_by_another_is_taken_back_first()
+    {
+        // The stacking bug. A preview pane showing a new file reuses its widget and so its
+        // id, so matching on the id alone kept the old picture: the new one was drawn over
+        // it and the taller one's edges showed above and below, stacked, until something
+        // else repainted.
+        var previous = new TuiBuffer(new TuiSize(10, 6));
+        var next = new TuiBuffer(new TuiSize(10, 6));
+
+        previous.Place(new TuiPlacement(1, 0, 0, 8, 5, Red()));
+        next.Place(new TuiPlacement(1, 0, 1, 8, 3, Red(4, 4)));
+
+        var sent = TuiTerminalWriter.Present(previous, next);
+
+        var deleted = sent.IndexOf("a=d,d=i,i=1", StringComparison.Ordinal);
+        var drawn = sent.IndexOf("a=T", StringComparison.Ordinal);
+
+        Assert.True(deleted >= 0, "The picture being replaced was never taken back.");
+        Assert.True(drawn > deleted, "The replacement was drawn before the old one was taken back.");
+    }
+
+    [Fact]
+    public void A_resize_takes_every_picture_back_and_draws_them_again()
+    {
+        // A resize repaints every cell and repaints no pixels: the terminal is still
+        // holding every picture it was given, and something has to say otherwise.
+        var previous = new TuiBuffer(new TuiSize(10, 6));
+        var next = new TuiBuffer(new TuiSize(20, 6));
+
+        previous.Place(new TuiPlacement(1, 0, 0, 8, 5, Red()));
+        next.Place(new TuiPlacement(1, 0, 0, 8, 5, Red()));
+
+        var sent = TuiTerminalWriter.Present(previous, next);
+
+        Assert.Contains("a=d,d=i,i=1", sent, StringComparison.Ordinal);
+        Assert.Contains("a=T", sent, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_picture_that_has_gone_is_taken_back()
     {
         var previous = new TuiBuffer(new TuiSize(10, 4));
