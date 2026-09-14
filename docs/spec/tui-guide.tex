@@ -568,6 +568,24 @@ The caption is not focusable and the input is, so the keyboard lands on the inpu
 without anything having to say so. The row answers with what its input holds, so
 an \code{Id} on the field is the id its text is reported under.
 
+\subsection{\texttt{Check}}
+
+\begin{lstlisting}
+{| Check = "Follow the log", Value = true, OnChange = &Following |}
+\end{lstlisting}
+
+Drawn as \code{[x]} or \code{[\ ]} with its label beside it, and a marker in front
+when it has the keyboard --- so which one you are on is legible on a terminal with
+no colour, the same way a button's is. \code{Enter} and \code{Space} toggle it, and
+so does a click.
+
+\code{OnChange} is handed the new state, not the old one, so a handler reads as the
+thing it is deciding:
+
+\begin{lstlisting}
+func Following(on) { $follow = $on }
+\end{lstlisting}
+
 \subsection{\texttt{Button}}
 
 \begin{lstlisting}
@@ -1180,6 +1198,7 @@ List    & the items           & Display, Multi, OnChange, OnSelect, + style \\
 Table   & the rows            & Columns, Borders, Header, Scrollbar, OnChange, OnSelect \\
 Tree    & the root            & Children, Display, Key, Root, Scrollbar, OnChange, OnSelect \\
 Field   & the caption         & Value, Placeholder, Password, Multiline, OnChange, OnSubmit \\
+Check   & the label           & Value, OnChange, + style \\
 Button  & the label           & OnPress, Exit, + style \\
 Gauge   & ---                 & Value, Min, Max, Label, + style \\
 Spark   & the series          & Scale, Capacity, Pad, + style \\
