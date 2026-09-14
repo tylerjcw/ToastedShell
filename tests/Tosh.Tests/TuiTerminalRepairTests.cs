@@ -133,6 +133,38 @@ public sealed class TuiTerminalRepairTests
         }
     }
 
+    [Fact]
+    public void A_signal_says_so_as_well_as_restoring()
+    {
+        // Restoring on its own was not enough, and failed worse than not restoring: the
+        // terminal came back and the process did not stop, so the render loop went on
+        // drawing frames over the shell it had just handed back until the terminal driver
+        // stopped it for reading in the background, leaving a suspended job behind.
+        var host = new Recording();
+
+        using var session = TuiTerminalSession.Enter(host);
+
+        Assert.False(session.WasCancelled);
+
+        session.Cancel();
+
+        Assert.True(session.WasCancelled);
+        Assert.Contains("\x1b[?1049l", string.Concat(host.Written), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ending_normally_is_not_a_cancellation()
+    {
+        // The loop reads this to decide whether to throw, so a screen that ended because
+        // its own handler said so must not look like one the reader interrupted.
+        var host = new Recording();
+        var session = TuiTerminalSession.Enter(host);
+
+        session.Dispose();
+
+        Assert.False(session.WasCancelled);
+    }
+
     /// <summary>Puts a terminal name in place for one test, and takes it away after.</summary>
     private sealed class Pretend : IDisposable
     {

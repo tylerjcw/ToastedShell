@@ -8,6 +8,7 @@
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
 | [`TOAST-0088`](items/TOAST-0088.md) | P2 | complete | 4/4 | A declared enum serialises its own internals, in every format |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
+| [`TUI-0010`](items/TUI-0010.md) | P1 | complete | 7/7 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | complete | 9/9 | Suite reliability on a clean checkout: four flakes named and resolved |
 | [`TUI-0017`](items/TUI-0017.md) | P2 | complete | 9/9 | There is no table widget, in a shell whose pipeline is objects |
 | [`TOAST-0039`](items/TOAST-0039.md) | P2 | complete | 4/4 | A function and a method returning the same collection have different pipeline shapes |

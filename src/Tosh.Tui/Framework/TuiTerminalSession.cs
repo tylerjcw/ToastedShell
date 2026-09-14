@@ -35,6 +35,7 @@ public sealed class TuiTerminalSession : IDisposable
     private readonly List<IDisposable> _signalRegistrations = [];
     private readonly ConsoleCancelEventHandler _cancelHandler;
     private int _restored;
+    private int _cancelled;
 
     private TuiTerminalSession(ITuiHost host)
     {
@@ -51,7 +52,7 @@ public sealed class TuiTerminalSession : IDisposable
 
         _cancelHandler = (_, eventArgs) =>
         {
-            Restore();
+            Cancel();
 
             // Not cancelled: a signal the process is meant to die from should still kill
             // it. The only job here is to hand back a usable terminal on the way out.
@@ -88,7 +89,7 @@ public sealed class TuiTerminalSession : IDisposable
         {
             _signalRegistrations.Add(PosixSignalRegistration.Create(signal, context =>
             {
-                Restore();
+                Cancel();
 
                 // The default action still applies: a signal the process is meant to die
                 // from should kill it. Making the ordering deterministic by calling
@@ -103,6 +104,33 @@ public sealed class TuiTerminalSession : IDisposable
         {
             // A platform without this signal simply does not get that guarantee.
         }
+    }
+
+    /// <summary>
+    /// Whether a signal asked this session to end.
+    /// </summary>
+    /// <remarks>
+    /// The loop reads this rather than being torn down from the handler. Restoring the
+    /// terminal from a signal handler is safe — it is one write to a file descriptor.
+    /// Ending a program from one is not, which is why the loop is told instead of killed.
+    /// </remarks>
+    public bool WasCancelled => Volatile.Read(ref _cancelled) != 0;
+
+    /// <summary>
+    /// Puts the terminal back and says a signal did it. Safe from a signal handler.
+    /// </summary>
+    /// <remarks>
+    /// The restore on its own was not enough, and the way it failed was worse than not
+    /// restoring at all. The terminal came back and <em>the process did not stop</em>: the
+    /// runtime does not apply SIGINT's default disposition once something has registered
+    /// for it, so the render loop carried on drawing frames over the shell it had just
+    /// handed back, until the terminal driver stopped it for reading in the background and
+    /// left a suspended job behind (<c>TUI-0010</c>).
+    /// </remarks>
+    public void Cancel()
+    {
+        Interlocked.Exchange(ref _cancelled, 1);
+        Restore();
     }
 
     /// <summary>

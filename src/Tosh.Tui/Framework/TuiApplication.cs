@@ -46,6 +46,14 @@ public static class TuiApplication
         {
             while (true)
             {
+                // Asked before anything is drawn as well as after every wait: a signal that
+                // arrived while the last frame was going out has already put the terminal
+                // back, and one more frame would be painted over the reader's shell.
+                if (session.WasCancelled)
+                {
+                    throw new OperationCanceledException();
+                }
+
                 var size = host.TryGetSize() ?? new TuiSize(80, 25);
                 var frame = screen.Render(size);
 
@@ -55,22 +63,22 @@ public static class TuiApplication
                 host.Write(TuiTerminalWriter.Present(presented, frame.Buffer));
                 presented = frame.Buffer;
 
-                var refresh = screen.RefreshInterval;
-                var wake = screen.Wake;
+                // Waited for in slices even when only a keystroke can change the screen.
+                // Blocking on the keyboard is cheaper, and it meant a screen with no refresh
+                // interval could not be interrupted at all: the signal restored the terminal
+                // and the loop stayed asleep in a read nobody was going to answer, holding a
+                // terminal it had already handed back.
+                var outcome = WaitForSomething(
+                    host, screen, failure, session, screen.Wake, screen.RefreshInterval);
 
-                if (refresh is null && wake is null)
+                // Before the exit check, so a cancelled screen never looks like one that
+                // ended of its own accord and lets the rest of the script carry on.
+                if (session.WasCancelled)
                 {
-                    // Nothing changes without the user, so block rather than spin.
-                    if (failure.Guard(() => ProcessInputBatch(host, screen, host.ReadInput()))
-                        == TuiScreenResult.Exit)
-                    {
-                        break;
-                    }
-
-                    continue;
+                    throw new OperationCanceledException();
                 }
 
-                if (WaitForSomething(host, screen, failure, wake, refresh) == TuiScreenResult.Exit)
+                if (outcome == TuiScreenResult.Exit)
                 {
                     break;
                 }
@@ -94,6 +102,7 @@ public static class TuiApplication
         ITuiHost host,
         ITuiScreen screen,
         TuiHandlerFailureReporter failure,
+        TuiTerminalSession session,
         TuiWake? wake,
         TimeSpan? refresh)
     {
@@ -103,6 +112,11 @@ public static class TuiApplication
 
         while (true)
         {
+            if (session.WasCancelled)
+            {
+                return TuiScreenResult.Continue;
+            }
+
             // Asked before the keyboard, because work posted while the last frame was being
             // drawn is already waiting and should not sit through a slice first.
             if (wake is not null && wake.TryTake())

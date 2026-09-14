@@ -198,6 +198,13 @@ if (plan.Kind != CliInvocationKind.Repl)
                 throw new InvalidOperationException($"Unsupported CLI invocation kind '{plan.Kind}'.");
         }
     }
+    catch (OperationCanceledException)
+    {
+        // Ctrl+C. The reader asked for this, so there is nothing to report — an error box
+        // saying "the operation was canceled" is the shell explaining what they just did.
+        // The exit code is the conventional 128 + SIGINT so a caller can still tell.
+        Environment.ExitCode = 130;
+    }
     catch (Exception exception)
     {
         await Console.Error.WriteLineAsync(diagnostics.Render(exception));
