@@ -1,0 +1,207 @@
+using Tosh.Runtime;
+using Tosh.Tui.Rendering;
+
+namespace Tosh.Tui.Widgets;
+
+/// <summary>How a picture is fitted to the room it is given.</summary>
+public enum TuiImageFit
+{
+    /// <summary>Whole picture, right shape, blank bars where it does not reach.</summary>
+    Letterbox,
+
+    /// <summary>Fills the room, right shape, edges cut off.</summary>
+    Crop,
+
+    /// <summary>Fills the room exactly, wrong shape.</summary>
+    Stretch,
+}
+
+/// <summary>
+/// A picture, drawn in half-blocks.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <c>yazi</c> previews an image, a video frame and a page of a PDF in the terminal,
+/// because Kitty, WezTerm, Ghostty and iTerm2 all accept pixels over the same channel they
+/// accept text on. A framework that cannot do that has decided a file browser's third pane
+/// is a list of bytes (<c>TUI-0025</c>).
+/// </para>
+/// <para>
+/// This is the floor of it, and the part that always works: one cell is two pixels, an
+/// upper half block with the top pixel's colour in front and the bottom pixel's behind. No
+/// protocol to detect, no placement to erase, nothing that a plain-text snapshot cannot
+/// capture — and it degrades to a recognisable shape on anything that does truecolour.
+/// </para>
+/// <para>
+/// The widget knows pixels and nothing else. What turns a path into pixels is
+/// <see cref="Loader"/>, installed by the host, so the toolkit has no image dependency and
+/// a video frame is the same kind of thing as a PNG.
+/// </para>
+/// </remarks>
+public sealed class TuiImage : TuiWidget
+{
+    /// <summary>The upper half of a cell, so one cell carries two pixels.</summary>
+    private const string HalfBlock = "▀";
+
+    /// <summary>
+    /// What turns a path into pixels. Installed by the host; null in a bare toolkit.
+    /// </summary>
+    /// <remarks>
+    /// The hook pattern the table's columns and the tree's glyphs already use. A widget
+    /// that shelled out to <c>magick</c> would be a widget that knows what a shell is.
+    /// </remarks>
+    public static Func<string, TuiPixels?>? Loader { get; set; }
+
+    public TuiImage(TuiPixels? pixels = null)
+    {
+        Pixels = pixels;
+    }
+
+    /// <summary>The picture, or null while there is nothing to show.</summary>
+    public TuiPixels? Pixels { get; set; }
+
+    /// <summary>Where the picture comes from, when it comes from a file.</summary>
+    /// <remarks>
+    /// Setting this asks <see cref="Loader"/> straight away. A path that loads to nothing —
+    /// no loader, a missing file, a format the loader does not know — leaves
+    /// <see cref="Pixels"/> null and the widget draws its placeholder, which is what a
+    /// preview pane should do for a file it cannot preview.
+    /// </remarks>
+    public string? Path
+    {
+        get;
+        set
+        {
+            // Only when it actually changes. A pull binding re-reads this before every
+            // frame, and a setter that reloaded each time would run a video through ffmpeg
+            // once per keystroke.
+            if (string.Equals(field, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            field = value;
+            Pixels = value is { Length: > 0 } path ? Loader?.Invoke(path) : null;
+        }
+    }
+
+    /// <summary>A script function supplying the path, re-read on every redraw.</summary>
+    /// <remarks>
+    /// What makes a preview pane a preview pane: the list's selection is the question and
+    /// this is the answer, so nothing has to be wired between them.
+    /// </remarks>
+    public IShellCallable? PathSource { get; set; }
+
+    /// <summary>How the picture is fitted to the room it is given.</summary>
+    public TuiImageFit Fit { get; set; } = TuiImageFit.Letterbox;
+
+    /// <summary>What is drawn when there is no picture.</summary>
+    public string Placeholder { get; set; } = string.Empty;
+
+    public TuiStyle Style { get; set; }
+
+    /// <inheritdoc />
+    public override object? Value => Path;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// One cell is two pixels tall, so a picture's natural size in cells is its width by
+    /// half its height — clamped, because a photograph's natural size is larger than any
+    /// terminal and a pane that asked for it would get all of one.
+    /// </remarks>
+    protected override TuiSize MeasureCore(TuiConstraints constraints)
+        => Pixels is { IsEmpty: false } pixels
+            ? constraints.Constrain(new TuiSize(pixels.Width, (pixels.Height + 1) / 2))
+            : constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(Placeholder), Placeholder.Length > 0 ? 1 : 0));
+
+    /// <inheritdoc />
+    public override void Draw(TuiSurface surface)
+    {
+        if (Pixels is not { IsEmpty: false } pixels)
+        {
+            if (Placeholder.Length > 0)
+            {
+                surface.DrawText(0, 0, TuiTextMeasure.Elide(Placeholder, surface.Width), Style);
+            }
+
+            return;
+        }
+
+        // The canvas is the cells doubled up: two pixels to a cell, top and bottom.
+        var canvas = new TuiSize(surface.Width, surface.Height * 2);
+
+        if (canvas.Width == 0 || canvas.Height == 0)
+        {
+            return;
+        }
+
+        var placed = Place(pixels, canvas);
+
+        for (var row = 0; row < surface.Height; row += 1)
+        {
+            for (var column = 0; column < surface.Width; column += 1)
+            {
+                var top = Sample(pixels, placed, column, row * 2);
+                var bottom = Sample(pixels, placed, column, (row * 2) + 1);
+
+                if (top is null && bottom is null)
+                {
+                    // Outside the picture altogether: left alone rather than painted black,
+                    // so a letterboxed image sits on whatever is behind it.
+                    continue;
+                }
+
+                surface.DrawText(column, row, HalfBlock, new TuiStyle(top ?? bottom, bottom ?? top));
+            }
+        }
+    }
+
+    /// <summary>Where the picture sits on the canvas, in canvas pixels.</summary>
+    /// <remarks>
+    /// Not a <see cref="TuiRect"/>: a cropped picture is bigger than the canvas and sits at
+    /// a negative offset, and a rectangle clamps that to zero — which pins the picture to
+    /// the top-left corner and crops only the far edges.
+    /// </remarks>
+    internal (int Left, int Top, int Width, int Height) Place(TuiPixels pixels, TuiSize canvas)
+    {
+        if (Fit == TuiImageFit.Stretch)
+        {
+            return (0, 0, canvas.Width, canvas.Height);
+        }
+
+        // Which axis binds, as a cross-multiplication so the arithmetic stays whole:
+        // fitting inside takes the smaller ratio and leaves bars, filling takes the larger
+        // and overflows.
+        var wide = pixels.Width * canvas.Height;
+        var tall = pixels.Height * canvas.Width;
+        var byWidth = Fit == TuiImageFit.Letterbox ? tall <= wide : tall >= wide;
+
+        var width = byWidth ? canvas.Width : Math.Max(1, pixels.Width * canvas.Height / pixels.Height);
+        var height = byWidth ? Math.Max(1, pixels.Height * canvas.Width / pixels.Width) : canvas.Height;
+
+        return ((canvas.Width - width) / 2, (canvas.Height - height) / 2, width, height);
+    }
+
+    /// <summary>The colour at one canvas pixel, or null where the picture does not reach.</summary>
+    private static string? Sample(
+        TuiPixels pixels,
+        (int Left, int Top, int Width, int Height) placed,
+        int column,
+        int row)
+    {
+        if (placed.Width <= 0 || placed.Height <= 0)
+        {
+            return null;
+        }
+
+        var x = column - placed.Left;
+        var y = row - placed.Top;
+
+        if (x < 0 || y < 0 || x >= placed.Width || y >= placed.Height)
+        {
+            return null;
+        }
+
+        return pixels.HexAt(x * pixels.Width / placed.Width, y * pixels.Height / placed.Height);
+    }
+}

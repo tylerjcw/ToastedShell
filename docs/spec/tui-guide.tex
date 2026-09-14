@@ -584,6 +584,44 @@ the form it is inside, so without it a dialog could raise itself and have no way
 to let the reader out; the object style says the same thing with
 \code{\$form.Discard()}.
 
+\section{Pictures}
+\label{sec:pictures}
+
+\begin{lstlisting}
+{| Image = "cover.png", Fit = "letterbox" |}
+{| Image = &Chosen, Placeholder = "  nothing here can read this one" |}
+\end{lstlisting}
+
+A terminal that can show pixels and a framework that cannot is a framework that has
+decided a file browser's third pane is a list of bytes. One cell is two pixels ---
+an upper half block with the top pixel's colour in front and the bottom pixel's
+behind --- so a pane of $w \times h$ cells is a canvas of $w \times 2h$.
+
+\code{Fit} is \code{letterbox} (the whole picture, right shape, bars where it does
+not reach), \code{crop} (fills the room, right shape, edges lost) or \code{stretch}
+(fills the room, wrong shape). Letterbox bars are left unpainted rather than
+filled, so the picture sits on whatever is behind it.
+
+An image, a frame of a video and a page of a PDF are the same problem, and the
+widget knows none of them: it knows pixels. What turns a path into pixels is a hook
+the host installs, and the shell's own asks \code{magick}, \code{ffmpeg} and
+\code{pdftoppm} --- which are already on the machine of anyone who wants the
+feature, so a format nobody here has heard of works the day the reader installs
+something that reads it. Results are remembered by path, size and write time, so
+arrowing back up a list is instant and a file that changed is read again.
+
+\begin{tipbox}
+A path that loads to nothing --- no tool installed, a format none of them know, a
+file that is not a picture at all --- leaves the \code{Placeholder} showing. That is
+what a preview pane should do for a file it cannot preview, rather than ending the
+screen.
+\end{tipbox}
+
+Half-blocks are the floor and the part that always works: nothing to detect, nothing
+to erase when it scrolls, and a recognisable shape on anything that does truecolour.
+Handing the terminal real pixels --- the Kitty graphics protocol, or sixel --- is
+\code{TUI-0025} and is not here yet.
+
 \section{Containers}
 
 \subsection{\texttt{Box} --- a titled border}
@@ -1146,6 +1184,7 @@ Button  & the label           & OnPress, Exit, + style \\
 Gauge   & ---                 & Value, Min, Max, Label, + style \\
 Spark   & the series          & Scale, Capacity, Pad, + style \\
 Bars    & the values          & Scale, Values, + style \\
+Image   & the path            & Fit, Placeholder, + style \\
 Row     & the children        & Gap \\
 Column  & the children        & Gap \\
 Box     & the children        & Title, + style \\

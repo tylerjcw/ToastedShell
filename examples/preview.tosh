@@ -1,0 +1,65 @@
+#!/bin/tosh
+## @summary A file browser with a preview pane, yazi-style.
+## @remarks
+##   A terminal that can show pixels and a framework that cannot is a framework that has
+##   decided a file browser's third pane is a list of bytes. Kitty, WezTerm, Ghostty and
+##   iTerm2 all accept pixels over the same channel they accept text on.
+##
+##   This is the floor of it, and the part that always works: one cell is two pixels — an
+##   upper half block with the top pixel's colour in front and the bottom pixel's behind.
+##   Nothing to detect, nothing to erase when it scrolls, and it degrades to a
+##   recognisable shape on anything that does truecolour.
+##
+##   An image, a frame of a video and a page of a PDF are the same problem, and the tools
+##   that solve it — `magick`, `ffmpeg`, `pdftoppm` — are already on the machine of anyone
+##   who wants the feature. So a format nobody here has heard of works the day the reader
+##   installs something that reads it.
+##
+##   Pass a directory to browse; `/usr/share/pixmaps` by default, because it is one of the
+##   few that is on nearly every machine and full of pictures.
+## @example examples/preview.tosh ~/Pictures
+
+var where = "/usr/share/pixmaps"
+
+var given = $tosh.Script.Args
+
+if ($given.Length > 0) {
+    $where = $"{$given[0]}"
+}
+
+var files = ls $where | where { not _.IsDirectory } | collect
+
+if ($files.Length == 0) {
+    throw $"Nothing to preview in {$where}."
+}
+
+var chosen = $files[0].FullName
+
+## @summary What the list shows. Names, not paths — the pane is narrow.
+func Names() => $files | each { $"{_.Name}" }
+
+## @summary Moving in the list changes the preview, and nothing had to be wired for it.
+## @remarks
+##   `OnChange` fires as the selection moves rather than when it is confirmed, which is
+##   what makes a preview pane feel like one. Reading it back out is a pull binding, so
+##   there is no update code anywhere in this file.
+func Picked(index) {
+    $chosen = $files[$index].FullName
+}
+
+func Chosen()  => $chosen
+func Caption() => $"  {$chosen}   ↑↓ move   q quit"
+
+tui run --title "preview" {|
+    Keys = [ {| Key = "q", Label = "q", Does = "quit", Exit = true |} ],
+    Column = [
+        {| Row = [
+               {| Title = "Files", Size = "1/3",
+                  Box = [ {| List = &Names, Id = "files", OnChange = &Picked |} ] |},
+               {| Title = "Preview", Size = "*",
+                  Box = [ {| Image = &Chosen, Fit = "letterbox",
+                             Placeholder = "  nothing here can read this one" |} ] |}
+           ], Size = "*" |},
+        {| Text = &Caption, Size = "1" |}
+    ]
+|}

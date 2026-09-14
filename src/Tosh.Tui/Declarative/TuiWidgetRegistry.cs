@@ -502,6 +502,19 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        registry.Register("image", static (spec, _) => new TuiImage
+        {
+            Path = spec.PrimaryText(),
+            Fit = spec.Text("fit")?.ToLowerInvariant() switch
+            {
+                "crop" => TuiImageFit.Crop,
+                "stretch" => TuiImageFit.Stretch,
+                _ => TuiImageFit.Letterbox,
+            },
+            Placeholder = spec.Text("placeholder") ?? string.Empty,
+            Style = spec.Style(),
+        });
+
         registry.Register("menu", static (spec, context) => BuildMenu(spec, context));
 
         registry.Register("menubar", static (spec, context) =>

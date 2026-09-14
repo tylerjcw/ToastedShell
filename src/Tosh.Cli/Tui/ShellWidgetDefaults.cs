@@ -35,6 +35,10 @@ internal static class ShellWidgetDefaults
             _ => TuiTreeGlyphs.Default,
         };
 
+        // Previews come from whatever the reader already has installed, so a format nobody
+        // here has heard of works the day they install something that reads it.
+        TuiImage.Loader = ShellImageLoader.Load;
+
         var engine = new DisplayEngine(runtime.Formatter);
 
         TuiTable.ColumnSource = row =>

@@ -33,6 +33,7 @@ public static class TuiBindings
             case TuiBars bars: bars.BarsSource = source; return;
             case TuiTable table: table.RowsSource = source; return;
             case TuiLines lines: lines.LinesSource = source; return;
+            case TuiImage image: image.PathSource = source; return;
             case TuiScroll { Child: TuiList scrolled }: scrolled.ItemsSource = source; return;
         }
 
@@ -134,6 +135,10 @@ public static class TuiBindings
                 gauge.Amount = TypeConversion.TryConvert(invoke(source, values), typeof(double), out var amount)
                     ? (double)amount!
                     : 0d;
+                return;
+
+            case TuiImage { PathSource: { } source } image:
+                image.Path = invoke(source, values)?.ToString();
                 return;
 
             case TuiLines { LinesSource: { } source } lines:
