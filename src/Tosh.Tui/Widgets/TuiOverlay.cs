@@ -53,6 +53,19 @@ public sealed class TuiOverlay : TuiWidget
     /// </remarks>
     public bool IsModal => Modal is { IsVisible: true };
 
+    /// <summary>
+    /// What the modal opens from, when it belongs to something on the page rather than to
+    /// the screen. Null for a dialog, which belongs to the screen and is centred.
+    /// </summary>
+    /// <remarks>
+    /// A dialog is about the screen, so the middle is where it goes. A menu, a completion
+    /// list, a tooltip and a colour picker are all about the thing they came out of, and
+    /// putting one in the middle of the terminal loses the only piece of information its
+    /// position carries. A widget rather than a rectangle, so the anchor follows what it
+    /// is anchored to when the layout changes (<c>TUI-0023</c>).
+    /// </remarks>
+    public TuiWidget? Anchor { get; set; }
+
     /// <summary>Blank cells between the modal and the edge of the overlay.</summary>
     /// <remarks>
     /// A dialog measured against the full screen can ask for all of it, and one drawn edge
@@ -151,6 +164,11 @@ public sealed class TuiOverlay : TuiWidget
             return default;
         }
 
+        if (Anchor is { IsVisible: true, Bounds.IsEmpty: false } anchor)
+        {
+            return AnchoredBounds(bounds, anchor.Bounds);
+        }
+
         var room = new TuiConstraints(
             Math.Max(0, bounds.Width - (Margin * 2)),
             Math.Max(0, bounds.Height - (Margin * 2)));
@@ -165,5 +183,35 @@ public sealed class TuiOverlay : TuiWidget
             bounds.Top + ((bounds.Height - height) / 2),
             width,
             height);
+    }
+
+    /// <summary>
+    /// Where a modal that came out of something sits: under it, or over it when under
+    /// would fall off the bottom.
+    /// </summary>
+    /// <remarks>
+    /// No margin. A margin is what stops a dialog looking painted onto the page, and an
+    /// anchored popup is meant to look attached to the thing it came out of. Flipping is
+    /// what stops a menu near the bottom of the terminal being two rows tall.
+    /// </remarks>
+    private TuiRect AnchoredBounds(TuiRect bounds, TuiRect anchor)
+    {
+        var below = Math.Max(0, bounds.Bottom - anchor.Bottom);
+        var above = Math.Max(0, anchor.Top - bounds.Top);
+
+        // Measured against the better of the two sides rather than against whichever it
+        // will end up on: a menu asked how tall it would like to be should not answer
+        // differently because it happens to be near the bottom.
+        var wanted = Modal!.Measure(new TuiConstraints(bounds.Width, Math.Max(below, above)));
+
+        var width = Math.Min(wanted.Width, bounds.Width);
+        var opensDown = wanted.Height <= below || below >= above;
+        var height = Math.Min(wanted.Height, opensDown ? below : above);
+
+        // Left-aligned with the anchor, pulled back onto the screen rather than clipped:
+        // a menu opening from the last item on the bar would otherwise lose its right half.
+        var left = Math.Min(anchor.Left, Math.Max(bounds.Left, bounds.Right - width));
+
+        return new TuiRect(left, opensDown ? anchor.Bottom : anchor.Top - height, width, height);
     }
 }

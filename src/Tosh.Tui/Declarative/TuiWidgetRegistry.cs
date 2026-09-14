@@ -77,6 +77,56 @@ public sealed class TuiWidgetRegistry
         return false;
     }
 
+    /// <summary>
+    /// Reads a menu: its name, and the commands under it.
+    /// </summary>
+    /// <remarks>
+    /// <code>
+    /// {| Menu = "File", Items = [
+    ///        {| Item = "Open",  Key = "Ctrl+O", Do = &amp;Open |},
+    ///        {| Separator = true |},
+    ///        {| Item = "Quit",  Key = "q",      Do = &amp;Quit |}
+    ///    ] |}
+    /// </code>
+    /// <c>Key</c> is shown, not registered: the key belongs to whatever screen the menu is
+    /// on, and one registered here would answer only while the menu was open.
+    /// </remarks>
+    private static TuiMenu BuildMenu(TuiWidgetSpec spec, TuiBuildContext context)
+    {
+        var menu = new TuiMenu(spec.PrimaryText() ?? string.Empty) { Style = spec.Style() };
+
+        if (!spec.TryGet("items", out var declared) || declared is not IEnumerable<object?> nodes)
+        {
+            return menu;
+        }
+
+        foreach (var node in nodes)
+        {
+            if (ShellRecordUtilities.TryGetValue(node, "Separator", out var line) && line is true)
+            {
+                menu.AddSeparator();
+                continue;
+            }
+
+            if (!ShellRecordUtilities.TryGetValue(node, "Item", out var label) || label is null)
+            {
+                continue;
+            }
+
+            var handler = ShellRecordUtilities.TryGetValue(node, "Do", out var action)
+                ? action as IShellCallable
+                : null;
+
+            menu.Add(new TuiMenuItem(
+                label.ToString() ?? string.Empty,
+                ShellRecordUtilities.TryGetValue(node, "Key", out var key) ? key?.ToString() ?? string.Empty : string.Empty,
+                handler is null ? null : () => context.Invoke(handler, null),
+                !(ShellRecordUtilities.TryGetValue(node, "Enabled", out var enabled) && enabled is false)));
+        }
+
+        return menu;
+    }
+
     /// <summary>The widget id a key aims at, when it names one.</summary>
     private static string? Aimed(object? binding, string key)
         => ShellRecordUtilities.TryGetValue(binding, key, out var id) && id?.ToString() is { Length: > 0 } text
@@ -450,6 +500,25 @@ public sealed class TuiWidgetRegistry
             }
 
             return button;
+        });
+
+        registry.Register("menu", static (spec, context) => BuildMenu(spec, context));
+
+        registry.Register("menubar", static (spec, context) =>
+        {
+            var bar = new TuiMenuBar { Gap = spec.Number("gap", 0), Style = spec.Style() };
+
+            // Each child is a menu node, built through the registry rather than by hand, so
+            // a bar of menus and a menu on its own are the same thing.
+            foreach (var child in context.BuildChildren(spec.PrimaryItems()))
+            {
+                if (child is TuiMenu menu)
+                {
+                    bar.Add(menu);
+                }
+            }
+
+            return bar;
         });
 
         registry.Register("form", static (spec, context) =>

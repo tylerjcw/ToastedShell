@@ -146,9 +146,11 @@ public sealed class TuiMarkupSurfaceTests
 
         var undocumented = TuiWidgetRegistry.CreateDefault().Names
             .Select(name => $"{char.ToUpperInvariant(name[0])}{name[1..]}")
-            .Where(name => !text.Contains($"\\texttt{{{name}}}", StringComparison.Ordinal)
-                        && !text.Contains($"\n{name}    ", StringComparison.Ordinal)
-                        && !text.Contains($"{{| {name} ", StringComparison.Ordinal))
+            // Case-insensitively, because markup is: the guide writes `MenuBar` where the
+            // registry holds `menubar`, and both are the name the reader types.
+            .Where(name => !text.Contains($"\\texttt{{{name}}}", StringComparison.OrdinalIgnoreCase)
+                        && !text.Contains($"\n{name}    ", StringComparison.OrdinalIgnoreCase)
+                        && !text.Contains($"{{| {name} ", StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
         Assert.True(

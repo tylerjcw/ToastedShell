@@ -603,6 +603,64 @@ to let the reader out; the object style says the same thing with
 A window onto a child taller than the space available. A list, a table, a tree and
 a document all scroll themselves; this is for everything else.
 
+\subsection{\texttt{Menu} and \texttt{MenuBar}}
+
+A screen can offer a command two ways without a menu. It can register a key, which
+is terse and costs no room but is invisible until someone reads the footer --- and
+there are not enough memorable chords for five menus of a dozen. Or it can put a
+button on the page, which is discoverable and costs a row of the document. A menu
+is the third answer: one row, whether there are two menus or nine, because the
+group opens only when it is asked for.
+
+\begin{lstlisting}
+{| Id = "menus", MenuBar = [
+       {| Menu = "File", Items = [
+              {| Item = "Open", Key = "Ctrl+O", Do = &Open |},
+              {| Separator = true |},
+              {| Item = "Quit", Key = "q" |}
+          ] |},
+       {| Menu = "Edit", Items = [
+              {| Item = "Copy", Key = "Ctrl+C", Do = &Copy |},
+              {| Item = "Replace", Enabled = false |}
+          ] |}
+   ], Size = "1" |}
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{\normalfont\sffamily Key} & \textbf{\normalfont\sffamily What it does} \\
+\midrule
+F10 (or a click)   & opens the bar --- see below \\
+Left / Right       & walk the bar, and take the open menu with them \\
+a letter           & opens the menu it names \\
+Up / Down          & move inside the open menu, over separators and disabled commands \\
+Enter              & choose, which also takes the menu down \\
+Escape             & close, and hand the keyboard back \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}[The key beside a command is shown and not registered]
+It belongs to the screen, so register it in \code{Keys}. A key registered on the
+menu would answer only while the menu was open, which is exactly backwards ---
+\code{Ctrl+O} exists so that you do not have to open the menu.
+\end{warnbox}
+
+A bar does not take the keyboard until something is down. It sits at the top of the
+tree, so a bar that took focus like any other widget would take it \emph{first}, and
+a letter typed at a screen that had just opened would open a menu instead of being
+typed. Reach it the way every editor does --- a key aimed at it:
+
+\begin{lstlisting}
+Keys = [ {| Key = "f10", Does = "menu", Press = "menus" |} ]
+\end{lstlisting}
+
+The popup is a layer, not part of the bar: a widget cannot paint outside what it was
+given, which is the whole reason layers exist. A screen with a bar in it gets one
+without asking, so the bar is written where it belongs --- one row at the top of a
+column --- rather than having the whole screen wrapped around it.
+
 \subsection{\texttt{Form} --- a window with a way in and a way out}
 
 \begin{lstlisting}
@@ -1092,6 +1150,8 @@ Row     & the children        & Gap \\
 Column  & the children        & Gap \\
 Box     & the children        & Title, + style \\
 Scroll  & the child           & --- \\
+Menu    & the name            & Items, + style \\
+MenuBar & the menus           & Gap, + style \\
 Form    & the children        & Title, OnSubmit, OnCancel \\
 Overlay & page, then modal    & Margin \\
 \bottomrule

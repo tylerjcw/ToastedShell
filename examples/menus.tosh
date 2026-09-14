@@ -1,0 +1,69 @@
+#!/bin/tosh
+## @summary A menu bar, its drop-downs, and what they cost.
+## @remarks
+##   A screen can offer a command two ways without a menu. It can register a key, which
+##   is terse and costs no room but is invisible until someone reads the footer — and
+##   there are not enough memorable chords for five menus of a dozen. Or it can put a
+##   button on the page, which is discoverable and costs a row of the document.
+##
+##   A menu is the third answer. One row, whether there are two menus or nine, because
+##   the group opens only when it is asked for.
+##
+##     F10            open the bar — a key aimed at it, the way every editor does it
+##     Left / Right   walk the bar, and take the open menu with them
+##     a letter       open the menu it names
+##     Up / Down      move inside the open menu, stepping over separators
+##     Enter          choose
+##     Escape         close, and hand the keyboard back
+##
+##   The key beside a command is shown, not registered. It belongs to the screen, and one
+##   registered on the menu would answer only while the menu was open — which is exactly
+##   backwards.
+##
+##   The bar does not take the keyboard until a menu is down, so the document below it has
+##   it from the start and a letter typed at a screen that has just opened is typed rather
+##   than swallowed.
+
+var document = "untitled.txt"
+var last = "—"
+
+func Did(what) { $last = $what }
+
+func New()   { $document = "untitled.txt"; Did("new") }
+func Open()  { $document = "reactor.tosh"; Did("open") }
+func Save()  { Did("save") }
+func Copy()  { Did("copy") }
+func Paste() { Did("paste") }
+func Find()  { Did("find") }
+func About() { Did("about") }
+
+func Status() => $"  {$document}    last: {$last}"
+
+tui run --title "menus" {|
+    Keys = [
+        {| Key = "f10", Label = "F10", Does = "menu", Press = "menus" |},
+        {| Key = "q",   Label = "q",   Does = "quit", Exit  = true    |}
+    ],
+    Column = [
+        {| Id = "menus", MenuBar = [
+               {| Menu = "File", Items = [
+                      {| Item = "New",   Key = "Ctrl+N", Do = &New |},
+                      {| Item = "Open",  Key = "Ctrl+O", Do = &Open |},
+                      {| Item = "Save",  Key = "Ctrl+S", Do = &Save |},
+                      {| Separator = true |},
+                      {| Item = "Quit",  Key = "q" |}
+                  ] |},
+               {| Menu = "Edit", Items = [
+                      {| Item = "Copy",  Key = "Ctrl+C", Do = &Copy |},
+                      {| Item = "Paste", Key = "Ctrl+V", Do = &Paste |},
+                      {| Separator = true |},
+                      {| Item = "Find",  Key = "Ctrl+F", Do = &Find |},
+                      {| Item = "Replace", Enabled = false |}
+                  ] |},
+               {| Menu = "Help", Items = [ {| Item = "About", Do = &About |} ] |}
+           ], Size = "1" |},
+        {| Title = "Document", Size = "*",
+           Box = [ {| Field = "", Id = "body", Value = "The quick brown fox.", Multiline = true |} ] |},
+        {| Text = &Status, Size = "1" |}
+    ]
+|}

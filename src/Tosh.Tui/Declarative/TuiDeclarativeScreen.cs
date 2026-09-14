@@ -43,6 +43,8 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     private readonly Action? _tick;
     private readonly TuiWake? _wake;
     private readonly List<TuiFeeds> _feeds = [];
+    private readonly TuiMenuBar? _menus;
+    private readonly TuiOverlay? _layers;
     private TuiBorder? _frame;
     private TuiWidget? _returnTo;
 
@@ -66,6 +68,18 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // one still wins: the flag is the more specific statement.
         _title = title ?? _form?.Title;
         RefreshInterval = refreshInterval;
+
+        // A menu is a layer, so a tree with a bar in it needs somewhere to put one. Wrapped
+        // rather than required, because a bar is written where it belongs — one row at the
+        // top of a column — and asking an author to also wrap their whole screen in an
+        // overlay to make it work would be asking them to say the same thing twice.
+        _menus = FindMenus(root);
+
+        if (_menus is not null)
+        {
+            _layers = root as TuiOverlay ?? new TuiOverlay(root);
+            root = _layers;
+        }
 
         _root = _title is null ? root : _frame = new TuiBorder(root, _title)
         {
@@ -147,6 +161,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     public TuiFrame Render(TuiSize size)
     {
         ApplyBindings();
+        ShowOpenMenu();
 
         // Asked before drawing as well as before dispatching, so the caret is drawn where
         // the next keystroke will go even when the scope changed on a tick rather than on
@@ -206,6 +221,23 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         if (!input.IsKey)
         {
             return TuiScreenResult.Continue;
+        }
+
+        // A popup is a layer, so the bar is not one of its ancestors and never sees a key
+        // pressed inside it. These three are the ones a reader expects the bar to answer
+        // while it is open, so the screen — which owns the layering — answers them.
+        if (_menus is { Open: not null })
+        {
+            switch (input.Key.Key)
+            {
+                case ConsoleKey.Escape:
+                    _menus.Close();
+                    return TuiScreenResult.Continue;
+
+                case ConsoleKey.LeftArrow or ConsoleKey.RightArrow:
+                    _menus.OnInput(input);
+                    return TuiScreenResult.Continue;
+            }
         }
 
         // Registered keys, asked outwards from whatever has the keyboard: a dialog's keys
@@ -289,6 +321,46 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
 
     /// <inheritdoc />
     public TuiWake? Wake => _wake;
+
+    /// <summary>Puts the open menu on the layer above the page, or takes it off.</summary>
+    /// <remarks>
+    /// Done here rather than by the bar because a popup is not the bar's to draw: a widget
+    /// cannot paint outside what it was given, which is the whole reason a layer exists.
+    /// Only a menu's own popup is cleared, so a dialog a handler put up is left alone.
+    /// </remarks>
+    private void ShowOpenMenu()
+    {
+        if (_layers is null || _menus is null)
+        {
+            return;
+        }
+
+        if (_menus.Open is { } title)
+        {
+            // Remembered on the way in, so closing hands the keyboard back to whatever the
+            // reader was in rather than to the first field on the screen.
+            if (_layers.Anchor is not TuiMenuTitle)
+            {
+                _returnTo = _focus.Focused;
+            }
+
+            _layers.Modal = title.Popup;
+            _layers.Anchor = title;
+        }
+        else if (_layers.Anchor is TuiMenuTitle)
+        {
+            _layers.Modal = null;
+            _layers.Anchor = null;
+
+            // Before the revalidation in `Render`, which would otherwise have already
+            // seated the keyboard on the first thing it could find.
+            Restore();
+        }
+    }
+
+    /// <summary>The first menu bar in a tree, if it has one.</summary>
+    private static TuiMenuBar? FindMenus(TuiWidget widget)
+        => widget as TuiMenuBar ?? widget.Children.Select(FindMenus).FirstOrDefault(found => found is not null);
 
     /// <summary>Stops reading every source, once the loop that was drawing them has gone.</summary>
     public void Dispose()
