@@ -635,10 +635,40 @@ what a preview pane should do for a file it cannot preview, rather than ending t
 screen.
 \end{tipbox}
 
-Half-blocks are the floor and the part that always works: nothing to detect, nothing
-to erase when it scrolls, and a recognisable shape on anything that does truecolour.
-Handing the terminal real pixels --- the Kitty graphics protocol, or sixel --- is
-\code{TUI-0025} and is not here yet.
+\subsection{Real pixels}
+
+Half-blocks are the floor and the part that always works. Where the terminal speaks
+the Kitty graphics protocol --- Ghostty, Kitty and WezTerm do --- the same widget
+hands over the pixels themselves instead, and the picture is a picture rather than a
+mosaic. Nothing in the markup changes; the layout does not either, because the fit is
+worked out on the same half-cell canvas whichever way it is drawn.
+
+Which one is used is read from the environment once, at start-up. A reader whose
+terminal lies has the last word:
+
+\begin{lstlisting}
+TOSH_TUI_GRAPHICS=kitty    # force it on
+TOSH_TUI_GRAPHICS=half     # force it off
+\end{lstlisting}
+
+\begin{warnbox}[Inside \texttt{tmux} you get half-blocks]
+A multiplexer does not know a picture was sent, so it would be drawn over whatever
+pane the multiplexer had decided to put there. That is detected and stepped around
+rather than left to surprise you.
+\end{warnbox}
+
+A placement is kept by the terminal until it is deleted, which is why each one
+carries an id: a picture that moved, closed or was covered has to be taken back, and
+only something comparing this frame against the last one knows that happened. The
+frame diff does both --- cells and placements --- so an unchanged picture is not sent
+again, and a screen that ends with one up hands the terminal back clean.
+
+Pictures are scaled down before they are sent. A thousand-pixel photograph in a
+thirteen-cell box is four megabytes of base64 down a pipe, to be scaled to two
+hundred pixels at the other end; capping it at what a cell could generously be worth
+turns that into one.
+
+Sixel, for the terminals that speak that and not this, is still \code{TUI-0025}.
 
 \section{Containers}
 

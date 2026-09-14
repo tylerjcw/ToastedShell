@@ -41,6 +41,27 @@ public sealed class TuiBuffer
     /// </remarks>
     public (int Column, int Row)? Cursor { get; set; }
 
+    /// <summary>
+    /// Pictures the terminal is asked to draw over this frame, in the order they were
+    /// asked for.
+    /// </summary>
+    /// <remarks>
+    /// Beside the cells rather than in them, because pixels do not fit in a cell. Part of
+    /// the frame all the same, so a frame still says everything about what the reader
+    /// sees and the writer still has one thing to diff against the last one.
+    /// </remarks>
+    public IReadOnlyList<TuiPlacement> Placements => _placements;
+
+    private readonly List<TuiPlacement> _placements = [];
+
+    /// <summary>Asks the terminal to draw a picture over part of this frame.</summary>
+    public void Place(TuiPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+
+        _placements.Add(placement);
+    }
+
     public int Width => Size.Width;
 
     public int Height => Size.Height;

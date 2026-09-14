@@ -78,6 +78,13 @@ public static class TuiApplication
         }
         finally
         {
+            // Pictures outlive the frame that asked for them, so a screen that ends with
+            // one up would leave it painted over the shell the reader is handed back.
+            if (presented?.Placements.Count > 0)
+            {
+                host.Write(TuiGraphics.DeleteAll());
+            }
+
             session.Restore();
 
             // A screen with sources has tasks reading them, and they outlive the loop

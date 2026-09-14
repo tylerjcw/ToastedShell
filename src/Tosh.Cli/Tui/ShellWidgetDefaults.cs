@@ -1,4 +1,5 @@
 using Tosh.Runtime;
+using Tosh.Tui.Rendering;
 using Tosh.Tui.Widgets;
 
 namespace Tosh.Cli.Tui;
@@ -38,6 +39,10 @@ internal static class ShellWidgetDefaults
         // Previews come from whatever the reader already has installed, so a format nobody
         // here has heard of works the day they install something that reads it.
         TuiImage.Loader = ShellImageLoader.Load;
+
+        // Asked once. The environment is what a terminal says about itself, and a reader
+        // whose terminal lies sets TOSH_TUI_GRAPHICS rather than being guessed around.
+        TuiImage.Protocol = TuiGraphics.Detect(Environment.GetEnvironmentVariable);
 
         var engine = new DisplayEngine(runtime.Formatter);
 

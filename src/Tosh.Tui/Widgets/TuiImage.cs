@@ -44,6 +44,35 @@ public sealed class TuiImage : TuiWidget
     private const string HalfBlock = "▀";
 
     /// <summary>
+    /// The most pixels a cell is assumed to be worth when handing the terminal a picture.
+    /// </summary>
+    /// <remarks>
+    /// Generous — larger than any real font, HiDPI included — because the cost of being
+    /// wrong upwards is a slightly soft picture and the cost of being wrong downwards is a
+    /// visibly blocky one. What it buys is not sending the original: a 1024-pixel photograph
+    /// in a thirteen-cell box is four megabytes of base64 down a pipe, to be scaled to two
+    /// hundred pixels at the other end.
+    /// </remarks>
+    private const int CellWidth = 24;
+
+    private const int CellHeight = 48;
+
+    /// <summary>
+    /// How pictures reach this terminal. Installed by the host, which knows what it is
+    /// attached to.
+    /// </summary>
+    /// <remarks>
+    /// Half blocks by default, because they are the thing that always works and a toolkit
+    /// with no host is a toolkit that cannot know any better.
+    /// </remarks>
+    public static TuiGraphicsProtocol Protocol { get; set; } = TuiGraphicsProtocol.HalfBlocks;
+
+    /// <summary>The next id to hand a picture that needs one.</summary>
+    private static int _nextId;
+
+    private readonly int _id = Interlocked.Increment(ref _nextId);
+
+    /// <summary>
     /// What turns a path into pixels. Installed by the host; null in a bare toolkit.
     /// </summary>
     /// <remarks>
@@ -127,6 +156,12 @@ public sealed class TuiImage : TuiWidget
             return;
         }
 
+        if (Protocol == TuiGraphicsProtocol.Kitty)
+        {
+            DrawPixels(surface, pixels);
+            return;
+        }
+
         // The canvas is the cells doubled up: two pixels to a cell, top and bottom.
         var canvas = new TuiSize(surface.Width, surface.Height * 2);
 
@@ -154,6 +189,90 @@ public sealed class TuiImage : TuiWidget
                 surface.DrawText(column, row, HalfBlock, new TuiStyle(top ?? bottom, bottom ?? top));
             }
         }
+    }
+
+    /// <summary>
+    /// Hands the terminal the picture itself, over a rectangle of cleared cells.
+    /// </summary>
+    /// <remarks>
+    /// The cells underneath are blanked rather than left as they were. A terminal draws an
+    /// image over the text, so anything left there shows through wherever the picture does
+    /// not reach — and when the picture is taken away, the cells are what the reader is
+    /// left looking at.
+    /// </remarks>
+    private void DrawPixels(TuiSurface surface, TuiPixels pixels)
+    {
+        // Fitted on the same half-cell canvas the blocks use, because a cell is about twice
+        // as tall as it is wide and a fit that treats one as square stretches every picture
+        // vertically. Switching protocols should change how a picture is drawn, not where.
+        var placed = Place(pixels, new TuiSize(surface.Width, surface.Height * 2));
+
+        if (placed.Width <= 0 || placed.Height <= 0)
+        {
+            return;
+        }
+
+        // Back into whole cells. Rounded outwards, so a picture an odd number of half-cells
+        // tall keeps all of itself rather than losing its last row.
+        var top = placed.Top / 2;
+        var rows = (placed.Top + placed.Height + 1) / 2 - top;
+
+        var region = new TuiRect(
+            Math.Max(0, placed.Left),
+            Math.Max(0, top),
+            Math.Min(placed.Width, surface.Width),
+            Math.Min(rows, surface.Height));
+
+        surface.Clip(region).Fill(Style);
+
+        // The cut is measured on the half-cell canvas the fit was decided on, so the part of
+        // the picture that survives is the part those cells were showing.
+        var cut = Cut(pixels, placed, new TuiRect(region.Left, region.Top * 2, region.Width, region.Height * 2));
+
+        surface.Place(_id, region, cut.Resampled(
+            Math.Min(cut.Width, region.Width * CellWidth),
+            Math.Min(cut.Height, region.Height * CellHeight)));
+    }
+
+    /// <summary>
+    /// The part of the picture a cropped placement should carry.
+    /// </summary>
+    /// <remarks>
+    /// Cropping is done here rather than by the terminal because the terminal would scale
+    /// whatever it is given into the box it is given: handing it the whole picture and a
+    /// smaller box is a squashed picture, not a cropped one.
+    /// </remarks>
+    private static TuiPixels Cut(
+        TuiPixels pixels,
+        (int Left, int Top, int Width, int Height) placed,
+        TuiRect region)
+    {
+        if (placed.Left >= 0 && placed.Top >= 0 && placed.Width == region.Width && placed.Height == region.Height)
+        {
+            return pixels;
+        }
+
+        var left = (region.Left - placed.Left) * pixels.Width / placed.Width;
+        var top = (region.Top - placed.Top) * pixels.Height / placed.Height;
+        var width = Math.Max(1, region.Width * pixels.Width / placed.Width);
+        var height = Math.Max(1, region.Height * pixels.Height / placed.Height);
+
+        var rgb = new byte[width * height * 3];
+
+        for (var y = 0; y < height; y += 1)
+        {
+            for (var x = 0; x < width; x += 1)
+            {
+                var (red, green, blue) = pixels[left + x, top + y];
+                var offset = ((y * width) + x) * 3;
+
+                rgb[offset] = red;
+                rgb[offset + 1] = green;
+                rgb[offset + 2] = blue;
+            }
+        }
+
+        return new TuiPixels(width, height, rgb);
     }
 
     /// <summary>Where the picture sits on the canvas, in canvas pixels.</summary>

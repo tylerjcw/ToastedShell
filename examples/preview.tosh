@@ -35,16 +35,21 @@ if ($files.Length == 0) {
 
 var chosen = $files[0].FullName
 
-## @summary What the list shows. Names, not paths — the pane is narrow.
-func Names() => $files | each { $"{_.Name}" }
+## @summary The files themselves. `Display` decides what of them the pane shows.
+## @remarks
+##   The list carries the file, not its name, so the handler is handed something worth
+##   having. Showing one property of an object rather than converting everything to
+##   strings first is what `Display` is for.
+func Files() => $files
 
 ## @summary Moving in the list changes the preview, and nothing had to be wired for it.
 ## @remarks
 ##   `OnChange` fires as the selection moves rather than when it is confirmed, which is
-##   what makes a preview pane feel like one. Reading it back out is a pull binding, so
-##   there is no update code anywhere in this file.
-func Picked(index) {
-    $chosen = $files[$index].FullName
+##   what makes a preview pane feel like one — and it is handed the selected item, not its
+##   index. Reading the answer back out is a pull binding, so there is no update code
+##   anywhere in this file.
+func Picked(file) {
+    $chosen = $"{$file.FullName}"
 }
 
 func Chosen()  => $chosen
@@ -55,7 +60,8 @@ tui run --title "preview" {|
     Column = [
         {| Row = [
                {| Title = "Files", Size = "1/3",
-                  Box = [ {| List = &Names, Id = "files", OnChange = &Picked |} ] |},
+                  Box = [ {| List = &Files, Id = "files", Display = "Name",
+                             OnChange = &Picked |} ] |},
                {| Title = "Preview", Size = "*",
                   Box = [ {| Image = &Chosen, Fit = "letterbox",
                              Placeholder = "  nothing here can read this one" |} ] |}

@@ -76,6 +76,44 @@ public sealed class TuiPixels
     }
 
     /// <summary>
+    /// The same picture at a different size, by nearest neighbour.
+    /// </summary>
+    /// <remarks>
+    /// Nearest neighbour rather than anything better because the result is about to be
+    /// scaled again by the terminal into a box of cells, and the only job here is to stop
+    /// four megabytes going down a pipe to be thrown away at the other end.
+    /// </remarks>
+    public TuiPixels Resampled(int width, int height)
+    {
+        if (IsEmpty || width <= 0 || height <= 0)
+        {
+            return this;
+        }
+
+        if (width == Width && height == Height)
+        {
+            return this;
+        }
+
+        var rgb = new byte[width * height * 3];
+
+        for (var y = 0; y < height; y += 1)
+        {
+            for (var x = 0; x < width; x += 1)
+            {
+                var (red, green, blue) = this[x * Width / width, y * Height / height];
+                var offset = ((y * width) + x) * 3;
+
+                rgb[offset] = red;
+                rgb[offset + 1] = green;
+                rgb[offset + 2] = blue;
+            }
+        }
+
+        return new TuiPixels(width, height, rgb);
+    }
+
+    /// <summary>
     /// Reads binary PPM — the format every image tool can already write.
     /// </summary>
     /// <remarks>

@@ -105,6 +105,11 @@ public static class TuiTerminalWriter
             builder.Append(Reset);
         }
 
+        // Pictures after the cells, because a placement lands at the cursor and the cursor
+        // is wherever the last cell written left it — and before the caret, because the
+        // caret is the last thing said about a frame.
+        AppendPictures(builder, reusable ? previous!.Placements : [], next.Placements);
+
         AppendCursor(builder, reusable ? previous!.Cursor : null, next.Cursor, reusable);
 
         return builder.ToString();
@@ -138,6 +143,37 @@ public static class TuiTerminalWriter
         if (!reusable || previous is null)
         {
             builder.Append("\x1b[?25h");
+        }
+    }
+
+    /// <summary>
+    /// Sends the pictures that are new or have moved, and takes back the ones that are gone.
+    /// </summary>
+    /// <remarks>
+    /// A terminal keeps an image until it is told to delete it, so a frame that no longer
+    /// asks for one has to say so — otherwise a preview stays on screen over whatever
+    /// replaced it. Re-sending an unchanged picture is the other failure: a 4K frame down
+    /// the wire every time a clock ticks is a slideshow, not a preview.
+    /// </remarks>
+    private static void AppendPictures(
+        StringBuilder builder,
+        IReadOnlyList<TuiPlacement> previous,
+        IReadOnlyList<TuiPlacement> next)
+    {
+        foreach (var was in previous)
+        {
+            if (!next.Any(now => now.Id == was.Id))
+            {
+                builder.Append(TuiGraphics.Delete(was.Id));
+            }
+        }
+
+        foreach (var now in next)
+        {
+            if (!previous.Any(was => was.SameAs(now)))
+            {
+                builder.Append(TuiGraphics.Transmit(now));
+            }
         }
     }
 

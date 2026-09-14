@@ -82,4 +82,70 @@ public readonly struct TuiSurface
 
     /// <summary>Fills this whole surface with a blank in the given style.</summary>
     public void Fill(TuiStyle style) => _buffer.Fill(Bounds, style);
+
+    /// <summary>
+    /// Asks the terminal to draw a picture over part of this surface.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is in surface coordinates like everything else a widget says, and is
+    /// clipped to what the surface can actually show — so a picture in a pane scrolled
+    /// half off the screen asks for half a picture rather than for a picture the terminal
+    /// would happily draw over the pane beside it.
+    /// </remarks>
+    /// <returns>The part of the rectangle that was placed, empty when none of it was.</returns>
+    public TuiRect Place(int id, TuiRect region, TuiPixels pixels)
+    {
+        ArgumentNullException.ThrowIfNull(pixels);
+
+        var wanted = new TuiRect(
+            Bounds.Left + region.Left,
+            Bounds.Top + region.Top,
+            region.Width,
+            region.Height);
+
+        var visible = wanted.Intersect(Bounds);
+
+        if (visible.IsEmpty || pixels.IsEmpty)
+        {
+            return default;
+        }
+
+        _buffer.Place(new TuiPlacement(
+            id,
+            visible.Left,
+            visible.Top,
+            visible.Width,
+            visible.Height,
+            visible == wanted ? pixels : Crop(pixels, wanted, visible)));
+
+        return new TuiRect(visible.Left - Bounds.Left, visible.Top - Bounds.Top, visible.Width, visible.Height);
+    }
+
+    /// <summary>The part of a picture that a clipped placement should carry.</summary>
+    private static TuiPixels Crop(TuiPixels pixels, TuiRect wanted, TuiRect visible)
+    {
+        // Proportional, because the picture was already scaled to `wanted` when the widget
+        // decided how big to ask for it: the cells that survive keep the pixels they had.
+        var left = (visible.Left - wanted.Left) * pixels.Width / wanted.Width;
+        var top = (visible.Top - wanted.Top) * pixels.Height / wanted.Height;
+        var width = Math.Max(1, visible.Width * pixels.Width / wanted.Width);
+        var height = Math.Max(1, visible.Height * pixels.Height / wanted.Height);
+
+        var rgb = new byte[width * height * 3];
+
+        for (var y = 0; y < height; y += 1)
+        {
+            for (var x = 0; x < width; x += 1)
+            {
+                var (red, green, blue) = pixels[left + x, top + y];
+                var offset = ((y * width) + x) * 3;
+
+                rgb[offset] = red;
+                rgb[offset + 1] = green;
+                rgb[offset + 2] = blue;
+            }
+        }
+
+        return new TuiPixels(width, height, rgb);
+    }
 }
