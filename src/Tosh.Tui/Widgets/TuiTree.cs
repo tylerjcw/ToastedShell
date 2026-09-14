@@ -170,6 +170,18 @@ public sealed class TuiTree : TuiWidget
     /// <summary>Raised when a leaf is chosen with Enter. A branch toggles instead.</summary>
     public Action<object?>? Activated { get; set; }
 
+    /// <inheritdoc />
+    public override bool Activate()
+    {
+        if (Activated is null)
+        {
+            return false;
+        }
+
+        Activated(SelectedNode);
+        return true;
+    }
+
     /// <summary>Raised when a node is opened or closed.</summary>
     public Action<object?, bool>? Toggled { get; set; }
 

@@ -247,6 +247,18 @@ public sealed class TuiTable : TuiWidget
     /// <summary>Raised when a row is chosen with Enter.</summary>
     public Action<object?>? Activated { get; set; }
 
+    /// <inheritdoc />
+    public override bool Activate()
+    {
+        if (Activated is null)
+        {
+            return false;
+        }
+
+        Activated(SelectedRow);
+        return true;
+    }
+
     /// <summary>Draws a bar down the right edge saying where in the table you are.</summary>
     public bool Scrollbar { get; set; }
 

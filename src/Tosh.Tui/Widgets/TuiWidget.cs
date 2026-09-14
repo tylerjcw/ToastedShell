@@ -403,6 +403,18 @@ public abstract class TuiWidget
     /// </remarks>
     public bool ClosesScreen { get; set; }
 
+    /// <summary>
+    /// Does whatever pressing Enter on this widget would do, and says whether that was
+    /// anything.
+    /// </summary>
+    /// <remarks>
+    /// So that a key can aim at a widget by id — <c>F5</c> means "press Refresh" — without
+    /// the screen holding a reference to it or knowing what kind of thing it is. The
+    /// keyboard is not moved: a key that presses a button somewhere else should not take
+    /// the caret out of what the reader was typing in (<c>TUI-0026</c>).
+    /// </remarks>
+    public virtual bool Activate() => false;
+
     /// <summary>Called when the keyboard arrives or leaves.</summary>
     /// <remarks>
     /// For the widget whose own state duplicates the answer — a button's selection is the

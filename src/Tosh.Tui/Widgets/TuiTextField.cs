@@ -53,6 +53,18 @@ public sealed class TuiTextField : TuiWidget
     /// <summary>Raised when Enter is pressed.</summary>
     public Action<string>? Submitted { get; set; }
 
+    /// <inheritdoc />
+    public override bool Activate()
+    {
+        if (Submitted is null)
+        {
+            return false;
+        }
+
+        Submitted(Text);
+        return true;
+    }
+
     /// <summary>Raised when Escape is pressed.</summary>
     public Action? Cancelled { get; set; }
 

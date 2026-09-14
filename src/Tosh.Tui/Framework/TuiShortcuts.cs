@@ -1,5 +1,37 @@
 namespace Tosh.Tui;
 
+/// <summary>
+/// What a key can aim at, when it aims at part of the screen rather than at a function.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A shortcut binds a chord to an action, and an action is a script function. That covers
+/// every command that changes state — save, open, quit, refresh — and none that change
+/// where the keyboard <em>is</em>, which is the other half of what keybindings are for.
+/// <c>Ctrl+P</c> opens a palette and puts the caret in it. <c>/</c> focuses the search box.
+/// </para>
+/// <para>
+/// The focus manager is private to the screen, rightly — a script should not be holding
+/// one — so a key says what it wants by id, the same way everything else on a screen is
+/// addressed, and whatever owns the tree does it (<c>TUI-0026</c>).
+/// </para>
+/// </remarks>
+public interface ITuiAim
+{
+    /// <summary>Moves the keyboard to the widget with this id.</summary>
+    /// <returns>Whether there was such a widget and it could take the keyboard.</returns>
+    bool Focus(string id);
+
+    /// <summary>Does whatever pressing Enter on that widget would do.</summary>
+    /// <remarks>The keyboard does not move: <c>F5</c> should not take the caret out of
+    /// whatever the reader was typing in.</remarks>
+    bool Press(string id);
+
+    /// <summary>Puts the keyboard back where it was before the last <see cref="Focus"/>.</summary>
+    /// <remarks>What closing a palette, a menu or a search box wants.</remarks>
+    bool Restore();
+}
+
 /// <summary>One registered key, and what it does.</summary>
 /// <param name="Description">
 /// What a footer would say about it. Kept beside the action so the help line and the
@@ -37,6 +69,16 @@ public sealed class TuiShortcuts
 
     /// <summary>Every registered key, in the order they were added.</summary>
     public IReadOnlyList<TuiShortcut> Registered => _shortcuts;
+
+    /// <summary>
+    /// What a key aiming at a widget goes through. Set by whatever owns the tree.
+    /// </summary>
+    /// <remarks>
+    /// Null in a table nobody has hung on a screen — a test building one, say — and a key
+    /// that aims at something then does nothing rather than throwing. A binding that does
+    /// not currently apply should be inert, not fatal.
+    /// </remarks>
+    public ITuiAim? Aim { get; set; }
 
     /// <summary>Registers a key that ends the screen.</summary>
     public TuiShortcuts Exit(ConsoleKey key, string label, string description)
@@ -98,6 +140,48 @@ public sealed class TuiShortcuts
         return Add(key, character, modifiers, label.Length > 0 ? label : chord, description, () =>
         {
             action();
+            return TuiScreenResult.Continue;
+        });
+    }
+
+    /// <summary>Registers a chord that moves the keyboard to a widget, by id.</summary>
+    /// <remarks><c>$keys.Focus("/", "/", "search", "query")</c> — the last argument is the
+    /// widget's <c>Id</c>, not its caption.</remarks>
+    public TuiShortcuts Focus(string chord, string label, string description, string id)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+
+        var (key, character, modifiers) = ParseChord(chord);
+
+        return Add(key, character, modifiers, label.Length > 0 ? label : chord, description, () =>
+        {
+            Aim?.Focus(id);
+            return TuiScreenResult.Continue;
+        });
+    }
+
+    /// <summary>Registers a chord that presses a widget, by id, without moving the keyboard.</summary>
+    public TuiShortcuts Press(string chord, string label, string description, string id)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+
+        var (key, character, modifiers) = ParseChord(chord);
+
+        return Add(key, character, modifiers, label.Length > 0 ? label : chord, description, () =>
+        {
+            Aim?.Press(id);
+            return TuiScreenResult.Continue;
+        });
+    }
+
+    /// <summary>Registers a chord that puts the keyboard back where it was.</summary>
+    public TuiShortcuts Back(string chord, string label, string description)
+    {
+        var (key, character, modifiers) = ParseChord(chord);
+
+        return Add(key, character, modifiers, label.Length > 0 ? label : chord, description, () =>
+        {
+            Aim?.Restore();
             return TuiScreenResult.Continue;
         });
     }

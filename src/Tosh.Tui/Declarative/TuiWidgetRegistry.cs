@@ -77,6 +77,12 @@ public sealed class TuiWidgetRegistry
         return false;
     }
 
+    /// <summary>The widget id a key aims at, when it names one.</summary>
+    private static string? Aimed(object? binding, string key)
+        => ShellRecordUtilities.TryGetValue(binding, key, out var id) && id?.ToString() is { Length: > 0 } text
+            ? text
+            : null;
+
     /// <summary>
     /// Reads the sources a node is fed by.
     /// </summary>
@@ -179,6 +185,31 @@ public sealed class TuiWidgetRegistry
             var handler = ShellRecordUtilities.TryGetValue(binding, "Do", out var action)
                 ? action as IShellCallable
                 : null;
+
+            // A key can aim at part of the screen instead of at a function: `Focus` moves
+            // the keyboard to a widget by id, `Press` does what Enter on it would do, and
+            // `Back` puts the keyboard where it was. The screen resolves all three,
+            // because the focus manager is its and should stay its.
+            if (Aimed(binding, "Focus") is { } focused)
+            {
+                keys.Focus(text, label, describes, focused);
+                any = true;
+                continue;
+            }
+
+            if (Aimed(binding, "Press") is { } pressed)
+            {
+                keys.Press(text, label, describes, pressed);
+                any = true;
+                continue;
+            }
+
+            if (ShellRecordUtilities.TryGetValue(binding, "Back", out var back) && back is true)
+            {
+                keys.Back(text, label, describes);
+                any = true;
+                continue;
+            }
 
             if (exits)
             {

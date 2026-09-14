@@ -1,0 +1,46 @@
+#!/bin/tosh
+## @summary Every kind of custom keybinding, in one screen.
+## @remarks
+##   A key can do four things, and the difference between them is what a keybinding
+##   chapter is actually about:
+##
+##     Do      run a function — the ordinary case, and the only one that changes state
+##     Focus   move the keyboard to a widget, by id
+##     Press   do what Enter on a widget would do, without moving the keyboard
+##     Back    put the keyboard where it was before the last Focus
+##
+##   `Exit = true` is the fifth, and composes with `Do`: save and quit is one keystroke
+##   in every editor anyone has used.
+##
+##   Two rules make these safe to write. A key is asked only after the focused widget and
+##   everything between have declined it, so `/` reaches the table when a list has the
+##   keyboard and gets typed when a text field does. And a table hangs on the node it
+##   belongs to, so a key written on a pane stops answering when that pane is not up.
+
+var files = ["reactor.tosh", "notes.md", "untitled.txt", "build.log"]
+var opened = ""
+var query = ""
+var refreshed = 0
+
+func Files() => $files
+func Choose(name) { $opened = $"{$name}" }
+func Refresh()    { $refreshed = $refreshed + 1 }
+
+func Status() => $"  opened: {$opened == "" ? "—" : $opened}   refreshed: {$refreshed}"
+
+tui run --title "keys" {|
+    Keys = [
+        {| Key = "/",      Label = "/",    Does = "search",  Focus = "query" |},
+        {| Key = "escape", Label = "Esc",  Does = "back",    Back  = true    |},
+        {| Key = "f5",     Label = "F5",   Does = "refresh", Press = "reload" |},
+        {| Key = "ctrl+r", Label = "^R",   Does = "",        Press = "reload" |},
+        {| Key = "q",      Label = "q",    Does = "quit",    Exit  = true    |}
+    ],
+    Column = [
+        {| Title = "Files", Size = "*",
+           Box = [ {| List = &Files, Id = "list", Padding = 1, OnSelect = &Choose |} ] |},
+        {| Field = "Find", Id = "query", Size = "1" |},
+        {| Button = "Reload", Id = "reload", OnPress = &Refresh, Size = "1" |},
+        {| Text = &Status, Size = "1" |}
+    ]
+|}

@@ -98,6 +98,19 @@ public sealed class TuiForm : TuiWidget
     /// <summary>Accepts the form, as a default button would.</summary>
     public void Submit() => Close(TuiFormResult.Submitted, Submitted);
 
+    /// <inheritdoc />
+    /// <remarks>Accepting it, which is what pressing Enter on a form does.</remarks>
+    public override bool Activate()
+    {
+        if (Result != TuiFormResult.Open)
+        {
+            return false;
+        }
+
+        Submit();
+        return true;
+    }
+
     /// <summary>Abandons the form, as a cancel button would.</summary>
     public void Cancel() => Close(TuiFormResult.Cancelled, Cancelled);
 

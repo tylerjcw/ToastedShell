@@ -32,6 +32,18 @@ public sealed class TuiButton : TuiWidget
     public bool IsSelected { get; set; }
 
     /// <inheritdoc />
+    public override bool Activate()
+    {
+        if (Pressed is null)
+        {
+            return false;
+        }
+
+        Pressed();
+        return true;
+    }
+
+    /// <inheritdoc />
     protected override void OnFocusChanged() => IsSelected = IsFocused;
 
     public TuiStyle Style { get; set; }

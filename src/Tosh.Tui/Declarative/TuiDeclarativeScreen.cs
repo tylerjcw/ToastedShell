@@ -32,7 +32,7 @@ public sealed record TuiBinding(TuiWidget Widget, IShellCallable Source, Action<
 /// "before every redraw" means once per keystroke rather than at a frame rate.
 /// </para>
 /// </remarks>
-public sealed class TuiDeclarativeScreen : ITuiScreen, IDisposable
+public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
 {
     private readonly TuiWidget _root;
     private readonly IReadOnlyList<TuiBinding> _bindings;
@@ -44,6 +44,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, IDisposable
     private readonly TuiWake? _wake;
     private readonly List<TuiFeeds> _feeds = [];
     private TuiBorder? _frame;
+    private TuiWidget? _returnTo;
 
     public TuiDeclarativeScreen(
         TuiWidget root,
@@ -83,6 +84,14 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, IDisposable
             {
                 feeds.Start(_wake);
             }
+        }
+
+        // Every key table in the tree is pointed at this screen, so a key that names a
+        // widget has something to name it to. Done once here rather than at each keystroke
+        // because `Keys` is written when the tree is built and does not move.
+        foreach (var keys in Tables(_root))
+        {
+            keys.Aim = this;
         }
 
         // Visibility is settled before focus is seated. A widget hidden by `When` is
@@ -287,6 +296,120 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, IDisposable
         foreach (var feeds in _feeds)
         {
             feeds.Stop();
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A widget that is hidden, not focusable, or behind a modal is not reachable, and a
+    /// key aiming at it does nothing. `Focusable` already answers all three, because it
+    /// walks focus scopes rather than children.
+    /// </remarks>
+    public bool Focus(string id)
+    {
+        if (Find(id) is not { } named || Reachable(named) is not { } target)
+        {
+            return false;
+        }
+
+        // Remembered before the move, so a palette or a search box can hand the keyboard
+        // back to whatever the reader was in.
+        _returnTo = _focus.Focused;
+        _focus.Focus(target);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool Press(string id)
+        => Find(id) is { IsVisible: true } target && (target.Activate() || Inside(target));
+
+    /// <summary>
+    /// The widget an id names, or the one inside it that can actually take the keyboard.
+    /// </summary>
+    /// <remarks>
+    /// A labelled field is a row around an input, and the id is written on the row —
+    /// <c>{| Field = "Find", Id = "query" |}</c> — because that is the node the author
+    /// wrote. The input is what was meant, which is the same reading bindings already take.
+    /// </remarks>
+    private TuiWidget? Reachable(TuiWidget named)
+    {
+        var focusable = _focus.Focusable();
+
+        if (focusable.Contains(named))
+        {
+            return named;
+        }
+
+        return Descendants(named).FirstOrDefault(focusable.Contains);
+    }
+
+    /// <summary>Activates the first thing inside a widget that has anything to do.</summary>
+    private static bool Inside(TuiWidget widget) => Descendants(widget).Any(child => child.Activate());
+
+    private static IEnumerable<TuiWidget> Descendants(TuiWidget widget)
+    {
+        foreach (var child in widget.Children)
+        {
+            yield return child;
+
+            foreach (var nested in Descendants(child))
+            {
+                yield return nested;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public bool Restore()
+    {
+        if (_returnTo is not { } target || !_focus.Focusable().Contains(target))
+        {
+            return false;
+        }
+
+        _returnTo = null;
+        _focus.Focus(target);
+        return true;
+    }
+
+    /// <summary>The widget with an id, anywhere in the tree.</summary>
+    private TuiWidget? Find(string id)
+    {
+        return Walk(_root);
+
+        TuiWidget? Walk(TuiWidget widget)
+        {
+            if (string.Equals(widget.Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                return widget;
+            }
+
+            foreach (var child in widget.Children)
+            {
+                if (Walk(child) is { } found)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>Every key table hung anywhere on the tree.</summary>
+    private static IEnumerable<TuiShortcuts> Tables(TuiWidget widget)
+    {
+        if (widget.Keys is { } keys)
+        {
+            yield return keys;
+        }
+
+        foreach (var child in widget.Children)
+        {
+            foreach (var nested in Tables(child))
+            {
+                yield return nested;
+            }
         }
     }
 

@@ -74,6 +74,18 @@ public sealed class TuiList : TuiWidget
     /// <summary>Raised when an item is chosen with Enter.</summary>
     public Action<object?>? Activated { get; set; }
 
+    /// <inheritdoc />
+    public override bool Activate()
+    {
+        if (Activated is null)
+        {
+            return false;
+        }
+
+        Activated(SelectedItem);
+        return true;
+    }
+
     /// <summary>Asks whether an item is ticked, instead of the list remembering.</summary>
     /// <remarks>
     /// A list that filters cannot hold ticks by index: the indices mean something

@@ -40,6 +40,7 @@
 | [`TOAST-0096`](items/TOAST-0096.md) | P2 | complete | — | A generic union's unit variant cannot infer its type arguments from where the value is going |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | complete | 5/5 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`TOAST-0034`](items/TOAST-0034.md) | P2 | complete | 8/8 | A declared type is not used: the compile-time inferrer pins down literals and `new` and nothing else |
+| [`TUI-0026`](items/TUI-0026.md) | P3 | complete | 7/7 | A keybinding can run a function but cannot move the keyboard, so 'jump to the search box' is unwritable |
 | [`TOAST-0111`](items/TOAST-0111.md) | P2 | complete | 6/6 | `is` and `as` do not see refinement types, so a type test on one is always false |
 | [`TOAST-0049`](items/TOAST-0049.md) | P2 | complete | 5/5 | Recursion is capped at 128 frames, and the cap is a stack size nobody can change |
 | [`TOSH-0011`](items/TOSH-0011.md) | P2 | complete | 5/5 | Both TUI browsers test for `q` before they test for focus, so searching for anything with a q in it quits |

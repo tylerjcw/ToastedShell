@@ -840,6 +840,68 @@ does not work.
 \code{Oem2} never fires. Register the character the reader actually pressed.
 \end{warnbox}
 
+\subsection{A key that aims at the screen}
+
+Running a function covers every command that changes state --- save, open, quit,
+refresh --- and none that change where the keyboard \emph{is}, which is the other
+half of what keybindings are for. \code{Ctrl+P} opens a palette \emph{and puts the
+caret in it}. \code{/} focuses the search box. \code{F2} moves to the second pane.
+
+A key says what it wants by id, the same way everything else on a screen is
+addressed:
+
+\begin{lstlisting}
+Keys = [
+    {| Key = "/",      Does = "search",  Focus = "query"  |},
+    {| Key = "escape", Does = "back",    Back  = true     |},
+    {| Key = "f5",     Does = "refresh", Press = "reload" |},
+    {| Key = "q",      Does = "quit",    Exit  = true     |}
+]
+\end{lstlisting}
+
+\begin{lstlisting}
+$keys.Focus("/", "/", "search", "query") | ignore
+$keys.Press("f5", "F5", "refresh", "reload") | ignore
+$keys.Back("escape", "Esc", "back") | ignore
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{\normalfont\sffamily Key} & \textbf{\normalfont\sffamily What it does} \\
+\midrule
+\code{Do}    & runs a function \\
+\code{Focus} & moves the keyboard to a widget, by id \\
+\code{Press} & does what Enter on that widget would do, without moving the keyboard \\
+\code{Back}  & puts the keyboard where it was before the last \code{Focus} \\
+\code{Exit}  & ends the screen, and composes with \code{Do} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\code{Press} deliberately leaves the keyboard alone: \code{F5} should not take the
+caret out of whatever the reader was typing in. \code{Back} is what closing a
+palette, a menu or a search box wants.
+
+An id written on a labelled field names the row, because that is the node you
+wrote --- \code{\{| Field = "Find", Id = "query" |\}} --- and aiming looks inside it
+for the input, which is the reading bindings already take. Aiming at something
+hidden, missing, or behind a modal does nothing at all; a binding that does not
+currently apply should be inert, not fatal.
+
+\begin{warnbox}[A printable key still belongs to whoever is typing]
+\code{/} reaches the table only after the focused widget declines it. With a list
+focused it opens the search box; with a text field focused it types a slash. That
+is the routing working, and it is why a screen key can be a bare letter at all.
+\end{warnbox}
+
+\subsection{Starting something in the background}
+
+A key's handler runs on the render loop's thread, so it should return promptly. Work
+that takes time belongs in a job or an \code{async} block whose results come back
+through a \code{Feed} (\S\ref{sec:feeds}) --- which is also what keeps the screen
+answering keys while it runs.
+
 % =============================================================================
 \chapter{Styling}
 % =============================================================================

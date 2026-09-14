@@ -20,7 +20,6 @@
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TUI-0009`](items/TUI-0009.md) | P3 | proposed | 0/6 | The TUI assumes truecolor and a terminal, with no degradation and no plain-text path |
 | [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
-| [`TUI-0026`](items/TUI-0026.md) | P3 | proposed | 0/7 | A keybinding can run a function but cannot move the keyboard, so 'jump to the search box' is unwritable |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
 | [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
