@@ -38,7 +38,7 @@
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after down → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -79,7 +79,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after down → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -120,7 +120,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after right, opening the entry → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -161,7 +161,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  1-9 related
 ─── after down in the detail pane → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -202,7 +202,7 @@ focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/togg
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  1-9 related
 ─── after tab → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -243,7 +243,7 @@ focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/togg
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit
 ─── after end → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -284,7 +284,7 @@ focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/togg
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit
 ─── after home → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -325,7 +325,7 @@ focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/togg
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit
 ─── after page down → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -366,7 +366,7 @@ focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/togg
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:search  F1-F4 groups  / search  [ back  ] forward  q quit
 ─── after shift+tab → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -407,4 +407,4 @@ focus:search  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/togg
 │    copy-to                          │ │                                                                              │
 │    cp                               │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  1-9 related

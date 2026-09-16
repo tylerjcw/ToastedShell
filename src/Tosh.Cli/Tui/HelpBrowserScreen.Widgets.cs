@@ -188,7 +188,11 @@ internal sealed partial class HelpBrowserScreen
     {
         var focus = _focus.ToString().ToLowerInvariant();
 
-        var text = $"focus:{focus}  F1-F4 groups  {_shortcuts.Describe()}  Enter open/toggle  i insert  Left up  1-9 related";
+        // Generated, not written. A footer that is a sentence beside the switch that
+        // implements the keys drifts, and this one had: it offered `/`, `[` and `]` after
+        // they stopped working, and `Enter open/toggle` from inside the search box
+        // (`TUI-0022`).
+        var text = $"focus:{focus}  {_shortcuts.Describe()}";
 
         return new TuiSpanLine().Add(TuiRenderHelpers.TrimOrPadPlain(text, width), theme.Footer.ToStyle());
     }

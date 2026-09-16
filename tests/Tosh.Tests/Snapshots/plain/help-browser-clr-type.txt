@@ -38,7 +38,7 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+ck  ] forward  q quit
 ue ───
 ─────────────────────────────────────────────────────────────────────────────╮
 F4 CLR/.NET                                                                  │
@@ -79,7 +79,7 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+  ] forward  q quit  Enter open/toggle
 inue ───
 ─────────────────────────────────────────────────────────────────────────────╮
 F4 CLR/.NET                                                                  │
@@ -120,7 +120,7 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+ck  ] forward  q quit  1-9 related
 ─── after page down → Continue ───
 ─────────────────────────────────────────────────────────────────────────────╮
 F4 CLR/.NET                                                                  │
@@ -161,7 +161,7 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+ck  ] forward  q quit  1-9 related
 ─── after page down → Continue ───
 ─────────────────────────────────────────────────────────────────────────────╮
 F4 CLR/.NET                                                                  │
@@ -202,7 +202,7 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+ck  ] forward  q quit  1-9 related
 ─── after end → Continue ───
 ─────────────────────────────────────────────────────────────────────────────╮
 F4 CLR/.NET                                                                  │
@@ -243,7 +243,7 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+ck  ] forward  q quit  1-9 related
 ─── after home → Continue ───
 ─────────────────────────────────────────────────────────────────────────────╮
 F4 CLR/.NET                                                                  │
@@ -284,4 +284,4 @@ ethods                                                                       │
  System.Text.StringBuilder Append(System.String value)                       │
  System.Text.StringBuilder Append(System.Text.StringBuilder value)           │
 ─────────────────────────────────────────────────────────────────────────────╯
-ck  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+ck  ] forward  q quit  1-9 related

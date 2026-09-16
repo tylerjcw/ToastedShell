@@ -38,7 +38,7 @@
 │        │ │ │ ├─ JsonDerivedType     │ │                                                                              │
 │        │ │ │ ├─ JsonMetadataServices│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after down → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -79,7 +79,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonDerivedType     │ │                                                                              │
 │        │ │ │ ├─ JsonMetadataServices│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after enter, opening the entry → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -120,7 +120,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonDerivedType     │ │                                                                              │
 │        │ │ │ ├─ JsonMetadataServices│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after down → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -161,7 +161,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonDerivedType     │ │                                                                              │
 │        │ │ │ ├─ JsonMetadataServices│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after enter → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -202,7 +202,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonDerivedType     │ │                                                                              │
 │        │ │ │ ├─ JsonMetadataServices│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after page down → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -243,7 +243,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonParameterInfoVal│ │                                                                              │
 │›       │ │ │ ├─ JsonPolymorphismOpti│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after left, back up a level → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -284,7 +284,7 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonParameterInfoVal│ │                                                                              │
 │›       │ │ │ ├─ JsonPolymorphismOpti│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 ─── after tab, into the detail pane → Continue ───
 ╭ Help Browser ────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │F1 All  F2 ToastedShell  F3 ToastScript  F4 CLR/.NET                                                                  │
@@ -325,4 +325,4 @@ focus:list  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle
 │        │ │ │ ├─ JsonParameterInfoVal│ │                                                                              │
 │›       │ │ │ ├─ JsonPolymorphismOpti│ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit  Enter open/toggle  i insert  Left up  1-9 related
+focus:detail  F1-F4 groups  / search  [ back  ] forward  q quit

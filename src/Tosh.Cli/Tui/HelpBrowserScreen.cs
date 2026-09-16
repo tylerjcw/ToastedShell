@@ -55,12 +55,57 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         // built its own key info. Search, back and forward were dead keys.
         // Registered in the order the footer should read them, because the footer is
         // generated from this table rather than written out again beside it.
-        _shortcuts = new TuiShortcuts()
+        _shortcuts = new TuiShortcuts();
+
+        // Registered in the order the footer should read them, because the footer is
+        // generated from this table rather than written out again beside it.
+        _shortcuts.On("f1", "F1-F4", "groups", () => SelectGroup(HelpBrowserGroup.All));
+        _shortcuts.On("f2", "F2", string.Empty, () => SelectGroup(HelpBrowserGroup.ToastedShell));
+        _shortcuts.On("f3", "F3", string.Empty, () => SelectGroup(HelpBrowserGroup.ToastScript));
+        _shortcuts.On("f4", "F4", string.Empty, () => SelectGroup(HelpBrowserGroup.Clr));
+
+        _shortcuts
             .On('/', "/", "search", () => _focus = HelpBrowserFocus.Search)
             .On('[', "[", "back", () => NavigateBack())
             .On(']', "]", "forward", () => NavigateForward())
             .On(ConsoleKey.Q, "q", "quit", Quit)
             .On(ConsoleKey.Escape, "Esc", string.Empty, Quit);
+
+        // The keys that apply only sometimes. They were a sentence in the footer beside the
+        // `switch` that implemented them, which is the drift this table exists to remove —
+        // it offered `Enter open/toggle` from inside the search box, where Enter leaves the
+        // search box, `i insert` with nowhere to insert to, and `1-9 related` on every
+        // topic including the ones with no related topics at all (`TUI-0022`).
+        _shortcuts.When(
+            () => _focus == HelpBrowserFocus.List,
+            () => _shortcuts.On(
+                "enter", "Enter", "open/toggle", () => ActivateSelectedEntry(preferOpen: false)));
+
+        _shortcuts.When(
+            CanNavigateClrUp,
+            () => _shortcuts.On("leftarrow", "Left", "up", () => NavigateClrUp()));
+
+        _shortcuts.When(
+            CanInsertSelection,
+            () => _shortcuts.Exit("i", "i", "insert", () => TryInsertCurrentSelection()));
+
+        // `1` carries the description for the family, the rest are silent: nine lines for
+        // one idea is not a footer.
+        _shortcuts.When(
+            HasRelatedTopics,
+            () =>
+            {
+                for (var related = 1; related <= 9; related += 1)
+                {
+                    var index = related;
+
+                    _shortcuts.On(
+                        $"{index}",
+                        index == 1 ? "1-9" : $"{index}",
+                        index == 1 ? "related" : string.Empty,
+                        () => OpenRelatedTopic(index));
+                }
+            });
 
         BuildTree();
         ApplyFilter(pageSize: 10);
@@ -175,27 +220,12 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
 
         switch (key.Key)
         {
-            case ConsoleKey.F1:
-                SelectGroup(HelpBrowserGroup.All);
-                return TuiScreenResult.Continue;
-            case ConsoleKey.F2:
-                SelectGroup(HelpBrowserGroup.ToastedShell);
-                return TuiScreenResult.Continue;
-            case ConsoleKey.F3:
-                SelectGroup(HelpBrowserGroup.ToastScript);
-                return TuiScreenResult.Continue;
-            case ConsoleKey.F4:
-                SelectGroup(HelpBrowserGroup.Clr);
-                return TuiScreenResult.Continue;
             case ConsoleKey.Tab:
                 CycleFocus(reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
                 return TuiScreenResult.Continue;
             case ConsoleKey.LeftArrow:
-                if (_focus == HelpBrowserFocus.List && NavigateClrUp())
-                {
-                    return TuiScreenResult.Continue;
-                }
-
+                // Walking out of a CLR scope is the table's now, with the condition that
+                // says when Left means "up" rather than "move to the list".
                 _focus = HelpBrowserFocus.List;
                 return TuiScreenResult.Continue;
             case ConsoleKey.RightArrow:
@@ -218,8 +248,10 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
                 }
 
                 break;
-            case ConsoleKey.Insert or ConsoleKey.I:
-                if (_focus != HelpBrowserFocus.Search && TryInsertCurrentSelection())
+            case ConsoleKey.Insert:
+                // `i` is the table's; Insert is the same command under its other name, and
+                // has no business in a footer that already spells it once.
+                if (CanInsertSelection() && TryInsertCurrentSelection())
                 {
                     _shouldExit = true;
                     return TuiScreenResult.Exit;
@@ -991,6 +1023,26 @@ internal sealed partial class HelpBrowserScreen : ITuiScreen
         group = HelpBrowserGroup.All;
         return false;
     }
+
+    /// <summary>Whether there is something to put on the command line, and somewhere to put it.</summary>
+    /// <remarks>
+    /// The condition `i insert` applies under. It mirrors the guard in
+    /// <see cref="TryInsertCurrentSelection"/> rather than calling it, because a condition
+    /// is asked once per frame to draw a footer and must not insert anything.
+    /// </remarks>
+    private bool CanInsertSelection()
+        => _focus != HelpBrowserFocus.Search &&
+           _runtime.CommandLineInsertion is not null &&
+           !string.IsNullOrWhiteSpace(GetSelectedInsertionText());
+
+    /// <summary>Whether the topic being read has related topics to jump to.</summary>
+    private bool HasRelatedTopics()
+        => _focus == HelpBrowserFocus.Detail && ResolveCurrentTopic() is { Related.Count: > 0 };
+
+    /// <summary>Whether Left would walk out of a CLR scope rather than change panes.</summary>
+    private bool CanNavigateClrUp()
+        => _focus == HelpBrowserFocus.List &&
+           (_clrTypeScope is not null || _clrNamespaceScope is not null || _clrAssemblyScope is not null);
 
     private bool TryInsertCurrentSelection()
     {
