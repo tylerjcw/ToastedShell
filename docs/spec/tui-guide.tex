@@ -860,9 +860,28 @@ There is no update code in a screen built this way, because there is nothing to
 keep in step. A live monitor is two pull bindings and \code{-{}-refresh 1s}.
 \end{tipbox}
 
-A binding is asked for everything it produces, not for the last of it. A function
-returning a collection yields its elements one at a time, so a list, a table, a
-document, a sparkline and a bar chart all get the whole thing.
+A binding is asked for \emph{everything} it produces, not for the last of it --- and
+that is not a convenience, it is the only thing a caller can safely do.
+
+A collection written as an expression is a sequence, and the engine hands one over
+two ways. A function returning a bare variable yields the collection's
+\emph{elements}, because a variable reference is expanded where it is produced. A
+function returning a literal yields the collection \emph{whole}, marked as a
+sequence for whatever consumes it to spread. Both are correct, both are
+long-standing, and no script can tell them apart --- \code{Items | collect} counts
+three either way.
+
+A binding reads the raw stream, where that marking is not visible, so it takes the
+lot. Keeping only the last value meant keeping only the last \emph{row}, and every
+binding that carries more than one thing --- \code{Lines}, \code{List},
+\code{Table}, \code{Spark}, \code{Bars} --- silently showed its final element.
+
+\begin{warnbox}[A literal in a test proves less than it looks]
+\code{func Items() => ["a", "b"]} and \code{func Items() => \$rows} exercise
+different halves of this. A test written with the literal --- which is what one
+naturally writes --- cannot catch a fault in the expanded half, and did not
+(\code{TUI-0027}).
+\end{warnbox}
 
 \section{Feeds}
 \label{sec:feeds}

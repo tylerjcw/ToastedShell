@@ -38,7 +38,6 @@
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
-| [`TUI-0027`](items/TUI-0027.md) | P2 | proposed | 0/5 | A function returning a collection yields it whole under the test engine and element by element under the shell |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
 | [`TUI-0012`](items/TUI-0012.md) | P3 | proposed | 0/6 | There is no performance budget, so 'fast enough' is a feeling |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |

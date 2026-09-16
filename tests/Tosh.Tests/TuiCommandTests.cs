@@ -2,6 +2,7 @@ using Tosh.Cli;
 using Tosh.Runtime;
 using Tosh.Language;
 using Tosh.Tui;
+using Tosh.Tui.Declarative;
 using Tosh.Tui.Requests;
 using Tosh.Tui.Widgets;
 
@@ -225,6 +226,41 @@ public sealed class TuiCommandTests
     public async Task A_binding_that_produces_nothing_answers_with_nothing()
     {
         Assert.Null(await Invoke(new Yielding()));
+    }
+
+    /// <summary>
+    /// The two shapes a real function delivers a collection in, and the one answer a
+    /// binding gets from either (<c>TUI-0027</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A collection written as an expression is a sequence, and the engine delivers one two
+    /// ways: a bare variable reference is expanded at the producer, so the callable yields
+    /// its <em>elements</em>; a literal is yielded once, marked spreadable, and expanded by
+    /// whatever consumes it. Downstream honours the marking, so at script level the two are
+    /// indistinguishable — <c>F | collect</c> counts three either way.
+    /// </para>
+    /// <para>
+    /// A host reading the raw stream does not see the marking, and the difference cost real
+    /// time: it was read as the test engine and the shell disagreeing, which they do not.
+    /// A binding takes everything a callable produces, so both shapes land on the same list.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("func Items() => [\"alpha\", \"beta\", \"gamma\"]")]
+    [InlineData("var rows = [\"alpha\", \"beta\", \"gamma\"]\nfunc Items() => $rows")]
+    public async Task A_collection_reaches_a_binding_whole_however_the_function_spells_it(string declaration)
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync($"{declaration}\ntui run {{| Lines = &Items |}}");
+        var request = Assert.IsType<TuiTreeRunRequest>(Assert.Single(results));
+
+        var widget = Assert.IsType<TuiLines>(TuiTreeBuilder.Build(
+            request.Node, registry: null, invoke: request.Invoke, out _));
+
+        TuiBindings.Apply(widget, request.Invoke!, values: null);
+
+        Assert.Equal(["alpha", "beta", "gamma"], widget.Lines.Select(line => line.Text));
     }
 
     /// <summary>Runs one callable through the invoker `tui run` hands its bindings.</summary>
