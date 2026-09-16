@@ -127,6 +127,81 @@ public sealed class TuiWidgetRegistry
         return menu;
     }
 
+    /// <summary>Registers a group of keys under a condition, and says whether any landed.</summary>
+    private static bool Conditionally(
+        TuiShortcuts keys,
+        IShellCallable applies,
+        TuiBuildContext context,
+        Func<bool> register)
+    {
+        var registered = false;
+
+        keys.When(
+            () => context.Invoke(applies, null) is not (null or false or 0),
+            () => registered = register());
+
+        return registered;
+    }
+
+    /// <summary>
+    /// Registers one key, whichever of the five things it turned out to be.
+    /// </summary>
+    /// <returns>Whether it was any of them.</returns>
+    private static bool Register(
+        TuiShortcuts keys,
+        object? binding,
+        string text,
+        string label,
+        string describes,
+        bool exits,
+        IShellCallable? handler,
+        TuiBuildContext context)
+    {
+        // A key can aim at part of the screen instead of at a function: `Focus` moves the
+        // keyboard to a widget by id, `Press` does what Enter on it would do, and `Back`
+        // puts the keyboard where it was. The screen resolves all three, because the focus
+        // manager is its and should stay its.
+        if (Aimed(binding, "Focus") is { } focused)
+        {
+            keys.Focus(text, label, describes, focused);
+            return true;
+        }
+
+        if (Aimed(binding, "Press") is { } pressed)
+        {
+            keys.Press(text, label, describes, pressed);
+            return true;
+        }
+
+        if (ShellRecordUtilities.TryGetValue(binding, "Back", out var back) && back is true)
+        {
+            keys.Back(text, label, describes);
+            return true;
+        }
+
+        if (exits)
+        {
+            if (handler is null)
+            {
+                keys.Exit(text, label, describes);
+            }
+            else
+            {
+                keys.Exit(text, label, describes, () => context.Invoke(handler, null));
+            }
+
+            return true;
+        }
+
+        if (handler is null)
+        {
+            return false;
+        }
+
+        keys.On(text, label, describes, () => context.Invoke(handler, null));
+        return true;
+    }
+
     /// <summary>The widget id a key aims at, when it names one.</summary>
     private static string? Aimed(object? binding, string key)
         => ShellRecordUtilities.TryGetValue(binding, key, out var id) && id?.ToString() is { Length: > 0 } text
@@ -236,52 +311,19 @@ public sealed class TuiWidgetRegistry
                 ? action as IShellCallable
                 : null;
 
-            // A key can aim at part of the screen instead of at a function: `Focus` moves
-            // the keyboard to a widget by id, `Press` does what Enter on it would do, and
-            // `Back` puts the keyboard where it was. The screen resolves all three,
-            // because the focus manager is its and should stay its.
-            if (Aimed(binding, "Focus") is { } focused)
-            {
-                keys.Focus(text, label, describes, focused);
-                any = true;
-                continue;
-            }
+            // `When` on a key is the condition it applies under — the same word a node uses
+            // for whether it is drawn at all. A key that does not apply does not fire and is
+            // not described, so a footer cannot offer one the screen would ignore.
+            var applies = ShellRecordUtilities.TryGetValue(binding, "When", out var condition)
+                ? condition as IShellCallable
+                : null;
 
-            if (Aimed(binding, "Press") is { } pressed)
-            {
-                keys.Press(text, label, describes, pressed);
-                any = true;
-                continue;
-            }
+            var registered = applies is null
+                ? Register(keys, binding, text, label, describes, exits, handler, context)
+                : Conditionally(keys, applies, context, () =>
+                    Register(keys, binding, text, label, describes, exits, handler, context));
 
-            if (ShellRecordUtilities.TryGetValue(binding, "Back", out var back) && back is true)
-            {
-                keys.Back(text, label, describes);
-                any = true;
-                continue;
-            }
-
-            if (exits)
-            {
-                if (handler is null)
-                {
-                    keys.Exit(text, label, describes);
-                }
-                else
-                {
-                    keys.Exit(text, label, describes, () => context.Invoke(handler, null));
-                }
-            }
-            else if (handler is not null)
-            {
-                keys.On(text, label, describes, () => context.Invoke(handler, null));
-            }
-            else
-            {
-                continue;
-            }
-
-            any = true;
+            any |= registered;
         }
 
         return any ? keys : null;
@@ -513,6 +555,25 @@ public sealed class TuiWidgetRegistry
             },
             Placeholder = spec.Text("placeholder") ?? string.Empty,
             Style = spec.Style(),
+        });
+
+        registry.Register("help", static (spec, context) =>
+        {
+            var help = new TuiHelp
+            {
+                Full = spec.Flag("full"),
+                Separator = spec.Text("separator") ?? "   ",
+                Style = spec.Style(),
+            };
+
+            // `Full = &Everything` rather than a fixed true or false: whether the reader
+            // wants the list is something a key toggles, so the widget asks.
+            if (spec.Callable("full") is { } everything)
+            {
+                help.FullWhen = () => context.Invoke(everything, null) is not (null or false or 0);
+            }
+
+            return help;
         });
 
         registry.Register("menu", static (spec, context) => BuildMenu(spec, context));

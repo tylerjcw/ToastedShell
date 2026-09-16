@@ -1,0 +1,53 @@
+#!/bin/tosh
+## @summary A footer nobody maintains: the keys describe themselves.
+## @remarks
+##   A footer used to be a string kept beside the `switch` that implemented the keys, and
+##   it drifted the way that always does — the help browser offered `/`, `[` and `]` for a
+##   while after they had stopped working.
+##
+##   Here it is a projection instead. `Help` shows the keys that would answer *right now*,
+##   so it cannot claim one the screen would ignore:
+##
+##     * a key with a `When` appears only where its condition holds
+##     * a key on a widget appears only while the keyboard is at or under that widget
+##     * a chord bound twice is shown once, by whichever binding would actually answer
+##
+##   Press `?` to swap the line for the full list, and Tab between the panes to watch the
+##   footer change without anything updating it.
+
+var editing = false
+var chosen = "—"
+
+func Editing()    => $editing
+func NotEditing() => not $editing
+
+func Edit()   { $editing = true }
+func Stop()   { $editing = false }
+func Save()   { $chosen = "saved";  $editing = false }
+func Pick(x)  { $chosen = $"{$x}" }
+func Rename() { $chosen = "renamed" }
+
+var full = false
+func Toggle() { $full = not $full }
+func IsFull() => $full
+
+func Status() => $"  {$editing ? "editing" : "browsing"}   last: {$chosen}"
+
+tui run --title "keys" {|
+    Keys = [
+        {| Key = "?",      Label = "?",   Does = "help",   Do = &Toggle |},
+        {| Key = "q",      Label = "q",   Does = "quit",   Exit = true |},
+        {| Key = "e",      Label = "e",   Does = "edit",   Do = &Edit,  When = &NotEditing |},
+        {| Key = "ctrl+s", Label = "^S",  Does = "save",   Do = &Save,  When = &Editing |},
+        {| Key = "escape", Label = "Esc", Does = "stop",   Do = &Stop,  When = &Editing |}
+    ],
+    Column = [
+        {| Title = "Items", Size = "*",
+           Box = [ {|
+               List = ["alpha", "beta", "gamma"], Id = "items", OnChange = &Pick,
+               Keys = [ {| Key = "r", Label = "r", Does = "rename", Do = &Rename |} ]
+           |} ] |},
+        {| Text = &Status, Size = "1" |},
+        {| Help = "", Full = &IsFull, Size = "auto" |}
+    ]
+|}

@@ -100,6 +100,16 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
             }
         }
 
+        // A footer is a projection of what would answer, so it is told how to ask rather
+        // than handed a list: which tables apply depends on where the keyboard is, and
+        // that changes when a dialog goes up.
+        foreach (var help in Helps(_root))
+        {
+            help.Tables = () => _focus.FromFocused()
+                .Select(widget => widget.Keys)
+                .Where(keys => keys is not null)!;
+        }
+
         // Every key table in the tree is pointed at this screen, so a key that names a
         // widget has something to name it to. Done once here rather than at each keystroke
         // because `Keys` is written when the tree is built and does not move.
@@ -465,6 +475,23 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
             }
 
             return null;
+        }
+    }
+
+    /// <summary>Every help widget in a tree.</summary>
+    private static IEnumerable<TuiHelp> Helps(TuiWidget widget)
+    {
+        if (widget is TuiHelp help)
+        {
+            yield return help;
+        }
+
+        foreach (var child in widget.Children)
+        {
+            foreach (var nested in Helps(child))
+            {
+                yield return nested;
+            }
         }
     }
 

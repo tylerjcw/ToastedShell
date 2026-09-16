@@ -37,13 +37,47 @@ public interface ITuiAim
 /// What a footer would say about it. Kept beside the action so the help line and the
 /// behaviour cannot drift apart.
 /// </param>
+/// <param name="Applies">
+/// Whether this key means anything right now, or null when it always does. Half of what a
+/// binding is: <c>i insert</c> applies outside the search box and nowhere else, and
+/// <c>1</c>-<c>9</c> apply only when the current topic has related topics (<c>TUI-0022</c>).
+/// </param>
 public sealed record TuiShortcut(
     ConsoleKey Key,
     char Character,
     ConsoleModifiers Modifiers,
     string Label,
     string Description,
-    Func<TuiScreenResult> Action);
+    Func<TuiScreenResult> Action,
+    Func<bool>? Applies = null)
+{
+    /// <summary>Whether this key would answer if it were pressed now.</summary>
+    /// <remarks>
+    /// A predicate that throws is treated as "no". A footer is not worth ending a screen
+    /// over, and a binding whose condition cannot be evaluated is one nobody should be
+    /// told about either.
+    /// </remarks>
+    public bool IsAvailable
+    {
+        get
+        {
+            if (Applies is not { } applies)
+            {
+                return true;
+            }
+
+            try
+            {
+                return applies();
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException
+                                                  and not StackOverflowException)
+            {
+                return false;
+            }
+        }
+    }
+}
 
 /// <summary>
 /// A screen's own keys, held in a table rather than tested at the top of a handler.
@@ -293,7 +327,54 @@ public sealed class TuiShortcuts
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        _shortcuts.Add(new TuiShortcut(key, character, modifiers, label, description, action));
+        _shortcuts.Add(new TuiShortcut(key, character, modifiers, label, description, action, _applies));
+        return this;
+    }
+
+    /// <summary>The condition the next registrations are made under.</summary>
+    private Func<bool>? _applies;
+
+    /// <summary>
+    /// Registers keys that apply only sometimes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A condition wraps a group rather than being an argument to each one, because keys
+    /// that apply together are written together and repeating the predicate six times is
+    /// how the seventh comes to disagree:
+    /// </para>
+    /// <code>
+    /// $keys.When(func() => not $searching, func() {
+    ///     $keys.On("i", "i", "insert", &amp;Insert) | ignore
+    ///     $keys.On("e", "e", "edit", &amp;Edit) | ignore
+    /// })
+    /// </code>
+    /// <para>
+    /// A key that does not apply does not fire and is not described, so the footer cannot
+    /// claim a key that would do nothing — which is the whole point: the help is a
+    /// projection of what would answer, not a sentence maintained beside it.
+    /// </para>
+    /// </remarks>
+    public TuiShortcuts When(Func<bool> applies, Action register)
+    {
+        ArgumentNullException.ThrowIfNull(applies);
+        ArgumentNullException.ThrowIfNull(register);
+
+        var outer = _applies;
+
+        // Nested conditions are both conditions, so a group inside a group applies only
+        // where each of them does.
+        _applies = outer is null ? applies : () => outer() && applies();
+
+        try
+        {
+            register();
+        }
+        finally
+        {
+            _applies = outer;
+        }
+
         return this;
     }
 
@@ -308,7 +389,10 @@ public sealed class TuiShortcuts
     {
         foreach (var shortcut in _shortcuts)
         {
-            if (!Matches(shortcut, key))
+            // The condition is checked as well as the chord, so a key that does not apply
+            // does not fire. Describing it and then answering it anyway would be a footer
+            // that tells the truth about a screen that does not.
+            if (!Matches(shortcut, key) || !shortcut.IsAvailable)
             {
                 continue;
             }
@@ -321,9 +405,16 @@ public sealed class TuiShortcuts
         return false;
     }
 
+    /// <summary>The keys that would answer right now, in the order they were added.</summary>
+    public IEnumerable<TuiShortcut> Available => _shortcuts.Where(shortcut => shortcut.IsAvailable);
+
     /// <summary>The footer line these shortcuts describe.</summary>
+    /// <remarks>
+    /// Only the ones that apply. A footer offering a key that would do nothing is the
+    /// drift this table exists to remove, and a condition is the other half of it.
+    /// </remarks>
     public string Describe(string separator = "  ")
-        => string.Join(separator, _shortcuts
+        => string.Join(separator, Available
             .Where(shortcut => shortcut.Description.Length > 0)
             .Select(shortcut => $"{shortcut.Label} {shortcut.Description}"));
 

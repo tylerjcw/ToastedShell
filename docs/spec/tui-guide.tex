@@ -1105,6 +1105,60 @@ focused it opens the search box; with a text field focused it types a slash. Tha
 is the routing working, and it is why a screen key can be a bare letter at all.
 \end{warnbox}
 
+\subsection{\texttt{Help} --- a footer nobody maintains}
+
+A footer used to be a string kept beside the \code{switch} that implemented the
+keys, and it drifted the way that always does: the help browser offered \code{/},
+\code{[} and \code{]} for a while after they had stopped working.
+
+\code{Help} is a projection instead. It shows the keys that would answer
+\emph{right now}:
+
+\begin{lstlisting}
+{| Help = "", Size = "auto" |}
+{| Help = "", Full = &Everything |}
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{\normalfont\sffamily It shows} & \textbf{\normalfont\sffamily Because} \\
+\midrule
+the keys on the focused widget first & that is the one that would answer \\
+then each ancestor's, then the screen's & which is the order a key travels \\
+a chord bound twice, once             & two lines for one key describes nobody's screen \\
+nothing a condition excludes          & a footer must not offer a key that does nothing \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A condition is the other half of a binding. \code{When} on a key says when it
+applies, and a key that does not apply is neither described \emph{nor fired}:
+
+\begin{lstlisting}
+Keys = [
+    {| Key = "e",      Does = "edit", Do = &Edit, When = &NotEditing |},
+    {| Key = "ctrl+s", Does = "save", Do = &Save, When = &Editing    |}
+]
+\end{lstlisting}
+
+\begin{lstlisting}
+$keys.When(func() => not $editing, func() {
+    $keys.On("e", "e", "edit", &Edit) | ignore
+}) | ignore
+\end{lstlisting}
+
+\noindent In code the condition wraps a group rather than being an argument to
+each key, because keys that apply together are written together and repeating the
+predicate six times is how the seventh comes to disagree. Conditions nest: a group
+inside a group applies only where both hold.
+
+\begin{tipbox}
+A condition that throws is taken as "no". A footer is not worth ending a screen
+over, and a binding whose condition cannot be evaluated is one nobody should be
+told about either.
+\end{tipbox}
+
 \subsection{Starting something in the background}
 
 A key's handler runs on the render loop's thread, so it should return promptly. Work
@@ -1256,6 +1310,7 @@ Image   & the path            & Fit, Placeholder, + style \\
 Row     & the children        & Gap \\
 Column  & the children        & Gap \\
 Box     & the children        & Title, + style \\
+Help    & ---                 & Full, Separator, + style \\
 Scroll  & the child           & --- \\
 Menu    & the name            & Items, + style \\
 MenuBar & the menus           & Gap, + style \\
