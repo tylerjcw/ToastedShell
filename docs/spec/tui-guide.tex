@@ -568,6 +568,40 @@ The caption is not focusable and the input is, so the keyboard lands on the inpu
 without anything having to say so. The row answers with what its input holds, so
 an \code{Id} on the field is the id its text is reported under.
 
+\subsection{\texttt{Combo} --- one of a few}
+
+\begin{lstlisting}
+{| Combo = $coolants, Id = "coolant", OnChange = &Picked |}
+{| Combo = &Coolants, Display = "Name", Placeholder = "pick one" |}
+\end{lstlisting}
+
+A list on the page costs a row per option whether or not anyone is choosing. A
+combo box costs one row and opens when it is asked to.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{\normalfont\sffamily Key} & \textbf{\normalfont\sffamily What it does} \\
+\midrule
+Down, Enter, Space, F4 & open the list \\
+Up / Down              & move inside it \\
+Enter                  & choose, and close \\
+Escape                 & close without choosing \\
+Left / Right           & step through without opening it at all \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+It is as wide as its widest option, so a column of them lines up and the field does
+not change width as the choice does.
+
+\begin{aside}[The same drop-down]
+The list is the one a menu bar opens, on the same layer, anchored the same way. That
+is why this widget is short and why it behaves the way the menus do: a drop-down
+anchored to a field and one anchored to a name on a bar are the same drop-down, and
+writing the second one again is what \code{TUI-0023} exists to prevent.
+\end{aside}
+
 \subsection{\texttt{Check}}
 
 \begin{lstlisting}
@@ -1302,6 +1336,7 @@ Table   & the rows            & Columns, Borders, Header, Scrollbar, OnChange, O
 Tree    & the root            & Children, Display, Key, Root, Scrollbar, OnChange, OnSelect \\
 Field   & the caption         & Value, Placeholder, Password, Multiline, OnChange, OnSubmit \\
 Check   & the label           & Value, OnChange, + style \\
+Combo   & the options         & Display, Placeholder, OnChange, + style \\
 Button  & the label           & OnPress, Exit, + style \\
 Gauge   & ---                 & Value, Min, Max, Label, + style \\
 Spark   & the series          & Scale, Capacity, Pad, + style \\

@@ -557,6 +557,20 @@ public sealed class TuiWidgetRegistry
             Style = spec.Style(),
         });
 
+        registry.Register("combo", static (spec, context) =>
+        {
+            var combo = new TuiCombo(spec.PrimaryItems())
+            {
+                DisplayProperty = spec.Text("display"),
+                Placeholder = spec.Text("placeholder") ?? "\u2014",
+                Style = spec.Style(),
+            };
+
+            context.OnHandler(spec, "onchange", handler => combo.Changed = item => handler(item));
+
+            return combo;
+        });
+
         registry.Register("help", static (spec, context) =>
         {
             var help = new TuiHelp

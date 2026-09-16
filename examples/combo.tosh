@@ -1,0 +1,47 @@
+#!/bin/tosh
+## @summary A value chosen from a list that opens out of it.
+## @remarks
+##   A list on the page costs a row per option whether or not anyone is choosing. A combo
+##   box costs one row and opens when it is asked to.
+##
+##     Down / Enter / Space   open the list
+##     Up / Down              move inside it
+##     Enter                  choose
+##     Escape                 close without choosing
+##     Left / Right           step through without opening it at all
+##
+##   The list is the same drop-down a menu bar opens, on the same layer, anchored the same
+##   way — which is why this widget is short. A drop-down anchored to a field and one
+##   anchored to a name on a bar are the same drop-down.
+
+var reactors = ["Pressurised Water", "Boiling Water", "Fast Breeder", "Molten Salt"]
+var coolants = ["Water", "Sodium", "Helium", "FLiBe"]
+
+var reactor = $reactors[0]
+var coolant = $coolants[0]
+
+func Reactors() => $reactors
+func Coolants() => $coolants
+
+func PickReactor(x) { $reactor = $"{$x}" }
+func PickCoolant(x) { $coolant = $"{$x}" }
+
+func Summary() => $"  {$reactor}, cooled with {$coolant}"
+
+tui run --title "reactor" {|
+    Keys = [ {| Key = "q", Label = "q", Does = "quit", Exit = true |} ],
+    Form = [ {|
+        Column = [
+            {| Title = "Design", Size = "*", Box = [ {|
+                Column = [
+                    {| Row = [ {| Text = "Reactor", Size = "12" |},
+                               {| Combo = &Reactors, Id = "reactor", OnChange = &PickReactor |} ], Size = "1" |},
+                    {| Row = [ {| Text = "Coolant", Size = "12" |},
+                               {| Combo = &Coolants, Id = "coolant", OnChange = &PickCoolant |} ], Size = "1" |}
+                ], Padding = 1
+            |} ] |},
+            {| Text = &Summary, Size = "1" |},
+            {| Help = "", Size = "1" |}
+        ]
+    |} ]
+|}

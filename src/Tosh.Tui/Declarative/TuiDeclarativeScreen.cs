@@ -43,10 +43,18 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     private readonly Action? _tick;
     private readonly TuiWake? _wake;
     private readonly List<TuiFeeds> _feeds = [];
-    private readonly TuiMenuBar? _menus;
+    private readonly IReadOnlyList<ITuiPopupHost> _popups;
     private readonly TuiOverlay? _layers;
     private TuiBorder? _frame;
     private TuiWidget? _returnTo;
+
+    /// <summary>Whether the layer is currently showing a popup this screen put there.</summary>
+    /// <remarks>
+    /// Tracked rather than inferred from the anchor's type, so a combo box's list and a
+    /// menu's drop-down are taken down the same way — and so a dialog a handler put up is
+    /// still left alone.
+    /// </remarks>
+    private bool _opened;
 
     public TuiDeclarativeScreen(
         TuiWidget root,
@@ -73,9 +81,9 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // rather than required, because a bar is written where it belongs — one row at the
         // top of a column — and asking an author to also wrap their whole screen in an
         // overlay to make it work would be asking them to say the same thing twice.
-        _menus = FindMenus(root);
+        _popups = [.. Hosts(root)];
 
-        if (_menus is not null)
+        if (_popups.Count > 0)
         {
             _layers = root as TuiOverlay ?? new TuiOverlay(root);
             root = _layers;
@@ -233,20 +241,22 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
             return TuiScreenResult.Continue;
         }
 
-        // A popup is a layer, so the bar is not one of its ancestors and never sees a key
-        // pressed inside it. These three are the ones a reader expects the bar to answer
-        // while it is open, so the screen — which owns the layering — answers them.
-        if (_menus is { Open: not null })
+        // A popup is a layer, so whatever opened it is not one of its ancestors and never
+        // sees a key pressed inside it. Escape closing it is what every reader expects, so
+        // the screen — which owns the layering — answers that.
+        if (_popups.FirstOrDefault(host => host.Popup is not null) is { } open)
         {
-            switch (input.Key.Key)
+            if (input.Key.Key == ConsoleKey.Escape)
             {
-                case ConsoleKey.Escape:
-                    _menus.Close();
-                    return TuiScreenResult.Continue;
+                open.ClosePopup();
+                return TuiScreenResult.Continue;
+            }
 
-                case ConsoleKey.LeftArrow or ConsoleKey.RightArrow:
-                    _menus.OnInput(input);
-                    return TuiScreenResult.Continue;
+            // Walking the bar with a menu down is the bar's own, and only a bar has one.
+            if (open is TuiMenuBar bar && input.Key.Key is ConsoleKey.LeftArrow or ConsoleKey.RightArrow)
+            {
+                bar.OnInput(input);
+                return TuiScreenResult.Continue;
             }
         }
 
@@ -340,25 +350,29 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     /// </remarks>
     private void ShowOpenMenu()
     {
-        if (_layers is null || _menus is null)
+        if (_layers is null || _popups.Count == 0)
         {
             return;
         }
 
-        if (_menus.Open is { } title)
+        var open = _popups.FirstOrDefault(host => host.Popup is not null);
+
+        if (open is { Popup: { } popup })
         {
             // Remembered on the way in, so closing hands the keyboard back to whatever the
             // reader was in rather than to the first field on the screen.
-            if (_layers.Anchor is not TuiMenuTitle)
+            if (!_opened)
             {
                 _returnTo = _focus.Focused;
+                _opened = true;
             }
 
-            _layers.Modal = title.Popup;
-            _layers.Anchor = title;
+            _layers.Modal = popup;
+            _layers.Anchor = open.PopupAnchor;
         }
-        else if (_layers.Anchor is TuiMenuTitle)
+        else if (_opened)
         {
+            _opened = false;
             _layers.Modal = null;
             _layers.Anchor = null;
 
@@ -368,9 +382,22 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         }
     }
 
-    /// <summary>The first menu bar in a tree, if it has one.</summary>
-    private static TuiMenuBar? FindMenus(TuiWidget widget)
-        => widget as TuiMenuBar ?? widget.Children.Select(FindMenus).FirstOrDefault(found => found is not null);
+    /// <summary>Everything in a tree that can put something on the layer.</summary>
+    private static IEnumerable<ITuiPopupHost> Hosts(TuiWidget widget)
+    {
+        if (widget is ITuiPopupHost host)
+        {
+            yield return host;
+        }
+
+        foreach (var child in widget.Children)
+        {
+            foreach (var nested in Hosts(child))
+            {
+                yield return nested;
+            }
+        }
+    }
 
     /// <summary>Stops reading every source, once the loop that was drawing them has gone.</summary>
     public void Dispose()

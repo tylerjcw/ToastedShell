@@ -58,7 +58,7 @@ public sealed class TuiMenuTitle : TuiWidget
 /// used any editor will try.
 /// </para>
 /// </remarks>
-public sealed class TuiMenuBar : TuiWidget
+public sealed class TuiMenuBar : TuiWidget, ITuiPopupHost
 {
     private readonly List<TuiMenuTitle> _titles = [];
     private int _highlighted;
@@ -90,6 +90,16 @@ public sealed class TuiMenuBar : TuiWidget
 
     /// <summary>The menu currently down, or null.</summary>
     public TuiMenuTitle? Open => _titles.FirstOrDefault(title => title.IsOpen);
+
+    /// <inheritdoc />
+    public TuiWidget? Popup => Open?.Popup;
+
+    /// <inheritdoc />
+    /// <remarks>The name it came out of, not the bar: a menu opens under its own title.</remarks>
+    public TuiWidget? PopupAnchor => Open;
+
+    /// <inheritdoc />
+    public bool ClosePopup() => Close();
 
     /// <summary>Which name the keyboard is on.</summary>
     public int Highlighted

@@ -34,7 +34,12 @@ public sealed class TuiHelp : TuiWidget
     public Func<IEnumerable<TuiShortcuts>>? Tables { get; set; }
 
     /// <summary>A table to describe, for a caller that has just the one.</summary>
-    public TuiShortcuts? Keys { get; set; }
+    /// <remarks>
+    /// Not <c>Keys</c>: every widget already has one of those — the keys it <em>answers</em> —
+    /// and a property of the same name meaning the keys it <em>describes</em> is two ideas
+    /// wearing one word.
+    /// </remarks>
+    public TuiShortcuts? Table { get; set; }
 
     /// <summary>Whether to draw the list rather than the line.</summary>
     public bool Full { get; set; }
@@ -90,7 +95,7 @@ public sealed class TuiHelp : TuiWidget
 
     private IEnumerable<TuiShortcuts> Sources()
     {
-        if (Keys is { } only)
+        if (Table is { } only)
         {
             yield return only;
         }

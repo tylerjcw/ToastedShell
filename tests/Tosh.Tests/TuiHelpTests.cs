@@ -33,7 +33,7 @@ public sealed class TuiHelpTests
         keys.When(() => editing, () => keys.On("escape", "Esc", "stop", () => { }));
         keys.When(() => !editing, () => keys.On("e", "e", "edit", () => { }));
 
-        var help = new TuiHelp { Keys = keys };
+        var help = new TuiHelp { Table = keys };
 
         Assert.Equal(["q", "e"], help.Describes().Select(key => key.Label));
 
@@ -104,7 +104,7 @@ public sealed class TuiHelpTests
         keys.On("q", "q", "quit", () => { });
         keys.On("e", "e", "edit", () => { });
 
-        var help = new TuiHelp { Keys = keys, Separator = "  " };
+        var help = new TuiHelp { Table = keys, Separator = "  " };
 
         Assert.Equal(["q quit  e edit"], Render(help, 40, 1));
 
@@ -121,7 +121,7 @@ public sealed class TuiHelpTests
 
         keys.On("q", "q", "quit", () => { });
 
-        var help = new TuiHelp { Keys = keys, FullWhen = () => everything };
+        var help = new TuiHelp { Table = keys, FullWhen = () => everything };
 
         Assert.Equal(1, help.Measure(TuiConstraints.Unbounded).Height);
 
