@@ -65,6 +65,7 @@
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | complete | 8/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOAST-0119`](items/TOAST-0119.md) | P2 | complete | 4/4 | The argument-cost guard measures a body the fast-path flag does not control, so its two budgets are vacuous |
+| [`TUI-0007`](items/TUI-0007.md) | P3 | complete | 6/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0114`](items/TOAST-0114.md) | P3 | complete | 7/7 | A struct is invisible to the editor: no outline entry, no hover, no completion |
 | [`TOAST-0128`](items/TOAST-0128.md) | P2 | complete | 8/8 | The specification's own code listings did not parse, in four places where the parser was narrower than the language it documents |

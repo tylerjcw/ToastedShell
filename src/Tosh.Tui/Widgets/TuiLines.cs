@@ -109,9 +109,7 @@ public sealed class TuiLines : TuiWidget
     /// <inheritdoc />
     public override void Draw(TuiSurface surface)
     {
-        var content = Scrollbar && _lines.Count > surface.Height
-            ? surface.Clip(new TuiRect(0, 0, Math.Max(0, surface.Width - 1), surface.Height))
-            : surface;
+        var content = TuiScrollbar.Fit(surface, Scrollbar, _offset, _lines.Count, ScrollbarStyle);
 
         for (var row = 0; row < content.Height; row += 1)
         {
@@ -125,10 +123,6 @@ public sealed class TuiLines : TuiWidget
             _lines[index].Draw(content, row);
         }
 
-        if (Scrollbar)
-        {
-            TuiScrollbar.DrawVertical(surface, _offset, _lines.Count, ScrollbarStyle, ScrollbarStyle);
-        }
     }
 
     /// <inheritdoc />

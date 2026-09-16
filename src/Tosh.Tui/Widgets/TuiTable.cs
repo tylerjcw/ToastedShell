@@ -262,6 +262,13 @@ public sealed class TuiTable : TuiWidget
     /// <summary>Draws a bar down the right edge saying where in the table you are.</summary>
     public bool Scrollbar { get; set; }
 
+    /// <summary>How the scrollbar is drawn, when there is one.</summary>
+    /// <remarks>
+    /// Named and defaulted like every other scrolling widget's. This one used to inline a
+    /// dim style at the call site, which is the same decision spelled a fourth way.
+    /// </remarks>
+    public TuiStyle ScrollbarStyle { get; set; } = new(Attributes: TuiTextAttributes.Dim);
+
     /// <inheritdoc />
     public override bool IsFocusable { get; } = true;
 
@@ -292,9 +299,16 @@ public sealed class TuiTable : TuiWidget
     /// <inheritdoc />
     public override void Draw(TuiSurface outer)
     {
-        var surface = Scrollbar && _rows.Count > PageSize
-            ? outer.Clip(new TuiRect(0, 0, Math.Max(0, outer.Width - 1), outer.Height))
-            : outer;
+        // The bar runs beside the rows and not beside the header, which is why this one
+        // says where it starts and how many rows are actually on screen.
+        var surface = TuiScrollbar.Fit(
+            outer,
+            Scrollbar,
+            _offset,
+            _rows.Count,
+            ScrollbarStyle,
+            firstRow: ShowHeader ? 1 : 0,
+            visibleRows: PageSize);
 
         var columns = Visible();
         var widths = Distribute(columns, surface.Width);
@@ -349,15 +363,6 @@ public sealed class TuiTable : TuiWidget
                     : column.StyleSelector?.Invoke(column.ValueOf(item)) ?? column.Style);
         }
 
-        if (Scrollbar)
-        {
-            TuiScrollbar.DrawVertical(
-                outer.Clip(new TuiRect(0, top, outer.Width, Math.Max(0, outer.Height - top))),
-                _offset,
-                _rows.Count,
-                new TuiStyle(Attributes: TuiTextAttributes.Dim),
-                new TuiStyle(Attributes: TuiTextAttributes.Dim));
-        }
     }
 
     /// <summary>

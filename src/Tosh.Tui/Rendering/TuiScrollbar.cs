@@ -22,6 +22,59 @@ public static class TuiScrollbar
     private const char Track = '│';
 
     /// <summary>
+    /// Draws the bar if one is wanted and needed, and answers with the room left for the
+    /// content.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reserving the column and drawing the bar are one decision, so they are one call.
+    /// Written out at each widget they were two — <c>Scrollbar &amp;&amp; count &gt;
+    /// height</c> to reserve, and <c>Scrollbar</c> to draw — which agreed only because
+    /// <see cref="DrawVertical"/> draws nothing when everything fits. Two conditions that
+    /// have to agree, four times over, is a bug waiting for someone to change one of them.
+    /// </para>
+    /// <para>
+    /// The bar goes down first because the content never reaches the column it takes, so
+    /// the order costs nothing and the caller is left with one line instead of five.
+    /// </para>
+    /// </remarks>
+    /// <param name="wanted">Whether this widget draws a bar at all.</param>
+    /// <param name="firstRow">
+    /// The first row the bar covers. A table's runs beside its rows and not beside its
+    /// header, which is the one thing about this that differs between widgets.
+    /// </param>
+    /// <param name="visibleRows">
+    /// How many rows of content are on screen, when that is not the surface's height —
+    /// again a table, whose header takes one of them.
+    /// </param>
+    /// <returns>The surface the content should draw into.</returns>
+    public static TuiSurface Fit(
+        TuiSurface surface,
+        bool wanted,
+        int offset,
+        int contentLength,
+        TuiStyle style = default,
+        int firstRow = 0,
+        int? visibleRows = null)
+    {
+        var shows = visibleRows ?? Math.Max(0, surface.Height - firstRow);
+
+        if (!wanted || contentLength <= shows || surface.Width <= 0 || surface.Height <= firstRow)
+        {
+            return surface;
+        }
+
+        DrawVertical(
+            surface.Clip(new TuiRect(0, firstRow, surface.Width, surface.Height - firstRow)),
+            offset,
+            contentLength,
+            style,
+            style);
+
+        return surface.Clip(new TuiRect(0, 0, surface.Width - 1, surface.Height));
+    }
+
+    /// <summary>
     /// Draws a vertical bar down the last column of <paramref name="surface"/>.
     /// </summary>
     /// <remarks>

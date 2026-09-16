@@ -17,7 +17,6 @@
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0092`](items/TOAST-0092.md) | P2 | partial | 9/10 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOAST-0102`](items/TOAST-0102.md) | P2 | partial | 4/5 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
-| [`TUI-0007`](items/TUI-0007.md) | P3 | partial | 4/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TUI-0022`](items/TUI-0022.md) | P3 | partial | 6/7 | A keybinding's help text is written twice, and the two drift |
 | [`TUI-0020`](items/TUI-0020.md) | P3 | partial | 5/7 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |

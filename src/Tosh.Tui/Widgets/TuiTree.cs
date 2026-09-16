@@ -164,6 +164,13 @@ public sealed class TuiTree : TuiWidget
     /// <summary>Draws a bar down the right edge saying where in the tree you are.</summary>
     public bool Scrollbar { get; set; }
 
+    /// <summary>How the scrollbar is drawn, when there is one.</summary>
+    /// <remarks>
+    /// Its own rather than the guide style it borrowed. A tree's guides and its scrollbar
+    /// happen to be dim for the same reason and are not the same decision.
+    /// </remarks>
+    public TuiStyle ScrollbarStyle { get; set; } = new(Attributes: TuiTextAttributes.Dim);
+
     /// <summary>Raised when the selection moves.</summary>
     public Action<object?>? SelectionChanged { get; set; }
 
@@ -292,9 +299,7 @@ public sealed class TuiTree : TuiWidget
     {
         EnsureRows();
 
-        var surface = Scrollbar && _rows.Count > outer.Height
-            ? outer.Clip(new TuiRect(0, 0, Math.Max(0, outer.Width - 1), outer.Height))
-            : outer;
+        var surface = TuiScrollbar.Fit(outer, Scrollbar, _offset, _rows.Count, ScrollbarStyle);
 
         for (var row = 0; row < surface.Height; row += 1)
         {
@@ -306,11 +311,6 @@ public sealed class TuiTree : TuiWidget
             }
 
             Line(_rows[index], index == _selectedIndex).Draw(surface, row);
-        }
-
-        if (Scrollbar)
-        {
-            TuiScrollbar.DrawVertical(outer, _offset, _rows.Count, GuideStyle, GuideStyle);
         }
     }
 

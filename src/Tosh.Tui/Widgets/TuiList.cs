@@ -258,9 +258,7 @@ public sealed class TuiList : TuiWidget
 
     public override void Draw(TuiSurface outer)
     {
-        var surface = Scrollbar && Items.Count > outer.Height
-            ? outer.Clip(new TuiRect(0, 0, Math.Max(0, outer.Width - 1), outer.Height))
-            : outer;
+        var surface = TuiScrollbar.Fit(outer, Scrollbar, _offset, Items.Count, ScrollbarStyle);
 
         for (var row = 0; row < surface.Height; row += 1)
         {
@@ -296,10 +294,6 @@ public sealed class TuiList : TuiWidget
             surface.DrawText(used, row, Format(Items[index]), style);
         }
 
-        if (Scrollbar)
-        {
-            TuiScrollbar.DrawVertical(outer, _offset, Items.Count, ScrollbarStyle, ScrollbarStyle);
-        }
     }
 
     /// <summary>Ticks or unticks the selected item.</summary>
