@@ -704,6 +704,54 @@ turns that into one.
 
 Sixel, for the terminals that speak that and not this, is still \code{TUI-0025}.
 
+\subsection{\texttt{Spinner}}
+
+\begin{lstlisting}
+{| Spinner = "Fetching" |}
+{| Spinner = "Building", Frames = "line", Spinning = &Busy, Idle = "ok" |}
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{\normalfont\sffamily \texttt{Frames}} & \textbf{\normalfont\sffamily What it is} \\
+\midrule
+\code{dots}     & braille dots --- the default, and what most tools use \\
+\code{line}     & a turning line, four frames \\
+\code{arc}      & a turning arc \\
+\code{circle}   & a quartered circle \\
+\code{bounce}   & a dot going round the edge \\
+\code{blocks}   & a block growing and shrinking \\
+\code{ellipsis} & three dots filling up, slow enough to read \\
+\code{ascii}    & the one that works anywhere \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each style carries its own pace, because the two are one choice: braille dots read
+as motion at eighty milliseconds and as a flicker at forty. A name nobody
+recognises spins with dots rather than failing.
+
+The frame is a function of the clock rather than a counter something advances, so
+nothing has to tick it and two spinners on one screen cannot disagree about whose
+turn it is. What a spinner does need is redraws, and it \emph{asks} for them rather
+than starting a thread:
+
+\begin{lstlisting}
+tui run {| Spinner = "Working" |}
+\end{lstlisting}
+
+\noindent That animates. There is no \code{-{}-refresh}: a screen holding a
+spinning spinner reports an interval of its own accord, and stops reporting one the
+moment nothing is turning, so a finished screen goes back to costing nothing.
+
+\begin{tipbox}
+The text sits at the style's width rather than at the current frame's, so it does
+not shuffle left and right as the spinner turns. Several of these characters are
+ambiguous-width and draw as two columns on some terminals, which is exactly the
+case that would.
+\end{tipbox}
+
 \section{Containers}
 
 \subsection{\texttt{Box} --- a titled border}
@@ -1084,6 +1132,12 @@ does not work.
 \code{Oem2} never fires. Register the character the reader actually pressed.
 \end{warnbox}
 
+A chord is written the way a reader would say it: \code{"q"}, \code{"ctrl+s"},
+\code{"shift+tab"}, \code{"f5"}, \code{"/"}. \code{"space"}, \code{"esc"},
+\code{"up"}, \code{"pgdn"} and their like are accepted alongside the enum's own
+names --- and \code{"space"} is the only way to say it, because a chord is trimmed
+before it is read and a literal \code{" "} does not survive that.
+
 \subsection{A key that aims at the screen}
 
 Running a function covers every command that changes state --- save, open, quit,
@@ -1342,6 +1396,7 @@ Gauge   & ---                 & Value, Min, Max, Label, + style \\
 Spark   & the series          & Scale, Capacity, Pad, + style \\
 Bars    & the values          & Scale, Values, + style \\
 Image   & the path            & Fit, Placeholder, + style \\
+Spinner & the text            & Frames, Spinning, Idle, + style \\
 Row     & the children        & Gap \\
 Column  & the children        & Gap \\
 Box     & the children        & Title, + style \\

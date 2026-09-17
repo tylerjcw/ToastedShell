@@ -1,0 +1,38 @@
+#!/bin/tosh
+## @summary Every spinner style, turning at once.
+## @remarks
+##   A spinner's frame is a function of the clock rather than a counter something advances,
+##   so nothing has to tick it and three of them on one screen cannot disagree about whose
+##   turn it is.
+##
+##   What it does need is redraws, and it asks for them rather than starting a thread: a
+##   screen holding a spinning spinner reports a refresh interval of its own accord. There
+##   is no `--refresh` on the `tui run` below, and it animates anyway — and stops costing
+##   anything the moment nothing is turning.
+##
+##   Press space to stop them all, and again to start them.
+
+var busy = true
+
+func Busy() => $busy
+func Toggle() { $busy = not $busy }
+func Status() => $busy ? "  working — space to stop, q to quit" : "  stopped — space to start, q to quit"
+
+tui run --title "spinners" {|
+    Keys = [
+        {| Key = "space", Label = "space", Does = "stop/start", Do = &Toggle |},
+        {| Key = "q", Label = "q",     Does = "quit",       Exit = true  |}
+    ],
+    Column = [
+        {| Spinner = "dots      the default, and what most tools use", Frames = "dots",     Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "line      four frames, nothing above U+007E",    Frames = "line",     Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "arc       a turning arc",                        Frames = "arc",      Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "circle    a quartered circle",                   Frames = "circle",   Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "bounce    a dot going round the edge",           Frames = "bounce",   Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "blocks    the family the gauges use",            Frames = "blocks",   Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "ellipsis  slow enough to read",                  Frames = "ellipsis", Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Spinner = "ascii     the one that works anywhere",          Frames = "ascii",    Spinning = &Busy, Idle = "✓", Size = "1" |},
+        {| Text = &Status, Size = "*" |},
+        {| Help = "", Size = "1" |}
+    ]
+|}

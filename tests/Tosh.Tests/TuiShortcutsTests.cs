@@ -96,4 +96,36 @@ public sealed class TuiShortcutsTests
         // The one with nothing to say stays out of the line rather than appearing blank.
         Assert.Equal("q quit  / search", shortcuts.Describe());
     }
+
+    [Theory]
+    [InlineData("space", ConsoleKey.Spacebar)]
+    [InlineData("esc", ConsoleKey.Escape)]
+    [InlineData("pgdn", ConsoleKey.PageDown)]
+    [InlineData("up", ConsoleKey.UpArrow)]
+    [InlineData("left", ConsoleKey.LeftArrow)]
+    public void A_key_can_be_spelled_the_way_a_reader_would_write_it(string chord, ConsoleKey expected)
+    {
+        // `" "` cannot be spelled at all: a chord is trimmed before it is read, so a
+        // literal space is lost, which left the one key every "pause" binding wants
+        // unregisterable. The enum's own names are not what anybody writes either.
+        var shortcuts = new TuiShortcuts();
+        var fired = 0;
+
+        shortcuts.On(chord, chord, "go", () => fired += 1);
+
+        Assert.True(shortcuts.TryHandle(new ConsoleKeyInfo('\0', expected, false, false, false), out _));
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void The_enum_names_still_work_for_anyone_who_prefers_them()
+    {
+        var shortcuts = new TuiShortcuts();
+
+        shortcuts.On("spacebar", "space", "go", () => { });
+        shortcuts.On("f5", "F5", "refresh", () => { });
+
+        Assert.True(shortcuts.TryHandle(new ConsoleKeyInfo('\0', ConsoleKey.Spacebar, false, false, false), out _));
+        Assert.True(shortcuts.TryHandle(new ConsoleKeyInfo('\0', ConsoleKey.F5, false, false, false), out _));
+    }
 }

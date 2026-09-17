@@ -41,6 +41,8 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     private readonly TuiForm? _form;
     private readonly string? _title;
     private readonly Action? _tick;
+    private readonly TimeSpan? _refresh;
+    private readonly IReadOnlyList<TuiSpinner> _spinners;
     private readonly TuiWake? _wake;
     private readonly List<TuiFeeds> _feeds = [];
     private readonly IReadOnlyList<ITuiPopupHost> _popups;
@@ -75,13 +77,14 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // A form names its own window, so `tui run $form` needs no `--title`. An explicit
         // one still wins: the flag is the more specific statement.
         _title = title ?? _form?.Title;
-        RefreshInterval = refreshInterval;
+        _refresh = refreshInterval;
 
         // A menu is a layer, so a tree with a bar in it needs somewhere to put one. Wrapped
         // rather than required, because a bar is written where it belongs — one row at the
         // top of a column — and asking an author to also wrap their whole screen in an
         // overlay to make it work would be asking them to say the same thing twice.
         _popups = [.. Hosts(root)];
+        _spinners = [.. Find<TuiSpinner>(root)];
 
         if (_popups.Count > 0)
         {
@@ -111,7 +114,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // A footer is a projection of what would answer, so it is told how to ask rather
         // than handed a list: which tables apply depends on where the keyboard is, and
         // that changes when a dialog goes up.
-        foreach (var help in Helps(_root))
+        foreach (var help in Find<TuiHelp>(_root))
         {
             help.Tables = () => _focus.FromFocused()
                 .Select(widget => widget.Keys)
@@ -158,7 +161,26 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     }
 
     /// <inheritdoc />
-    public TimeSpan? RefreshInterval { get; }
+    /// <remarks>
+    /// The screen's own interval, or a spinner's, whichever is sooner. A spinner asks for
+    /// redraws rather than starting a thread, so a screen holding one animates without the
+    /// author knowing that a spinner has a pace — and stops asking the moment it stops
+    /// turning, so a finished screen costs nothing again (<c>TUI-0020</c>).
+    /// </remarks>
+    public TimeSpan? RefreshInterval
+    {
+        get
+        {
+            var spinning = _spinners
+                .Select(spinner => spinner.Pace)
+                .Where(pace => pace is not null)
+                .Select(pace => pace!.Value);
+
+            return _refresh is { } asked
+                ? spinning.Append(asked).Min()
+                : spinning.Cast<TimeSpan?>().Min();
+        }
+    }
 
     /// <summary>What the user left in the screen, once it has closed.</summary>
     public TuiScreenOutcome? Outcome { get; private set; }
@@ -505,17 +527,17 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         }
     }
 
-    /// <summary>Every help widget in a tree.</summary>
-    private static IEnumerable<TuiHelp> Helps(TuiWidget widget)
+    /// <summary>Every widget of one kind in a tree.</summary>
+    private static IEnumerable<T> Find<T>(TuiWidget widget)
     {
-        if (widget is TuiHelp help)
+        if (widget is T found)
         {
-            yield return help;
+            yield return found;
         }
 
         foreach (var child in widget.Children)
         {
-            foreach (var nested in Helps(child))
+            foreach (var nested in Find<T>(child))
             {
                 yield return nested;
             }

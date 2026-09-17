@@ -312,6 +312,30 @@ public sealed class TuiShortcuts
             return (default, final[0], modifiers);
         }
 
+        // A few names that are what a reader would write rather than what the enum calls
+        // them. `" "` cannot be spelled at all — the chord is trimmed before it is read, so
+        // a literal space is lost — which left the one key every "pause" binding wants
+        // unregisterable.
+        var alias = final.ToLowerInvariant() switch
+        {
+            "space" or "spacebar" => ConsoleKey.Spacebar,
+            "esc" => ConsoleKey.Escape,
+            "del" => ConsoleKey.Delete,
+            "ins" => ConsoleKey.Insert,
+            "pgup" => ConsoleKey.PageUp,
+            "pgdn" or "pgdown" => ConsoleKey.PageDown,
+            "up" => ConsoleKey.UpArrow,
+            "down" => ConsoleKey.DownArrow,
+            "left" => ConsoleKey.LeftArrow,
+            "right" => ConsoleKey.RightArrow,
+            _ => ConsoleKey.None,
+        };
+
+        if (alias != ConsoleKey.None)
+        {
+            return (alias, '\0', modifiers);
+        }
+
         return Enum.TryParse<ConsoleKey>(final, ignoreCase: true, out var key)
             ? (key, '\0', modifiers)
             : (ConsoleKey.None, '\0', modifiers);

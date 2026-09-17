@@ -557,6 +557,26 @@ public sealed class TuiWidgetRegistry
             Style = spec.Style(),
         });
 
+        registry.Register("spinner", static (spec, context) =>
+        {
+            var spinner = new TuiSpinner(spec.PrimaryText() ?? string.Empty)
+            {
+                Style = TuiSpinnerStyle.Named(spec.Text("frames")),
+                Idle = spec.Text("idle") ?? " ",
+                IsSpinning = spec.Flag("spinning", true),
+                TextStyle = spec.Style(),
+            };
+
+            // `Spinning = &Busy` rather than a fixed true: whether something is still
+            // happening is exactly the thing that changes while the screen is up.
+            if (spec.Callable("spinning") is { } busy)
+            {
+                spinner.SpinningWhen = () => context.Invoke(busy, null) is not (null or false or 0);
+            }
+
+            return spinner;
+        });
+
         registry.Register("combo", static (spec, context) =>
         {
             var combo = new TuiCombo(spec.PrimaryItems())
