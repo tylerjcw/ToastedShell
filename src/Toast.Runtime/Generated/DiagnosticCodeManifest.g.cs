@@ -4519,7 +4519,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not read directory '{path}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 365),
+            SourceLine: 366),
         ["tosh.tui.filter.no_items"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.filter.no_items",
             Namespace: "tui",
@@ -4527,7 +4527,7 @@ public static class DiagnosticCodeManifest
             Title: "No items provided for 'tui filter'.",
             Help: "Pipe items into 'tui filter' or provide them as arguments.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 390),
+            SourceLine: 391),
         ["tosh.tui.input.multiline_requires_fullscreen"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.input.multiline_requires_fullscreen",
             Namespace: "tui",
@@ -4535,7 +4535,7 @@ public static class DiagnosticCodeManifest
             Title: "'tui input --multiline' cannot be combined with '--cli'.",
             Help: "The inline prompt is a single-row box. Drop --cli for a multiline field, ",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 201),
+            SourceLine: 202),
         ["tosh.tui.invalid_page_size"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.invalid_page_size",
             Namespace: "tui",
@@ -4543,7 +4543,7 @@ public static class DiagnosticCodeManifest
             Title: "'--page-size' needs a positive whole number, not '{text}'.",
             Help: "For example: tui pick $items --page-size 20",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 797),
+            SourceLine: 894),
         ["tosh.tui.missing_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.missing_subcommand",
             Namespace: "tui",
@@ -4551,7 +4551,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'tui' command requires a subcommand.",
             Help: "Available subcommands: pick, confirm, input, file, filter, run, reset",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 49),
+            SourceLine: 50),
         ["tosh.tui.no_inline_provider"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.no_inline_provider",
             Namespace: "tui",
@@ -4559,7 +4559,7 @@ public static class DiagnosticCodeManifest
             Title: "Inline prompts (--cli) are not available in this environment.",
             Help: "The --cli flag requires an interactive terminal. Remove --cli to use fullscreen mode.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 889),
+            SourceLine: 986),
         ["tosh.tui.no_terminal"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.no_terminal",
             Namespace: "tui",
@@ -4567,7 +4567,7 @@ public static class DiagnosticCodeManifest
             Title: "A full-screen TUI needs a terminal.",
             Help: "Output is redirected, so there is nothing to draw on. Run this ",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 675),
+            SourceLine: 772),
         ["tosh.tui.pick.no_items"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.pick.no_items",
             Namespace: "tui",
@@ -4575,7 +4575,7 @@ public static class DiagnosticCodeManifest
             Title: "No items provided for 'tui pick'.",
             Help: "Pipe items into 'tui pick' or provide them as arguments: tui pick item1 item2 item3",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 102),
+            SourceLine: 103),
         ["tosh.tui.run.no_screen"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.run.no_screen",
             Namespace: "tui",
@@ -4583,7 +4583,7 @@ public static class DiagnosticCodeManifest
             Title: "No screen was given to 'tui run'.",
             Help: "Pass a widget tree as an argument or pipe one in: ",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 472),
+            SourceLine: 473),
         ["tosh.tui.unknown_flag"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.unknown_flag",
             Namespace: "tui",
@@ -4591,7 +4591,7 @@ public static class DiagnosticCodeManifest
             Title: "Unknown flag '--{flag}' for 'tui {subcommand}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 775),
+            SourceLine: 872),
         ["tosh.tui.unknown_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.unknown_subcommand",
             Namespace: "tui",
@@ -4599,7 +4599,7 @@ public static class DiagnosticCodeManifest
             Title: "Unknown tui subcommand '{subcommand}'.",
             Help: "Available subcommands: pick, confirm, input, file, filter, run, reset",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 76),
+            SourceLine: 77),
         ["tosh.type.arity"] = new DiagnosticCodeInfo(
             Code: "tosh.type.arity",
             Namespace: "type",

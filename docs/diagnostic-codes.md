@@ -689,17 +689,17 @@ Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 
 | Code | Title | First emit site |
 |---|---|---|
-| `tosh.tui.file.unreadable_directory` | Could not read directory '{path}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:365](src/Tosh.Stdlib/Shell/TuiCommand.cs#L365) |
-| `tosh.tui.filter.no_items` | No items provided for 'tui filter'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:390](src/Tosh.Stdlib/Shell/TuiCommand.cs#L390) |
-| `tosh.tui.input.multiline_requires_fullscreen` | 'tui input --multiline' cannot be combined with '--cli'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:201](src/Tosh.Stdlib/Shell/TuiCommand.cs#L201) |
-| `tosh.tui.invalid_page_size` | '--page-size' needs a positive whole number, not '{text}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:797](src/Tosh.Stdlib/Shell/TuiCommand.cs#L797) |
-| `tosh.tui.missing_subcommand` | The 'tui' command requires a subcommand. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:49](src/Tosh.Stdlib/Shell/TuiCommand.cs#L49) |
-| `tosh.tui.no_inline_provider` | Inline prompts (--cli) are not available in this environment. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:889](src/Tosh.Stdlib/Shell/TuiCommand.cs#L889) |
-| `tosh.tui.no_terminal` | A full-screen TUI needs a terminal. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:675](src/Tosh.Stdlib/Shell/TuiCommand.cs#L675) |
-| `tosh.tui.pick.no_items` | No items provided for 'tui pick'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:102](src/Tosh.Stdlib/Shell/TuiCommand.cs#L102) |
-| `tosh.tui.run.no_screen` | No screen was given to 'tui run'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:472](src/Tosh.Stdlib/Shell/TuiCommand.cs#L472) |
-| `tosh.tui.unknown_flag` | Unknown flag '--{flag}' for 'tui {subcommand}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:775](src/Tosh.Stdlib/Shell/TuiCommand.cs#L775) |
-| `tosh.tui.unknown_subcommand` | Unknown tui subcommand '{subcommand}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:76](src/Tosh.Stdlib/Shell/TuiCommand.cs#L76) |
+| `tosh.tui.file.unreadable_directory` | Could not read directory '{path}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:366](src/Tosh.Stdlib/Shell/TuiCommand.cs#L366) |
+| `tosh.tui.filter.no_items` | No items provided for 'tui filter'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:391](src/Tosh.Stdlib/Shell/TuiCommand.cs#L391) |
+| `tosh.tui.input.multiline_requires_fullscreen` | 'tui input --multiline' cannot be combined with '--cli'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:202](src/Tosh.Stdlib/Shell/TuiCommand.cs#L202) |
+| `tosh.tui.invalid_page_size` | '--page-size' needs a positive whole number, not '{text}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:894](src/Tosh.Stdlib/Shell/TuiCommand.cs#L894) |
+| `tosh.tui.missing_subcommand` | The 'tui' command requires a subcommand. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:50](src/Tosh.Stdlib/Shell/TuiCommand.cs#L50) |
+| `tosh.tui.no_inline_provider` | Inline prompts (--cli) are not available in this environment. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:986](src/Tosh.Stdlib/Shell/TuiCommand.cs#L986) |
+| `tosh.tui.no_terminal` | A full-screen TUI needs a terminal. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:772](src/Tosh.Stdlib/Shell/TuiCommand.cs#L772) |
+| `tosh.tui.pick.no_items` | No items provided for 'tui pick'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:103](src/Tosh.Stdlib/Shell/TuiCommand.cs#L103) |
+| `tosh.tui.run.no_screen` | No screen was given to 'tui run'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:473](src/Tosh.Stdlib/Shell/TuiCommand.cs#L473) |
+| `tosh.tui.unknown_flag` | Unknown flag '--{flag}' for 'tui {subcommand}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:872](src/Tosh.Stdlib/Shell/TuiCommand.cs#L872) |
+| `tosh.tui.unknown_subcommand` | Unknown tui subcommand '{subcommand}'. | [src/Tosh.Stdlib/Shell/TuiCommand.cs:77](src/Tosh.Stdlib/Shell/TuiCommand.cs#L77) |
 
 ## `tosh.type.*`
 
