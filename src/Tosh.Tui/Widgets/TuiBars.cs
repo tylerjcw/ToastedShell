@@ -6,6 +6,16 @@ namespace Tosh.Tui.Widgets;
 /// <summary>One labelled value per row, drawn as a bar.</summary>
 public sealed record TuiBar(string Label, double Amount);
 
+/// <summary>Which way a set of bars runs.</summary>
+public enum TuiBarsOrientation
+{
+    /// <summary>One bar per row, growing rightwards. Room for many, and for long labels.</summary>
+    Horizontal,
+
+    /// <summary>One bar per column, growing upwards. A set small enough to read across.</summary>
+    Vertical,
+}
+
 /// <summary>
 /// A bar per value, so several numbers can be compared at a glance.
 /// </summary>
@@ -33,6 +43,23 @@ public sealed class TuiBars : TuiWidget
             Bars = [.. bars];
         }
     }
+
+    /// <summary>
+    /// The eighths a partial cell is drawn with, so a column ends where the value does.
+    /// </summary>
+    /// <remarks>The sparkline's ramp, for the same reason it has one.</remarks>
+    private static readonly string[] Eighths = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+
+    /// <summary>Which way the bars run.</summary>
+    /// <remarks>
+    /// The same data and the same shared scale, drawn the other way. A row per value reads
+    /// further and takes a long label; a column per value compares a handful at a glance
+    /// and is what a reader expects of a chart.
+    /// </remarks>
+    public TuiBarsOrientation Orientation { get; set; }
+
+    /// <summary>Blank columns between one vertical bar and the next.</summary>
+    public int Gap { get; set; } = 1;
 
     /// <summary>The values, one per row.</summary>
     public IReadOnlyList<TuiBar> Bars
@@ -86,15 +113,34 @@ public sealed class TuiBars : TuiWidget
 
     /// <inheritdoc />
     protected override TuiSize MeasureCore(TuiConstraints constraints)
-        => constraints.Constrain(new TuiSize(
+    {
+        if (Orientation == TuiBarsOrientation.Vertical)
+        {
+            // As wide as the bars need and as tall as it is given: a column chart's height
+            // is the scale, so there is no natural one to ask for.
+            var width = (_bars.Count * ColumnWidth()) + (Gap * Math.Max(0, _bars.Count - 1));
+
+            return constraints.Constrain(new TuiSize(
+                width,
+                constraints.MaxHeight == int.MaxValue ? 8 : constraints.MaxHeight));
+        }
+
+        return constraints.Constrain(new TuiSize(
             constraints.MaxWidth == int.MaxValue ? 40 : constraints.MaxWidth,
             _bars.Count));
+    }
 
     /// <inheritdoc />
     public override void Draw(TuiSurface surface)
     {
         if (_bars.Count == 0 || surface.Width <= 0)
         {
+            return;
+        }
+
+        if (Orientation == TuiBarsOrientation.Vertical)
+        {
+            DrawVertical(surface);
             return;
         }
 
@@ -139,6 +185,80 @@ public sealed class TuiBars : TuiWidget
                     row,
                     text,
                     LabelStyle);
+            }
+        }
+    }
+
+    /// <summary>How wide one vertical bar is: enough for its label, and at least one.</summary>
+    private int ColumnWidth()
+        => Math.Max(1, _bars.Count == 0 ? 1 : _bars.Max(bar => TuiTextMeasure.MeasureWidth(bar.Label)));
+
+    /// <summary>
+    /// A column per value, growing upwards from a row of labels.
+    /// </summary>
+    /// <remarks>
+    /// The top cell is drawn with an eighth block, so a column ends where its value does
+    /// rather than at the nearest whole row — which is the difference between a chart and
+    /// a set of rounded-off stacks.
+    /// </remarks>
+    private void DrawVertical(TuiSurface surface)
+    {
+        var labels = surface.Height > 1 ? 1 : 0;
+        var numbers = ShowValues && surface.Height > 2 ? 1 : 0;
+        var height = surface.Height - labels - numbers;
+
+        if (height <= 0)
+        {
+            return;
+        }
+
+        var width = Math.Max(1, Math.Min(ColumnWidth(), surface.Width));
+        var top = Scale();
+
+        for (var index = 0; index < _bars.Count; index += 1)
+        {
+            var left = index * (width + Gap);
+
+            if (left >= surface.Width)
+            {
+                break;
+            }
+
+            var bar = _bars[index];
+            var ratio = top <= 0 ? 0 : Math.Clamp(bar.Amount / top, 0, 1);
+            var style = StyleSelector?.Invoke(ratio) ?? FilledStyle;
+
+            // In eighths of a cell, so the fraction that does not fill a row still shows.
+            var eighths = (int)Math.Round(ratio * height * Eighths.Length, MidpointRounding.AwayFromZero);
+
+            for (var row = 0; row < height; row += 1)
+            {
+                // Counted from the bottom, because that is where a column grows from.
+                var fromBottom = height - 1 - row;
+                var cell = Math.Clamp(eighths - (fromBottom * Eighths.Length), 0, Eighths.Length);
+
+                var glyph = cell == 0 ? EmptyGlyph : Eighths[cell - 1];
+                var cellStyle = cell == 0 ? EmptyStyle : style;
+
+                for (var column = 0; column < width && left + column < surface.Width; column += 1)
+                {
+                    surface.DrawText(left + column, numbers + row, glyph, cellStyle);
+                }
+            }
+
+            if (numbers > 0)
+            {
+                surface.DrawText(left, 0, TuiTextMeasure.Truncate(Format(bar.Amount), width), LabelStyle, width);
+            }
+
+            if (labels > 0)
+            {
+                surface.DrawText(
+                    left,
+                    surface.Height - 1,
+                    TuiTextMeasure.Truncate(bar.Label, width),
+                    LabelStyle,
+                    width);
             }
         }
     }

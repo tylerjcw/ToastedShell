@@ -19,7 +19,6 @@
 | [`TOAST-0102`](items/TOAST-0102.md) | P2 | partial | 4/5 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TUI-0022`](items/TUI-0022.md) | P3 | partial | 6/7 | A keybinding's help text is written twice, and the two drift |
-| [`TUI-0020`](items/TUI-0020.md) | P3 | partial | 6/7 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TUI-0025`](items/TUI-0025.md) | P3 | partial | 6/8 | A TUI cannot show a picture, so a file browser's preview pane is a hex dump or nothing |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |

@@ -442,6 +442,14 @@ public sealed class TuiWidgetRegistry
                 MinimumScale = spec.Number("scale", 0),
                 ShowValues = spec.Flag("values", true),
                 FilledStyle = spec.Style(),
+                Gap = spec.Number("gap", 1),
+
+                // `Vertical = true` rather than an `Orientation` word, because a row and a
+                // column are what `Row` and `Column` already mean and reusing those here
+                // would read as a container.
+                Orientation = spec.Flag("vertical")
+                    ? TuiBarsOrientation.Vertical
+                    : TuiBarsOrientation.Horizontal,
             };
         });
 

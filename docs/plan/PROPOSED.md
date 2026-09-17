@@ -27,6 +27,7 @@
 | [`TOAST-0123`](items/TOAST-0123.md) | P2 | proposed | 0/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0101`](items/TOAST-0101.md) | P3 | proposed | 0/5 | A pipeline into a user function does not bind to a parameter, and the arity error misdescribes why |
+| [`TUI-0028`](items/TUI-0028.md) | P3 | proposed | 0/7 | A chart with an axis has to be drawn by hand, so nobody draws one |
 | [`TOAST-0103`](items/TOAST-0103.md) | P3 | proposed | 0/5 | unfold cannot terminate: returning null raises instead of ending the sequence |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |

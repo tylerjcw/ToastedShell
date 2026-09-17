@@ -84,6 +84,7 @@
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | complete | 6/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TOAST-0066`](items/TOAST-0066.md) | P2 | complete | 6/6 | A compiled function's null result contributes a pipeline value where the interpreter's contributes none |
+| [`TUI-0020`](items/TUI-0020.md) | P3 | complete | 7/7 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
 | [`TUI-0004`](items/TUI-0004.md) | P2 | complete | 8/8 | Building a screen from a script is seven lines of scaffolding, string ids and `| ignore` |
 | [`TUI-0018`](items/TUI-0018.md) | P2 | complete | 7/7 | Both browsers hand-render a tree, and a script cannot show one at all |
 | [`TOAST-0067`](items/TOAST-0067.md) | P2 | complete | 4/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |

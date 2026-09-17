@@ -1,4 +1,5 @@
 using Tosh.Tui;
+using Tosh.Tui.Declarative;
 using Tosh.Tui.Rendering;
 using Tosh.Tui.Widgets;
 
@@ -185,5 +186,114 @@ public sealed class TuiSparklineTests
         Assert.Equal("··········", Row(new TuiGauge(0) { Label = string.Empty }, 10));
         Assert.Equal("██████████", Row(new TuiGauge(100) { Label = string.Empty }, 10));
         Assert.Equal("██████████", Row(new TuiGauge(9999) { Label = string.Empty }, 10));
+    }
+
+    private static string[] Draw(TuiWidget widget, int width, int height)
+    {
+        var buffer = new TuiBuffer(new TuiSize(width, height));
+        var bounds = new TuiRect(0, 0, width, height);
+
+        widget.Measure(TuiConstraints.From(new TuiSize(width, height)));
+        widget.Arrange(bounds);
+        widget.Paint(new TuiSurface(buffer, bounds));
+
+        return [.. Enumerable.Range(0, height).Select(row => buffer.RowText(row).TrimEnd())];
+    }
+
+    private static TuiBars Week() => new(
+        [new TuiBar("Mon", 100), new TuiBar("Tue", 50), new TuiBar("Wed", 0)])
+    {
+        Orientation = TuiBarsOrientation.Vertical,
+        Maximum = 100,
+        ShowValues = false,
+    };
+
+    [Fact]
+    public void A_vertical_bar_grows_upwards_from_its_label()
+    {
+        var rows = Draw(Week(), 11, 5);
+
+        // Four rows of chart and one of labels, so a full bar fills all four.
+        Assert.Equal("Mon Tue Wed", rows[^1]);
+        Assert.StartsWith("███", rows[0]);
+        Assert.Equal('·', rows[0][4]);
+    }
+
+    [Fact]
+    public void Half_the_scale_fills_half_the_height()
+    {
+        var rows = Draw(Week(), 11, 5);
+        var filled = Enumerable.Range(0, 4).Count(row => rows[row].Length > 4 && rows[row][4] == '█');
+
+        Assert.Equal(2, filled);
+    }
+
+    [Fact]
+    public void A_column_ends_where_its_value_does_rather_than_at_the_nearest_row()
+    {
+        // The difference between a chart and a set of rounded-off stacks: the top cell is
+        // an eighth block, so the fraction that does not fill a row still shows.
+        var bars = new TuiBars([new TuiBar("a", 55)])
+        {
+            Orientation = TuiBarsOrientation.Vertical,
+            Maximum = 100,
+            ShowValues = false,
+        };
+
+        var rows = Draw(bars, 3, 5);
+
+        Assert.Contains(rows[1][0], "▁▂▃▄▅▆▇");
+    }
+
+    [Fact]
+    public void Nothing_at_all_is_drawn_as_the_empty_glyph()
+    {
+        var rows = Draw(Week(), 11, 5);
+
+        Assert.All(Enumerable.Range(0, 4), row => Assert.Equal('·', rows[row][8]));
+    }
+
+    [Fact]
+    public void Both_orientations_share_one_scale()
+    {
+        // Comparing bars drawn to different scales says nothing, which is why the maximum
+        // is the widget's rather than each bar's — whichever way it runs.
+        var vertical = Week();
+        var horizontal = new TuiBars(vertical.Bars) { Maximum = 100, ShowValues = false };
+
+        var tall = Draw(vertical, 11, 5);
+        var wide = Draw(horizontal, 20, 3);
+
+        Assert.Equal(2, Enumerable.Range(0, 4).Count(row => tall[row].Length > 4 && tall[row][4] == '█'));
+        Assert.Equal(8, wide[1].Count(glyph => glyph == '█'));
+    }
+
+    [Fact]
+    public void A_bar_is_as_wide_as_its_label_so_the_label_fits_under_it()
+    {
+        var bars = new TuiBars([new TuiBar("Monday", 10), new TuiBar("Tue", 10)])
+        {
+            Orientation = TuiBarsOrientation.Vertical,
+            ShowValues = false,
+        };
+
+        Assert.Equal("Monday Tue", Draw(bars, 20, 3)[^1]);
+    }
+
+    [Fact]
+    public void Written_in_markup_the_same_values_run_either_way()
+    {
+        var items = new object?[]
+        {
+            new Dictionary<string, object?> { ["Label"] = "a", ["Value"] = 1 },
+        };
+
+        var flat = Assert.IsType<TuiBars>(TuiTreeBuilder.Build(
+            new Dictionary<string, object?> { ["Bars"] = items }));
+        var upright = Assert.IsType<TuiBars>(TuiTreeBuilder.Build(
+            new Dictionary<string, object?> { ["Bars"] = items, ["Vertical"] = true }));
+
+        Assert.Equal(TuiBarsOrientation.Horizontal, flat.Orientation);
+        Assert.Equal(TuiBarsOrientation.Vertical, upright.Orientation);
     }
 }
