@@ -23,6 +23,9 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
     private readonly DisplayEngine? _display;
     private readonly TuiInputReader _inputReader = new();
 
+    /// <summary>Where this prompt's keys come from, so a test can decide them.</summary>
+    internal TuiInputReader InputReader => _inputReader;
+
     [GeneratedRegex(@"\x1b\[[0-9;]*[a-zA-Z]")]
     private static partial Regex AnsiEscapePattern();
 
@@ -250,18 +253,38 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
 
         var v = borderStyle.Apply(box.Vertical.ToString()).ToAnsi();
 
-        // Top border with "Confirm" title
         var titleText = " Confirm ";
         var topTrailing = Math.Max(0, contentWidth - 1 - titleText.Length);
-        Console.Write(
-            borderStyle.Apply($"{box.TopLeft}{box.Horizontal}").ToAnsi()
+
+        var top = borderStyle.Apply($"{box.TopLeft}{box.Horizontal}").ToAnsi()
             + titleStyle.Apply(titleText).ToAnsi()
-            + borderStyle.Apply($"{new string(box.Horizontal, topTrailing)}{box.TopRight}").ToAnsi());
+            + borderStyle.Apply($"{new string(box.Horizontal, topTrailing)}{box.TopRight}").ToAnsi();
+
+        var bottom = borderStyle.Apply(
+            $"{box.BottomLeft}{new string(box.Horizontal, contentWidth)}{box.BottomRight}").ToAnsi();
+
+        // The whole box, up front, the way `Input` draws its own. Drawing the bottom only
+        // once an answer arrived left an unclosed box on screen for as long as the prompt
+        // waited — which is most of the time a prompt exists, and looked like a bug because
+        // every other inline prompt closes itself.
+        ReserveLines(3);
+        MoveUp(3);
+
+        Console.Write(ClearLine);
+        Console.Write(top);
         Console.WriteLine();
 
-        // Content row (partial — waiting for input)
-        var paddedContent = InlineTablePlan.PadRight(contentText, contentWidth);
-        Console.Write($"{v}{paddedContent}{v} ");
+        Console.Write(ClearLine);
+        Console.Write($"{v}{InlineTablePlan.PadRight(contentText, contentWidth)}{v}");
+        Console.WriteLine();
+
+        Console.Write(ClearLine);
+        Console.Write(bottom);
+
+        // Back onto the content row, just past the question, so the caret waits where the
+        // answer will appear rather than below a finished-looking box.
+        Console.Write("\x1b[1A");
+        Console.Write($"\x1b[{contentText.Length + 2}G");
         Console.Out.Flush();
 
         while (true)
@@ -299,18 +322,17 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                     continue;
             }
 
-            // Rewrite content row with answer
-            Console.Write("\r");
-            var fullContent = $"{contentText}{answer}";
-            var fullPlain = contentText.Length + answerLen;
-            var remaining = Math.Max(0, contentWidth - fullPlain);
+            // The content row again, with the answer in it, and the bottom border after —
+            // both redrawn rather than appended, because the box is already on screen.
+            var remaining = Math.Max(0, contentWidth - contentText.Length - answerLen);
+
+            Console.Write(ClearLine);
             Console.Write($"{v}{contentText}{answer}{new string(' ', remaining)}{v}");
             Console.WriteLine();
 
-            // Bottom border
-            var bottomLine = borderStyle.Apply(
-                $"{box.BottomLeft}{new string(box.Horizontal, contentWidth)}{box.BottomRight}").ToAnsi();
-            Console.WriteLine(bottomLine);
+            Console.Write(ClearLine);
+            Console.Write(bottom);
+            Console.WriteLine();
 
             return result;
         }

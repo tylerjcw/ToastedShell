@@ -19,6 +19,13 @@ public sealed class TuiInputReader
     /// extra events (e.g. an escape sequence that was not a mouse event), those
     /// are returned first before reading new input from the console.
     /// </summary>
+    /// <summary>Puts an event at the back of the queue, to be read before the console is.</summary>
+    /// <remarks>
+    /// The seam a test drives a prompt through. The queue is already how a half-read escape
+    /// sequence is handed back, so this adds a door rather than a mechanism.
+    /// </remarks>
+    internal void Enqueue(TuiInputEvent input) => _pendingEvents.Enqueue(input);
+
     public TuiInputEvent Read()
     {
         if (_pendingEvents.TryDequeue(out var buffered))

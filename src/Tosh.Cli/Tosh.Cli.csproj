@@ -34,4 +34,12 @@
           WorkingDirectory="$(MSBuildProjectDirectory)/../.." />
   </Target>
 
+  <ItemGroup>
+    <!-- The inline prompts draw straight to the console, so what they draw can only be
+         tested by driving one and reading what came out. The inline confirm left an
+         unclosed box on screen for as long as it waited, and every test used a fake
+         provider, so nothing that existed could have noticed. -->
+    <InternalsVisibleTo Include="Tosh.Tests" />
+  </ItemGroup>
+
 </Project>
