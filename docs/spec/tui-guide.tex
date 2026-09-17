@@ -815,6 +815,44 @@ case that would.
 A window onto a child taller than the space available. A list, a table, a tree and
 a document all scroll themselves; this is for everything else.
 
+\subsection{\texttt{Tabs} --- several views in one rectangle}
+
+\begin{lstlisting}
+{| Tabs = [
+       {| Label = "Summary", Lines = &Summary |},
+       {| Label = "Log",     Lines = &Log     |},
+       {| Label = "Errors",  Text  = "none"   |}
+   ] |}
+\end{lstlisting}
+
+Each item is an ordinary node with a \code{Label} beside whatever names the widget
+--- there is no separate \code{Content} key, because the nesting the language
+already has is the node itself.
+
+Left and right move between tabs, and the row is a ring: past the last one is the
+first. \code{Home} and \code{End} go to the ends. Not \code{Tab} --- that moves the
+keyboard between panes, and a reader who has learned what it means should not find
+it meaning two things on one screen.
+
+Only the tab showing is measured, arranged and drawn, so a pane that is expensive to
+draw costs nothing while it is behind another. The content is held rather than
+rebuilt, so switching back is free and whatever state the child had is still there.
+
+\begin{notebox}[A frame says which tab is showing]
+A \code{Box} around tabs, or the screen's own frame, is titled with the tab
+showing unless it was told otherwise:
+
+\begin{verbatim}
++ Errors ---------------------+      # follows the selection
+|Summary  Log  Errors         |
+\end{verbatim}
+
+\noindent \code{-{}-title} wins where it is given, and \code{Title} on the tabs
+themselves overrides the label without needing a box. A screen whose root is a set of
+tabs gets a frame even with no \code{-{}-title}, because a row of labels with nothing
+naming the pane beneath them reads as two unrelated things.
+\end{notebox}
+
 \subsection{\texttt{Menu} and \texttt{MenuBar}}
 
 A screen can offer a command two ways without a menu. It can register a key, which

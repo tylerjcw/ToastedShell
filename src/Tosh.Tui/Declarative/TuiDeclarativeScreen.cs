@@ -103,7 +103,13 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
             root = _layers;
         }
 
-        _root = _title is null ? root : _frame = new TuiBorder(root, _title)
+        // Framed when there is a title, and also when the root can say what it is showing
+        // — tabs do. Without this a screen of tabs is a row of labels with nothing naming
+        // the pane under them, and `--title` would have to be repeated in every script
+        // that uses one.
+        _root = _title is null && root is not ITuiCaption { Caption: not null }
+            ? root
+            : _frame = new TuiBorder(root, _title)
         {
             TitleStyle = new TuiStyle(Attributes: TuiTextAttributes.Bold),
         };

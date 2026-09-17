@@ -388,6 +388,45 @@ public sealed class TuiWidgetRegistry
             return lines;
         });
 
+        registry.Register("tabs", static (spec, context) =>
+        {
+            // `{| Tabs = [ {| Label = "Log", Log = [...] |}, ... ] |}` — each item is a
+            // node like any other, with `Label` beside whatever names the widget. Writing
+            // the content under a `Content` key as well would mean two spellings for the
+            // same nesting, and the one already in the language is the node itself.
+            var tabs = new List<TuiTab>();
+
+            foreach (var item in spec.PrimaryItems())
+            {
+                var built = context.BuildChildren([item]);
+
+                if (built.Count == 0)
+                {
+                    continue;
+                }
+
+                var label = ShellRecordUtilities.TryGetValue(item, "Label", out var written)
+                    ? written?.ToString()
+                    : null;
+
+                tabs.Add(new TuiTab(label ?? $"{tabs.Count + 1}", built[0]));
+            }
+
+            var widget = new TuiTabs(tabs)
+            {
+                Gap = spec.Number("gap", 2),
+                Underline = spec.Flag("underline", true),
+                Title = spec.Text("title"),
+                Style = spec.Style(),
+            };
+
+            widget.Selected = spec.Number("selected", 0);
+
+            context.OnHandler(spec, "onchange", handler => widget.Changed = index => handler(index));
+
+            return widget;
+        });
+
         registry.Register("scroll", static (spec, context) =>
         {
             // For a child that draws itself at full height and has no scrolling of its own.

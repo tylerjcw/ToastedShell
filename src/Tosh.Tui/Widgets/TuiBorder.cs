@@ -45,7 +45,7 @@ public sealed class TuiBorder : TuiWidget
     protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var inner = Child?.Measure(constraints.Shrink(2, 2)) ?? new TuiSize(0, 0);
-        var titleWidth = Title is null ? 0 : TuiTextMeasure.MeasureWidth(Title) + 4;
+        var titleWidth = EffectiveTitle is not { } heading ? 0 : TuiTextMeasure.MeasureWidth(heading) + 4;
 
         return constraints.Constrain(new TuiSize(
             Math.Max(inner.Width, titleWidth) + 2,
@@ -103,9 +103,20 @@ public sealed class TuiBorder : TuiWidget
     /// Writes the title into the top edge, padded so the box reads as a label rather
     /// than as text jammed against a line.
     /// </summary>
+    /// <summary>
+    /// What this border says: what it was told, or what its child offers.
+    /// </summary>
+    /// <remarks>
+    /// Told wins. A frame given a title is saying something the author chose, and a child
+    /// that also has an opinion does not get to overrule it — but a frame given nothing can
+    /// say what is inside it rather than nothing at all.
+    /// </remarks>
+    private string? EffectiveTitle
+        => Title ?? (Child as ITuiCaption)?.Caption;
+
     private void DrawTitle(TuiSurface surface, int right)
     {
-        if (string.IsNullOrEmpty(Title))
+        if (string.IsNullOrEmpty(EffectiveTitle))
         {
             return;
         }
@@ -118,7 +129,7 @@ public sealed class TuiBorder : TuiWidget
             return;
         }
 
-        var text = TuiTextMeasure.Truncate(Title, available);
+        var text = TuiTextMeasure.Truncate(EffectiveTitle, available);
 
         if (text.Length == 0)
         {
