@@ -38,7 +38,7 @@
 │  • Time Format                      │ │                                                                              │
 │  • Time Color                       │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after e, opening the editor → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -243,4 +243,4 @@ focus:editor  dirty:0  editing text  Enter stage  Esc cancel
 │  • Time Format                      │ │                                                                              │
 │  • Time Color                       │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a appl…

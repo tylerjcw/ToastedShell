@@ -545,6 +545,98 @@ public sealed class TuiBrowserGoldenTests : IDisposable
         Assert.Equal(TuiScreenResult.Exit, screen.HandleInput(Type('q')));
     }
 
+    /// <summary>
+    /// The footer offers no letter while the search box has the keyboard (<c>TUI-0022</c>).
+    /// </summary>
+    /// <remarks>
+    /// Every one of them types itself there — which the test above pins for <c>q</c> — so a
+    /// footer listing `e edit` and `s save` beside a box the reader is typing into described
+    /// a screen that does not exist. The two keys that do leave the box are the two offered.
+    /// </remarks>
+    [Fact]
+    public void The_config_browsers_footer_offers_only_the_keys_that_leave_its_search_box()
+    {
+        var screen = new ConfigBrowserScreen(SandboxedRuntime(), new ConfigBrowseRequest(null, null));
+
+        screen.HandleInput(Type('/'));
+
+        var footer = FooterOf(screen);
+
+        Assert.Contains("Enter leave search", footer, StringComparison.Ordinal);
+        Assert.Contains("Esc cancel search", footer, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("e edit", footer, StringComparison.Ordinal);
+        Assert.DoesNotContain("s save", footer, StringComparison.Ordinal);
+        Assert.DoesNotContain("q quit", footer, StringComparison.Ordinal);
+        Assert.DoesNotContain("/ search", footer, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>Space toggle</c> is offered on a boolean and nowhere else (<c>TUI-0022</c>).
+    /// </summary>
+    /// <remarks>
+    /// The condition and the key are one fact now. Before, the footer said <c>Space
+    /// toggle</c> on every node in the tree and the key did nothing on all but the booleans.
+    /// </remarks>
+    [Fact]
+    public void The_config_browsers_footer_offers_Space_only_where_Space_would_do_something()
+    {
+        var screen = new ConfigBrowserScreen(SandboxedRuntime(), new ConfigBrowseRequest(null, null));
+
+        // A group is selected when the browser opens, and a group has nothing to toggle.
+        Assert.DoesNotContain("Space toggle", FooterOf(screen), StringComparison.Ordinal);
+
+        Assert.True(
+            SelectBoolean(screen),
+            "Nothing matching SyntaxHighlightingEnabled could be selected, so this test "
+            + "cannot say anything about the condition it is here to check.");
+
+        Assert.Contains("Space toggle", FooterOf(screen), StringComparison.Ordinal);
+    }
+
+    /// <summary>Searches for a known boolean setting and selects it.</summary>
+    /// <remarks>
+    /// Through the search box rather than by reaching into the screen, so the node that
+    /// ends up selected is one a reader could have selected. Arrowing down the tree does
+    /// not work for this: Right expands a group, and once there is nothing left to expand
+    /// it moves the keyboard to the detail pane, where Down scrolls text instead.
+    /// </remarks>
+    private static bool SelectBoolean(ConfigBrowserScreen screen)
+    {
+        screen.HandleInput(Type('/'));
+
+        foreach (var character in "SyntaxHighlightingEnabled")
+        {
+            screen.HandleInput(Type(character));
+        }
+
+        screen.HandleInput(Key(ConsoleKey.Enter));
+
+        for (var step = 0; step < 40; step += 1)
+        {
+            if (FooterOf(screen).Contains("Space toggle", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            screen.HandleInput(Key(ConsoleKey.DownArrow));
+        }
+
+        return false;
+    }
+
+    /// <summary>The footer row, which is the last line the screen draws.</summary>
+    /// <remarks>
+    /// Drawn wider than the golden masters are. The footer is trimmed to the terminal, and
+    /// at the snapshots' 120 columns the keys at the end of it fall off the edge — which is
+    /// a truncation these tests would otherwise read as an absence.
+    /// </remarks>
+    private static string FooterOf(ITuiScreen screen)
+        => Normalize(screen.Render(new TuiSize(240, 40)).ToPlainText())
+            .Split('\n')
+            .Last(line => line.Trim().Length > 0)
+            .Trim();
+
     /// <summary>The whole frame as plain text, for asserting that a query reached the box.</summary>
     private static string Frame(ITuiScreen screen) => Normalize(PlainOf(screen));
 }

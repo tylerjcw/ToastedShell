@@ -1172,10 +1172,48 @@ does not work.
 \end{warnbox}
 
 A chord is written the way a reader would say it: \code{"q"}, \code{"ctrl+s"},
-\code{"shift+tab"}, \code{"f5"}, \code{"/"}. \code{"space"}, \code{"esc"},
-\code{"up"}, \code{"pgdn"} and their like are accepted alongside the enum's own
-names --- and \code{"space"} is the only way to say it, because a chord is trimmed
-before it is read and a literal \code{" "} does not survive that.
+\code{"f5"}, \code{"/"}. \code{"space"}, \code{"esc"}, \code{"up"}, \code{"pgdn"}
+and their like are accepted alongside the enum's own names --- and \code{"space"} is
+the only way to say it, because a chord is trimmed before it is read and a literal
+\code{" "} does not survive that.
+
+\begin{warnbox}[Shift is not a chord]
+Shift is how a capital arrives, so a table that treated it as a modifier could not
+register \code{r} and \code{R} as two different bindings. Matching ignores it, which
+means \code{"shift+tab"} also fires on a plain \code{Tab}. When the press decides
+what the key does, take it as an argument:
+
+\begin{lstlisting}
+$keys.On(ConsoleKey.Tab, "Tab", "switch panes", func(key) {
+    Cycle(reverse: $key.Modifiers.HasFlag(ConsoleModifiers.Shift))
+    return TuiScreenResult.Continue
+})
+\end{lstlisting}
+
+\noindent One entry, one line in the footer, and both directions work.
+\end{warnbox}
+
+\subsection{A key somebody else answers}
+
+Not every key on a screen is the screen's. A text editor answers its own
+\code{Enter}, and that is right --- the widget that owns the state owns the key.
+But the footer still has to say so, and a screen that re-registered the editor's keys
+in its own table to be able to describe them would have two dispatchers for one key,
+which is worse than the footer it was trying to fix.
+
+\code{Note} describes without dispatching:
+
+\begin{lstlisting}
+$keys.When(func() { return $editing }, func() {
+    $keys.Note("Enter", "stage")
+    $keys.Note("Esc", "cancel")
+})
+\end{lstlisting}
+
+\noindent A note never fires. What it buys is that the condition under which the key
+is \emph{described} is the same expression the dispatcher switches on, so the two
+cannot disagree about when --- which is the drift a second hand-written string
+eventually produces.
 
 \subsection{A key that aims at the screen}
 

@@ -128,4 +128,79 @@ public sealed class TuiShortcutsTests
         Assert.True(shortcuts.TryHandle(new ConsoleKeyInfo('\0', ConsoleKey.Spacebar, false, false, false), out _));
         Assert.True(shortcuts.TryHandle(new ConsoleKeyInfo('\0', ConsoleKey.F5, false, false, false), out _));
     }
+
+    /// <summary>
+    /// A binding can read the press, for the one thing a chord cannot say (<c>TUI-0022</c>).
+    /// </summary>
+    /// <remarks>
+    /// Shift is ignored when matching, on purpose: it is how a capital arrives, so a table
+    /// that treated it as a modifier could not register <c>r</c> and <c>R</c> as two
+    /// bindings. The cost is that <c>Tab</c> and <c>Shift+Tab</c> are one binding, and one
+    /// line in the footer — so the action is what has to tell them apart.
+    /// </remarks>
+    [Fact]
+    public void A_binding_can_be_told_how_it_was_pressed()
+    {
+        var shortcuts = new TuiShortcuts();
+        var reversed = new List<bool>();
+
+        shortcuts.On(ConsoleKey.Tab, "Tab", "switch panes", key =>
+        {
+            reversed.Add(key.Modifiers.HasFlag(ConsoleModifiers.Shift));
+            return TuiScreenResult.Continue;
+        });
+
+        Assert.True(shortcuts.TryHandle(Tab(shift: false), out _));
+        Assert.True(shortcuts.TryHandle(Tab(shift: true), out _));
+
+        Assert.Equal([false, true], reversed);
+
+        // And it is one line in the footer, not two.
+        Assert.Equal("Tab switch panes", shortcuts.Describe());
+    }
+
+    /// <summary>
+    /// A note describes a key without answering it (<c>TUI-0022</c>).
+    /// </summary>
+    /// <remarks>
+    /// For a key a widget owns. The screen has to be able to describe an editor's
+    /// <c>Enter</c> without registering a second dispatcher for it.
+    /// </remarks>
+    [Fact]
+    public void A_note_is_described_but_never_fires()
+    {
+        var shortcuts = new TuiShortcuts();
+
+        shortcuts.Note("Enter", "stage");
+
+        Assert.Equal("Enter stage", shortcuts.Describe());
+
+        // Nothing answers it — including the key it happens to be labelled with.
+        Assert.False(shortcuts.TryHandle(
+            new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false), out _));
+    }
+
+    /// <summary>A note is conditional the same way a binding is.</summary>
+    /// <remarks>
+    /// This is the whole point of it: the condition under which a key is described is the
+    /// same expression the widget's dispatcher switches on, so the footer cannot go on
+    /// offering a key after the thing that answered it has closed.
+    /// </remarks>
+    [Fact]
+    public void A_note_appears_only_while_its_condition_holds()
+    {
+        var shortcuts = new TuiShortcuts();
+        var editing = false;
+
+        shortcuts.When(() => editing, () => shortcuts.Note("Esc", "cancel"));
+
+        Assert.Equal(string.Empty, shortcuts.Describe());
+
+        editing = true;
+
+        Assert.Equal("Esc cancel", shortcuts.Describe());
+    }
+
+    private static ConsoleKeyInfo Tab(bool shift)
+        => new('\t', ConsoleKey.Tab, shift, false, false);
 }

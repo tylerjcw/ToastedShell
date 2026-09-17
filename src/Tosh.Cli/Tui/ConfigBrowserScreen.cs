@@ -56,9 +56,68 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
         // `/` is matched on the character: .NET reports `ConsoleKey.Divide` for it on a
         // real terminal, so the case written against `Oem2` was a dead key and the search
         // box could not be opened at all.
-        _shortcuts = new TuiShortcuts()
-            .On(ConsoleKey.Q, "q", "quit", Quit)
-            .On('/', "/", "search", () => _focus = ConfigBrowserFocus.Search);
+        //
+        // Registered in the order the footer should read them, because the footer is
+        // generated from this table rather than written out again beside it (`TUI-0022`).
+        _shortcuts = new TuiShortcuts();
+
+        // The search box takes every printable key, so none of the browser's letters are
+        // offered while it has the keyboard — `e` there is the letter e. Only the two keys
+        // that leave it are.
+        _shortcuts.When(
+            () => IsBrowsing && _focus == ConfigBrowserFocus.Search,
+            () => _shortcuts
+                .On(ConsoleKey.Enter, "Enter", "leave search", HandleEnterKey)
+                .On(ConsoleKey.Escape, "Esc", "cancel search", () => _focus = ConfigBrowserFocus.Tree));
+
+        _shortcuts.When(
+            () => IsBrowsingKeys,
+            () => _shortcuts
+                .On('/', "/", "search", () => _focus = ConfigBrowserFocus.Search)
+                .On(ConsoleKey.Enter, "Enter", "expand/open", HandleEnterKey)
+                .On(ConsoleKey.Tab, "Tab", "switch panes", key =>
+                {
+                    CycleFocus(reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                    return TuiScreenResult.Continue;
+                }));
+
+        // Everything below needs something selected to act on. The old footer offered all
+        // of it unconditionally, including `Space toggle` on nodes that are not booleans.
+        _shortcuts.When(
+            () => IsBrowsingKeys && GetSelectedNode() is not null,
+            () => _shortcuts
+                .On('e', "e", "edit", () => BeginEditSelectedNode())
+                .On('t', "t", "raw-edit", () => BeginRawEditSelectedNode()));
+
+        _shortcuts.When(
+            () => IsBrowsingKeys && CanToggleSelectedBoolean,
+            () => _shortcuts.On(ConsoleKey.Spacebar, "Space", "toggle", () => TryToggleSelectedBoolean()));
+
+        _shortcuts.When(
+            () => IsBrowsingKeys,
+            () => _shortcuts
+                .On('a', "a", "apply", () => ApplyStagedChanges())
+                .On('s', "s", "save", () => SaveConfiguration()));
+
+        _shortcuts.When(
+            () => IsBrowsingKeys && GetSelectedNode() is not null,
+            () => _shortcuts
+                .On('r', "r", "revert", () => RevertSelectedNode())
+                .On('R', "R", "reset", () => ResetSelectedNodeToDefaults()));
+
+        // Matched on the character rather than the key, because `r` and `R` are two
+        // bindings and Shift is how the capital arrives.
+        _shortcuts.When(
+            () => IsBrowsingKeys && CanUseStartupActions,
+            () => _shortcuts
+                .On('l', "l", "reload", () => TryReloadStartupAction())
+                .On('i', "i", "init", () => TryInitializeStartupAction()));
+
+        _shortcuts.When(
+            () => IsBrowsingKeys,
+            () => _shortcuts.On(ConsoleKey.Q, "q", "quit", Quit));
+
+        RegisterEditorKeys();
 
         foreach (var child in _schema.Root.Children)
         {
@@ -189,36 +248,8 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             return shortcut;
         }
 
-        if (_focus != ConfigBrowserFocus.Search && !key.Modifiers.HasFlag(ConsoleModifiers.Control) && !key.Modifiers.HasFlag(ConsoleModifiers.Alt))
-        {
-            switch (key.Key)
-            {
-                case ConsoleKey.Spacebar when TryToggleSelectedBoolean():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.E when BeginEditSelectedNode():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.T when BeginRawEditSelectedNode():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.S when SaveConfiguration():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.A when !key.Modifiers.HasFlag(ConsoleModifiers.Shift) && ApplyStagedChanges():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.R when key.Modifiers.HasFlag(ConsoleModifiers.Shift) && ResetSelectedNodeToDefaults():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.R when !key.Modifiers.HasFlag(ConsoleModifiers.Shift) && RevertSelectedNode():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.L when TryReloadStartupAction():
-                    return TuiScreenResult.Continue;
-                case ConsoleKey.I when TryInitializeStartupAction():
-                    return TuiScreenResult.Continue;
-            }
-        }
-
         switch (key.Key)
         {
-            case ConsoleKey.Tab:
-                CycleFocus(reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
-                return TuiScreenResult.Continue;
             case ConsoleKey.LeftArrow:
                 if (_focus == ConfigBrowserFocus.Tree && CollapseSelectedGroup())
                 {
@@ -240,8 +271,6 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
 
                 _focus = ConfigBrowserFocus.Detail;
                 return TuiScreenResult.Continue;
-            case ConsoleKey.Enter:
-                return HandleEnterKey();
         }
 
         return _focus switch
@@ -336,10 +365,9 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
     {
         switch (key.Key)
         {
-            case ConsoleKey.Escape:
-                _focus = ConfigBrowserFocus.Tree;
-                return true;
-
+            // Escape is not here: it leaves the box rather than editing what is in it, so
+            // it is a binding in the table where the footer can find it. Control keys fall
+            // through below, which is how it gets there.
             case ConsoleKey.Backspace:
                 if (_query.Length > 0)
                 {
@@ -963,36 +991,165 @@ internal sealed partial class ConfigBrowserScreen : ITuiScreen
             };
     }
 
+    /// <summary>Nothing is being edited and no dialog is up.</summary>
+    private bool IsBrowsing
+        => _editMode == ConfigBrowserEditMode.None && !_confirmDialog.IsOpen;
+
+    /// <summary>
+    /// The browser's own letters answer: browsing, and the search box does not have the
+    /// keyboard.
+    /// </summary>
+    /// <remarks>
+    /// The second half is why <c>q</c> types a q in the search box rather than quitting
+    /// (<c>TOSH-0011</c>). It was a property of where the check sat in the handler; it is a
+    /// condition on the bindings now, so the footer stops offering nine letters that all
+    /// type themselves.
+    /// </remarks>
+    private bool IsBrowsingKeys
+        => IsBrowsing && _focus != ConfigBrowserFocus.Search;
+
+    /// <summary>Whether <c>Space</c> would toggle the selected node.</summary>
+    /// <remarks>
+    /// The old footer offered <c>Space toggle</c> on every node, which is the same untruth
+    /// the help browser told with <c>1-9 related</c>: the key did nothing on a node that is
+    /// not an editable boolean, and the footer said it would.
+    /// </remarks>
+    private bool CanToggleSelectedBoolean
+        => GetSelectedNode() is
+        {
+            Kind: ConfigBrowserNodeKind.Value,
+            EditorKind: ConfigBrowserEditorKind.Boolean,
+            IsEditable: true,
+        };
+
+    /// <summary>Whether the selected node is one with startup actions on it.</summary>
+    private bool CanUseStartupActions
+        => GetSelectedNode() is { } node && ShouldShowStartupActions(node);
+
+    /// <summary>Browsing, and this is the editor that is open.</summary>
+    private bool Editing(ConfigBrowserEditMode mode)
+        => !_confirmDialog.IsOpen && _editMode == mode;
+
+    /// <summary>
+    /// What the editors and the dialog answer, recorded so the footer can say so.
+    /// </summary>
+    /// <remarks>
+    /// Notes rather than bindings: a <c>TuiTextInput</c> answers its own <c>Enter</c>, and
+    /// a screen that re-registered it here to be able to describe it would have two
+    /// dispatchers for one key. What the table buys is that the condition under which a key
+    /// is described is the same expression <c>HandleEditorKey</c> switches on, so the
+    /// footer cannot claim <c>b browse</c> while the path editor is already browsing —
+    /// which is what a second hand-written string eventually does.
+    /// </remarks>
+    private void RegisterEditorKeys()
+    {
+        _shortcuts.When(
+            () => _confirmDialog.IsOpen,
+            () => _shortcuts
+                .Note("Left/Right", "choose")
+                .Note("Enter", "confirm")
+                .Note("Esc", "cancel"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Text),
+            () => _shortcuts
+                .Note("editing", "text")
+                .Note("Enter", "stage")
+                .Note("Esc", "cancel"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Path) && _pathEditor.IsBrowsing,
+            () => _shortcuts
+                .Note("browsing", "paths")
+                .Note("Enter", "open/select")
+                .Note("Space", "pick")
+                .Note("Left", "parent")
+                .Note("Esc", "close"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Path) && !_pathEditor.IsBrowsing,
+            () => _shortcuts
+                .Note("editing", "path")
+                .Note("b", "browse")
+                .Note("Enter", "stage")
+                .Note("Esc", "cancel"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Enum),
+            () => _shortcuts
+                .Note("editing", "enum")
+                .Note("Up/Down", "pick")
+                .Note("Enter", "stage")
+                .Note("Esc", "cancel"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Color),
+            () => _shortcuts
+                .Note("editing", "color")
+                .Note("Up/Down", "pick")
+                .Note("Enter", "stage")
+                .Note("Esc", "cancel"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Collection) &&
+                  _collectionEditor.InputMode == TuiCollectionEditorInputMode.None,
+            () => _shortcuts
+                .Note("editing", "collection")
+                .Note("Enter", "edit")
+                .Note("n", "add")
+                .Note("Del", "remove")
+                .Note("a", "apply")
+                .Note("s", "save")
+                .Note("Esc", "close"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Collection) &&
+                  _collectionEditor.InputMode != TuiCollectionEditorInputMode.None,
+            () => _shortcuts
+                .Note("editing", "collection item")
+                .Note("Enter", "stage")
+                .Note("Esc", "cancel"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.PromptLayout),
+            () => _shortcuts
+                .Note("editing", "prompt layout")
+                .Note("Space", "toggle")
+                .Note("Shift+Up/Down", "reorder")
+                .Note("Enter", "keep")
+                .Note("Esc", "restore"));
+
+        _shortcuts.When(
+            () => Editing(ConfigBrowserEditMode.Group),
+            () => _shortcuts
+                .Note("editing", "group")
+                .Note("Up/Down", "select")
+                .Note("Enter", "edit")
+                .Note("Space", "toggle")
+                .Note("Esc", "close"));
+    }
+
+    /// <summary>The footer, which is a projection of the key table rather than a string.</summary>
+    /// <remarks>
+    /// <c>focus:</c> and <c>dirty:</c> are state rather than keys, so they are still written
+    /// here. Everything after them is whatever would answer a key right now (`TUI-0022`).
+    /// </remarks>
     private string FooterText()
     {
-        var focus = _focus.ToString().ToLowerInvariant();
-        var dirtyCount = _stagedValues.Count;
-        var selectedNode = GetSelectedNode();
-        var validationSummary = TuiValidationFormatter.BuildSummary(
-            selectedNode is not null
-                ? GetValidationMessages(selectedNode).ToArray()
-                : Array.Empty<TuiValidationMessage>());
-        var startupHint = selectedNode is not null && ShouldShowStartupActions(selectedNode)
-            ? "  l reload  i init"
-            : string.Empty;
-        var text = _confirmDialog.IsOpen
-            ? $"focus:{focus}  dirty:{dirtyCount}  Left/Right choose  Enter confirm  Esc cancel"
-            : _editMode switch
-            {
-                ConfigBrowserEditMode.Text => $"focus:{focus}  dirty:{dirtyCount}  editing text  Enter stage  Esc cancel",
-                ConfigBrowserEditMode.Path when _pathEditor.IsBrowsing => $"focus:{focus}  dirty:{dirtyCount}  browsing paths  Enter open/select  Space pick  Left parent  Esc close",
-                ConfigBrowserEditMode.Path => $"focus:{focus}  dirty:{dirtyCount}  editing path  b browse  Enter stage  Esc cancel",
-                ConfigBrowserEditMode.Enum => $"focus:{focus}  dirty:{dirtyCount}  editing enum  Up/Down pick  Enter stage  Esc cancel",
-                ConfigBrowserEditMode.Color => $"focus:{focus}  dirty:{dirtyCount}  editing color  Up/Down pick  Enter stage  Esc cancel",
-                ConfigBrowserEditMode.Collection => _collectionEditor.InputMode == TuiCollectionEditorInputMode.None
-                    ? $"focus:{focus}  dirty:{dirtyCount}  editing collection  Enter edit  n add  Del remove  a apply  s save  Esc close"
-                    : $"focus:{focus}  dirty:{dirtyCount}  editing collection item  Enter stage  Esc cancel",
-                ConfigBrowserEditMode.PromptLayout => $"focus:{focus}  dirty:{dirtyCount}  editing prompt layout  Space toggle  Shift+Up/Down reorder  Enter keep  Esc restore",
-                ConfigBrowserEditMode.Group => $"focus:{focus}  dirty:{dirtyCount}  editing group  Up/Down select  Enter edit  Space toggle  Esc close",
-                _ => $"focus:{focus}  dirty:{dirtyCount}  {validationSummary}  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space toggle  a apply  s save  r revert  R reset{startupHint}  q quit"
-            };
+        var selectedNode = IsBrowsing ? GetSelectedNode() : null;
 
-        return text;
+        var validation = selectedNode is not null
+            ? TuiValidationFormatter.BuildSummary(GetValidationMessages(selectedNode).ToArray())
+            : string.Empty;
+
+        return string.Join("  ", new[]
+            {
+                $"focus:{_focus.ToString().ToLowerInvariant()}",
+                $"dirty:{_stagedValues.Count}",
+                validation,
+                _shortcuts.Describe(),
+            }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private string BuildManagedConfigBlockText()

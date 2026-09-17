@@ -42,6 +42,12 @@ public interface ITuiAim
 /// binding is: <c>i insert</c> applies outside the search box and nowhere else, and
 /// <c>1</c>-<c>9</c> apply only when the current topic has related topics (<c>TUI-0022</c>).
 /// </param>
+/// <param name="Pressed">
+/// Run in place of <paramref name="Action"/> when the key press itself decides what the
+/// binding does. Shift is the reason this exists: it is how a capital arrives, so it
+/// cannot distinguish one chord from another, which leaves <c>Shift+Tab</c> and
+/// <c>Tab</c> as one binding that has to read the press to know which way to go.
+/// </param>
 public sealed record TuiShortcut(
     ConsoleKey Key,
     char Character,
@@ -49,8 +55,30 @@ public sealed record TuiShortcut(
     string Label,
     string Description,
     Func<TuiScreenResult> Action,
-    Func<bool>? Applies = null)
+    Func<bool>? Applies = null,
+    Func<ConsoleKeyInfo, TuiScreenResult>? Pressed = null)
 {
+    /// <summary>Runs this binding for the key that matched it.</summary>
+    internal TuiScreenResult Invoke(ConsoleKeyInfo key)
+        => Pressed is { } pressed ? pressed(key) : Action();
+
+    /// <summary>
+    /// Whether this entry only describes a key, leaving something else to answer it.
+    /// </summary>
+    /// <remarks>
+    /// For a key owned by a widget rather than by the screen — an editor's <c>Enter</c>,
+    /// a dialog's arrows. The widget answering its own keys is the right design, and a
+    /// screen that re-implemented them in its table to be able to describe them would have
+    /// two dispatchers for one key, which is worse than the footer it was trying to fix.
+    /// <para>
+    /// A note never fires. What it buys is that the condition under which the key is
+    /// described is the same expression the dispatcher switches on, so the two cannot
+    /// disagree about <em>when</em> — which is the drift that made a footer offer
+    /// <c>Esc cancel</c> on a screen with nothing to cancel.
+    /// </para>
+    /// </remarks>
+    public bool IsNote { get; init; }
+
     /// <summary>Whether this key would answer if it were pressed now.</summary>
     /// <remarks>
     /// A predicate that throws is treated as "no". A footer is not worth ending a screen
@@ -121,6 +149,59 @@ public sealed class TuiShortcuts
     /// <summary>Registers a key.</summary>
     public TuiShortcuts On(ConsoleKey key, string label, string description, Func<TuiScreenResult> action)
         => Add(key, '\0', ConsoleModifiers.None, label, description, action);
+
+    /// <summary>Registers a key whose action depends on how it was pressed.</summary>
+    /// <remarks>
+    /// For the one case the chord cannot express. <c>Matches</c> ignores Shift on purpose —
+    /// it is how a capital arrives, so a table that treated it as a modifier could not
+    /// register <c>r</c> and <c>R</c> as different things — and the cost is that
+    /// <c>Shift+Tab</c> is the same binding as <c>Tab</c>. One entry, one description in
+    /// the footer, and the action reads the press to know which way to cycle.
+    /// </remarks>
+    public TuiShortcuts On(
+        ConsoleKey key,
+        string label,
+        string description,
+        Func<ConsoleKeyInfo, TuiScreenResult> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        _shortcuts.Add(new TuiShortcut(
+            key,
+            '\0',
+            ConsoleModifiers.None,
+            label,
+            description,
+            static () => TuiScreenResult.Continue,
+            _applies,
+            action));
+
+        return this;
+    }
+
+    /// <summary>
+    /// Records a key that something else answers, so the footer can describe it.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="TuiShortcut.IsNote"/>. Written under the same <see cref="When"/>
+    /// condition the dispatcher uses, so the description appears exactly when the key works.
+    /// </remarks>
+    public TuiShortcuts Note(string label, string description)
+    {
+        _shortcuts.Add(new TuiShortcut(
+            default,
+            '\0',
+            ConsoleModifiers.None,
+            label,
+            description,
+            static () => TuiScreenResult.Continue,
+            _applies)
+        {
+            IsNote = true,
+        });
+
+        return this;
+    }
 
     /// <summary>Registers a key that does something and leaves the screen up.</summary>
     public TuiShortcuts On(ConsoleKey key, string label, string description, Action action)
@@ -416,12 +497,12 @@ public sealed class TuiShortcuts
             // The condition is checked as well as the chord, so a key that does not apply
             // does not fire. Describing it and then answering it anyway would be a footer
             // that tells the truth about a screen that does not.
-            if (!Matches(shortcut, key) || !shortcut.IsAvailable)
+            if (shortcut.IsNote || !Matches(shortcut, key) || !shortcut.IsAvailable)
             {
                 continue;
             }
 
-            result = shortcut.Action();
+            result = shortcut.Invoke(key);
             return true;
         }
 

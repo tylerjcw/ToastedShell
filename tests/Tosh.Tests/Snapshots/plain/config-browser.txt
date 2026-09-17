@@ -38,7 +38,7 @@
 │  • Time Format                      │ │                                                                              │
 │  • Time Color                       │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after down → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -79,7 +79,7 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  • Time Format                      │ │  Indicator [Group] (ToshTextStyleConfig)                                     │
 │  • Time Color                       │ │                                                                              │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after down → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -120,7 +120,7 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  • Time Format                      │ │  Valid Command [Group] (ToshTextStyleConfig)                                 │
 │  • Time Color                       │ │  Invalid Command [Group] (ToshTextStyleConfig)                               │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after enter, expanding the group → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -161,7 +161,7 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  ▸ Date Time                        │ │  Valid Command [Group] (ToshTextStyleConfig)                                 │
 │  ▸ Date Time Offset                 │ │  Invalid Command [Group] (ToshTextStyleConfig)                               │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after down → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -202,7 +202,7 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  ▸ Date Time                        │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Date Time Offset                 │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after right into the detail pane → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -243,7 +243,7 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
 ─── after tab → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -284,7 +284,7 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a appl…
 ─── after end → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -325,7 +325,7 @@ focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab s
 │  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a appl…
 ─── after home → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -366,7 +366,7 @@ focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab s
 │  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a appl…
 ─── after page down → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -407,7 +407,7 @@ focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab s
 │  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space …
+focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a appl…
 ─── after left → Continue ───
 ╭ Config Browser ──────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │Search:                                                                                                               │
@@ -448,4 +448,4 @@ focus:detail  dirty:0  No validation issues.  / search  Enter expand/open  Tab s
 │  ▸ Completion                       │ │  Bold [Boolean] (Boolean)                                                    │
 │  ▸ Diagnostics                      │ │  Italic [Boolean] (Boolean)                                                  │
 ╰─────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────────────────────────╯
-focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space to…
+focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  a apply …
