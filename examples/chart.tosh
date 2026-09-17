@@ -1,0 +1,42 @@
+#!/bin/tosh
+## @summary A series drawn against a scale you can read.
+## @remarks
+##   There are four chart widgets and they answer different questions. `Spark` is a shape in
+##   one row, `Bars` compares a handful of labelled values, `Gauge` is one proportion — and
+##   `Chart` is the one with an axis, for when the reader needs the numbers rather than just
+##   the shape.
+##
+##   The same series is drawn three ways here. `blocks` is the default and reads as an area
+##   chart; `braille` packs eight points into every cell and draws a line rather than a
+##   staircase; `ascii` needs nothing above U+007E and is what to reach for when the terminal
+##   is known to be poor.
+##
+##   Try it without a terminal too — `tui run --plain` renders one frame as text, which is
+##   how a chart ends up in a build log:
+##
+##       tosh examples/chart.tosh --plain
+
+## Seconds per build, oldest first. A real series: mostly quick, with one bad afternoon.
+var builds = [
+    12.4, 18.1,  9.7, 31.2, 22.8, 15.3, 28.9, 11.1,
+    19.4, 24.0,  8.2, 16.7, 41.6, 38.2, 44.1, 12.9,
+    10.3, 14.8, 17.2,  9.1, 13.6, 21.7, 11.8, 15.9
+]
+
+func Builds() => $builds
+
+tui run --title "build times" {|
+    Keys = [ {| Key = "q", Label = "q", Does = "quit", Exit = true |} ],
+    Column = [
+        {| Text = "  blocks — the default, an area against the scale", Size = "1" |},
+        {| Chart = &Builds, Scale = 50, Size = "*" |},
+
+        {| Text = "  braille — eight points per cell, so a line rather than a staircase", Size = "1" |},
+        {| Chart = &Builds, Marks = "braille", Scale = 50, Size = "*" |},
+
+        {| Text = "  ascii — nothing above U+007E", Size = "1" |},
+        {| Chart = &Builds, Marks = "ascii", Scale = 50, Size = "*" |},
+
+        {| Help = "", Size = "1" |}
+    ]
+|}

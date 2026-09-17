@@ -28,8 +28,6 @@ namespace Tosh.Tui.Widgets;
 /// </remarks>
 public sealed class TuiSparkline : TuiWidget
 {
-    /// <summary>Eighths of a block, from nearly nothing to full height.</summary>
-    private static readonly string[] Blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
     private readonly List<double> _values = [];
 
@@ -148,14 +146,14 @@ public sealed class TuiSparkline : TuiWidget
             // The empty part of a chart still reads as a chart: a dim floor, not a gap.
             for (var blank = 0; blank < column; blank += 1)
             {
-                surface.DrawText(blank, 0, Blocks[0], new TuiStyle(Attributes: TuiTextAttributes.Dim));
+                surface.DrawText(blank, 0, TuiBlocks.Eighths[0], new TuiStyle(Attributes: TuiTextAttributes.Dim));
             }
         }
 
         foreach (var value in visible)
         {
             var ratio = top <= Minimum ? 0 : Math.Clamp((value - Minimum) / (top - Minimum), 0, 1);
-            var block = Blocks[(int)(ratio * (Blocks.Length - 1))];
+            var block = TuiBlocks.Eighths[(int)(ratio * (TuiBlocks.Eighths.Length - 1))];
 
             surface.DrawText(column, 0, block, StyleSelector?.Invoke(value, ratio) ?? Style);
             column += 1;

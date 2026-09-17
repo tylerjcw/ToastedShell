@@ -86,12 +86,19 @@ public sealed class TuiWidgetSpec
     /// taken; a value that does not becomes zero rather than ending the screen, because a
     /// gap in a series is a gap and not a failure.
     /// </remarks>
+    /// <summary>The primary value as a list of numbers.</summary>
+    /// <remarks>
+    /// Through <see cref="PrimaryItems"/>, which matches the non-generic
+    /// <see cref="System.Collections.IEnumerable"/>. Matching <c>IEnumerable&lt;object?&gt;</c>
+    /// instead looks equivalent and is not: the runtime's own list does not implement the
+    /// generic interface at that element type, so <c>{| Spark = [1, 2, 3] |}</c> matched
+    /// nothing and drew an empty chart. It went unnoticed because every example binds a
+    /// function rather than writing the numbers out.
+    /// </remarks>
     public IReadOnlyList<double> Numbers()
-        => Primary is IEnumerable<object?> items
-            ? [.. items.Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
-                ? (double)number!
-                : 0d)]
-            : [];
+        => [.. PrimaryItems().Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
+            ? (double)number!
+            : 0d)];
 
     public int Number(string key, int fallback)
     {
@@ -108,6 +115,27 @@ public sealed class TuiWidgetSpec
             string text when int.TryParse(text, out var parsed) => parsed,
             _ => fallback,
         };
+    }
+
+    /// <summary>
+    /// Reads a key as a number that may have a fractional part.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="int"/> overload above truncates, which is right for a capacity or a
+    /// page size and wrong for a scale: a latency chart topping out at <c>1.5</c> was being
+    /// told its maximum was <c>1</c>. Picked by the type of the fallback, so <c>0</c> reads
+    /// a count and <c>0d</c> reads a measurement.
+    /// </remarks>
+    public double Number(string key, double fallback)
+    {
+        if (!TryGet(key, out var value) || value is null)
+        {
+            return fallback;
+        }
+
+        return TypeConversion.TryConvert(value, typeof(double), out var number)
+            ? (double)number!
+            : fallback;
     }
 
     /// <summary>Reads a key as a flag, accepting the words a script might use.</summary>

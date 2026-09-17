@@ -935,6 +935,45 @@ percentage. Without it, a quiet series of 1--2--1--2 scales to its own maximum a
 draws as a mountain range, which is precisely the reading a monitor must not give.
 \end{notebox}
 
+\subsection{\texttt{Chart} --- a series against a scale you can read}
+
+\begin{lstlisting}
+{| Chart = $samples, Scale = 100, Marks = "braille" |}
+\end{lstlisting}
+
+The other three have no axis on purpose. This one does, and the axis is the reason to
+reach for it: without numbers a chart is a decoration. Ticks are chosen to be numbers
+somebody would have written --- 0, 25, 50, 75, 100 rather than 0, 33.3, 66.6 --- and
+the labels take their precision from the step, so the column lines up.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\code{Marks} & Draws & Reach for it when \\
+\midrule
+\code{blocks} & An area, eighths of a cell & Always, unless you need better \\
+\code{braille} & A line, eight points per cell & The shape between samples matters \\
+\code{ascii} & One \code{\#} per point & The terminal is known to be poor \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent \code{Stretch} is on by default and spreads the whole series across the
+plot: eight build times in a forty-column pane are five columns each. Turn it off for
+a live meter and the plot becomes a window onto the newest samples, one per column,
+the way \code{Spark} works. Where there are more samples than columns, each column
+takes the \emph{largest} value in its bucket --- a mean is defensible and wrong here,
+because a chart that averages away the spike hides the incident the reader opened it
+to find.
+
+\begin{notebox}[Which of the four?]
+\code{Gauge} is one proportion, now. \code{Bars} compares a handful of labelled
+values. \code{Spark} is a shape in one row, for a corner of a status line.
+\code{Chart} is the one that takes a pane and answers ``how much, exactly''.
+\end{notebox}
+
+\noindent \code{examples/chart.tosh} draws one series all three ways.
+
 % =============================================================================
 \chapter{Values and Bindings}
 % =============================================================================

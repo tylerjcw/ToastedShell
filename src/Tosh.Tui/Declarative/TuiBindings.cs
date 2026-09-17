@@ -29,6 +29,7 @@ public static class TuiBindings
             case TuiBorder border: border.TitleSource = source; return;
             case TuiList list: list.ItemsSource = source; return;
             case TuiSparkline spark: spark.ValuesSource = source; return;
+            case TuiChart chart: chart.ValuesSource = source; return;
             case TuiGauge gauge: gauge.AmountSource = source; return;
             case TuiBars bars: bars.BarsSource = source; return;
             case TuiTable table: table.RowsSource = source; return;
@@ -170,6 +171,13 @@ public static class TuiBindings
 
             case TuiSparkline { ValuesSource: { } source } spark:
                 spark.Values = [.. AsItems(invoke(source, values))
+                    .Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
+                        ? (double)number!
+                        : 0d)];
+                return false;
+
+            case TuiChart { ValuesSource: { } source } chart:
+                chart.Values = [.. AsItems(invoke(source, values))
                     .Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
                         ? (double)number!
                         : 0d)];

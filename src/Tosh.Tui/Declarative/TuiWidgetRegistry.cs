@@ -401,9 +401,27 @@ public sealed class TuiWidgetRegistry
         registry.Register("spark", static (spec, _) => new TuiSparkline(spec.Numbers())
         {
             Style = spec.Style(),
-            MinimumScale = spec.Number("scale", 0),
+            MinimumScale = spec.Number("scale", 0d),
             Capacity = spec.Number("capacity", 0),
             PadLeft = spec.Flag("pad", true),
+        });
+
+        registry.Register("chart", static (spec, _) => new TuiChart(spec.Numbers())
+        {
+            Style = spec.Style(),
+            MinimumScale = spec.Number("scale", 0d),
+            Capacity = spec.Number("capacity", 0),
+            Minimum = spec.Has("min") ? spec.Number("min", 0d) : null,
+            Maximum = spec.Has("max") ? spec.Number("max", 0d) : null,
+            Stretch = spec.Flag("stretch", true),
+            ShowAxis = spec.Flag("axis", true),
+            ShowHorizontalAxis = spec.Flag("xaxis", true),
+            Marks = spec.Text("marks")?.ToLowerInvariant() switch
+            {
+                "braille" or "line" or "dots" => TuiChartMarks.Braille,
+                "ascii" => TuiChartMarks.Ascii,
+                _ => TuiChartMarks.Blocks,
+            },
         });
 
         registry.Register("bars", static (spec, _) =>

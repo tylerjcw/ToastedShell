@@ -48,7 +48,6 @@ public sealed class TuiBars : TuiWidget
     /// The eighths a partial cell is drawn with, so a column ends where the value does.
     /// </summary>
     /// <remarks>The sparkline's ramp, for the same reason it has one.</remarks>
-    private static readonly string[] Eighths = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
     /// <summary>Which way the bars run.</summary>
     /// <remarks>
@@ -229,15 +228,15 @@ public sealed class TuiBars : TuiWidget
             var style = StyleSelector?.Invoke(ratio) ?? FilledStyle;
 
             // In eighths of a cell, so the fraction that does not fill a row still shows.
-            var eighths = (int)Math.Round(ratio * height * Eighths.Length, MidpointRounding.AwayFromZero);
+            var eighths = (int)Math.Round(ratio * height * TuiBlocks.Eighths.Length, MidpointRounding.AwayFromZero);
 
             for (var row = 0; row < height; row += 1)
             {
                 // Counted from the bottom, because that is where a column grows from.
                 var fromBottom = height - 1 - row;
-                var cell = Math.Clamp(eighths - (fromBottom * Eighths.Length), 0, Eighths.Length);
+                var cell = Math.Clamp(eighths - (fromBottom * TuiBlocks.Eighths.Length), 0, TuiBlocks.Eighths.Length);
 
-                var glyph = cell == 0 ? EmptyGlyph : Eighths[cell - 1];
+                var glyph = cell == 0 ? EmptyGlyph : TuiBlocks.Eighths[cell - 1];
                 var cellStyle = cell == 0 ? EmptyStyle : style;
 
                 for (var column = 0; column < width && left + column < surface.Width; column += 1)
