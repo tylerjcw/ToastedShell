@@ -409,7 +409,23 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     // cache written by an earlier build still carries the runtime's internals under their
     // simple names — so without the bump the fix would do nothing on any machine that had run
     // tosh before, which is every machine that matters.
-    private const string PlatformCacheVersion = "3";
+    //
+    // `TOAST-0134` bumped it to 4. Every file written before the fingerprint accounted for
+    // the application's own assemblies may be indexing source that no longer exists, and a
+    // miss in one is answered as fact. They are unreadable now rather than merely wrong.
+    private const string PlatformCacheVersion = "4";
+
+    /// <summary>
+    /// How many cache files to keep. Each is roughly 800 KB.
+    /// </summary>
+    /// <remarks>
+    /// The fingerprint varies with the trusted-platform paths, so every build directory,
+    /// every test that runs from a temporary directory and every publish mints a pair — and
+    /// nothing ever removed one. The directory this was found in held **7,478 files and
+    /// 2.9 GB** (<c>TOAST-0134</c>). Stamping the application's assemblies adds one pair per
+    /// rebuild on top of that, which makes a bound necessary rather than tidy.
+    /// </remarks>
+    private const int PlatformCacheFilesKept = 12;
 
     internal sealed class PlatformTypeCacheFile(byte[] body, string[] assemblies)
     {
@@ -529,15 +545,102 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     }
 
     /// <summary>Identifies the exact set of assemblies an index would be built from.</summary>
+    /// <remarks>
+    /// <para>
+    /// The trusted-platform list is a list of <em>paths</em>, and rebuilding a project does
+    /// not change one of them. Keyed on that alone, a rebuilt binary read an index built
+    /// from the source as it was whenever the file was first written — and because a miss in
+    /// the cache is answered authoritatively, every public type added since simply did not
+    /// exist. It cost seventeen days of `new Tui.TuiGauge()` failing for no visible reason
+    /// (<c>TOAST-0134</c>).
+    /// </para>
+    /// <para>
+    /// So the application's own assemblies are stamped by what they contain rather than by
+    /// where they are. A rebuild changes the stamp, the stamp changes the fingerprint, and
+    /// the next process builds a fresh index instead of trusting a stale one.
+    /// </para>
+    /// </remarks>
     private static string PlatformSetFingerprint()
     {
         var material =
             PlatformCacheVersion + "\n" +
             System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription + "\n" +
-            (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? string.Empty);
+            (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? string.Empty) + "\n" +
+            ApplicationStamp(
+                (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? string.Empty)
+                    .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                AppContext.BaseDirectory,
+                StatFile);
 
         var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material));
         return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
+    }
+
+    /// <summary>Size and write time, or null for a file that cannot be read.</summary>
+    private static (long Length, long Ticks)? StatFile(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+
+            return info.Exists ? (info.Length, info.LastWriteTimeUtc.Ticks) : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What the application's own assemblies contain, as a string that changes when they do.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the assemblies beside the executable are stamped. The framework's never change
+    /// under a running installation, and there are two hundred of them — stamping those
+    /// would pay two hundred file reads at every start-up to learn nothing.
+    /// </para>
+    /// <para>
+    /// Sorted, because the trusted-platform list's order is not something to depend on: a
+    /// fingerprint that varies with it would mint a new cache file for no reason, and the
+    /// directory has no shortage of those already.
+    /// </para>
+    /// <para>
+    /// A published single-file binary has no such paths to stamp, which is correct rather
+    /// than a gap: its assemblies cannot change without the file changing.
+    /// </para>
+    /// </remarks>
+    internal static string ApplicationStamp(
+        IEnumerable<string> trustedPlatformPaths,
+        string? baseDirectory,
+        Func<string, (long Length, long Ticks)?> stat)
+    {
+        ArgumentNullException.ThrowIfNull(trustedPlatformPaths);
+        ArgumentNullException.ThrowIfNull(stat);
+
+        if (string.IsNullOrEmpty(baseDirectory))
+        {
+            return string.Empty;
+        }
+
+        var stamps = new List<string>();
+
+        foreach (var path in trustedPlatformPaths)
+        {
+            if (!path.StartsWith(baseDirectory, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (stat(path) is { } entry)
+            {
+                stamps.Add($"{Path.GetFileName(path)}\t{entry.Length}\t{entry.Ticks}");
+            }
+        }
+
+        stamps.Sort(StringComparer.Ordinal);
+
+        return string.Join('\n', stamps);
     }
 
     private static PlatformTypeCacheFile? LoadPlatformTypeCache()
@@ -576,6 +679,80 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OutOfMemoryException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// The cache files to delete, newest kept, given every file and how recent each is.
+    /// </summary>
+    /// <remarks>
+    /// Separated from the directory so it can be tested without one. The rule is "keep the
+    /// most recently written"; what makes it worth writing down is that a pair has to go
+    /// together — deleting an index and leaving its assembly list behind would leave a file
+    /// the reader half-trusts.
+    /// </remarks>
+    internal static IReadOnlyList<string> CacheFilesToPrune(
+        IEnumerable<(string Path, DateTime Written)> files,
+        int keep)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        var pairs = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+
+        foreach (var (path, written) in files)
+        {
+            var stem = Path.Combine(
+                Path.GetDirectoryName(path) ?? string.Empty,
+                Path.GetFileNameWithoutExtension(path));
+
+            // A pair is as recent as its newer half, so a half-written one is not mistaken
+            // for an old one and deleted out from under the process writing it.
+            pairs[stem] = pairs.TryGetValue(stem, out var seen) && seen > written ? seen : written;
+        }
+
+        return
+        [
+            .. pairs
+                .OrderByDescending(pair => pair.Value)
+                .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+                .Skip(Math.Max(0, keep))
+                .SelectMany(pair => new[] { pair.Key + ".idx", pair.Key + ".asm" }),
+        ];
+    }
+
+    /// <summary>Deletes all but the most recent cache files, best effort.</summary>
+    /// <remarks>
+    /// Runs after a write, which is already off the critical path — a process that has just
+    /// paid to build an index is not one that will notice a directory listing. Failures are
+    /// swallowed: a cache that cannot be pruned is a disk-space problem, and throwing here
+    /// would make it a start-up problem.
+    /// </remarks>
+    private static void PrunePlatformTypeCache(string directory)
+    {
+        try
+        {
+            var files = Directory
+                .EnumerateFiles(directory, "platform-types-*.*")
+                .Where(path => path.EndsWith(".idx", StringComparison.Ordinal) ||
+                               path.EndsWith(".asm", StringComparison.Ordinal))
+                .Select(path => (Path: path, Written: File.GetLastWriteTimeUtc(path)))
+                .ToArray();
+
+            foreach (var path in CacheFilesToPrune(files, PlatformCacheFilesKept))
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // Another process is reading it, or it went already. Either is fine.
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or
+                                                      ArgumentException or DirectoryNotFoundException)
+        {
         }
     }
 
@@ -642,6 +819,11 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
             File.Move(assemblyPath + suffix, assemblyPath, overwrite: true);
             File.Move(bodyPath + suffix, bodyPath, overwrite: false);
+
+            if (!string.IsNullOrEmpty(directory))
+            {
+                PrunePlatformTypeCache(directory);
+            }
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

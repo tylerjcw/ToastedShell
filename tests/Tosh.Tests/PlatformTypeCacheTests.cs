@@ -157,4 +157,149 @@ public sealed class PlatformTypeCacheTests
         Assert.False(cache.TryGet("broken.record", out var found));
         Assert.Null(found);
     }
+
+    // ── What keys the file, and what bounds the directory (TOAST-0134) ──
+
+    private static (long Length, long Ticks)? Stat(long length, long ticks)
+        => (length, ticks);
+
+    /// <summary>
+    /// A rebuilt assembly changes the stamp, so it cannot be answered from an old index.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole of <c>TOAST-0134</c>. The fingerprint used to be the assembly
+    /// <em>paths</em>, which a rebuild does not change — so a rebuilt binary read an index
+    /// built from older source, and because a miss in the cache is answered authoritatively,
+    /// every type added since did not exist. It cost seventeen days of
+    /// <c>new Tui.TuiGauge()</c> failing for no visible reason.
+    /// </remarks>
+    [Fact]
+    public void A_rebuilt_assembly_changes_the_stamp()
+    {
+        string[] paths = ["/app/Tosh.Cli.dll", "/app/Tosh.Tui.dll"];
+
+        var before = DotNetTypeResolver.ApplicationStamp(paths, "/app/", _ => Stat(1000, 100));
+        var rebuilt = DotNetTypeResolver.ApplicationStamp(paths, "/app/", _ => Stat(1000, 200));
+        var resized = DotNetTypeResolver.ApplicationStamp(paths, "/app/", _ => Stat(1400, 100));
+
+        Assert.NotEqual(before, rebuilt);
+        Assert.NotEqual(before, resized);
+    }
+
+    /// <summary>An unchanged build keeps its cache, which is the point of having one.</summary>
+    [Fact]
+    public void An_unchanged_build_keeps_the_same_stamp()
+    {
+        string[] paths = ["/app/Tosh.Cli.dll", "/app/Tosh.Tui.dll"];
+
+        Assert.Equal(
+            DotNetTypeResolver.ApplicationStamp(paths, "/app/", _ => Stat(1000, 100)),
+            DotNetTypeResolver.ApplicationStamp(paths, "/app/", _ => Stat(1000, 100)));
+    }
+
+    /// <summary>
+    /// The order the trusted-platform list happens to be in does not change the stamp.
+    /// </summary>
+    /// <remarks>
+    /// A stamp that varied with it would mint a new cache file for no reason, and the
+    /// directory that found this bug had 7,478 of them already.
+    /// </remarks>
+    [Fact]
+    public void The_order_of_the_list_does_not_change_the_stamp()
+        => Assert.Equal(
+            DotNetTypeResolver.ApplicationStamp(
+                ["/app/a.dll", "/app/b.dll"], "/app/", path => Stat(path.Length, 1)),
+            DotNetTypeResolver.ApplicationStamp(
+                ["/app/b.dll", "/app/a.dll"], "/app/", path => Stat(path.Length, 1)));
+
+    /// <summary>
+    /// Only the application's own assemblies are stamped.
+    /// </summary>
+    /// <remarks>
+    /// The framework's do not change under a running installation and there are two hundred
+    /// of them; stamping those would pay two hundred file reads at every start-up to learn
+    /// nothing at all.
+    /// </remarks>
+    [Fact]
+    public void The_frameworks_assemblies_are_not_stamped()
+    {
+        var stamped = new List<string>();
+
+        DotNetTypeResolver.ApplicationStamp(
+            ["/usr/share/dotnet/System.Private.CoreLib.dll", "/app/Tosh.Tui.dll"],
+            "/app/",
+            path =>
+            {
+                stamped.Add(path);
+                return Stat(1, 1);
+            });
+
+        Assert.Equal(["/app/Tosh.Tui.dll"], stamped);
+    }
+
+    /// <summary>A published single-file binary has nothing to stamp, and needs none.</summary>
+    [Fact]
+    public void A_layout_with_no_application_paths_stamps_nothing()
+        => Assert.Equal(
+            string.Empty,
+            DotNetTypeResolver.ApplicationStamp(["/usr/share/dotnet/x.dll"], "/app/", _ => Stat(1, 1)));
+
+    /// <summary>A file that cannot be read contributes nothing rather than throwing.</summary>
+    [Fact]
+    public void A_file_that_cannot_be_read_is_skipped()
+        => Assert.Equal(
+            string.Empty,
+            DotNetTypeResolver.ApplicationStamp(["/app/gone.dll"], "/app/", _ => null));
+
+    /// <summary>The newest files are kept and the rest are named for deletion.</summary>
+    [Fact]
+    public void Pruning_keeps_the_most_recent_and_drops_the_rest()
+    {
+        var files = new[]
+        {
+            ("/c/platform-types-aaa.idx", new DateTime(2026, 1, 3)),
+            ("/c/platform-types-aaa.asm", new DateTime(2026, 1, 3)),
+            ("/c/platform-types-bbb.idx", new DateTime(2026, 1, 2)),
+            ("/c/platform-types-bbb.asm", new DateTime(2026, 1, 2)),
+            ("/c/platform-types-ccc.idx", new DateTime(2026, 1, 1)),
+            ("/c/platform-types-ccc.asm", new DateTime(2026, 1, 1)),
+        };
+
+        var pruned = DotNetTypeResolver.CacheFilesToPrune(files, keep: 1);
+
+        // Both halves of a pair go, and only the newest pair stays.
+        Assert.Equal(4, pruned.Count);
+        Assert.Contains("/c/platform-types-bbb.idx", pruned);
+        Assert.Contains("/c/platform-types-bbb.asm", pruned);
+        Assert.Contains("/c/platform-types-ccc.idx", pruned);
+        Assert.DoesNotContain("/c/platform-types-aaa.idx", pruned);
+    }
+
+    /// <summary>
+    /// A pair is as recent as its newer half.
+    /// </summary>
+    /// <remarks>
+    /// The two files are written moments apart, and a pair being written right now must not
+    /// look like an old one because its first half has an older timestamp.
+    /// </remarks>
+    [Fact]
+    public void A_pair_is_as_recent_as_its_newer_half()
+    {
+        var files = new[]
+        {
+            ("/c/platform-types-new.asm", new DateTime(2020, 1, 1)),
+            ("/c/platform-types-new.idx", new DateTime(2026, 6, 1)),
+            ("/c/platform-types-old.idx", new DateTime(2024, 1, 1)),
+            ("/c/platform-types-old.asm", new DateTime(2024, 1, 1)),
+        };
+
+        Assert.DoesNotContain(
+            "/c/platform-types-new.idx",
+            DotNetTypeResolver.CacheFilesToPrune(files, keep: 1));
+    }
+
+    [Fact]
+    public void Nothing_is_pruned_when_there_is_room()
+        => Assert.Empty(DotNetTypeResolver.CacheFilesToPrune(
+            [("/c/platform-types-a.idx", DateTime.UnixEpoch)], keep: 12));
 }
