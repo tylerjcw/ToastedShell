@@ -17,6 +17,7 @@
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
 | [`TOAST-0113`](items/TOAST-0113.md) | P2 | complete | 6/6 | A qualified refinement type in a type test is evaluated as module member access |
+| [`TOAST-0134`](items/TOAST-0134.md) | P1 | complete | 5/5 | The persisted type cache answers a miss authoritatively, so a type added since it was written does not exist |
 | [`TOAST-0089`](items/TOAST-0089.md) | P2 | complete | 4/4 | A declared record's collection fields vanish from a table, but an anonymous record's do not |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TOAST-0130`](items/TOAST-0130.md) | P1 | complete | 6/6 | A module-qualified generic annotation never matched, so every generic type in a library was unusable in one |
