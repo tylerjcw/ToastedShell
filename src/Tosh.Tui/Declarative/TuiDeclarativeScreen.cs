@@ -148,7 +148,8 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // left the keyboard nowhere at all.
         if (_invoke is not null)
         {
-            TuiBindings.ApplyVisibility(_root, _invoke, ShellRecordUtilities.CreateExpando(Values()));
+            TuiBindings.ApplyVisibility(
+                _root, _invoke, ShellRecordUtilities.CreateExpando(Values()), OnBindingFailure);
         }
 
         _focus = new TuiFocus(_root);
@@ -247,12 +248,23 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     }
 
     /// <summary>
+    /// Where a binding's failure is reported, when something is running this screen.
+    /// </summary>
+    /// <remarks>
+    /// Left unset the exception propagates, which is what a test driving a screen directly
+    /// wants. <see cref="TuiApplication"/> sets it so a failure reaches the banner instead,
+    /// and so it costs the one widget that caused it rather than the frame it was in.
+    /// </remarks>
+    internal Action<Exception>? OnBindingFailure { get; set; }
+
+    /// <summary>
     /// Re-reads every bound property, passing the form's current values.
     /// </summary>
     /// <remarks>
-    /// A binding that throws is left to the runtime's handler guard rather than being
-    /// swallowed here: a mistake in a binding should be visible, and the guard already
-    /// reports it without ending the screen.
+    /// A binding that throws is reported and skipped rather than swallowed: a mistake in a
+    /// binding should be visible. Skipped one at a time, though — the frame guard around
+    /// the whole render catches what gets past this, and a frame dropped whole is a blank
+    /// screen when the failing binding is on the first one.
     /// </remarks>
     private void ApplyBindings()
     {
@@ -261,7 +273,8 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
             return;
         }
 
-        TuiBindings.Apply(_root, _invoke, ShellRecordUtilities.CreateExpando(Values()));
+        TuiBindings.Apply(
+            _root, _invoke, ShellRecordUtilities.CreateExpando(Values()), OnBindingFailure);
     }
 
     public TuiScreenResult HandleInput(TuiInputEvent input)

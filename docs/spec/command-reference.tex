@@ -7804,6 +7804,7 @@ run <screen> & Run a full-screen widget tree, written as a record or built with 
 --fullscreen & Run `filter` as a fullscreen picker with search open, instead of its inline default. \\
 --title <text> & Screen title shown in the header bar, for `run`. A form names its own window. \\
 --refresh <duration> & Redraw this often with no input, for `run`. Accepts 1s, 500ms or 00:00:01. \\
+--budget <duration|\allowbreak off> & How long a handler may hold the render loop, for `run`. A handler that outstays it is stopped and reported on the screen. \\
 \bottomrule
 \end{tabular}
 

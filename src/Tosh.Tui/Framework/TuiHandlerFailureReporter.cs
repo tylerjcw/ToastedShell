@@ -72,7 +72,13 @@ internal sealed class TuiHandlerFailureReporter
         }
     }
 
-    private void Record(Exception exception)
+    /// <summary>Reports a failure that was caught somewhere other than here.</summary>
+    /// <remarks>
+    /// A binding is caught one widget at a time, so that one bad property costs one widget
+    /// rather than the whole frame it is drawn in. That catch happens where the widgets
+    /// are; the banner is here.
+    /// </remarks>
+    public void Record(Exception exception)
     {
         var message = $"{exception.GetType().Name}: {exception.Message}";
 

@@ -1,5 +1,8 @@
+using Tosh.Runtime;
 using Tosh.Tui;
+using Tosh.Tui.Declarative;
 using Tosh.Tui.Rendering;
+using Tosh.Tui.Widgets;
 
 namespace Tosh.Tests;
 
@@ -73,6 +76,71 @@ public sealed class TuiRenderFailureTests
         presented.Place(new TuiPlacement(1, 0, 0, 4, 2, new TuiPixels(1, 1, [1, 2, 3])));
 
         Assert.Empty(presented.Copy().Placements);
+    }
+
+    /// <summary>
+    /// A binding that throws costs its own widget and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Catching the whole frame is not enough on its own. Dropping a frame keeps the last
+    /// good one, and there is no last good one when the failing binding is on the first —
+    /// so a screen whose title was misspelled opened as an empty rectangle with a banner
+    /// under it, which says far less than the screen with one blank line in it.
+    /// </remarks>
+    [Fact]
+    public void One_binding_that_throws_costs_one_widget_and_not_the_tree()
+    {
+        var broken = new Source();
+        var working = new Source();
+
+        var first = new TuiTextWidget { TextSource = broken };
+        var second = new TuiTextWidget { TextSource = working };
+        var root = new TuiStack(TuiOrientation.Vertical) { Items = [first, second] };
+
+        var failures = new List<Exception>();
+
+        TuiBindings.Apply(
+            root,
+            (source, _) => ReferenceEquals(source, broken)
+                ? throw new InvalidOperationException("no such property")
+                : "read fresh",
+            values: null,
+            failures.Add);
+
+        // The one after it is asked, which is the point: the walk carries on past a
+        // failure rather than unwinding out of the tree.
+        Assert.Equal("read fresh", second.Text);
+        Assert.Equal(string.Empty, first.Text);
+        Assert.Equal("no such property", Assert.Single(failures).Message);
+    }
+
+    /// <summary>With nobody listening, a binding still throws where it always did.</summary>
+    /// <remarks>
+    /// A screen wires the sink; a test or a script driving widgets itself does not, and
+    /// swallowing a mistake there would hide it with nothing drawing a banner to say so.
+    /// </remarks>
+    [Fact]
+    public void A_binding_with_no_reporter_behind_it_is_left_to_throw()
+    {
+        var widget = new TuiTextWidget { TextSource = new Source() };
+
+        Assert.Throws<InvalidOperationException>(() => TuiBindings.Apply(
+            widget,
+            (_, _) => throw new InvalidOperationException("nothing is catching this"),
+            values: null));
+    }
+
+    /// <summary>A stand-in for a script function, told apart by identity alone.</summary>
+    private sealed class Source : IShellCallable
+    {
+        public string CallableName => "source";
+
+        public int RequiredParameterCount => 0;
+
+        public int? MaximumParameterCount => 0;
+
+        public IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
+            => throw new NotSupportedException("the invoker is stubbed by the test");
     }
 
     [Fact]

@@ -61,19 +61,25 @@ public static class TuiBindings
     public static void ApplyVisibility(
         TuiWidget root,
         Func<IShellCallable, object?, object?> invoke,
-        object? values)
+        object? values,
+        Action<Exception>? onFailure = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(invoke);
 
         if (root.VisibleSource is { } visible)
         {
-            root.IsVisible = invoke(visible, values) is not (null or false or 0);
+            // A predicate that fails leaves the widget as the author wrote it rather than
+            // hiding it: a screen missing the pane you were looking at explains itself far
+            // worse than one showing a pane it should not have.
+            Try(
+                () => root.IsVisible = invoke(visible, values) is not (null or false or 0),
+                onFailure);
         }
 
         foreach (var child in root.Children)
         {
-            ApplyVisibility(child, invoke, values);
+            ApplyVisibility(child, invoke, values, onFailure);
         }
     }
 
@@ -81,11 +87,58 @@ public static class TuiBindings
     /// <param name="root">The tree to refresh.</param>
     /// <param name="invoke">Calls a script function with the screen's current values.</param>
     /// <param name="values">What to hand each function.</param>
-    public static void Apply(TuiWidget root, Func<IShellCallable, object?, object?> invoke, object? values)
+    /// <param name="onFailure">
+    /// Told about a binding that threw, if anything is listening. The widget keeps whatever
+    /// it last showed and the rest of the tree is refreshed regardless — one misspelled
+    /// property should cost one widget, not the screen it is on.
+    /// </param>
+    public static void Apply(
+        TuiWidget root,
+        Func<IShellCallable, object?, object?> invoke,
+        object? values,
+        Action<Exception>? onFailure = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(invoke);
 
+        var descend = true;
+
+        try
+        {
+            descend = ApplyOne(root, invoke, values);
+        }
+        catch (Exception exception) when (onFailure is not null &&
+                                          exception is not OutOfMemoryException
+                                              and not StackOverflowException)
+        {
+            // Descending anyway. The children of a widget whose own binding failed are
+            // separate bindings with separate mistakes in them, and refusing to ask them
+            // would turn one bad line into a blank branch.
+            onFailure(exception);
+        }
+
+        if (!descend)
+        {
+            return;
+        }
+
+        foreach (var child in root.Children)
+        {
+            Apply(child, invoke, values, onFailure);
+        }
+    }
+
+    /// <summary>Re-reads one widget's bound properties, and says whether to go deeper.</summary>
+    /// <remarks>
+    /// The widgets that answer <c>false</c> carry their contents as data rather than as
+    /// child widgets — a list's items are not a list's children — so there is nothing below
+    /// them to bind.
+    /// </remarks>
+    private static bool ApplyOne(
+        TuiWidget root,
+        Func<IShellCallable, object?, object?> invoke,
+        object? values)
+    {
         // Asked first and of every widget, because whether something is drawn at all
         // decides whether anything else about it matters.
         if (root.VisibleSource is { } visible)
@@ -109,18 +162,18 @@ public static class TuiBindings
 
             case TuiList { ItemsSource: { } source } list:
                 list.Items = AsItems(invoke(source, values));
-                return;
+                return false;
 
             case TuiTable { RowsSource: { } source } table:
                 table.Rows = AsItems(invoke(source, values));
-                return;
+                return false;
 
             case TuiSparkline { ValuesSource: { } source } spark:
                 spark.Values = [.. AsItems(invoke(source, values))
                     .Select(item => TypeConversion.TryConvert(item, typeof(double), out var number)
                         ? (double)number!
                         : 0d)];
-                return;
+                return false;
 
             case TuiBars { BarsSource: { } source } bars:
                 bars.Bars = [.. AsItems(invoke(source, values))
@@ -130,21 +183,21 @@ public static class TuiBindings
                         TypeConversion.TryConvert(amount, typeof(double), out var number)
                             ? new TuiBar(label?.ToString() ?? string.Empty, (double)number!)
                             : new TuiBar(item?.ToString() ?? string.Empty, 0))];
-                return;
+                return false;
 
             case TuiGauge { AmountSource: { } source } gauge:
                 gauge.Amount = TypeConversion.TryConvert(invoke(source, values), typeof(double), out var amount)
                     ? (double)amount!
                     : 0d;
-                return;
+                return false;
 
             case TuiCombo { ItemsSource: { } source } combo:
                 combo.Items = AsItems(invoke(source, values));
-                return;
+                return false;
 
             case TuiImage { PathSource: { } source } image:
                 image.Path = invoke(source, values)?.ToString();
-                return;
+                return false;
 
             case TuiLines { LinesSource: { } source } lines:
                 // Plain text or lines already built as spans: a script writing a live log
@@ -156,9 +209,30 @@ public static class TuiBindings
                 break;
         }
 
-        foreach (var child in root.Children)
+        return true;
+    }
+
+    /// <summary>Runs one binding, handing a failure to whoever is listening for one.</summary>
+    /// <remarks>
+    /// With nothing listening the exception is left alone, so a tree bound outside a screen
+    /// — a test, a script driving widgets itself — fails where it always did.
+    /// </remarks>
+    private static void Try(Action work, Action<Exception>? onFailure)
+    {
+        if (onFailure is null)
         {
-            Apply(child, invoke, values);
+            work();
+            return;
+        }
+
+        try
+        {
+            work();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+                                              and not StackOverflowException)
+        {
+            onFailure(exception);
         }
     }
 

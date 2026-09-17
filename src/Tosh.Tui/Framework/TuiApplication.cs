@@ -42,6 +42,14 @@ public static class TuiApplication
         TuiBuffer? presented = null;
         var failure = new TuiHandlerFailureReporter();
 
+        // A declarative screen calls script functions while it draws, and it is the only
+        // screen that does. Told where to report one that fails, it keeps drawing the rest
+        // of the tree; told nothing, it throws, which is what a test driving it wants.
+        if (screen is Declarative.TuiDeclarativeScreen declarative)
+        {
+            declarative.OnBindingFailure = failure.Record;
+        }
+
         try
         {
             while (true)

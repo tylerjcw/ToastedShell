@@ -273,7 +273,8 @@ the command reports that it needs a terminal.
 \section{\texttt{tui run}}
 
 \begin{signature}
-tui run <tree> [--title <text>] [--refresh <duration>] [--result]
+tui run <tree> [--title <text>] [--refresh <duration>]
+              [--budget <duration|off>] [--result]
 \end{signature}
 
 The tree is a widget built with \tosh{new}, a record literal, or anything
@@ -285,9 +286,29 @@ like a tree is the one used, so \code{-{}-title} may sit on either side of it.
         \code{Form} names its own window, so a form needs no title flag.
   \item \code{-{}-refresh} redraws on a timer with nobody touching the keyboard.
         Accepts \tosh{1s}, \code{500ms} or \code{00:00:01}.
+  \item \code{-{}-budget} is how long one of your functions may hold the render
+        loop. Five seconds by default; \code{-{}-budget off} for a screen that means
+        to be slow.
   \item \code{-{}-result} answers with a \code{TuiScreenOutcome} carrying every
         identified widget's value and whether the screen was cancelled.
 \end{itemize}
+
+Your bindings and handlers run on the thread that answers the keyboard, which is what
+makes them safe to write --- nothing else is touching the widgets while yours does.
+The price is that one which never returns is a terminal that never comes back, so each
+call carries a deadline. A function that outstays it is stopped, the widget keeps
+whatever it last showed, and the reason appears across the bottom of the screen:
+
+\begin{verbatim}
+ handler failed - TimeoutException: a screen handler ran for longer than 5s
+ and was stopped. Do the slow part in a job and let the screen read the
+ result, or pass --budget off.
+\end{verbatim}
+
+\noindent Which is the advice: slow work belongs in a job or a channel, with a
+\code{Feed} bringing the answer back (page~\pageref{sec:feeds}). Raising the budget
+makes a screen wait longer before it tells you something is wrong; it does not make
+the screen answer the keyboard while it waits.
 
 A screen containing a \code{Form} emits nothing unless \code{-{}-result} asks: its
 handlers have already said what happened, and putting the values on the pipeline

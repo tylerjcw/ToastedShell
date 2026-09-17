@@ -28,6 +28,7 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--fullscreen", "Run `filter` as a fullscreen picker with search open, instead of its inline default.")]
 [CommandOption("--title <text>", "Screen title shown in the header bar, for `run`. A form names its own window.")]
 [CommandOption("--refresh <duration>", "Redraw this often with no input, for `run`. Accepts 1s, 500ms or 00:00:01.")]
+[CommandOption("--budget <duration|off>", "How long a handler may hold the render loop, for `run`. A handler that outstays it is stopped and reported on the screen.", Default = "5s")]
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
 [CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
@@ -445,7 +446,7 @@ public sealed class TuiCommand : ShellCommand
     }
 
     // ── tui run ───────────────────────────────────────────────
-    // Usage: tui run <tree> [--title <text>] [--refresh <duration>] [--result]
+    // Usage: tui run <tree> [--title <text>] [--refresh <duration>] [--budget <duration|off>] [--result]
     // Or:    <tree> | tui run
     private static async IAsyncEnumerable<object?> ExecuteRunAsync(CommandContext context)
     {
@@ -478,7 +479,7 @@ public sealed class TuiCommand : ShellCommand
         foreach (var produced in RunOrYield(context, new TuiTreeRunRequest(
             tree,
             parsed.HasFlag("result"),
-            BuildArgumentInvoker(context),
+            BuildArgumentInvoker(context, ParseBudget(ExtractNamedArgument(parsed.Positionals, "budget"))),
             ParseInterval(ExtractNamedArgument(parsed.Positionals, "refresh")),
             ExtractNamedArgument(parsed.Positionals, "title"))))
         {
@@ -592,8 +593,24 @@ public sealed class TuiCommand : ShellCommand
     /// <c>Bars</c> all showed exactly their final element. One value is still that value,
     /// so a caption or a title reads exactly as it did.
     /// </para>
+    /// <para>
+    /// Every one of these runs on the render loop, which is the thread that answers keys —
+    /// so a handler that never returns is a terminal that never comes back
+    /// (<c>TUI-0008</c>). Each call carries a deadline, and a handler that outstays it is
+    /// cancelled and reported on the screen's banner like any other failure.
+    /// </para>
+    /// <para>
+    /// What that catches is a script that loops, waits or polls forever, because the
+    /// interpreter checks the token as it goes. What it does not catch is a handler blocked
+    /// inside a call that cannot be cancelled — a read on a pipe nobody writes to. The
+    /// alternative is to run handlers on a thread and abandon them, which trades a stuck
+    /// screen for two threads writing the same widget, and a torn screen is worse than a
+    /// stopped one.
+    /// </para>
     /// </remarks>
-    private static Func<IShellCallable, object?, object?> BuildArgumentInvoker(CommandContext context)
+    private static Func<IShellCallable, object?, object?> BuildArgumentInvoker(
+        CommandContext context,
+        TimeSpan? budget)
         => (callable, argument) =>
         {
             // A binding that does not need the form's values should not have to declare a
@@ -602,45 +619,125 @@ public sealed class TuiCommand : ShellCommand
             var wantsArgument = argument is not null &&
                 (callable.MaximumParameterCount is null || callable.MaximumParameterCount > 0);
 
-            var inner = context with
-            {
-                Arguments = wantsArgument ? [argument] : [],
-                Input = AsyncEnumerableExtensions.Empty<object?>(),
-                IsPipelined = false,
-            };
+            // Linked rather than standalone, so Ctrl+C still reaches a handler that is
+            // halfway through something slow.
+            var deadline = budget is { } limit
+                ? CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken)
+                : null;
 
-            object? single = null;
-            List<object?>? produced = null;
-            var count = 0;
-
-            var enumerator = callable.InvokeAsync(inner).GetAsyncEnumerator(context.CancellationToken);
+            deadline?.CancelAfter(budget!.Value);
 
             try
             {
-                while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+                var inner = context with
                 {
-                    if (count == 0)
-                    {
-                        single = enumerator.Current;
-                    }
-                    else
-                    {
-                        // Only allocated once a second value shows up, because almost every
-                        // binding on almost every screen produces exactly one.
-                        produced ??= [single];
-                        produced.Add(enumerator.Current);
-                    }
+                    Arguments = wantsArgument ? [argument] : [],
+                    Input = AsyncEnumerableExtensions.Empty<object?>(),
+                    IsPipelined = false,
+                    CancellationToken = deadline?.Token ?? context.CancellationToken,
+                };
 
-                    count += 1;
-                }
+                return Collect(callable, inner);
+            }
+            catch (OperationCanceledException) when (
+                deadline is { IsCancellationRequested: true } &&
+                !context.CancellationToken.IsCancellationRequested)
+            {
+                // Translated rather than rethrown: a screen reports what it catches by
+                // type and message, and "TaskCanceledException: A task was canceled"
+                // names neither the handler nor the reason it stopped.
+                throw new TimeoutException(
+                    $"a screen handler ran for longer than {Describe(budget!.Value)} and was "
+                    + "stopped. Do the slow part in a job and let the screen read the result, "
+                    + "or pass --budget off.");
             }
             finally
             {
-                enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                deadline?.Dispose();
             }
-
-            return produced is null ? single : produced.ToArray();
         };
+
+    /// <summary>Reads everything a call produced, in order.</summary>
+    private static object? Collect(IShellCallable callable, CommandContext inner)
+    {
+        object? single = null;
+        List<object?>? produced = null;
+        var count = 0;
+
+        var enumerator = callable.InvokeAsync(inner).GetAsyncEnumerator(inner.CancellationToken);
+
+        try
+        {
+            while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
+            {
+                if (count == 0)
+                {
+                    single = enumerator.Current;
+                }
+                else
+                {
+                    // Only allocated once a second value shows up, because almost every
+                    // binding on almost every screen produces exactly one.
+                    produced ??= [single];
+                    produced.Add(enumerator.Current);
+                }
+
+                count += 1;
+            }
+        }
+        finally
+        {
+            enumerator.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
+        return produced is null ? single : produced.ToArray();
+    }
+
+    /// <summary>How long a budget is, in the spelling a script would have written.</summary>
+    private static string Describe(TimeSpan budget)
+        => budget.TotalMilliseconds < 1000
+            ? $"{budget.TotalMilliseconds:0.##}ms"
+            : $"{budget.TotalSeconds:0.##}s";
+
+    /// <summary>The longest a handler may hold the render loop, unless a script says otherwise.</summary>
+    /// <remarks>
+    /// This is a hang breaker rather than a latency budget. A binding that takes five
+    /// seconds has already made the screen useless; what this is for is the one that never
+    /// comes back at all, which without it takes the terminal with it.
+    /// </remarks>
+    private static readonly TimeSpan DefaultHandlerBudget = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Reads <c>--budget</c>: a duration, or <c>off</c> for a screen that means to be slow.
+    /// </summary>
+    /// <remarks>
+    /// An unreadable value falls back to the default rather than to <c>off</c>. The two
+    /// mistakes are not equal — a typo that silently removes the guard is found much later
+    /// than one that silently keeps it.
+    /// </remarks>
+    private static TimeSpan? ParseBudget(string? text)
+    {
+        if (text is null)
+        {
+            return DefaultHandlerBudget;
+        }
+
+        var trimmed = text.Trim();
+
+        if (trimmed.Length == 0 ||
+            string.Equals(trimmed, "off", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return ParseInterval(trimmed) switch
+        {
+            { } span when span > TimeSpan.Zero => span,
+            { } => null,
+            null => DefaultHandlerBudget,
+        };
+    }
 
     /// <summary>
     /// Runs a screen and yields its result, or yields the request for a display sink to
@@ -690,7 +787,7 @@ public sealed class TuiCommand : ShellCommand
     private static readonly HashSet<string> ValueOptionNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "prompt", "display", "page-size", "default", "path", "filter",
-        "id", "bind", "ratio", "gap", "title", "refresh",
+        "id", "bind", "ratio", "gap", "title", "refresh", "budget",
     };
 
     /// <summary>
