@@ -28,6 +28,9 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--fullscreen", "Run `filter` as a fullscreen picker with search open, instead of its inline default.")]
 [CommandOption("--title <text>", "Screen title shown in the header bar, for `run`. A form names its own window.")]
 [CommandOption("--refresh <duration>", "Redraw this often with no input, for `run`. Accepts 1s, 500ms or 00:00:01.")]
+[CommandOption("--plain", "Render `run` once as text instead of taking over the terminal, for a script whose output is piped or saved.")]
+[CommandOption("--width <columns>", "Columns to render `--plain` into. Defaults to the terminal's width, or 80.")]
+[CommandOption("--height <rows>", "Rows to render `--plain` into. Defaults to the terminal's height, or 24.")]
 [CommandOption("--budget <duration|off>", "How long a handler may hold the render loop, for `run`. A handler that outstays it is stopped and reported on the screen.", Default = "5s")]
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
@@ -451,7 +454,12 @@ public sealed class TuiCommand : ShellCommand
     private static async IAsyncEnumerable<object?> ExecuteRunAsync(CommandContext context)
     {
         var parsed = ParsedCommandArguments.Parse(NormalizeOptionSyntax(context.Arguments));
-        RejectUnknownFlags(context, parsed, "run", "result");
+        RejectUnknownFlags(context, parsed, "run", "result", "plain");
+
+        // One frame as text, for a destination that is not a terminal. Asked for rather
+        // than inferred: a script whose output happens to be redirected today should not
+        // silently change what it does (`TUI-0009`).
+        var plain = parsed.HasFlag("plain");
 
         var tree = FindTree(parsed.Positionals);
 
@@ -481,7 +489,11 @@ public sealed class TuiCommand : ShellCommand
             parsed.HasFlag("result"),
             BuildArgumentInvoker(context, ParseBudget(ExtractNamedArgument(parsed.Positionals, "budget"))),
             ParseInterval(ExtractNamedArgument(parsed.Positionals, "refresh")),
-            ExtractNamedArgument(parsed.Positionals, "title"))))
+            ExtractNamedArgument(parsed.Positionals, "title"),
+            plain,
+            ParseSize(ExtractNamedArgument(parsed.Positionals, "width")),
+            ParseSize(ExtractNamedArgument(parsed.Positionals, "height"))),
+            needsTerminal: !plain))
         {
             yield return produced;
         }
@@ -752,7 +764,14 @@ public sealed class TuiCommand : ShellCommand
     /// The fallback is kept rather than removed: with no runner — a headless process, a
     /// test host — behaviour is exactly what it was.
     /// </remarks>
-    private static IEnumerable<object?> RunOrYield(CommandContext context, object request)
+    /// <param name="needsTerminal">
+    /// Whether this request has to be drawn on something. False for a render that answers
+    /// with text, which is the whole point of having one.
+    /// </param>
+    private static IEnumerable<object?> RunOrYield(
+        CommandContext context,
+        object request,
+        bool needsTerminal = true)
     {
         if (context.Shell().TuiScreens is not { } runner)
         {
@@ -762,7 +781,7 @@ public sealed class TuiCommand : ShellCommand
             return [request];
         }
 
-        if (!runner.CanRun)
+        if (needsTerminal && !runner.CanRun)
         {
             // Yielding the request here is worse than failing: it lands in whatever the
             // caller assigned it to, and the next thing they touch reports that
@@ -787,7 +806,7 @@ public sealed class TuiCommand : ShellCommand
     private static readonly HashSet<string> ValueOptionNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "prompt", "display", "page-size", "default", "path", "filter",
-        "id", "bind", "ratio", "gap", "title", "refresh", "budget",
+        "id", "bind", "ratio", "gap", "title", "refresh", "budget", "width", "height",
     };
 
     /// <summary>
@@ -898,6 +917,10 @@ public sealed class TuiCommand : ShellCommand
 
         return pageSize;
     }
+
+    /// <summary>Reads a column or row count, ignoring anything that is not one.</summary>
+    private static int? ParseSize(string? text)
+        => int.TryParse(text, out var value) && value > 0 ? value : null;
 
     private static string? ExtractNamedArgument(IReadOnlyList<object?> positionals, string name)
     {

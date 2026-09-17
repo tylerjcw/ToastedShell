@@ -46,6 +46,7 @@ public static class TuiApplication
         // the reader who exports NO_COLOR mid-session is not a reader worth a check per
         // frame (`TUI-0009`).
         var depth = TuiColors.Detect(Environment.GetEnvironmentVariable);
+        var unicode = TuiGlyphs.Supported(Environment.GetEnvironmentVariable);
 
         // A declarative screen calls script functions while it draws, and it is the only
         // screen that does. Told where to report one that fails, it keeps drawing the rest
@@ -83,7 +84,7 @@ public static class TuiApplication
                 failure.Draw(buffer);
 
                 // Only what changed since the last frame reaches the terminal.
-                host.Write(TuiTerminalWriter.Present(presented, buffer, depth));
+                host.Write(TuiTerminalWriter.Present(presented, buffer, depth, unicode));
                 presented = buffer;
 
                 // Waited for in slices even when only a keystroke can change the screen.

@@ -185,6 +185,56 @@ public sealed class TuiCommandTests
         Assert.False(request.ReturnOutcome);
     }
 
+    /// <summary>
+    /// A screen can be asked for one frame as text, for a destination that is not a
+    /// terminal (<c>TUI-0009</c>).
+    /// </summary>
+    /// <remarks>
+    /// Asked for with <c>--plain</c> rather than inferred from whether output is
+    /// redirected: a script whose output happens to be piped today should not silently do
+    /// something different from what it did yesterday.
+    /// </remarks>
+    [Fact]
+    public async Task Tui_run_can_be_asked_for_text_instead_of_a_terminal()
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync(
+            "tui run {| Text = \"hello\" |} --plain --width 46 --height 8");
+
+        var request = Assert.IsType<TuiTreeRunRequest>(Assert.Single(results));
+
+        Assert.True(request.Plain);
+        Assert.Equal(46, request.Width);
+        Assert.Equal(8, request.Height);
+    }
+
+    /// <summary>Without it, nothing changes.</summary>
+    [Fact]
+    public async Task A_run_that_did_not_ask_for_text_still_wants_a_terminal()
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync("tui run {| Text = \"hello\" |}");
+
+        var request = Assert.IsType<TuiTreeRunRequest>(Assert.Single(results));
+
+        Assert.False(request.Plain);
+        Assert.Null(request.Width);
+        Assert.Null(request.Height);
+    }
+
+    /// <summary>A size that is not a size is ignored rather than taken as zero.</summary>
+    [Theory]
+    [InlineData("--width wide")]
+    [InlineData("--width 0")]
+    [InlineData("--width -20")]
+    public async Task A_width_nobody_can_read_falls_back_to_the_default(string options)
+    {
+        var engine = CreateEngine();
+        var results = await engine.ExecuteToListAsync($"tui run {{| Text = \"hello\" |}} --plain {options}");
+
+        Assert.Null(Assert.IsType<TuiTreeRunRequest>(Assert.Single(results)).Width);
+    }
+
     [Fact]
     public async Task Tui_run_with_result_flag()
     {

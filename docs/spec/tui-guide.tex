@@ -275,6 +275,7 @@ the command reports that it needs a terminal.
 \begin{signature}
 tui run <tree> [--title <text>] [--refresh <duration>]
               [--budget <duration|off>] [--result]
+              [--plain [--width <n>] [--height <n>]]
 \end{signature}
 
 The tree is a widget built with \tosh{new}, a record literal, or anything
@@ -289,6 +290,10 @@ like a tree is the one used, so \code{-{}-title} may sit on either side of it.
   \item \code{-{}-budget} is how long one of your functions may hold the render
         loop. Five seconds by default; \code{-{}-budget off} for a screen that means
         to be slow.
+  \item \code{-{}-plain} draws the screen once and answers with its text instead of
+        taking over the terminal. \code{-{}-width} and \code{-{}-height} set the
+        size; without them it is the terminal's, or 80\,$\times$\,24 when there is
+        no terminal at all.
   \item \code{-{}-result} answers with a \code{TuiScreenOutcome} carrying every
         identified widget's value and whether the screen was cancelled.
 \end{itemize}
@@ -1149,6 +1154,60 @@ one is swallowed rather than landing on a widget the reader cannot currently use
 When a handler puts a dialog up, the keyboard moves into it; when the dialog
 closes, it moves back. Only a widget that has gone out of reach is re-seated ---
 nothing focused is a state a screen can ask for.
+
+\section{What the Terminal Can Show}
+
+A screen is written once and read on whatever the reader has. The framework asks the
+environment what that is, once per session, and reduces on the way out --- so nothing
+you write has to know about it.
+
+\subsection{Colour}
+
+Colour degrades rather than disappearing. A named colour is already one of the
+sixteen every terminal has, so most of a theme survives untouched; a hex colour
+becomes a palette index at 256 colours and the nearest of sixteen below that.
+
+With no colour at all, a \emph{background} becomes reverse video. That is the
+difference between degrading and dropping: a selected row is drawn with a background,
+and a reader who cannot see which row is selected has lost something that matters.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Variable & Effect \\
+\midrule
+\code{NO\_COLOR} & Any non-empty value turns colour off. \\
+\code{FORCE\_COLOR} & \code{0}--\code{3}: none, 16, 256, truecolor. \\
+\code{COLORTERM} & \code{truecolor} or \code{24bit} means 24-bit colour. \\
+\code{TOSH\_TUI\_COLOR} & \code{none}, \code{16}, \code{256}, \code{truecolor} --- wins over all of them. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Otherwise \code{TERM} decides: \code{256color} in the name means 256,
+\code{dumb} or unset means none, anything else means sixteen.
+
+\subsection{Characters}
+
+Borders, tree guides, meters and spinners are drawn out of characters above U+2000.
+Where the encoding cannot carry them --- \code{LANG=C}, a serial console, \code{TERM=dumb}
+--- they fold to ASCII on the way out:
+
+\begin{verbatim}
++ colour ----------------------+      # was a rounded border
+|Disk    72%                   |
+|#########:::::::::::::::::::::|      # was block characters
+\end{verbatim}
+
+\noindent Only what the framework draws is folded. A filename with a CJK character in
+it is your data and is left exactly as it is. \code{TOSH\_TUI\_ASCII=1} forces it.
+
+\begin{warnbox}[A fold never changes a width]
+Every replacement is one column, because the layout has already reserved the columns.
+This is why \code{…} folds to \code{.} and not to \code{...}, and why a two-column
+character is never folded at all --- a fold that changed a width would leave the row
+short and every border after it out of line, which is the fault this exists to prevent.
+\end{warnbox}
 
 \section{Shortcuts}
 

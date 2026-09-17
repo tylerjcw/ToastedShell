@@ -17,4 +17,7 @@ public sealed record TuiTreeRunRequest(
     bool ReturnOutcome = false,
     Func<IShellCallable, object?, object?>? Invoke = null,
     TimeSpan? RefreshInterval = null,
-    string? Title = null);
+    string? Title = null,
+    bool Plain = false,
+    int? Width = null,
+    int? Height = null);

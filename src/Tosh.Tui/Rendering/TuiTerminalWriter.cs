@@ -27,8 +27,9 @@ public static class TuiTerminalWriter
     /// <summary>Everything needed to draw <paramref name="next"/> from scratch.</summary>
     public static string Present(TuiBuffer next) => Present(null, next);
 
-    /// <summary>The same, at whatever depth the terminal can show.</summary>
-    public static string Present(TuiBuffer next, TuiColorDepth depth) => Present(null, next, depth);
+    /// <summary>The same, at whatever the terminal can show.</summary>
+    public static string Present(TuiBuffer next, TuiColorDepth depth, bool unicode = true)
+        => Present(null, next, depth, unicode);
 
     /// <summary>
     /// The difference between two frames, or a full paint when
@@ -39,10 +40,16 @@ public static class TuiTerminalWriter
     /// before there was a choice — a screen rendered for a snapshot or a test is not being
     /// looked at by anybody, so there is nothing to degrade for.
     /// </param>
+    /// <param name="unicode">
+    /// Whether the terminal can carry the characters a screen is drawn with. False folds
+    /// borders, meters and marks to ASCII on the way out — the one place that turns cells
+    /// into bytes is the one place that knows what the bytes have to be.
+    /// </param>
     public static string Present(
         TuiBuffer? previous,
         TuiBuffer next,
-        TuiColorDepth depth = TuiColorDepth.TrueColor)
+        TuiColorDepth depth = TuiColorDepth.TrueColor,
+        bool unicode = true)
     {
         ArgumentNullException.ThrowIfNull(next);
 
@@ -111,7 +118,7 @@ public static class TuiTerminalWriter
                     // before it already covered this column.
                     if (!cell.IsContinuation)
                     {
-                        builder.Append(cell.Text);
+                        builder.Append(unicode ? cell.Text : TuiGlyphs.Fold(cell.Text));
                     }
 
                     column += 1;
