@@ -1,5 +1,6 @@
 using System.Text;
 using Tosh.Tui;
+using Tosh.Tui.Declarative;
 using Tosh.Tui.Rendering;
 using Tosh.Tui.Widgets;
 
@@ -8,6 +9,7 @@ namespace Tosh.Tests;
 /// <summary>
 /// Pictures in a terminal, drawn in half-blocks (<c>TUI-0025</c>).
 /// </summary>
+[Collection(TuiGraphicsCollection.Name)]
 public sealed class TuiImageTests
 {
     /// <summary>A picture of solid colours, one byte triple per pixel.</summary>
@@ -202,5 +204,155 @@ public sealed class TuiImageTests
         {
             TuiImage.Loader = was;
         }
+    }
+
+    [Fact]
+    public void A_widget_on_its_own_still_reads_its_own_picture()
+    {
+        // Nobody has offered to load off the loop, so the first thing that asks what it
+        // looks like is what makes it load. A widget that needed a host to show a picture
+        // would be a widget that cannot be used without one.
+        var was = TuiImage.Loader;
+
+        try
+        {
+            TuiImage.Loader = _ => Of(1, 2, (1, 2, 3));
+
+            var image = new TuiImage { Path = "picture.ppm" };
+
+            Assert.NotNull(image.Pixels);
+        }
+        finally
+        {
+            TuiImage.Loader = was;
+        }
+    }
+
+    [Fact]
+    public async Task A_screen_reads_a_picture_off_the_loop()
+    {
+        // The bug this closes: a frame pulled out of a video takes seconds, and doing it
+        // where the keyboard is answered is a screen that stops answering.
+        var was = TuiImage.Loader;
+        var started = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+
+        try
+        {
+            TuiImage.Loader = _ =>
+            {
+                started.Set();
+                release.Wait(TimeSpan.FromSeconds(5));
+                return Of(1, 2, (9, 9, 9));
+            };
+
+            var image = new TuiImage { Path = "slow.mp4", Loading = "reading" };
+            using var screen = new TuiDeclarativeScreen(image, []);
+
+            // The render returns while the loader is still inside its wait, which is the
+            // whole point: the loop is not in there with it.
+            var frame = screen.Render(new TuiSize(20, 1));
+
+            Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "The picture was never read.");
+            Assert.Equal("reading", frame.ToPlainText().TrimEnd());
+            Assert.Null(image.Pixels);
+
+            release.Set();
+
+            // And the answer arrives through the same door a source's values do.
+            Assert.True(await Settle(() =>
+            {
+                screen.Wake!.TryTake();
+                screen.Wake!.Drain();
+                return image.Pixels is not null;
+            }));
+        }
+        finally
+        {
+            release.Set();
+            TuiImage.Loader = was;
+        }
+    }
+
+    [Fact]
+    public async Task A_picture_nobody_is_looking_at_any_more_is_dropped()
+    {
+        // A reader arrowing down a directory asks for five files while the first is still
+        // being read. Only the last of them is wanted.
+        var was = TuiImage.Loader;
+
+        try
+        {
+            TuiImage.Loader = path => Of(1, 2, path == "second" ? ((byte)2, (byte)2, (byte)2) : ((byte)1, (byte)1, (byte)1));
+
+            var image = new TuiImage { Path = "first" };
+            using var screen = new TuiDeclarativeScreen(image, []);
+
+            screen.Render(new TuiSize(20, 1));
+            image.Path = "second";
+
+            Assert.True(await Settle(() =>
+            {
+                screen.Render(new TuiSize(20, 1));
+                screen.Wake!.TryTake();
+                screen.Wake!.Drain();
+                return image.Pixels is not null && !image.IsLoading;
+            }));
+
+            // Whichever order the two reads finished in, what is shown is what was asked
+            // for last.
+            Assert.Equal("#020202", image.Pixels!.HexAt(0, 0));
+        }
+        finally
+        {
+            TuiImage.Loader = was;
+        }
+    }
+
+    [Fact]
+    public async Task A_loader_that_throws_leaves_a_placeholder_rather_than_the_process()
+    {
+        var was = TuiImage.Loader;
+
+        try
+        {
+            TuiImage.Loader = _ => throw new InvalidOperationException("the file bit me");
+
+            var image = new TuiImage { Path = "trouble", Placeholder = "no preview" };
+            using var screen = new TuiDeclarativeScreen(image, []);
+
+            screen.Render(new TuiSize(20, 1));
+
+            Assert.True(await Settle(() =>
+            {
+                screen.Wake!.TryTake();
+                screen.Wake!.Drain();
+                return !image.IsLoading;
+            }));
+
+            Assert.Null(image.Pixels);
+            Assert.Equal("no preview", screen.Render(new TuiSize(20, 1)).ToPlainText().TrimEnd());
+        }
+        finally
+        {
+            TuiImage.Loader = was;
+        }
+    }
+
+    private static async Task<bool> Settle(Func<bool> until, int milliseconds = 5000)
+    {
+        var deadline = Environment.TickCount64 + milliseconds;
+
+        while (Environment.TickCount64 < deadline)
+        {
+            if (until())
+            {
+                return true;
+            }
+
+            await Task.Delay(5);
+        }
+
+        return until();
     }
 }

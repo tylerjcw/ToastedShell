@@ -43,6 +43,8 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     private readonly Action? _tick;
     private readonly TimeSpan? _refresh;
     private readonly IReadOnlyList<TuiSpinner> _spinners;
+    private readonly IReadOnlyList<TuiImage> _images;
+    private readonly HashSet<TuiImage> _reading = [];
     private readonly TuiWake? _wake;
     private readonly List<TuiFeeds> _feeds = [];
     private readonly IReadOnlyList<ITuiPopupHost> _popups;
@@ -85,6 +87,15 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // overlay to make it work would be asking them to say the same thing twice.
         _popups = [.. Hosts(root)];
         _spinners = [.. Find<TuiSpinner>(root)];
+        _images = [.. Find<TuiImage>(root)];
+
+        // A picture is read off the loop from here on, so the widget stops reading for
+        // itself. Pulling a frame out of a video takes seconds, and doing it where the
+        // keyboard is answered is a screen that stops answering.
+        foreach (var image in _images)
+        {
+            image.Deferred = true;
+        }
 
         if (_popups.Count > 0)
         {
@@ -101,7 +112,9 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
         // exactly as it was: the loop blocks on the keyboard rather than waiting in slices.
         Collect(_root, _feeds);
 
-        if (_feeds.Count > 0)
+        // A way in from another thread is wanted by anything that arrives later than the
+        // frame that asked for it, which is sources and pictures both.
+        if (_feeds.Count > 0 || _images.Count > 0)
         {
             _wake = new TuiWake();
 
@@ -202,6 +215,7 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
     {
         ApplyBindings();
         ShowOpenMenu();
+        ReadPictures();
 
         // Asked before drawing as well as before dispatching, so the caret is drawn where
         // the next keystroke will go even when the scope changed on a tick rather than on
@@ -363,6 +377,67 @@ public sealed class TuiDeclarativeScreen : ITuiScreen, ITuiAim, IDisposable
 
     /// <inheritdoc />
     public TuiWake? Wake => _wake;
+
+    /// <summary>
+    /// Starts reading whatever picture has been asked for and has not arrived.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off the loop, because a frame pulled out of a video by <c>ffmpeg</c> takes seconds
+    /// and the five-second timeout was the only thing bounding a frozen screen. The result
+    /// is posted back, so the widget is only ever touched on the loop's own thread and
+    /// nothing has to think about two threads (<c>TUI-0025</c>).
+    /// </para>
+    /// <para>
+    /// One read at a time per widget. A reader arrowing down a directory asks for five
+    /// files while the first is still being read, and starting five is how a preview pane
+    /// becomes a way to run out of memory.
+    /// </para>
+    /// </remarks>
+    private void ReadPictures()
+    {
+        if (_wake is not { } wake)
+        {
+            return;
+        }
+
+        foreach (var image in _images)
+        {
+            if (image.Pending is not { } path || !_reading.Add(image))
+            {
+                continue;
+            }
+
+            _ = Task.Run(() =>
+            {
+                var pixels = path.Length > 0 ? Read(path) : null;
+
+                wake.Post(() =>
+                {
+                    _reading.Remove(image);
+                    image.Accept(path, pixels);
+                });
+            });
+        }
+    }
+
+    /// <summary>Reads one picture, and treats a failure as a picture nobody can read.</summary>
+    /// <remarks>
+    /// A loader that throws on a background task would otherwise take the process with it,
+    /// and a preview pane asked to preview something strange should say it cannot.
+    /// </remarks>
+    private static TuiPixels? Read(string path)
+    {
+        try
+        {
+            return TuiImage.Loader?.Invoke(path);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+                                              and not StackOverflowException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Puts the open menu on the layer above the page, or takes it off.</summary>
     /// <remarks>

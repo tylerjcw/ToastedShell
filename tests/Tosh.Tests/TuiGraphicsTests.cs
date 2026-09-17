@@ -7,6 +7,7 @@ namespace Tosh.Tests;
 /// <summary>
 /// Handing the terminal real pixels, and taking them back (<c>TUI-0025</c>).
 /// </summary>
+[Collection(TuiGraphicsCollection.Name)]
 public sealed class TuiGraphicsTests
 {
     private static TuiPixels Red(int width = 2, int height = 2)

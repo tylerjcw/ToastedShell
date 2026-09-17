@@ -6,6 +6,7 @@ namespace Tosh.Tests;
 /// <summary>
 /// Putting a terminal back that an earlier TōSh did not (<c>TUI-0010</c>).
 /// </summary>
+[Collection(TuiGraphicsCollection.Name)]
 public sealed class TuiTerminalRepairTests
 {
     [Fact]

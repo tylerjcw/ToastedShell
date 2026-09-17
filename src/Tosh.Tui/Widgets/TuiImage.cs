@@ -91,7 +91,66 @@ public sealed class TuiImage : TuiWidget
     }
 
     /// <summary>The picture, or null while there is nothing to show.</summary>
-    public TuiPixels? Pixels { get; set; }
+    /// <remarks>
+    /// Read lazily where nothing has offered to load off the loop: a widget used on its own
+    /// still works, and the first thing that asks what it looks like is what makes it load.
+    /// </remarks>
+    public TuiPixels? Pixels
+    {
+        get
+        {
+            if (!Deferred && Pending is { } waiting)
+            {
+                Accept(waiting, waiting.Length > 0 ? Loader?.Invoke(waiting) : null);
+            }
+
+            return field;
+        }
+
+        set
+        {
+            field = value;
+            _loaded = Path;
+        }
+    }
+
+    /// <summary>What <see cref="Pixels"/> currently holds, which may not be what was asked for.</summary>
+    private string? _loaded;
+
+    /// <summary>
+    /// Whether something else has taken responsibility for loading.
+    /// </summary>
+    /// <remarks>
+    /// Set by whatever owns the tree when it can load off the render loop. Until then the
+    /// widget loads for itself, because a widget that needed a host to show a picture would
+    /// be a widget that cannot be used without one.
+    /// </remarks>
+    internal bool Deferred { get; set; }
+
+    /// <summary>The path that has been asked for and not yet loaded, if there is one.</summary>
+    internal string? Pending
+        => string.Equals(_loaded, Path, StringComparison.Ordinal) ? null : Path ?? string.Empty;
+
+    /// <summary>Whether the picture asked for has not arrived yet.</summary>
+    public bool IsLoading => Pending is { Length: > 0 };
+
+    /// <summary>
+    /// Takes the pixels for a path, if that is still the path being asked for.
+    /// </summary>
+    /// <remarks>
+    /// A reader arrowing down a directory asks for five files while the first is still
+    /// being read. Only the last of them is wanted, and a result that arrives for a file
+    /// nobody is looking at any more is dropped rather than drawn.
+    /// </remarks>
+    internal void Accept(string? path, TuiPixels? pixels)
+    {
+        if (!string.Equals(path, Path ?? string.Empty, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Pixels = pixels;
+    }
 
     /// <summary>Where the picture comes from, when it comes from a file.</summary>
     /// <remarks>
@@ -114,7 +173,6 @@ public sealed class TuiImage : TuiWidget
             }
 
             field = value;
-            Pixels = value is { Length: > 0 } path ? Loader?.Invoke(path) : null;
         }
     }
 
@@ -131,6 +189,14 @@ public sealed class TuiImage : TuiWidget
     /// <summary>What is drawn when there is no picture.</summary>
     public string Placeholder { get; set; } = string.Empty;
 
+    /// <summary>What is drawn while one is still being read.</summary>
+    /// <remarks>
+    /// Distinct from <see cref="Placeholder"/>, which says a file cannot be previewed. A
+    /// video being pulled apart by <c>ffmpeg</c> has not failed; it is just slower than a
+    /// keystroke.
+    /// </remarks>
+    public string Loading { get; set; } = "\u2026";
+
     public TuiStyle Style { get; set; }
 
     /// <inheritdoc />
@@ -143,18 +209,27 @@ public sealed class TuiImage : TuiWidget
     /// terminal and a pane that asked for it would get all of one.
     /// </remarks>
     protected override TuiSize MeasureCore(TuiConstraints constraints)
-        => Pixels is { IsEmpty: false } pixels
-            ? constraints.Constrain(new TuiSize(pixels.Width, (pixels.Height + 1) / 2))
-            : constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(Placeholder), Placeholder.Length > 0 ? 1 : 0));
+    {
+        if (Pixels is { IsEmpty: false } pixels)
+        {
+            return constraints.Constrain(new TuiSize(pixels.Width, (pixels.Height + 1) / 2));
+        }
+
+        var text = IsLoading ? Loading : Placeholder;
+
+        return constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(text), text.Length > 0 ? 1 : 0));
+    }
 
     /// <inheritdoc />
     public override void Draw(TuiSurface surface)
     {
         if (Pixels is not { IsEmpty: false } pixels)
         {
-            if (Placeholder.Length > 0)
+            var text = IsLoading ? Loading : Placeholder;
+
+            if (text.Length > 0)
             {
-                surface.DrawText(0, 0, TuiTextMeasure.Elide(Placeholder, surface.Width), Style);
+                surface.DrawText(0, 0, TuiTextMeasure.Elide(text, surface.Width), Style);
             }
 
             return;

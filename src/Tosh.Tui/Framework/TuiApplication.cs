@@ -55,13 +55,23 @@ public static class TuiApplication
                 }
 
                 var size = host.TryGetSize() ?? new TuiSize(80, 25);
-                var frame = screen.Render(size);
 
-                failure.Draw(frame.Buffer);
+                // Drawing runs user code as surely as a keystroke does: a pull binding is a
+                // script function asked once per frame. One that threw used to end the
+                // screen and print its diagnostic over the alternate screen on the way out.
+                // The last good frame stays up with the failure written across it, which is
+                // what a reader can actually act on.
+                // A copy of the last good frame, not the frame itself: the writer diffs
+                // against what it presented, and handing back the same buffer would emit
+                // nothing at all — including the message saying why nothing changed.
+                var buffer = failure.Frame(() => screen.Render(size))
+                    ?? (presented?.Size == size ? presented.Copy() : new TuiBuffer(size));
+
+                failure.Draw(buffer);
 
                 // Only what changed since the last frame reaches the terminal.
-                host.Write(TuiTerminalWriter.Present(presented, frame.Buffer));
-                presented = frame.Buffer;
+                host.Write(TuiTerminalWriter.Present(presented, buffer));
+                presented = buffer;
 
                 // Waited for in slices even when only a keystroke can change the screen.
                 // Blocking on the keyboard is cheaper, and it meant a screen with no refresh

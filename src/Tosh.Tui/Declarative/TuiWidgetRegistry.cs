@@ -562,6 +562,7 @@ public sealed class TuiWidgetRegistry
                 _ => TuiImageFit.Letterbox,
             },
             Placeholder = spec.Text("placeholder") ?? string.Empty,
+            Loading = spec.Text("loading") ?? "…",
             Style = spec.Style(),
         });
 

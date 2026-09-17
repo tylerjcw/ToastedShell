@@ -73,6 +73,23 @@ public sealed class TuiBuffer
     public bool Contains(int column, int row)
         => column >= 0 && column < Width && row >= 0 && row < Height;
 
+    /// <summary>A copy of this buffer, cells and cursor, with no placements.</summary>
+    /// <remarks>
+    /// For holding the last good frame when the next one could not be drawn. Reusing the
+    /// buffer itself would leave the writer diffing it against itself and emitting nothing,
+    /// so the message explaining the failure would never reach the terminal. Placements are
+    /// deliberately not carried over: the picture is already on screen, and asking for it
+    /// again would send it a second time.
+    /// </remarks>
+    public TuiBuffer Copy()
+    {
+        var copy = new TuiBuffer(Size) { Cursor = Cursor };
+
+        Array.Copy(_cells, copy._cells, _cells.Length);
+
+        return copy;
+    }
+
     /// <summary>Fills every cell with a blank in the given style.</summary>
     public void Clear(TuiStyle style)
     {

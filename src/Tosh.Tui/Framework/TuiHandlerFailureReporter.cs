@@ -48,6 +48,30 @@ internal sealed class TuiHandlerFailureReporter
         }
     }
 
+    /// <summary>
+    /// Draws a frame, or reports why it could not and answers with nothing.
+    /// </summary>
+    /// <remarks>
+    /// Drawing runs user code too. A pull binding is a script function asked once per
+    /// frame, and one that throws was ending the screen and printing its diagnostic over
+    /// the alternate screen on the way out — for an ordinary scripting mistake, in the one
+    /// place a mistake is most likely, because a binding runs far more often than a key
+    /// handler does (<c>TUI-0010</c>).
+    /// </remarks>
+    public TuiBuffer? Frame(Func<TuiFrame> render)
+    {
+        try
+        {
+            return render().Buffer;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException
+                                              and not StackOverflowException)
+        {
+            Record(exception);
+            return null;
+        }
+    }
+
     private void Record(Exception exception)
     {
         var message = $"{exception.GetType().Name}: {exception.Message}";
