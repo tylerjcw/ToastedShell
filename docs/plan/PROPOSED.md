@@ -37,7 +37,6 @@
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |
-| [`TUI-0012`](items/TUI-0012.md) | P3 | proposed | 0/6 | There is no performance budget, so 'fast enough' is a feeling |
 | [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
 | [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/7 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
 | [`TS-P3-21`](items/TS-P3-21.md) | P3 | proposed | — | Native runtime: GC, object layout, and startup budget |
