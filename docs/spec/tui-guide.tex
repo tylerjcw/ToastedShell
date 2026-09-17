@@ -702,7 +702,25 @@ thirteen-cell box is four megabytes of base64 down a pipe, to be scaled to two
 hundred pixels at the other end; capping it at what a cell could generously be worth
 turns that into one.
 
-Sixel, for the terminals that speak that and not this, is still \code{TUI-0025}.
+\subsection{Sixels}
+
+Where the terminal speaks sixels and not Kitty's protocol --- \code{foot},
+\code{mlterm}, \code{contour}, \code{mintty} --- the same widget encodes the same
+pixels that way instead. Nothing in the markup changes, and Kitty is preferred
+where a terminal offers both.
+
+The difference is worth knowing because it reaches the renderer. A Kitty image is
+\emph{placed}: it has an id, the terminal keeps it, and removing it is a message. A
+sixel is \emph{painted into the screen} like text: there is no id, nothing to
+delete, and a picture that goes away is removed by drawing the cells it covered
+again. The frame diff does that --- those cells hold exactly what they held last
+frame, so nothing else would have noticed they had stopped being right.
+
+\begin{tipbox}
+Sixels are smaller on the wire than they look. A preview that costs a megabyte as
+Kitty pixels is tens of kilobytes as sixels, because a 216-colour palette and
+run-length encoding suit a photograph better than raw bytes do.
+\end{tipbox}
 
 \subsection{\texttt{Spinner}}
 

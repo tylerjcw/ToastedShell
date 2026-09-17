@@ -16,6 +16,20 @@ public sealed class TuiGraphicsTests
     private static Func<string, string?> Env(params (string Name, string Value)[] pairs)
         => name => pairs.FirstOrDefault(pair => pair.Name == name).Value;
 
+    /// <summary>Speaks one protocol for the length of a test.</summary>
+    /// <remarks>
+    /// Delete means different things under the two — a message under Kitty and nothing at
+    /// all under sixels — so a test about deleting has to say which it is talking about.
+    /// </remarks>
+    private sealed class Speaking : IDisposable
+    {
+        private readonly TuiGraphicsProtocol _was = TuiGraphics.Protocol;
+
+        public Speaking(TuiGraphicsProtocol protocol) => TuiGraphics.Protocol = protocol;
+
+        public void Dispose() => TuiGraphics.Protocol = _was;
+    }
+
     [Theory]
     [InlineData("TERM", "xterm-ghostty")]
     [InlineData("TERM", "xterm-kitty")]
@@ -116,6 +130,8 @@ public sealed class TuiGraphicsTests
     [Fact]
     public void A_picture_replaced_by_another_is_taken_back_first()
     {
+        using var speaking = new Speaking(TuiGraphicsProtocol.Kitty);
+
         // The stacking bug. A preview pane showing a new file reuses its widget and so its
         // id, so matching on the id alone kept the old picture: the new one was drawn over
         // it and the taller one's edges showed above and below, stacked, until something
@@ -138,6 +154,8 @@ public sealed class TuiGraphicsTests
     [Fact]
     public void A_resize_takes_every_picture_back_and_draws_them_again()
     {
+        using var speaking = new Speaking(TuiGraphicsProtocol.Kitty);
+
         // A resize repaints every cell and repaints no pixels: the terminal is still
         // holding every picture it was given, and something has to say otherwise.
         var previous = new TuiBuffer(new TuiSize(10, 6));
@@ -155,6 +173,8 @@ public sealed class TuiGraphicsTests
     [Fact]
     public void A_picture_that_has_gone_is_taken_back()
     {
+        using var speaking = new Speaking(TuiGraphicsProtocol.Kitty);
+
         var previous = new TuiBuffer(new TuiSize(10, 4));
 
         previous.Place(new TuiPlacement(1, 0, 0, 4, 2, Red()));
@@ -177,6 +197,104 @@ public sealed class TuiGraphicsTests
         var sent = TuiTerminalWriter.Present(previous, next);
 
         Assert.Contains("a=T", sent, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("TERM", "foot")]
+    [InlineData("TERM", "mlterm")]
+    [InlineData("TERM_PROGRAM", "mintty")]
+    public void A_terminal_that_speaks_sixels_and_not_kitty_gets_sixels(string name, string value)
+        => Assert.Equal(TuiGraphicsProtocol.Sixel, TuiGraphics.Detect(Env((name, value))));
+
+    [Fact]
+    public void Kitty_wins_where_a_terminal_speaks_both()
+    {
+        // It places a picture and can take it back, where a sixel has to be painted over.
+        Assert.Equal(
+            TuiGraphicsProtocol.Kitty,
+            TuiGraphics.Detect(Env(("TERM", "xterm-kitty"), ("TERM_PROGRAM", "contour"))));
+    }
+
+    [Fact]
+    public void A_sixel_is_one_dcs_string_with_its_size_declared()
+    {
+        var sent = TuiSixel.Encode(Red(4, 4));
+
+        Assert.StartsWith("\x1bP0;1;0q", sent, StringComparison.Ordinal);
+        Assert.Contains("\"1;1;4;4", sent, StringComparison.Ordinal);
+        Assert.EndsWith("\x1b\\", sent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_sixel_colour_is_a_percentage_and_not_a_byte()
+    {
+        // The one place this format will quietly draw the wrong thing: `#n;2;r;g;b` is
+        // 0-100 per channel, so a byte written straight in is clamped to white.
+        var sent = TuiSixel.Encode(Red(2, 2));
+
+        var definition = sent[sent.IndexOf("#", StringComparison.Ordinal)..];
+        var numbers = definition[..definition.IndexOfAny(['#', '!', '$', '-', '?'])]
+            .Split(';')
+            .Skip(2)
+            .Select(int.Parse);
+
+        Assert.All(numbers, channel => Assert.InRange(channel, 0, 100));
+    }
+
+    [Fact]
+    public void A_run_of_the_same_column_is_sent_once()
+    {
+        // A preview is mostly runs, and the difference between encoding them and not is a
+        // factor of ten on a photograph.
+        var wide = TuiSixel.Encode(Red(64, 6));
+
+        Assert.Contains("!", wide, StringComparison.Ordinal);
+        Assert.True(wide.Length < 300, $"A flat 64-pixel band took {wide.Length} characters.");
+    }
+
+    [Fact]
+    public void Bands_are_six_rows_and_are_separated()
+    {
+        Assert.DoesNotContain("-", TuiSixel.Encode(Red(2, 6)), StringComparison.Ordinal);
+        Assert.Contains("-", TuiSixel.Encode(Red(2, 7)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Nothing_at_all_encodes_to_nothing()
+        => Assert.Equal(string.Empty, TuiSixel.Encode(new TuiPixels(0, 0, [])));
+
+    [Fact]
+    public void There_is_nothing_to_delete_under_sixels()
+    {
+        // A sixel is painted into the screen like text. Sending a Kitty delete to a
+        // terminal that never placed anything says nothing useful and might say it loudly.
+        using var speaking = new Speaking(TuiGraphicsProtocol.Sixel);
+
+        Assert.Equal(string.Empty, TuiGraphics.Delete(1));
+        Assert.Equal(string.Empty, TuiGraphics.DeleteAll());
+        Assert.False(TuiGraphics.Remembers(TuiGraphicsProtocol.Sixel));
+    }
+
+    [Fact]
+    public void The_cells_a_sixel_leaves_are_drawn_again()
+    {
+        // The consequence of not being remembered: those cells hold exactly what they held
+        // last frame, so the diff would skip them — and what the reader sees over them is a
+        // photograph that is no longer supposed to be there.
+        using var speaking = new Speaking(TuiGraphicsProtocol.Sixel);
+
+        {
+            var previous = new TuiBuffer(new TuiSize(10, 4));
+            var next = new TuiBuffer(new TuiSize(10, 4));
+
+            previous.DrawText(0, 1, "abcdefghij", default);
+            next.DrawText(0, 1, "abcdefghij", default);
+            previous.Place(new TuiPlacement(1, 0, 1, 6, 2, Red()));
+
+            var sent = TuiTerminalWriter.Present(previous, next);
+
+            Assert.Contains("abcdef", sent, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

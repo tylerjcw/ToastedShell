@@ -151,9 +151,7 @@ public sealed class TuiTerminalSession : IDisposable
             // A picture the terminal was asked to draw outlives the program that asked, so
             // it is taken back here too: a crash during a preview would otherwise leave it
             // painted over the shell the reader is handed back.
-            var pictures = Rendering.TuiGraphics.Protocol == Rendering.TuiGraphicsProtocol.Kitty
-                ? Rendering.TuiGraphics.DeleteAll()
-                : string.Empty;
+            var pictures = Rendering.TuiGraphics.DeleteAll();
 
             _host.WriteUrgent(pictures + DisableSgrMouse + ResetStyles + ShowCursor + ExitAlternateScreen);
         }

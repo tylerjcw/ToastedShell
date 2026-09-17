@@ -10,6 +10,16 @@ public enum TuiGraphicsProtocol
 
     /// <summary>The Kitty graphics protocol: real pixels, placed and deleted by id.</summary>
     Kitty,
+
+    /// <summary>
+    /// Sixels: real pixels, painted into the screen rather than placed on it.
+    /// </summary>
+    /// <remarks>
+    /// Older and more widely spoken, and with one consequence that reaches the rest of the
+    /// renderer: there is no id and nothing to delete, so a picture that goes away is
+    /// removed by repainting the cells it covered.
+    /// </remarks>
+    Sixel,
 }
 
 /// <summary>
@@ -50,10 +60,23 @@ public static class TuiGraphics
     /// </remarks>
     public static TuiGraphicsProtocol Protocol { get; set; } = TuiGraphicsProtocol.HalfBlocks;
 
-    /// <summary>Asks the terminal to draw a picture, and to remember it by id.</summary>
+    /// <summary>Whether this protocol keeps a picture until it is told to let go.</summary>
+    /// <remarks>
+    /// The difference the writer has to care about. Kitty remembers a placement by id, so
+    /// removing one is a message; sixels are painted into the screen like text, so removing
+    /// one is repainting the cells it covered.
+    /// </remarks>
+    public static bool Remembers(TuiGraphicsProtocol protocol) => protocol == TuiGraphicsProtocol.Kitty;
+
+    /// <summary>Asks the terminal to draw a picture.</summary>
     public static string Transmit(TuiPlacement placement)
     {
         ArgumentNullException.ThrowIfNull(placement);
+
+        if (Protocol == TuiGraphicsProtocol.Sixel)
+        {
+            return $"\x1b[{placement.Row + 1};{placement.Column + 1}H" + TuiSixel.Encode(placement.Pixels);
+        }
 
         var pixels = placement.Pixels;
         var payload = Convert.ToBase64String(Bytes(pixels));
@@ -87,11 +110,17 @@ public static class TuiGraphics
         return builder.ToString();
     }
 
-    /// <summary>Takes a picture back off the screen.</summary>
-    public static string Delete(int id) => $"\x1b_Ga=d,d=i,i={id},q=2;\x1b\\";
+    /// <summary>Takes a picture back off the screen, where the terminal is holding one.</summary>
+    /// <remarks>
+    /// Nothing to say under sixels: the picture is already part of the screen, and what
+    /// removes it is the cells being written again.
+    /// </remarks>
+    public static string Delete(int id)
+        => Remembers(Protocol) ? $"\x1b_Ga=d,d=i,i={id},q=2;\x1b\\" : string.Empty;
 
     /// <summary>Takes every picture off the screen, for handing the terminal back.</summary>
-    public static string DeleteAll() => "\x1b_Ga=d,d=A,q=2;\x1b\\";
+    public static string DeleteAll()
+        => Remembers(Protocol) ? "\x1b_Ga=d,d=A,q=2;\x1b\\" : string.Empty;
 
     private static byte[] Bytes(TuiPixels pixels)
     {
@@ -156,14 +185,28 @@ public static class TuiGraphics
         var program = environment("TERM_PROGRAM") ?? string.Empty;
         var term = environment("TERM") ?? string.Empty;
 
-        return Speaks(program) || Speaks(term)
-            ? TuiGraphicsProtocol.Kitty
+        if (Speaks(program) || Speaks(term))
+        {
+            return TuiGraphicsProtocol.Kitty;
+        }
+
+        // Kitty first where both are offered: it places a picture and can take it back,
+        // where a sixel has to be painted over.
+        return Sixels(program) || Sixels(term)
+            ? TuiGraphicsProtocol.Sixel
             : TuiGraphicsProtocol.HalfBlocks;
 
         static bool Speaks(string value)
             => value.Contains("ghostty", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("kitty", StringComparison.OrdinalIgnoreCase) ||
                value.Contains("wezterm", StringComparison.OrdinalIgnoreCase);
+
+        static bool Sixels(string value)
+            => value.Contains("foot", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("mlterm", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("contour", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("mintty", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("yaft", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>A protocol a reader named by hand, or null if they named nothing useful.</summary>
@@ -171,6 +214,7 @@ public static class TuiGraphics
         => value?.Trim().ToLowerInvariant() switch
         {
             "kitty" => TuiGraphicsProtocol.Kitty,
+            "sixel" => TuiGraphicsProtocol.Sixel,
             "half" or "halfblocks" or "blocks" or "none" or "off" => TuiGraphicsProtocol.HalfBlocks,
             _ => null,
         };

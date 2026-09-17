@@ -37,6 +37,13 @@ public static class TuiTerminalWriter
 
         // A resized terminal shares no addresses with the frame before it.
         var reusable = previous is not null && previous.Size == next.Size;
+
+        // Where a picture used to be and is not any more. Under Kitty this is empty, because
+        // deleting a placement reveals the cells underneath; under sixels a picture is
+        // painted into the screen like text, so the only thing that removes it is those
+        // cells being written again — and the diff would otherwise skip them, because their
+        // *content* has not changed even though what the reader sees has.
+        var repaint = Vacated(previous?.Placements ?? [], next.Placements, reusable);
         var builder = new StringBuilder();
 
         if (!reusable)
@@ -57,7 +64,7 @@ public static class TuiTerminalWriter
 
             while (column < next.Width)
             {
-                if (reusable && !Differs(previous!, next, column, row))
+                if (reusable && !Differs(previous!, next, column, row) && !Covers(repaint, column, row))
                 {
                     column += 1;
                     continue;
@@ -67,7 +74,8 @@ public static class TuiTerminalWriter
                 var runStart = column;
                 builder.Append($"\x1b[{row + 1};{runStart + 1}H");
 
-                while (column < next.Width && (!reusable || Differs(previous!, next, column, row)))
+                while (column < next.Width &&
+                       (!reusable || Differs(previous!, next, column, row) || Covers(repaint, column, row)))
                 {
                     var cell = next[column, row];
 
@@ -148,6 +156,51 @@ public static class TuiTerminalWriter
         {
             builder.Append("\x1b[?25h");
         }
+    }
+
+    /// <summary>
+    /// The rectangles a picture has left, which have to be drawn again.
+    /// </summary>
+    /// <remarks>
+    /// Empty for a protocol that remembers its placements, because deleting one is enough.
+    /// A sixel is not remembered — it was painted into the screen — so the cells it covered
+    /// are stale in a way the cell diff cannot see: they hold exactly what they held last
+    /// frame, and what the reader sees over them is a photograph.
+    /// </remarks>
+    private static IReadOnlyList<TuiRect> Vacated(
+        IReadOnlyList<TuiPlacement> previous,
+        IReadOnlyList<TuiPlacement> next,
+        bool reusable)
+    {
+        if (previous.Count == 0 || TuiGraphics.Remembers(TuiGraphics.Protocol))
+        {
+            return [];
+        }
+
+        var gone = new List<TuiRect>();
+
+        foreach (var was in previous)
+        {
+            if (!reusable || !next.Any(now => now.SameAs(was)))
+            {
+                gone.Add(new TuiRect(was.Column, was.Row, was.Columns, was.Rows));
+            }
+        }
+
+        return gone;
+    }
+
+    private static bool Covers(IReadOnlyList<TuiRect> regions, int column, int row)
+    {
+        for (var index = 0; index < regions.Count; index += 1)
+        {
+            if (regions[index].Contains(column, row))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

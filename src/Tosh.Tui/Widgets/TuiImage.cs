@@ -160,7 +160,7 @@ public sealed class TuiImage : TuiWidget
             return;
         }
 
-        if (Protocol == TuiGraphicsProtocol.Kitty)
+        if (Protocol != TuiGraphicsProtocol.HalfBlocks)
         {
             DrawPixels(surface, pixels);
             return;
