@@ -8,6 +8,7 @@
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
 | [`TOAST-0088`](items/TOAST-0088.md) | P2 | complete | 4/4 | A declared enum serialises its own internals, in every format |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
+| [`TUI-0008`](items/TUI-0008.md) | P2 | complete | 6/6 | A live screen can only poll on a timer; it cannot be fed by a job, a channel or a pipeline |
 | [`TUI-0010`](items/TUI-0010.md) | P1 | complete | 7/7 | A script handler that throws can leave the user's login shell in the alternate screen with no cursor |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | complete | 9/9 | Suite reliability on a clean checkout: four flakes named and resolved |
 | [`TUI-0017`](items/TUI-0017.md) | P2 | complete | 9/9 | There is no table widget, in a shell whose pipeline is objects |
@@ -95,6 +96,7 @@
 | [`TOAST-0109`](items/TOAST-0109.md) | P3 | complete | 3/3 | Any `|` or `>` within three characters of the cursor produces a pipeline hover |
 | [`TOAST-0118`](items/TOAST-0118.md) | P2 | complete | 8/8 | A generic method's own type parameter is unbound in anything it constructs |
 | [`TOAST-0071`](items/TOAST-0071.md) | P2 | complete | 5/5 | Rune expansion stamped a fold onto the shared body AST, so one call site answered for the next |
+| [`TUI-0025`](items/TUI-0025.md) | P3 | complete | 8/8 | A TUI cannot show a picture, so a file browser's preview pane is a hex dump or nothing |
 | [`TUI-0027`](items/TUI-0027.md) | P2 | complete | 5/5 | A function delivers a collection two ways, and a host reading the raw stream sees the difference |
 | [`TOAST-0127`](items/TOAST-0127.md) | P1 | complete | 7/7 | A numeric comparison meant something different when it could be constant-folded, because the fold compared through decimal |
 | [`TOAST-0107`](items/TOAST-0107.md) | P2 | complete | 6/6 | The path operator is unusable inside an interpolation hole, because `::` is read as a format clause |
