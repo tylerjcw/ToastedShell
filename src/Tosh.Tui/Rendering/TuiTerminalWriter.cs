@@ -27,11 +27,22 @@ public static class TuiTerminalWriter
     /// <summary>Everything needed to draw <paramref name="next"/> from scratch.</summary>
     public static string Present(TuiBuffer next) => Present(null, next);
 
+    /// <summary>The same, at whatever depth the terminal can show.</summary>
+    public static string Present(TuiBuffer next, TuiColorDepth depth) => Present(null, next, depth);
+
     /// <summary>
     /// The difference between two frames, or a full paint when
     /// <paramref name="previous"/> is absent or a different size.
     /// </summary>
-    public static string Present(TuiBuffer? previous, TuiBuffer next)
+    /// <param name="depth">
+    /// What the terminal can show. Defaults to truecolor, which is what every caller got
+    /// before there was a choice — a screen rendered for a snapshot or a test is not being
+    /// looked at by anybody, so there is nothing to degrade for.
+    /// </param>
+    public static string Present(
+        TuiBuffer? previous,
+        TuiBuffer next,
+        TuiColorDepth depth = TuiColorDepth.TrueColor)
     {
         ArgumentNullException.ThrowIfNull(next);
 
@@ -90,7 +101,7 @@ public static class TuiTerminalWriter
 
                         if (!cell.Style.IsDefault)
                         {
-                            builder.Append(Introducer(cell.Style));
+                            builder.Append(Introducer(cell.Style, depth));
                         }
 
                         style = cell.Style;
@@ -243,15 +254,6 @@ public static class TuiTerminalWriter
     private static bool Differs(TuiBuffer previous, TuiBuffer next, int column, int row)
         => previous[column, row] != next[column, row];
 
-    private static string Introducer(TuiStyle style)
-        => style.IsDefault
-            ? string.Empty
-            : StyledText.BuildSgrIntroducer(
-                style.Foreground,
-                style.Background,
-                style.Attributes.HasFlag(TuiTextAttributes.Bold),
-                style.Attributes.HasFlag(TuiTextAttributes.Italic),
-                style.Attributes.HasFlag(TuiTextAttributes.Underline),
-                style.Attributes.HasFlag(TuiTextAttributes.Dim),
-                style.Attributes.HasFlag(TuiTextAttributes.Reverse));
+    private static string Introducer(TuiStyle style, TuiColorDepth depth)
+        => style.IsDefault ? string.Empty : TuiColors.Introducer(style, depth);
 }

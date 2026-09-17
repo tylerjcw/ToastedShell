@@ -42,6 +42,11 @@ public static class TuiApplication
         TuiBuffer? presented = null;
         var failure = new TuiHandlerFailureReporter();
 
+        // Asked once. What a terminal can show does not change while a screen is up, and
+        // the reader who exports NO_COLOR mid-session is not a reader worth a check per
+        // frame (`TUI-0009`).
+        var depth = TuiColors.Detect(Environment.GetEnvironmentVariable);
+
         // A declarative screen calls script functions while it draws, and it is the only
         // screen that does. Told where to report one that fails, it keeps drawing the rest
         // of the tree; told nothing, it throws, which is what a test driving it wants.
@@ -78,7 +83,7 @@ public static class TuiApplication
                 failure.Draw(buffer);
 
                 // Only what changed since the last frame reaches the terminal.
-                host.Write(TuiTerminalWriter.Present(presented, buffer));
+                host.Write(TuiTerminalWriter.Present(presented, buffer, depth));
                 presented = buffer;
 
                 // Waited for in slices even when only a keystroke can change the screen.
