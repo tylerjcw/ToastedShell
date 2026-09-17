@@ -114,6 +114,47 @@ public sealed class TuiRenderFailureTests
         Assert.Equal("no such property", Assert.Single(failures).Message);
     }
 
+    /// <summary>
+    /// A binding that does something on the way to its answer shows the answer.
+    /// </summary>
+    /// <remarks>
+    /// In TōSh a bare statement emits, so a side effect inside a binding is a value on the
+    /// way past — and a widget showing one string was stringifying the whole collection as
+    /// <c>System.Object[]</c>. That is what `examples/system-monitor.tosh` displayed under
+    /// its meters, because its summary pushes two samples before returning its text.
+    /// </remarks>
+    [Fact]
+    public void A_widget_that_shows_one_thing_takes_the_last_thing_produced()
+    {
+        var widget = new TuiTextWidget { TextSource = new Source() };
+
+        TuiBindings.Apply(
+            widget,
+            (_, _) => new object?[] { "a side effect", "another", "the answer" },
+            values: null);
+
+        Assert.Equal("the answer", widget.Text);
+    }
+
+    /// <summary>A widget that shows many things still gets all of them.</summary>
+    /// <remarks>
+    /// The other half, and the reason the invoker collects everything in the first place:
+    /// `Lines`, `List`, `Table`, `Spark` and `Bars` had all been showing their final element
+    /// and nothing else (<c>TUI-0008</c>).
+    /// </remarks>
+    [Fact]
+    public void A_widget_that_shows_many_things_still_gets_all_of_them()
+    {
+        var widget = new TuiLines { LinesSource = new Source() };
+
+        TuiBindings.Apply(
+            widget,
+            (_, _) => new object?[] { "first", "second", "third" },
+            values: null);
+
+        Assert.Equal(["first", "second", "third"], widget.Lines.Select(line => line.Text));
+    }
+
     /// <summary>With nobody listening, a binding still throws where it always did.</summary>
     /// <remarks>
     /// A screen wires the sink; a test or a script driving widgets itself does not, and

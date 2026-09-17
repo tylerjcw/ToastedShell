@@ -1,5 +1,7 @@
 using System.Text;
 
+using Tosh.Tui.Rendering;
+
 namespace Tosh.Tui;
 
 public static class TextDocumentFormatter
@@ -41,6 +43,26 @@ public static class TextDocumentFormatter
         ArgumentNullException.ThrowIfNull(text);
         width = Math.Max(1, width);
 
+        // A single line that already fits is returned exactly as it was written.
+        //
+        // Wrapping splits on whitespace and rejoins with single spaces, which is what
+        // wrapping *means* — and it was doing it to lines that never needed wrapping, so a
+        // block of aligned columns came back reflowed. `examples/system-monitor.tosh` drew
+        // `Used 42.8 GB` where its source says `  Used       42.8 GB`, and this type's own
+        // summary says a block with headings and columns is not a paragraph.
+        //
+        // Text carrying its own line breaks or tabs does not take this path. Collapsing
+        // those is the documented contract — a paragraph's newlines are an artefact of how
+        // it was typed — and a tab has no width a cell grid can agree on.
+        //
+        // Measured in columns rather than code units, like everything else that decides
+        // whether text fits (`TUI-0005`).
+        if (text.AsSpan().IndexOfAny('\n', '\r', '\t') < 0 &&
+            TuiTextMeasure.MeasureWidth(indent) + TuiTextMeasure.MeasureWidth(text) <= width)
+        {
+            return [indent + text];
+        }
+
         var words = text
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
@@ -59,7 +81,8 @@ public static class TextDocumentFormatter
                 ? currentIndent + word
                 : current + " " + word;
 
-            if (candidate.Length <= width || current.Length == currentIndent.Length)
+            if (TuiTextMeasure.MeasureWidth(candidate) <= width ||
+                current.Length == currentIndent.Length)
             {
                 if (current.Length > currentIndent.Length)
                 {

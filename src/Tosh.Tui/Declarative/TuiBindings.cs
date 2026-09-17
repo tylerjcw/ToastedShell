@@ -74,7 +74,7 @@ public static class TuiBindings
             // hiding it: a screen missing the pane you were looking at explains itself far
             // worse than one showing a pane it should not have.
             Try(
-                () => root.IsVisible = invoke(visible, values) is not (null or false or 0),
+                () => root.IsVisible = Single(invoke(visible, values)) is not (null or false or 0),
                 onFailure);
         }
 
@@ -144,21 +144,21 @@ public static class TuiBindings
         // decides whether anything else about it matters.
         if (root.VisibleSource is { } visible)
         {
-            root.IsVisible = invoke(visible, values) is not (null or false or 0);
+            root.IsVisible = Single(invoke(visible, values)) is not (null or false or 0);
         }
 
         switch (root)
         {
             case TuiTextWidget { TextSource: { } source } text:
-                text.Text = invoke(source, values)?.ToString() ?? string.Empty;
+                text.Text = Single(invoke(source, values))?.ToString() ?? string.Empty;
                 break;
 
             case TuiTextField { ValueSource: { } source } field:
-                field.Text = invoke(source, values)?.ToString() ?? string.Empty;
+                field.Text = Single(invoke(source, values))?.ToString() ?? string.Empty;
                 break;
 
             case TuiBorder { TitleSource: { } source } border:
-                border.Title = invoke(source, values)?.ToString();
+                border.Title = Single(invoke(source, values))?.ToString();
                 break;
 
             case TuiList { ItemsSource: { } source } list:
@@ -194,7 +194,7 @@ public static class TuiBindings
                 return false;
 
             case TuiGauge { AmountSource: { } source } gauge:
-                gauge.Amount = TypeConversion.TryConvert(invoke(source, values), typeof(double), out var amount)
+                gauge.Amount = TypeConversion.TryConvert(Single(invoke(source, values)), typeof(double), out var amount)
                     ? (double)amount!
                     : 0d;
                 return false;
@@ -204,7 +204,7 @@ public static class TuiBindings
                 return false;
 
             case TuiImage { PathSource: { } source } image:
-                image.Path = invoke(source, values)?.ToString();
+                image.Path = Single(invoke(source, values))?.ToString();
                 return false;
 
             case TuiLines { LinesSource: { } source } lines:
@@ -243,6 +243,37 @@ public static class TuiBindings
             onFailure(exception);
         }
     }
+
+    /// <summary>
+    /// What a widget that shows one thing should take from everything a function produced.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The last of them, which is what a shell means by a function's result. A binding is an
+    /// ordinary function and may do something on the way to its answer — and in TōSh a bare
+    /// statement emits, so a side effect is a value on the way past:
+    /// </para>
+    /// <code>
+    /// func Status() {
+    ///     $spark.Push($sample)   // emits, because a bare statement does
+    ///     return "all good"
+    /// }
+    /// </code>
+    /// <para>
+    /// A <c>Text</c> bound to that showed <c>System.Object[]</c>. Collecting everything a
+    /// binding produces is right and is what <c>Lines</c>, <c>List</c>, <c>Table</c>,
+    /// <c>Spark</c> and <c>Bars</c> need (<c>TUI-0008</c>) — but a widget showing one string
+    /// then stringified the array. It reads as a framework that cannot be used with side
+    /// effects in it, which is most real bindings.
+    /// </para>
+    /// <para>
+    /// A function whose single value genuinely <em>is</em> an array is indistinguishable
+    /// here, and takes its last element. That is no worse than what it did before, which was
+    /// to print the array's type name.
+    /// </para>
+    /// </remarks>
+    private static object? Single(object? value)
+        => value is object?[] { Length: > 0 } produced ? produced[^1] : value;
 
     private static IReadOnlyList<object?> AsItems(object? value)
         => value switch
