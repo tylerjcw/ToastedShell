@@ -17,7 +17,6 @@
 | [`TOAST-0092`](items/TOAST-0092.md) | P2 | partial | 9/10 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOAST-0102`](items/TOAST-0102.md) | P2 | partial | 4/5 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
-| [`TUI-0022`](items/TUI-0022.md) | P3 | partial | 6/7 | A keybinding's help text is written twice, and the two drift |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0104`](items/TOAST-0104.md) | P2 | partial | 4/5 | A refinement type derived from a sibling in the same module silently fails to register |
