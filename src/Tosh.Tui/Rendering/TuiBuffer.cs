@@ -170,7 +170,11 @@ public sealed class TuiBuffer
         var limit = Math.Min(Width - column, maxColumns ?? int.MaxValue);
         var used = 0;
 
-        foreach (var cluster in TuiTextMeasure.EnumerateClusters(text))
+        // Spans rather than strings: this runs once per character of every string drawn on
+        // every frame, and a string per cluster was most of what a frame allocated
+        // (`TUI-0012`). The cell still needs a string, but a printable ASCII one comes from
+        // a table rather than the heap.
+        foreach (var cluster in TuiTextMeasure.Clusters(text))
         {
             var width = TuiTextMeasure.ClusterWidth(cluster);
 
@@ -181,7 +185,11 @@ public sealed class TuiBuffer
                 if (used > 0)
                 {
                     var previous = this[column + used - 1, row];
-                    Set(column + used - 1, row, previous with { Text = previous.Text + cluster });
+
+                    Set(
+                        column + used - 1,
+                        row,
+                        previous with { Text = previous.Text + TuiTextMeasure.Text(cluster) });
                 }
 
                 continue;
@@ -192,7 +200,7 @@ public sealed class TuiBuffer
                 break;
             }
 
-            Set(column + used, row, new TuiCell(cluster, style));
+            Set(column + used, row, new TuiCell(TuiTextMeasure.Text(cluster), style));
 
             if (width == 2)
             {

@@ -27,22 +27,92 @@ namespace Tosh.Tui.Rendering;
 /// </remarks>
 public static class TuiTextMeasure
 {
+    /// <summary>
+    /// One string per printable ASCII character, so a cell can hold one without allocating.
+    /// </summary>
+    /// <remarks>
+    /// Nearly every character a terminal draws is in here. Without the table, painting one
+    /// 80x24 frame allocated a string per cell, which is most of what a frame cost
+    /// (<c>TUI-0012</c>).
+    /// </remarks>
+    private static readonly string[] AsciiText =
+        [.. Enumerable.Range(0, 128).Select(code => ((char)code).ToString())];
+
     /// <summary>Columns occupied by <paramref name="text"/>.</summary>
     public static int MeasureWidth(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        var total = 0;
+        return MeasureWidth(text.AsSpan());
+    }
 
-        foreach (var cluster in EnumerateClusters(text))
+    /// <summary>Columns occupied by a span of text.</summary>
+    /// <remarks>
+    /// The span overloads exist because the obvious implementation of all of this walks
+    /// grapheme clusters as strings, and a string per character is ruinous on a path that
+    /// runs once per cell per frame.
+    /// </remarks>
+    public static int MeasureWidth(ReadOnlySpan<char> text)
+    {
+        // Printable ASCII is one column each, and is what a terminal is nearly always
+        // drawing. Scanning for it is a great deal cheaper than the grapheme walk it skips.
+        if (IsPrintableAscii(text))
         {
-            total += ClusterWidth(cluster);
+            return text.Length;
+        }
+
+        var total = 0;
+        var index = 0;
+
+        while (index < text.Length)
+        {
+            var length = StringInfo.GetNextTextElementLength(text[index..]);
+
+            total += ClusterWidth(text.Slice(index, length));
+            index += length;
         }
 
         return total;
     }
 
+    /// <summary>Whether every character is one the terminal draws in exactly one column.</summary>
+    /// <remarks>
+    /// Control characters are excluded on purpose: they are zero-width, so a fast path that
+    /// counted them would report the wrong width for text with a tab or an escape in it.
+    /// </remarks>
+    public static bool IsPrintableAscii(ReadOnlySpan<char> text)
+    {
+        foreach (var character in text)
+        {
+            if (character is < ' ' or > '~')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The string for one cluster, without allocating where it can be helped.</summary>
+    public static string Text(ReadOnlySpan<char> cluster)
+        => cluster.Length == 1 && cluster[0] < 128
+            ? AsciiText[cluster[0]]
+            : new string(cluster);
+
+    /// <summary>
+    /// Walks text one grapheme cluster at a time, giving each as a span.
+    /// </summary>
+    /// <remarks>
+    /// A struct enumerator so a <c>foreach</c> over it allocates nothing at all — not the
+    /// clusters and not the enumerator.
+    /// </remarks>
+    public static ClusterWalk Clusters(ReadOnlySpan<char> text) => new(text);
+
     /// <summary>Splits text into grapheme clusters — one visible character each.</summary>
+    /// <remarks>
+    /// Allocates a string per cluster, so it is for callers that want strings anyway.
+    /// <see cref="Clusters"/> is the one to use on a drawing path.
+    /// </remarks>
     public static IEnumerable<string> EnumerateClusters(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -55,14 +125,52 @@ public static class TuiTextMeasure
         }
     }
 
+    /// <summary>A <c>foreach</c>-able walk over grapheme clusters that allocates nothing.</summary>
+    public ref struct ClusterWalk(ReadOnlySpan<char> text)
+    {
+        private readonly ReadOnlySpan<char> _text = text;
+        private int _index;
+
+        /// <summary>The cluster the walk is on.</summary>
+        public ReadOnlySpan<char> Current { get; private set; }
+
+        public readonly ClusterWalk GetEnumerator() => this;
+
+        public bool MoveNext()
+        {
+            if (_index >= _text.Length)
+            {
+                return false;
+            }
+
+            var length = StringInfo.GetNextTextElementLength(_text[_index..]);
+
+            Current = _text.Slice(_index, length);
+            _index += length;
+
+            return true;
+        }
+    }
+
     /// <summary>Columns occupied by one grapheme cluster: 0, 1 or 2.</summary>
     public static int ClusterWidth(string cluster)
     {
         ArgumentNullException.ThrowIfNull(cluster);
 
+        return ClusterWidth(cluster.AsSpan());
+    }
+
+    /// <summary>Columns occupied by one grapheme cluster: 0, 1 or 2.</summary>
+    public static int ClusterWidth(ReadOnlySpan<char> cluster)
+    {
         if (cluster.Length == 0)
         {
             return 0;
+        }
+
+        if (cluster.Length == 1 && cluster[0] is >= ' ' and <= '~')
+        {
+            return 1;
         }
 
         // An emoji presentation selector makes the preceding character render as a
@@ -73,7 +181,9 @@ public static class TuiTextMeasure
             return 2;
         }
 
-        var first = char.ConvertToUtf32(cluster, 0);
+        var first = char.IsHighSurrogate(cluster[0]) && cluster.Length > 1
+            ? char.ConvertToUtf32(cluster[0], cluster[1])
+            : cluster[0];
 
         if (IsZeroWidth(first))
         {
@@ -101,10 +211,17 @@ public static class TuiTextMeasure
             return string.Empty;
         }
 
+        // Printable ASCII cuts on a character boundary because every character is one, and
+        // the substring is the whole answer.
+        if (IsPrintableAscii(text))
+        {
+            return text.Length <= maxColumns ? text : text[..maxColumns];
+        }
+
         var builder = new StringBuilder();
         var used = 0;
 
-        foreach (var cluster in EnumerateClusters(text))
+        foreach (var cluster in Clusters(text))
         {
             var width = ClusterWidth(cluster);
 

@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using Tosh.Tui.Rendering;
 using Tosh.Runtime;
 
 namespace Tosh.Tui;
@@ -245,11 +247,32 @@ public static class TuiRenderHelpers
         }
 
         var clipped = ClipPlain(text, width);
-        var remaining = width - StyledText.GetVisibleLength(clipped);
+
+        // Measured in columns, like the clip that produced it. Padding by the code-unit
+        // length put three spaces after a two-character CJK label that already occupied
+        // four columns, and pushed the box's right-hand border two columns out on exactly
+        // the rows that had non-ASCII text in them (`TUI-0005`).
+        var remaining = width - VisibleColumns(clipped);
 
         return remaining <= 0 ? clipped : clipped + new string(' ', remaining);
     }
 
+    /// <summary>
+    /// Clips text to a width, marking the cut.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to append one character at a time and recompute the visible length of the
+    /// whole accumulated string on each pass, which made it quadratic in the width it was
+    /// clipping to — and it is called once per line per frame, so a 200-column screen paid
+    /// for it forty times over (<c>TUI-0012</c>).
+    /// </para>
+    /// <para>
+    /// It also measured in UTF-16 code units, so a line with an emoji or a CJK character in
+    /// it was clipped to the wrong place (<c>TUI-0005</c>). Both go away by deferring to
+    /// <see cref="TuiTextMeasure"/>, which counts columns and walks the text once.
+    /// </para>
+    /// </remarks>
     public static string ClipPlain(string text, int width)
     {
         if (width <= 0 || string.IsNullOrEmpty(text))
@@ -257,7 +280,23 @@ public static class TuiRenderHelpers
             return string.Empty;
         }
 
-        if (StyledText.GetVisibleLength(text) <= width)
+        // The overwhelmingly common case, and the one the measure already answers.
+        return text.Contains('\x1b', StringComparison.Ordinal)
+            ? ClipStyled(text, width)
+            : TuiTextMeasure.Elide(text, width);
+    }
+
+    /// <summary>
+    /// The same, for text that carries its own colour.
+    /// </summary>
+    /// <remarks>
+    /// Escape sequences are copied through and cost no columns, so a clipped line keeps the
+    /// styling of the part that survived. Highlighted source in the config browser's preview
+    /// pane arrives here, which is why this path exists at all.
+    /// </remarks>
+    private static string ClipStyled(string text, int width)
+    {
+        if (VisibleColumns(text) <= width)
         {
             return text;
         }
@@ -268,17 +307,68 @@ public static class TuiRenderHelpers
         }
 
         var builder = new StringBuilder();
+        var used = 0;
+        var index = 0;
 
-        foreach (var character in text)
+        while (index < text.Length)
         {
-            if (StyledText.GetVisibleLength(builder + character.ToString()) >= width)
+            if (text[index] == '\x1b')
+            {
+                var end = EscapeEnd(text, index);
+
+                builder.Append(text, index, end - index);
+                index = end;
+                continue;
+            }
+
+            var length = StringInfo.GetNextTextElementLength(text.AsSpan(index));
+            var cluster = text.Substring(index, length);
+            var columns = TuiTextMeasure.ClusterWidth(cluster);
+
+            // One column is kept back for the mark.
+            if (used + columns > width - 1)
             {
                 break;
             }
 
-            builder.Append(character);
+            builder.Append(cluster);
+            used += columns;
+            index += length;
         }
 
-        return builder + "…";
+        return builder.Append('…').ToString();
+    }
+
+    /// <summary>How many columns text occupies once its styling is discounted.</summary>
+    /// <remarks>
+    /// Stripping allocates, so it is done only when there is something to strip — which is
+    /// nearly never. This is called once per line per frame, so "nearly never" is worth the
+    /// branch (<c>TUI-0012</c>).
+    /// </remarks>
+    private static int VisibleColumns(string text)
+        => TuiTextMeasure.MeasureWidth(
+            text.Contains('\x1b', StringComparison.Ordinal) ? StyledText.StripAnsi(text) : text);
+
+    /// <summary>Where the escape sequence starting at <paramref name="start"/> ends.</summary>
+    /// <remarks>
+    /// CSI — <c>ESC [</c> — runs to a byte in the 0x40-0x7E range, which is the <c>m</c> of
+    /// an SGR introducer. Anything else is taken as two characters, which is enough to keep
+    /// the walk moving past a sequence this does not know.
+    /// </remarks>
+    private static int EscapeEnd(string text, int start)
+    {
+        if (start + 1 >= text.Length || text[start + 1] != '[')
+        {
+            return Math.Min(text.Length, start + 2);
+        }
+
+        var index = start + 2;
+
+        while (index < text.Length && text[index] is < '\x40' or > '\x7e')
+        {
+            index += 1;
+        }
+
+        return Math.Min(text.Length, index + 1);
     }
 }

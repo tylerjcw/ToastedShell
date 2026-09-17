@@ -1,3 +1,5 @@
+using Tosh.Tui.Rendering;
+
 namespace Tosh.Tui;
 
 public enum TuiFormRowKind
@@ -81,23 +83,13 @@ public static class TuiFormLayout
         return entries;
     }
 
+    /// <summary>Clips a label to a width, marking the cut.</summary>
+    /// <remarks>
+    /// A copy of this cut on UTF-16 code units, which splits a surrogate pair down the
+    /// middle: a label ending in an emoji was clipped to half an emoji, and half a surrogate
+    /// pair is not a character at all (<c>TUI-0005</c>). The measure counts columns and
+    /// never cuts inside a cluster.
+    /// </remarks>
     private static string ClipPlain(string text, int width)
-    {
-        if (width <= 0 || string.IsNullOrEmpty(text))
-        {
-            return string.Empty;
-        }
-
-        if (text.Length <= width)
-        {
-            return text;
-        }
-
-        if (width == 1)
-        {
-            return "…";
-        }
-
-        return text[..Math.Max(0, width - 1)] + "…";
-    }
+        => string.IsNullOrEmpty(text) ? string.Empty : TuiTextMeasure.Elide(text, width);
 }

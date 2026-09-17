@@ -102,4 +102,78 @@ public sealed class TuiTextMeasureTests
         Assert.Equal(3, TuiTextMeasure.MeasureWidth(elided));
         Assert.EndsWith("\u2026", elided, StringComparison.Ordinal);
     }
+
+    // ── What makes it cheap enough to run per cell (TUI-0012) ────────
+
+    /// <summary>
+    /// Printable ASCII takes the fast path; anything that is not, does not.
+    /// </summary>
+    /// <remarks>
+    /// The fast path answers "one column each" without walking grapheme clusters, so it has
+    /// to be exactly wrong-free: a control character is zero-width and a combining mark
+    /// belongs to its neighbour, and counting either as a column would report the wrong
+    /// width for the line it is in.
+    /// </remarks>
+    [Theory]
+    [InlineData("hello world", true)]
+    [InlineData("~!@#$%^&*()", true)]
+    [InlineData("", true)]
+    [InlineData("tab\there", false)]
+    [InlineData("esc\u001b[0m", false)]
+    [InlineData("caf\u00e9", false)]
+    [InlineData("\u65e5", false)]
+    [InlineData("\U0001F680", false)]
+    public void The_fast_path_is_taken_only_where_it_is_right(string text, bool expected)
+        => Assert.Equal(expected, TuiTextMeasure.IsPrintableAscii(text));
+
+    /// <summary>
+    /// The fast path and the slow path agree, which is the only thing that matters.
+    /// </summary>
+    /// <remarks>
+    /// Asserted by measuring text that qualifies and text that does not against the same
+    /// expectation, rather than by reaching past the branch: a fast path nobody can tell
+    /// apart from the real answer is the whole point.
+    /// </remarks>
+    [Theory]
+    [InlineData("hello", 5)]
+    [InlineData("a b c", 5)]
+    [InlineData("caf\u00e9", 4)]
+    [InlineData("tab\there", 7)]
+    public void Both_paths_report_the_same_width(string text, int expected)
+        => Assert.Equal(expected, TuiTextMeasure.MeasureWidth(text));
+
+    /// <summary>
+    /// A printable ASCII character is always the same string instance.
+    /// </summary>
+    /// <remarks>
+    /// This is the mechanism, not a detail: a cell holds a string, and painting one 80x24
+    /// frame allocated one per cell before there was a table to take them from. That was
+    /// most of the three megabytes a frame cost.
+    /// </remarks>
+    [Fact]
+    public void An_ascii_cell_string_comes_from_a_table_rather_than_the_heap()
+    {
+        Assert.Same(TuiTextMeasure.Text("x"), TuiTextMeasure.Text("x"));
+        Assert.Same(TuiTextMeasure.Text(" "), TuiTextMeasure.Text(" "));
+
+        // And the answer is still right for what the table cannot hold.
+        Assert.Equal("\u65e5", TuiTextMeasure.Text("\u65e5"));
+    }
+
+    /// <summary>The span walk sees the same clusters the string one does.</summary>
+    [Theory]
+    [InlineData("hello")]
+    [InlineData("caf\u00e9 \U0001F680 \u65e5\u672c")]
+    [InlineData("e\u0301tait")]
+    public void The_allocation_free_walk_agrees_with_the_one_that_allocates(string text)
+    {
+        var walked = new List<string>();
+
+        foreach (var cluster in TuiTextMeasure.Clusters(text))
+        {
+            walked.Add(new string(cluster));
+        }
+
+        Assert.Equal(TuiTextMeasure.EnumerateClusters(text), walked);
+    }
 }
