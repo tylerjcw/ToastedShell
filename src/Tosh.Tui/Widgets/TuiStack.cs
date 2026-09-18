@@ -176,151 +176,27 @@ public sealed class TuiStack : TuiWidget
     /// without a mark to say anything had been cut.
     /// </para>
     /// </remarks>
-    private int[] Distribute(int available, bool horizontal, TuiRect bounds)
-    {
-        var sizes = new int[_children.Count];
-        var wanted = new int[_children.Count];
-        var floors = new int[_children.Count];
-        var claimed = 0;
-        var totalWeight = 0;
-
-        // What each child that has an answer of its own asks for, each measured against the
-        // whole line rather than against what earlier siblings happened to leave: how big a
-        // thing naturally is should not depend on who was written before it.
-        for (var index = 0; index < _children.Count; index += 1)
-        {
-            var child = _children[index];
-            // A hidden child is not a child with nothing in it: it takes no row and no
-            // share, so the ones beside it close up rather than leaving a gap.
-            if (!child.IsVisible)
-            {
-                continue;
-            }
-
-            var length = child.Size;
-
-            switch (length.Kind)
-            {
-                case TuiLengthKind.Fixed:
-                    wanted[index] = length.Clamp(length.Value);
-                    break;
-
-                case TuiLengthKind.Fraction:
-                    wanted[index] = length.Clamp(available * length.Value / length.Divisor);
-                    break;
-
-                case TuiLengthKind.Auto:
-                    var constraints = horizontal
-                        ? new TuiConstraints(Math.Max(0, available), bounds.Height)
-                        : new TuiConstraints(bounds.Width, Math.Max(0, available));
-                    var desired = child.Measure(constraints);
-                    wanted[index] = length.Clamp(horizontal ? desired.Width : desired.Height);
-                    break;
-
-                case TuiLengthKind.Star:
-                    totalWeight += length.Value;
-                    continue;
-            }
-
-            floors[index] = Math.Min(length.Minimum ?? 0, wanted[index]);
-            claimed += wanted[index];
-        }
-
-        var remaining = available - Fit(sizes, wanted, floors, claimed, available);
-
-        if (totalWeight == 0)
-        {
-            return sizes;
-        }
-
-        var share = Math.Max(0, remaining);
-        var handedOut = 0;
-        var lastUnbounded = -1;
-
-        for (var index = 0; index < _children.Count; index += 1)
-        {
-            var length = _children[index].Size;
-
-            // Hidden children were left out of the weight, so they must be left out of the
-            // sharing too. Paying them anyway ran the total handed out past the share, and
-            // the absorber below then subtracted the overspend from the last visible
-            // child — which is why a dialog that was the last of its siblings vanished.
-            if (length.Kind != TuiLengthKind.Star || !_children[index].IsVisible)
-            {
-                continue;
-            }
-
-            sizes[index] = length.Clamp(share * length.Value / totalWeight);
-            handedOut += sizes[index];
-
-            // The rounding error goes to a star child that can absorb it. One pinned by a
-            // bound cannot, and giving it the remainder anyway is how a bounded pane ends
-            // up one column wider than it asked to be.
-            if (length is { Minimum: null, Maximum: null })
-            {
-                lastUnbounded = index;
-            }
-        }
-
-        if (lastUnbounded >= 0)
-        {
-            sizes[lastUnbounded] = Math.Max(0, sizes[lastUnbounded] + share - handedOut);
-        }
-
-        return sizes;
-    }
-
-    /// <summary>
-    /// Hands out what each child asked for, or, when that is more than there is, the same
-    /// proportion of it to each.
-    /// </summary>
-    /// <returns>How much was handed out in total.</returns>
+    /// <summary>How many cells each child gets along the stack's own axis.</summary>
     /// <remarks>
-    /// A declared minimum is protected before anything is shared, so "this column is at
-    /// least twelve wide" survives a narrow terminal. What is above the minimums is what
-    /// shrinks.
+    /// The arithmetic is <see cref="TuiTracks"/>, shared with the grid. What is left here is
+    /// the one thing a stack knows that a track does not: how to ask a child its natural
+    /// size, which means measuring it against the whole line in the cross direction.
     /// </remarks>
-    private static int Fit(int[] sizes, int[] wanted, int[] floors, int claimed, int available)
-    {
-        if (claimed <= available)
-        {
-            Array.Copy(wanted, sizes, wanted.Length);
-            return claimed;
-        }
+    private int[] Distribute(int available, bool horizontal, TuiRect bounds)
+        => TuiTracks.Allocate(
+            [.. _children.Select(child => child.Size)],
+            [.. _children.Select(child => child.IsVisible)],
+            available,
+            index =>
+            {
+                var constraints = horizontal
+                    ? new TuiConstraints(Math.Max(0, available), bounds.Height)
+                    : new TuiConstraints(bounds.Width, Math.Max(0, available));
 
-        var protectedTotal = floors.Sum();
-        var room = Math.Max(0, available - protectedTotal);
-        var flexible = claimed - protectedTotal;
-        var given = 0;
+                var desired = _children[index].Measure(constraints);
 
-        for (var index = 0; index < sizes.Length; index += 1)
-        {
-            sizes[index] = flexible <= 0
-                ? floors[index]
-                : floors[index] + ((wanted[index] - floors[index]) * room / flexible);
-
-            given += sizes[index];
-        }
-
-        // Everything asked for more than there is, and the minimums alone are already too
-        // much. Nothing fair is left to do, so the ones written first are the ones drawn.
-        if (given <= available)
-        {
-            return given;
-        }
-
-        var over = given - available;
-
-        for (var index = sizes.Length - 1; index >= 0 && over > 0; index -= 1)
-        {
-            var taken = Math.Min(over, sizes[index]);
-
-            sizes[index] -= taken;
-            over -= taken;
-        }
-
-        return available;
-    }
+                return horizontal ? desired.Width : desired.Height;
+            });
 
     public override void Draw(TuiSurface surface)
     {

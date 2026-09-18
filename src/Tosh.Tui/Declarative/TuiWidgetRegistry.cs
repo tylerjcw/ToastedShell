@@ -388,6 +388,103 @@ public sealed class TuiWidgetRegistry
             return lines;
         });
 
+        registry.Register("dock", static (spec, context) =>
+        {
+            // `Side` beside whatever names the widget. Order decides the corners, so the
+            // order written is the order docked — which is the whole of the semantics.
+            var dock = new TuiDock();
+
+            foreach (var item in spec.PrimaryItems())
+            {
+                var built = context.BuildChildren([item]);
+
+                if (built.Count == 0)
+                {
+                    continue;
+                }
+
+                var side = ShellRecordUtilities.TryGetValue(item, "Side", out var written)
+                    ? written?.ToString()?.ToLowerInvariant()
+                    : null;
+
+                dock.Add(built[0], side switch
+                {
+                    "top" => TuiDockSide.Top,
+                    "bottom" => TuiDockSide.Bottom,
+                    "left" => TuiDockSide.Left,
+                    "right" => TuiDockSide.Right,
+                    _ => TuiDockSide.Fill,
+                });
+            }
+
+            return dock;
+        });
+
+        registry.Register("grid", static (spec, context) =>
+        {
+            // A list of rows, each a list of cells:
+            //
+            //     {| Grid = [ [ {| Text = "Name"  |}, {| Text = "tosh"  |} ],
+            //                 [ {| Text = "Cache" |}, {| Text = "11 MB" |} ] ],
+            //        Columns = "auto, *" |}
+            //
+            // Position rather than `Row = 0, Column = 1` keys, for a reason worth writing
+            // down: `Row` and `Column` are already the names of the two stack widgets, and
+            // markup picks the widget out of a node's keys — so `Row = 0` built a horizontal
+            // stack containing the number nought. Keys and widget names share one namespace
+            // here, and a placement key can only be one that no widget answers to.
+            var grid = new TuiGrid(spec.Text("columns"), spec.Text("rows"))
+            {
+                ColumnGap = spec.Number("columngap", 1),
+                RowGap = spec.Number("rowgap", 0),
+            };
+
+            var row = 0;
+
+            foreach (var line in spec.PrimaryItems())
+            {
+                var column = 0;
+
+                // A row written as a bare node rather than a list of them is one cell, which
+                // is what a single-column grid looks like when somebody writes it.
+                foreach (var cell in Cells(line))
+                {
+                    var built = context.BuildChildren([cell]);
+
+                    if (built.Count == 0)
+                    {
+                        column += 1;
+                        continue;
+                    }
+
+                    grid.Add(
+                        built[0],
+                        row,
+                        column,
+                        Span(cell, "RowSpan"),
+                        Span(cell, "ColumnSpan"));
+
+                    column += 1;
+                }
+
+                row += 1;
+            }
+
+            return grid;
+
+            static IEnumerable<object?> Cells(object? line)
+                => line is System.Collections.IEnumerable items and not string &&
+                   !ShellRecordUtilities.IsRecordLike(line)
+                    ? items.Cast<object?>()
+                    : [line];
+
+            static int Span(object? cell, string key)
+                => ShellRecordUtilities.TryGetValue(cell, key, out var value) &&
+                   TypeConversion.TryConvert(value, typeof(int), out var number)
+                    ? Math.Max(1, (int)number!)
+                    : 1;
+        });
+
         registry.Register("tabs", static (spec, context) =>
         {
             // `{| Tabs = [ {| Label = "Log", Log = [...] |}, ... ] |}` — each item is a

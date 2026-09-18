@@ -815,6 +815,68 @@ case that would.
 A window onto a child taller than the space available. A list, a table, a tree and
 a document all scroll themselves; this is for everything else.
 
+\subsection{\texttt{Grid} --- rows and columns that line up}
+
+\begin{lstlisting}
+{| Columns = "auto, *", Grid = [
+       [ {| Text = "Name"       |}, {| Text = "tosh"  |} ],
+       [ {| Text = "Assemblies" |}, {| Text = "12"    |} ],
+       [ {| Text = "Cache"      |}, {| Text = "11 MB" |} ]
+   ] |}
+\end{lstlisting}
+
+A list of rows, each a list of cells. A row of columns is a stack of stacks until two
+rows need the same column widths --- and nested stacks cannot do that, because each
+divides its own line and knows nothing about its neighbours. Here the label column
+agrees on one width and the values line up under each other.
+
+\code{Columns} and \code{Rows} take the same lengths as \code{Size} does, separated
+by commas. Undeclared columns are \code{*} and undeclared rows are \code{auto}, which
+is what each axis is usually for: a column divides the width it was given, a row is as
+tall as what is in it.
+
+\code{ColumnSpan} and \code{RowSpan} on a cell make it cover several.
+
+\begin{warnbox}[Commas between tracks, not spaces]
+A length already spends the space on its own bounds --- \code{auto 12..40} is one
+length, not two --- so \code{"auto 12..40, *"} is two tracks and
+\code{"auto, 12..40"} is a different two. Getting that backwards produces a layout
+that looks plausible and is wrong.
+\end{warnbox}
+
+\subsection{\texttt{Dock} --- edges first, the rest to the middle}
+
+\begin{lstlisting}
+{| Dock = [
+       {| Side = "top",    Text = "Build report" |},
+       {| Side = "bottom", Help = ""             |},
+       {| Side = "left",   List = &Files         |},
+       {| Side = "fill",   Lines = &Output       |}
+   ] |}
+\end{lstlisting}
+
+The shape almost every full-screen application has. A stack can do it only by nesting
+--- a column holding a header, a row holding a sidebar and a body, and a footer ---
+which is three containers describing one idea.
+
+Each edge takes what it asks for and the fill takes what is left. With nothing marked
+\code{fill}, the last child takes the rest, which is what every other container does
+with its last child.
+
+\begin{notebox}[Order decides the corners]
+Docked top first, the header runs the full width and the sidebar starts below it:
+
+\begin{verbatim}
+TOP                        LEFTTOP
+LEFTrest rest rest             rest rest rest
+    rest rest rest             rest rest rest
+\end{verbatim}
+
+\noindent Written the other way round, the sidebar runs full height and the header
+starts beside it. That is not an accident to work around --- it is how you say which
+of the two owns the corner.
+\end{notebox}
+
 \subsection{\texttt{Tabs} --- several views in one rectangle}
 
 \begin{lstlisting}
