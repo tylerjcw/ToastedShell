@@ -8,7 +8,7 @@
 
          <Project Sdk="Tosh.Sdk">
            <PropertyGroup>
-             <TargetFramework>net10.0</TargetFramework>
+             <TargetFramework>net11.0</TargetFramework>
            </PropertyGroup>
          </Project>
 
@@ -22,7 +22,7 @@
     <DefaultLanguageSourceExtension>.tosh</DefaultLanguageSourceExtension>
     <EnableDefaultToshItems Condition="'$(EnableDefaultToshItems)' == ''">true</EnableDefaultToshItems>
     <OutputType Condition="'$(OutputType)' == ''">Exe</OutputType>
-    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net11.0</TargetFramework>
     <AppendTargetFrameworkToOutputPath Condition="'$(AppendTargetFrameworkToOutputPath)' == ''">true</AppendTargetFrameworkToOutputPath>
     <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">bin\</BaseOutputPath>
     <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">obj\</BaseIntermediateOutputPath>

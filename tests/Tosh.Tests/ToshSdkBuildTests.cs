@@ -8,6 +8,15 @@ namespace Tosh.Tests;
 [Collection(SdkBuildSerialCollection.Name)]
 public sealed class ToshSdkBuildTests
 {
+    /// <summary>The framework these tests are running on, which is the one to expect.</summary>
+    /// <remarks>
+    /// Written out as `net10.0` in twenty-five places until the bump to 11, where half the
+    /// suite's temp projects moved with the SDK and half stayed behind — a `Shared` built to
+    /// net10.0 against an `App` built to net11.0. The framework is meant to be one string to
+    /// change, and a test that hardcodes it is one of the places that has to be found.
+    /// </remarks>
+    private static readonly string Tfm = $"net{Environment.Version.Major}.0";
+
     [Fact]
     public async Task Dotnet_lifecycle_direct_import_project_builds_runs_publishes_and_cleans_outputs()
     {
@@ -18,13 +27,13 @@ public sealed class ToshSdkBuildTests
         var cliPath = GetCliPath(projectRoot);
         var sourcePath = Path.Combine(tempDirectory.Path, "hello world.tosh");
         var projectPath = Path.Combine(tempDirectory.Path, "Hello.toshproj");
-        var outputPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "Hello.dll");
-        var refOutputPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "Hello.ref.dll");
-        var appHostPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", AppHostFileName("Hello"));
-        var stagedRuntimePath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "Tosh.Compiler.Runtime.dll");
-        var publishPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "publish", "Hello.dll");
-        var publishAppHostPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "publish", AppHostFileName("Hello"));
-        var publishRuntimePath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "publish", "Tosh.Compiler.Runtime.dll");
+        var outputPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "Hello.dll");
+        var refOutputPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "Hello.ref.dll");
+        var appHostPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, AppHostFileName("Hello"));
+        var stagedRuntimePath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "Tosh.Compiler.Runtime.dll");
+        var publishPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "publish", "Hello.dll");
+        var publishAppHostPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "publish", AppHostFileName("Hello"));
+        var publishRuntimePath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "publish", "Tosh.Compiler.Runtime.dll");
 
         await File.WriteAllTextAsync(
             sourcePath,
@@ -41,7 +50,7 @@ public sealed class ToshSdkBuildTests
               <Import Project="{{Xml(propsPath)}}" />
               <PropertyGroup>
                 <AssemblyName>Hello</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <ToshEmitReferenceAssembly>true</ToshEmitReferenceAssembly>
               </PropertyGroup>
               <Import Project="{{Xml(targetsPath)}}" />
@@ -155,8 +164,8 @@ public sealed class ToshSdkBuildTests
         var projectPath = Path.Combine(tempDirectory.Path, "PackHello.toshproj");
         var sourcePath = Path.Combine(tempDirectory.Path, "main.tosh");
         var nugetConfigPath = Path.Combine(tempDirectory.Path, "NuGet.config");
-        var outputPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "PackHello.dll");
-        var appHostPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", AppHostFileName("PackHello"));
+        var outputPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "PackHello.dll");
+        var appHostPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, AppHostFileName("PackHello"));
         var isolatedDirectory = Path.Combine(tempDirectory.Path, "isolated");
 
         var pack = await RunAsync(
@@ -190,7 +199,7 @@ public sealed class ToshSdkBuildTests
             <Project Sdk="Tosh.Sdk/{{packageVersion}}">
               <PropertyGroup>
                 <AssemblyName>PackHello</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <ToshPublishSingleFile>true</ToshPublishSingleFile>
               </PropertyGroup>
             </Project>
@@ -253,7 +262,7 @@ public sealed class ToshSdkBuildTests
         var appProjectPath = Path.Combine(appRoot, "PackageApp.toshproj");
         var appSourcePath = Path.Combine(appRoot, "main.tosh");
         var nugetConfigPath = Path.Combine(appRoot, "NuGet.config");
-        var outputDirectory = Path.Combine(appRoot, "bin", "Debug", "net10.0");
+        var outputDirectory = Path.Combine(appRoot, "bin", "Debug", Tfm);
         var outputPath = Path.Combine(outputDirectory, "PackageApp.dll");
         var greeterOutputPath = Path.Combine(outputDirectory, "Tosh.Test.Greeter.dll");
         var dependencyOutputPath = Path.Combine(outputDirectory, "Tosh.Test.Dependency.dll");
@@ -265,10 +274,10 @@ public sealed class ToshSdkBuildTests
 
         await File.WriteAllTextAsync(
             dependencyProjectPath,
-            """
+            $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <PackageId>Tosh.Test.Dependency</PackageId>
                 <Version>1.0.0</Version>
                 <ImplicitUsings>enable</ImplicitUsings>
@@ -303,10 +312,10 @@ public sealed class ToshSdkBuildTests
             LocalOnlyNuGetConfig(packageDirectory.Path));
         await File.WriteAllTextAsync(
             greeterProjectPath,
-            """
+            $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <PackageId>Tosh.Test.Greeter</PackageId>
                 <Version>1.0.0</Version>
                 <ImplicitUsings>enable</ImplicitUsings>
@@ -374,7 +383,7 @@ public sealed class ToshSdkBuildTests
             <Project Sdk="Tosh.Sdk/{{sdkPackageVersion}}">
               <PropertyGroup>
                 <AssemblyName>PackageApp</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
               </PropertyGroup>
               <ItemGroup>
                 <PackageReference Include="Tosh.Test.Greeter" Version="1.0.0" />
@@ -452,7 +461,7 @@ public sealed class ToshSdkBuildTests
         var cliPath = GetCliPath(projectRoot);
         var sourcePath = Path.Combine(tempDirectory.Path, "single.tosh");
         var projectPath = Path.Combine(tempDirectory.Path, "Single.toshproj");
-        var publishPath = Path.Combine(tempDirectory.Path, "bin", "Debug", "net10.0", "publish", AppHostFileName("Single"));
+        var publishPath = Path.Combine(tempDirectory.Path, "bin", "Debug", Tfm, "publish", AppHostFileName("Single"));
         var isolatedDirectory = Path.Combine(tempDirectory.Path, "isolated");
 
         await File.WriteAllTextAsync(sourcePath, "echo \"Hello from single file publish\"\n");
@@ -463,7 +472,7 @@ public sealed class ToshSdkBuildTests
               <Import Project="{{Xml(propsPath)}}" />
               <PropertyGroup>
                 <AssemblyName>Single</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <ToshPublishSingleFile>true</ToshPublishSingleFile>
               </PropertyGroup>
               <Import Project="{{Xml(targetsPath)}}" />
@@ -508,12 +517,12 @@ public sealed class ToshSdkBuildTests
 
         var toshSourcePath = Path.Combine(toshRoot, "library.tosh");
         var toshProjectPath = Path.Combine(toshRoot, "ToshLib.toshproj");
-        var toshOutputDirectory = Path.Combine(toshRoot, "bin", "Debug", "net10.0");
+        var toshOutputDirectory = Path.Combine(toshRoot, "bin", "Debug", Tfm);
         var toshImplementationPath = Path.Combine(toshOutputDirectory, "ToshLib.dll");
         var toshReferencePath = Path.Combine(toshOutputDirectory, "ToshLib.ref.dll");
         var consumerProjectPath = Path.Combine(csharpRoot, "Consumer.csproj");
         var consumerSourcePath = Path.Combine(csharpRoot, "Program.cs");
-        var consumerOutputDirectory = Path.Combine(csharpRoot, "bin", "Debug", "net10.0");
+        var consumerOutputDirectory = Path.Combine(csharpRoot, "bin", "Debug", Tfm);
 
         await File.WriteAllTextAsync(
             toshSourcePath,
@@ -541,7 +550,7 @@ public sealed class ToshSdkBuildTests
               <Import Project="{{Xml(propsPath)}}" />
               <PropertyGroup>
                 <AssemblyName>ToshLib</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <OutputType>Library</OutputType>
                 <ToshEmitAppHost>false</ToshEmitAppHost>
                 <ToshEmitReferenceAssembly>true</ToshEmitReferenceAssembly>
@@ -569,7 +578,7 @@ public sealed class ToshSdkBuildTests
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
@@ -658,7 +667,7 @@ public sealed class ToshSdkBuildTests
         var appLibrarySourcePath = Path.Combine(appRoot, "library.tosh");
         var appMainSourcePath = Path.Combine(appRoot, "main.tosh");
         var appProjectPath = Path.Combine(appRoot, "App.toshproj");
-        var appOutputDirectory = Path.Combine(appRoot, "bin", "Debug", "net10.0");
+        var appOutputDirectory = Path.Combine(appRoot, "bin", "Debug", Tfm);
         var appOutputPath = Path.Combine(appOutputDirectory, "App.dll");
         var copiedSharedOutputPath = Path.Combine(appOutputDirectory, "Shared.dll");
         var appDepsPath = Path.Combine(appOutputDirectory, "App.deps.json");
@@ -678,7 +687,7 @@ public sealed class ToshSdkBuildTests
               <Import Project="{{Xml(propsPath)}}" />
               <PropertyGroup>
                 <AssemblyName>Shared</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <OutputType>Library</OutputType>
                 <ToshEmitAppHost>false</ToshEmitAppHost>
               </PropertyGroup>
@@ -703,7 +712,7 @@ public sealed class ToshSdkBuildTests
               <Import Project="{{Xml(propsPath)}}" />
               <PropertyGroup>
                 <AssemblyName>App</AssemblyName>
-                <TargetFramework>net10.0</TargetFramework>
+                <TargetFramework>{{Tfm}}</TargetFramework>
                 <EnableDefaultToshItems>false</EnableDefaultToshItems>
               </PropertyGroup>
               <ItemGroup>

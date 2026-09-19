@@ -39,8 +39,7 @@
       `netstandard2.0` still say so themselves: a project file is read after this one,
       so what it states wins.
     -->
-    <ToshDotNetMajor>10</ToshDotNetMajor>
-    <ToshTargetFramework>net$(ToshDotNetMajor).0</ToshTargetFramework>
+    <ToshDotNetMajor>11</ToshDotNetMajor>
 
     <!-- Read publish state from .tosh-publish-state ("YY.M:N[:D]" format) -->
     <_ToshPubStateFile>$(MSBuildThisFileDirectory).tosh-publish-state</_ToshPubStateFile>
@@ -55,6 +54,15 @@
     <_ToshPubStoredNum Condition="'$(_ToshPubTailColonIdx)' != '' and '$(_ToshPubTailColonIdx)' != '-1'">$(_ToshPubTail.Remove($(_ToshPubTailColonIdx)))</_ToshPubStoredNum>
     <_ToshPubStoredDotnet Condition="'$(_ToshPubTailColonIdx)' != '' and '$(_ToshPubTailColonIdx)' != '-1'">$(_ToshPubTail.Substring($([MSBuild]::Add($(_ToshPubTailColonIdx), 1))))</_ToshPubStoredDotnet>
     <ToshDotNetMajor Condition="'$(_ToshPubStoredDotnet)' != ''">$(_ToshPubStoredDotnet)</ToshDotNetMajor>
+
+    <!--
+      Derived here rather than beside the default above, because the publish state may have
+      just overridden the major. Computed first, the two disagreed: a repository bumped to 11
+      built `net11.0` while `ToshDotNetMajor` still read 10 for everything that asks it —
+      the packaging manifest among them, which is how a publish would have claimed a
+      framework it was not built against.
+    -->
+    <ToshTargetFramework>net$(ToshDotNetMajor).0</ToshTargetFramework>
     <_ToshCurrentCalKey>$(ToshCalYear).$(ToshCalMonth)</_ToshCurrentCalKey>
 
     <!-- Use stored number if same month, otherwise reset to 1 -->

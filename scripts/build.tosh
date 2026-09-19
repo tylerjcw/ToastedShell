@@ -5,7 +5,7 @@
 ## @example build.tosh test --group lsp
 ## @example build.tosh --help
 
-const DefaultDotnetMajor = 10
+const DefaultDotnetMajor = 11
 
 ## MSBuild keeps its worker nodes alive after a build so the next one starts faster.
 ## Over a working session that accumulates: 110 idle nodes holding 19.4 GB were found

@@ -7,7 +7,7 @@
 
        Compilation strategy:
          1. Preferred: in-process MSBuild task `Tosh.Sdk.Tasks.ToshCompile`
-            loaded from `tasks\net10.0\Tosh.Sdk.Tasks.dll` next to this
+            loaded from `tasks\net11.0\Tosh.Sdk.Tasks.dll` next to this
             file. Avoids per-build process startup cost.
          2. Fallback: spawn the `tosh` CLI binary via <Exec> when the
             task assembly is missing or running on an unsupported
@@ -27,7 +27,7 @@
     <_ToshReferenceAssemblyPath>$(OutputPath)$(AssemblyName).ref$(TargetExt)</_ToshReferenceAssemblyPath>
     <_ToshCompileOutputs>$(TargetPath)</_ToshCompileOutputs>
     <_ToshCompileOutputs Condition="'$(ToshEmitReferenceAssembly)' == 'true'">$(TargetPath);$(_ToshReferenceAssemblyPath)</_ToshCompileOutputs>
-    <_ToshSdkTaskAssembly>$(MSBuildThisFileDirectory)..\tasks\net10.0\Tosh.Sdk.Tasks.dll</_ToshSdkTaskAssembly>
+    <_ToshSdkTaskAssembly>$(MSBuildThisFileDirectory)..\tasks\net11.0\Tosh.Sdk.Tasks.dll</_ToshSdkTaskAssembly>
     <_ToshSdkTaskAvailable Condition="Exists('$(_ToshSdkTaskAssembly)')">true</_ToshSdkTaskAvailable>
     <_ToshSdkTaskAvailable Condition="!Exists('$(_ToshSdkTaskAssembly)')">false</_ToshSdkTaskAvailable>
     <_ToshPackageRestoreProject>$(IntermediateOutputPath)tosh-package-restore.csproj</_ToshPackageRestoreProject>
@@ -184,7 +184,7 @@
   </Target>
 
   <!-- Fallback path: spawn the tosh CLI when the task assembly is
-       not present (e.g. when MSBuild can't load net10.0 task DLLs). -->
+       not present (e.g. when MSBuild can't load net11.0 task DLLs). -->
   <Target Name="_ToshCompileExec"
           Condition="'$(_ToshSdkTaskAvailable)' != 'true'"
           DependsOnTargets="_ToshPrepareOutputDirs;_ToshPrepareReferences"
