@@ -277,4 +277,15 @@ public sealed class ToastRuntime
     /// how to give a handler a way to call back into evaluation.
     /// </summary>
     public Func<ShellEventSender>? EventSenderFactory { get; set; }
+
+    /// <summary>
+    /// Where a reader's library lives, for <c>require</c> by name.
+    /// </summary>
+    /// <remarks>
+    /// Read through a function rather than held as a string because the setting is a live
+    /// one: a reader can move their library from a profile, and a value captured at startup
+    /// would go on pointing at where it used to be. Supplied by the shell, which owns the
+    /// configuration; null means the language resolves requires by path alone.
+    /// </remarks>
+    public Func<string?>? LibraryDirectoryProvider { get; set; }
 }

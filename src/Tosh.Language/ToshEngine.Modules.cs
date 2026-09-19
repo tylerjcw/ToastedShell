@@ -1079,8 +1079,32 @@ public sealed partial class ToshEngine
         return new ToshRequiredScriptArtifact(sourceName, moduleScope.Exports ?? new ModuleExportTable());
     }
 
-    private static RequireTarget ResolveRequirement(string target, string currentDirectory)
+    /// <summary>
+    /// Where <c>require &lt;target&gt;</c> points.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A name is looked for in the reader's library first, and only then beside the script
+    /// that asked. That order is deliberate: a library name should mean the same thing
+    /// wherever it is required from, rather than depending on which directory the shell
+    /// happens to be running in. A stray <c>Shell.tosh</c> next to a script cannot quietly
+    /// take the place of the library's.
+    /// </para>
+    /// <para>
+    /// An extension is how you say you mean a file. <c>require foo.tosh</c> is the file
+    /// <c>foo.tosh</c>, never the library name <c>foo/tosh</c> — and the same for
+    /// <c>.dll</c> and <c>.csproj</c>, because an extension is the same signal there. So is
+    /// anything with a separator, or a rooted, <c>~</c> or <c>./</c> prefix: those were
+    /// clearly written as paths.
+    /// </para>
+    /// </remarks>
+    private RequireTarget ResolveRequirement(string target, string currentDirectory)
     {
+        if (TryResolveLibraryName(target) is { } fromLibrary)
+        {
+            return fromLibrary;
+        }
+
         var candidate = PathUtilities.ResolvePath(currentDirectory, target);
 
         if (!Path.HasExtension(candidate))
@@ -1095,7 +1119,14 @@ public sealed partial class ToshEngine
 
         if (!File.Exists(candidate))
         {
-            throw new FileNotFoundException($"Required target '{candidate}' was not found.", candidate);
+            // Naming both places, because a name that was meant for the library resolves to
+            // a path beside the script and the message would otherwise point somewhere
+            // nobody wrote.
+            var library = IsLibraryName(target) && LanguageRuntime.LibraryDirectoryProvider?.Invoke() is { Length: > 0 } root
+                ? $" It is not in the library at '{Path.GetFullPath(root)}' either, as '{target.Replace('.', Path.DirectorySeparatorChar)}.tosh' or 'init.tosh' beside it."
+                : string.Empty;
+
+            throw new FileNotFoundException($"Required target '{candidate}' was not found.{library}", candidate);
         }
 
         return Path.GetExtension(candidate).ToLowerInvariant() switch
@@ -1105,6 +1136,78 @@ public sealed partial class ToshEngine
             ".csproj" => new RequireTarget(RequireTargetKind.Project, candidate, candidate),
             _ => throw new InvalidOperationException($"Unsupported require target '{candidate}'. ToSh currently supports .tosh, .dll, and .csproj targets."),
         };
+    }
+
+    /// <summary>The recognised file kinds, which is also what marks a target as a path.</summary>
+    private static readonly string[] RequireExtensions = [".tosh", ".dll", ".csproj"];
+
+    /// <summary>
+    /// Resolves a dotted library name, or answers null when the target is not one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>Core.Shell</c> becomes <c>&lt;library&gt;/Core/Shell.tosh</c>, or that directory's
+    /// <c>init.tosh</c> where the module has grown from one file into a folder. Finding both
+    /// is reported rather than silently decided: it is what a half-finished move from the
+    /// one to the other looks like, and picking either would hide it.
+    /// </para>
+    /// <para>
+    /// A name may not climb out of the library. <c>..</c> in a require is either a mistake
+    /// or an attempt to reach somewhere the reader did not mean to expose, and the path form
+    /// is there for anyone who genuinely wants to name a file elsewhere.
+    /// </para>
+    /// </remarks>
+    private RequireTarget? TryResolveLibraryName(string target)
+    {
+        if (LanguageRuntime.LibraryDirectoryProvider?.Invoke() is not { Length: > 0 } library ||
+            !IsLibraryName(target))
+        {
+            return null;
+        }
+
+        var relative = target.Replace('.', Path.DirectorySeparatorChar);
+        var root = Path.GetFullPath(library);
+        var asFile = Path.Combine(root, relative + ".tosh");
+        var asPackage = Path.Combine(root, relative, "init.tosh");
+
+        var fileExists = File.Exists(asFile);
+        var packageExists = File.Exists(asPackage);
+
+        if (fileExists && packageExists)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.require.ambiguous_library_name",
+                Title: $"'{target}' names both a file and a package in the library.",
+                Help: $"'{asFile}' and '{asPackage}' both exist. Delete whichever is no longer "
+                    + "the module, or require the one you mean by its path."));
+        }
+
+        if (fileExists)
+        {
+            return new RequireTarget(RequireTargetKind.Script, asFile, asFile);
+        }
+
+        return packageExists
+            ? new RequireTarget(RequireTargetKind.Script, asPackage, asPackage)
+            : null;
+    }
+
+    /// <summary>Whether a target was written as a name rather than as a path.</summary>
+    private static bool IsLibraryName(string target)
+    {
+        if (string.IsNullOrWhiteSpace(target) ||
+            target.Contains('/') ||
+            target.Contains('\\') ||
+            target.StartsWith('~') ||
+            target.StartsWith('.') ||
+            Path.IsPathRooted(target))
+        {
+            return false;
+        }
+
+        // An extension says "I mean a file"; `..` says nothing good.
+        return !RequireExtensions.Any(extension => target.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            && !target.Split('.').Any(segment => segment.Length == 0);
     }
 
     private sealed record RequireTarget(RequireTargetKind Kind, string ResolvedPath, string CacheKey);

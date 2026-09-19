@@ -75,6 +75,10 @@ public sealed class ToshRuntime :
         Config.Shell.Usings.Bind((DotNetTypeResolver)TypeResolver);
         TerminalGlyphs.Initialize(Config.Tty);
         PathUtilities.DirectoryAliases = Config.Shell.Dirs;
+
+        // Read each time rather than captured: a reader can move their library from a
+        // profile, and a value taken here would go on pointing at where it used to be.
+        Language.LibraryDirectoryProvider = () => Config.Startup.LibraryDirectory;
         Display.TableTheme = Config.Theme.Tables;
         History = new List<CommandHistoryEntry>();
         ExportedEnvironmentVariables = new HashSet<string>(StringComparer.Ordinal);
