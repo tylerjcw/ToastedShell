@@ -33,6 +33,12 @@ public sealed class LoadAssemblyCommand : ShellCommand
                 throw new InvalidOperationException($"Assembly '{path}' does not exist.");
             }
 
+            // Before the load, so a library needed during the assembly's own initialisation
+            // is already resolvable. See `ClrNativeLibraryResolver`: a package's native code
+            // lives under `runtimes/<rid>/native/`, which nothing reads a `.deps.json` for
+            // here.
+            ClrNativeLibraryResolver.Register();
+
             var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
             yield return ShellRecordUtilities.CreateExpando(
             [
