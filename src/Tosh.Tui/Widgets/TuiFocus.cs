@@ -163,7 +163,7 @@ public sealed class TuiFocus
 
         var target = Focused;
 
-        if (!input.IsKey && input.Mouse.Action == TuiMouseAction.Press)
+        if (input.IsMouse && input.Mouse.Action == TuiMouseAction.Press)
         {
             // A click moves focus before it is handled, so the widget clicked is the one
             // that answers for it.

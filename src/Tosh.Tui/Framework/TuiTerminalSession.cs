@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 
+using Tosh.Tui.Rendering;
+
 namespace Tosh.Tui;
 
 /// <summary>
@@ -46,6 +48,15 @@ public sealed class TuiTerminalSession : IDisposable
         _host.Write(EnterAlternateScreen);
         _host.Write(HideCursor);
         _host.Write(EnableSgrMouse);
+
+        // Only where the reader will understand the brackets. A terminal sending them to
+        // something that does not parse them types `[200~` into whatever has focus, so this
+        // is worse than nothing without `TuiInputReader` reading it — see
+        // `TuiBracketedPaste`.
+        if (TuiBracketedPaste.Detect(Environment.GetEnvironmentVariable))
+        {
+            _host.Write(TuiBracketedPaste.Enable);
+        }
 
         // A note for whoever comes next, in case this process never gets to clear it.
         TuiTerminalRepair.Taken();
@@ -153,7 +164,9 @@ public sealed class TuiTerminalSession : IDisposable
             // painted over the shell the reader is handed back.
             var pictures = Rendering.TuiGraphics.DeleteAll();
 
-            _host.WriteUrgent(pictures + DisableSgrMouse + ResetStyles + ShowCursor + ExitAlternateScreen);
+            _host.WriteUrgent(
+                pictures + TuiBracketedPaste.Disable + DisableSgrMouse + ResetStyles + ShowCursor +
+                ExitAlternateScreen);
         }
         catch (IOException)
         {

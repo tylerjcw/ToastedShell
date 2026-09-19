@@ -463,7 +463,7 @@ public sealed class TuiTable : TuiWidget
     /// <inheritdoc />
     public override bool OnInput(TuiInputEvent input)
     {
-        if (!input.IsKey)
+        if (input.IsMouse)
         {
             return Click(input.Mouse);
         }

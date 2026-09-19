@@ -319,7 +319,7 @@ public sealed class TuiTree : TuiWidget
     {
         EnsureRows();
 
-        if (!input.IsKey)
+        if (input.IsMouse)
         {
             return Click(input.Mouse);
         }

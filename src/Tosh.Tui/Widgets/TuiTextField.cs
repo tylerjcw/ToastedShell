@@ -150,7 +150,27 @@ public sealed class TuiTextField : TuiWidget
 
     public override bool OnInput(TuiInputEvent input)
     {
-        if (!input.IsKey)
+        // Before the mouse branch, which would otherwise read a default mouse event out of
+        // a paste and decide it was a click somewhere impossible.
+        if (input.IsPaste)
+        {
+            if (!IsFocused)
+            {
+                return false;
+            }
+
+            var pastedFrom = Text;
+            var outcome = _state.HandlePaste(input.Text, Multiline);
+
+            if (outcome == TuiTextInputResult.Changed && !string.Equals(Text, pastedFrom, StringComparison.Ordinal))
+            {
+                Changed?.Invoke(Text);
+            }
+
+            return outcome != TuiTextInputResult.None;
+        }
+
+        if (input.IsMouse)
         {
             var mouse = input.Mouse;
 

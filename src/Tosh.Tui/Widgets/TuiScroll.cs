@@ -179,7 +179,7 @@ public sealed class TuiScroll : TuiWidget
 
     public override bool OnInput(TuiInputEvent input)
     {
-        if (!input.IsKey)
+        if (input.IsMouse)
         {
             // The child sees the click in its own coordinates, and only if it declines
             // does this become a scroll.

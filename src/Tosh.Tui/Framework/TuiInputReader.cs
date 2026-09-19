@@ -37,7 +37,7 @@ public sealed class TuiInputReader
 
         if (key.Key == ConsoleKey.Escape && Console.KeyAvailable)
         {
-            return TryReadMouseSequence(key);
+            return TryReadPaste(out var pasted) ? pasted : TryReadMouseSequence(key);
         }
 
         return TuiInputEvent.FromKey(key);
@@ -64,7 +64,7 @@ public sealed class TuiInputReader
 
         if (key.Key == ConsoleKey.Escape && Console.KeyAvailable)
         {
-            inputEvent = TryReadMouseSequence(key);
+            inputEvent = TryReadPaste(out var pasted) ? pasted : TryReadMouseSequence(key);
             return true;
         }
 
@@ -77,6 +77,100 @@ public sealed class TuiInputReader
     /// SGR format: <c>ESC [ &lt; Pb ; Pc ; Pr M</c> (press) or <c>ESC [ &lt; Pb ; Pc ; Pr m</c> (release).
     /// If the sequence doesn't match, the consumed characters are re-enqueued as key events.
     /// </summary>
+    /// <summary>
+    /// Reads a bracketed paste, if that is what this escape begins.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A terminal asked to bracket pastes wraps them in <c>CSI 200 ~</c> and
+    /// <c>CSI 201 ~</c> — see <see cref="Rendering.TuiBracketedPaste"/>. Read whole, the
+    /// newlines inside are characters rather than presses of Enter, which is the difference
+    /// between pasting three lines into a field and submitting the form three times.
+    /// </para>
+    /// <para>
+    /// Tried before the mouse sequence because the two share their first two characters and
+    /// the mouse parser would reject <c>2</c> where it wants <c>&lt;</c>, handing the rest
+    /// back as keystrokes — <c>[200~</c> typed into the field.
+    /// </para>
+    /// <para>
+    /// An unterminated paste — the terminal was interrupted, or never sent the closing
+    /// bracket — yields what arrived rather than waiting for a bracket that is not coming.
+    /// </para>
+    /// </remarks>
+    private bool TryReadPaste(out TuiInputEvent pasted)
+    {
+        pasted = default;
+
+        // `[200~`, already knowing an Escape was read.
+        const string Opening = "[200~";
+        var seen = new StringBuilder();
+
+        for (var index = 0; index < Opening.Length; index++)
+        {
+            if (!Console.KeyAvailable)
+            {
+                Replay(seen);
+                return false;
+            }
+
+            var next = Console.ReadKey(intercept: true);
+            seen.Append(next.KeyChar);
+
+            if (next.KeyChar != Opening[index])
+            {
+                Replay(seen);
+                return false;
+            }
+        }
+
+        var text = new StringBuilder();
+        var terminator = new StringBuilder();
+
+        while (Console.KeyAvailable)
+        {
+            var next = Console.ReadKey(intercept: true);
+
+            // The closing bracket is matched as it arrives, so its characters never reach
+            // the text. A partial match that breaks off is text after all.
+            var expected = TuiBracketedPasteClose[terminator.Length];
+
+            if (next.KeyChar == expected)
+            {
+                terminator.Append(next.KeyChar);
+
+                if (terminator.Length == TuiBracketedPasteClose.Length)
+                {
+                    pasted = TuiInputEvent.FromPaste(text.ToString());
+                    return true;
+                }
+
+                continue;
+            }
+
+            text.Append(terminator);
+            terminator.Clear();
+            text.Append(next.KeyChar);
+        }
+
+        // Ran out before the closing bracket. What arrived is still a paste.
+        text.Append(terminator);
+        pasted = TuiInputEvent.FromPaste(text.ToString());
+        return true;
+    }
+
+    /// <summary>`ESC [ 2 0 1 ~`, without the escape that has already been matched.</summary>
+    private const string TuiBracketedPasteClose = "\x1b[201~";
+
+    /// <summary>Hands characters back as keystrokes, in the order they were read.</summary>
+    private void Replay(StringBuilder consumed)
+    {
+        foreach (var character in consumed.ToString())
+        {
+            _pendingEvents.Enqueue(TuiInputEvent.FromKey(
+                new ConsoleKeyInfo(character, CharToConsoleKey(character), false, false, false)));
+        }
+    }
+
     private TuiInputEvent TryReadMouseSequence(ConsoleKeyInfo escapeKey)
     {
         var buffer = new StringBuilder();

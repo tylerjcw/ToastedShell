@@ -318,7 +318,7 @@ public sealed class TuiList : TuiWidget
 
     public override bool OnInput(TuiInputEvent input)
     {
-        if (!input.IsKey)
+        if (input.IsMouse)
         {
             return ClickToSelect(input);
         }

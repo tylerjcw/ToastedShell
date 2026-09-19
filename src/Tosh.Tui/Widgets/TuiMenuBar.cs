@@ -227,7 +227,7 @@ public sealed class TuiMenuBar : TuiWidget, ITuiPopupHost
     /// <inheritdoc />
     public override bool OnInput(TuiInputEvent input)
     {
-        if (!input.IsKey)
+        if (input.IsMouse)
         {
             return ClickedOn(input);
         }
