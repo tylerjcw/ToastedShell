@@ -54,6 +54,30 @@
   </ItemGroup>
 
   <!--
+    The shipped SDK decides what a consumer .toshproj targets, and it is read
+    outside this repo where Directory.Build.props does not reach — so its default
+    cannot derive from $(ToshTargetFramework) the way every project here does.
+
+    A placeholder stamped at pack time was tried and is wrong: the SDK files are
+    also imported directly, by absolute path, from projects in temp directories
+    (see ToshSdkBuildTests), and those would import the unreplaced placeholder.
+
+    So the value is written out, and this makes it impossible to forget. Change
+    ToshDotNetMajor and the build says which file is now behind, rather than the
+    shipped SDK quietly defaulting consumers to a framework this repo has left.
+  -->
+  <Target Name="_ToshSdkCheckTargetFramework" BeforeTargets="Build">
+    <PropertyGroup>
+      <_ToshSdkPropsText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Sdk\Sdk.props'))</_ToshSdkPropsText>
+      <_ToshSdkTargetsText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Sdk\Sdk.targets'))</_ToshSdkTargetsText>
+    </PropertyGroup>
+    <Error Condition="!$(_ToshSdkPropsText.Contains('$(ToshTargetFramework)'))"
+           Text="Sdk/Sdk.props does not mention $(ToshTargetFramework). ToshDotNetMajor moved and the shipped SDK did not: update the default TargetFramework there." />
+    <Error Condition="!$(_ToshSdkTargetsText.Contains('$(ToshTargetFramework)'))"
+           Text="Sdk/Sdk.targets does not mention $(ToshTargetFramework). ToshDotNetMajor moved and the shipped SDK did not: update the tasks\ path there." />
+  </Target>
+
+  <!--
     Bake the current Tosh.* runtime version into the shipped Sdk.props
     so consumer projects pull matching Tosh.Runtime/Tosh.Stdlib/etc.
     PackageReference versions during `dotnet pack` of a .toshproj.
