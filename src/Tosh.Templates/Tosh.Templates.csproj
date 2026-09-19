@@ -40,4 +40,28 @@
     <Compile Remove="**\*" />
   </ItemGroup>
 
+  <!--
+    A scaffolded project targets whatever these template files say, and they are read by
+    `dotnet new` outside this repo where Directory.Build.props does not reach — so, like the
+    shipped SDK's own defaults, the value has to be written out rather than derived.
+
+    Written out and then forgotten is the failure this prevents. `dotnet new tosh-app` would
+    go on scaffolding projects for a framework the repository had left, and nothing would say
+    so until someone tried to build one. Change ToshDotNetMajor and the build names the file
+    that is behind instead.
+  -->
+  <Target Name="_ToshTemplatesCheckTargetFramework" BeforeTargets="Build">
+    <ItemGroup>
+      <_ToshTemplateFrameworkFile Include="templates\tosh-app\ToshApp1.toshproj" />
+      <_ToshTemplateFrameworkFile Include="templates\tosh-lib\ToshLibrary1.toshproj" />
+      <_ToshTemplateFrameworkFile Include="templates\tosh-app\.template.config\template.json" />
+      <_ToshTemplateFrameworkFile Include="templates\tosh-lib\.template.config\template.json" />
+    </ItemGroup>
+    <!-- ErrorAndContinue so one build names every file that is behind. Stopping at the
+         first turns one bump into four builds. -->
+    <Error Condition="!$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\%(_ToshTemplateFrameworkFile.Identity)').Contains('$(ToshTargetFramework)'))"
+           ContinueOnError="ErrorAndContinue"
+           Text="%(_ToshTemplateFrameworkFile.Identity) does not mention $(ToshTargetFramework). ToshDotNetMajor moved and this template did not: `dotnet new` would keep scaffolding projects for a framework this repository has left." />
+  </Target>
+
 </Project>
