@@ -203,10 +203,17 @@ public static partial class ToshPublisher
             }
 
             var fileSpecs = EnumerateBundleFileSpecs(stagingDir.FullName, hostName).ToArray();
+            // `targetOS` and `targetArch` are passed rather than left to their defaults.
+            // They had defaults through .NET 10 and are required from .NET 11, so naming
+            // them is what lets one source build on both — and the bundle is for the host
+            // that is running, which is the assumption `TOSH-0008` is about. Stated here
+            // rather than inherited from a default that changed underneath it.
             var bundler = new Bundler(
                 hostName,
                 outputTempDir.FullName,
                 BundleOptions.BundleAllContent,
+                targetOS: HostPlatform(),
+                targetArch: RuntimeInformation.ProcessArchitecture,
                 targetFrameworkVersion: Environment.Version,
                 appAssemblyName: Path.GetFileNameWithoutExtension(dllPath));
             var bundlePath = bundler.GenerateBundle(fileSpecs);
@@ -219,6 +226,21 @@ public static partial class ToshPublisher
             TryDeleteDirectory(stagingDir.FullName);
             TryDeleteDirectory(outputTempDir.FullName);
         }
+    }
+
+    /// <summary>The platform this process is running on, as the bundler names it.</summary>
+    /// <remarks>
+    /// <see cref="OSPlatform"/> has no "current" of its own — it is a set of values to test
+    /// against rather than to read — so the question has to be asked one platform at a time.
+    /// </remarks>
+    private static OSPlatform HostPlatform()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return OSPlatform.Windows;
+        }
+
+        return RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? OSPlatform.OSX : OSPlatform.Linux;
     }
 
     public static IReadOnlyList<string> GetRuntimeDependencyFileNames()
