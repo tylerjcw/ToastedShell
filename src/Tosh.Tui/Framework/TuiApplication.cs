@@ -47,6 +47,7 @@ public static class TuiApplication
         // frame (`TUI-0009`).
         var depth = TuiColors.Detect(Environment.GetEnvironmentVariable);
         var unicode = TuiGlyphs.Supported(Environment.GetEnvironmentVariable);
+        var synchronized = TuiSynchronizedOutput.Detect(Environment.GetEnvironmentVariable);
 
         // A declarative screen calls script functions while it draws, and it is the only
         // screen that does. Told where to report one that fails, it keeps drawing the rest
@@ -83,8 +84,14 @@ public static class TuiApplication
 
                 failure.Draw(buffer);
 
-                // Only what changed since the last frame reaches the terminal.
-                host.Write(TuiTerminalWriter.Present(presented, buffer, depth, unicode));
+                // Only what changed since the last frame reaches the terminal, and the
+                // terminal is told to show it all at once rather than as it arrives — see
+                // `TuiSynchronizedOutput`. A frame is a stream of cursor moves, and a
+                // terminal drawing as it reads shows half of one frame above half of the
+                // last.
+                host.Write(synchronized
+                    ? TuiSynchronizedOutput.Wrap(TuiTerminalWriter.Present(presented, buffer, depth, unicode))
+                    : TuiTerminalWriter.Present(presented, buffer, depth, unicode));
                 presented = buffer;
 
                 // Waited for in slices even when only a keystroke can change the screen.
