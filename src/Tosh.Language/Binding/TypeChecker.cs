@@ -1962,7 +1962,12 @@ public static class TypeChecker
             {
                 var actual = positional[i].Value.Type;
                 var expected = BoundType.FromClr(ps[i].ParameterType);
-                if (!IsAssignable(actual, expected, out _)) { ok = false; break; }
+                if (!IsAssignable(actual, expected, out _) &&
+                    !ExtendsClrTypeAssignableTo(actual, ps[i].ParameterType, ctx))
+                {
+                    ok = false;
+                    break;
+                }
             }
             if (ok) return;
         }
@@ -2300,6 +2305,54 @@ public static class TypeChecker
     /// widening (int→long, int→double, …) is allowed; narrowing is
     /// not. Everything else is exact-CLR-type equality.
     /// </summary>
+    /// <summary>
+    /// Whether a declared class extends a CLR type the parameter would accept.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A tōsh class written <c>extends Tosh.Tui.Widgets.TuiWidget</c> is one, where the
+    /// platform is concerned: the object that crosses the boundary is its base. The checker
+    /// did not know that, so it warned on correct code — <c>TuiStack.Add</c> was told a
+    /// <c>Banner</c> is not a <c>TuiWidget</c>, and then accepted it at runtime and rendered
+    /// it. A warning on code that works is worse than no warning, because it is how people
+    /// learn to stop reading them.
+    /// </para>
+    /// <para>
+    /// Resolved from the declaration's base-class <em>name</em> rather than from a runtime
+    /// definition: at bind time the class is still a syntax node, and its
+    /// <c>ClrBaseType</c> is not filled in until the declaration is evaluated.
+    /// </para>
+    /// <para>
+    /// The chain is walked, because the base belongs to whichever class named it — for
+    /// <c>class Leaf extends Mid</c> over <c>class Mid extends TuiWidget</c>, the leaf names
+    /// no CLR type at all. A cycle in badly-written source is bounded by the visited set
+    /// rather than trusted not to happen.
+    /// </para>
+    /// </remarks>
+    private static bool ExtendsClrTypeAssignableTo(BoundType actual, Type parameterType, CheckContext ctx)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var current = actual;
+
+        while (current is UserClassType userClass &&
+               userClass.Definition is ClassDefinitionStatementSyntax syntax &&
+               syntax.BaseClassName is { Length: > 0 } baseName &&
+               visited.Add(userClass.Name))
+        {
+            var resolved = ResolverFor(ctx).Resolve(baseName);
+
+            if (resolved.ClrType is { } clrBase)
+            {
+                return parameterType.IsAssignableFrom(clrBase);
+            }
+
+            // A tōsh base: keep walking, since the CLR type may be further up.
+            current = resolved;
+        }
+
+        return false;
+    }
+
     private static bool IsAssignable(BoundType from, BoundType to, out string? reason)
     {
         reason = null;
