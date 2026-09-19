@@ -683,6 +683,18 @@ public sealed class TuiWidgetRegistry
             return table;
         });
 
+        registry.Register("check", static (spec, context) =>
+        {
+            var widget = new TuiCheck(spec.PrimaryText() ?? string.Empty, spec.Flag("value"))
+            {
+                Style = spec.Style()
+            };
+
+            context.OnHandler(spec, "onchange", handler => widget.Toggled = val => handler(val));
+
+            return widget;
+        });
+
         registry.Register("button", static (spec, context) =>
         {
             var button = new TuiButton(spec.PrimaryText() ?? "OK") { Style = spec.Style() };
@@ -716,7 +728,7 @@ public sealed class TuiWidgetRegistry
                 _ => TuiImageFit.Letterbox,
             },
             Placeholder = spec.Text("placeholder") ?? string.Empty,
-            Loading = spec.Text("loading") ?? "…",
+            Loading = spec.Text("loading") ?? "\u2026",
             Style = spec.Style(),
         });
 
