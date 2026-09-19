@@ -92,14 +92,14 @@ public sealed class ModuleSelectiveImportTests : IDisposable
     }
 
     /// <summary>
-    /// Each under a name of the caller's choosing.
+    /// Each under a name of the caller's choosing, wherever it is called.
     /// </summary>
     /// <remarks>
-    /// The aliases here are lower-case on purpose. An alias whose first letter is capitalised
-    /// binds, and answers in command position — `Pin 15 0 10` works — but is not found in
-    /// expression position, where `Pin(15)` is read as a .NET access path. That is older than
-    /// this feature and independent of it: an un-aliased `Clamp(15, 0, 10)` resolves fine, so
-    /// it is the aliasing rather than the capital that is at fault.
+    /// An alias used to bind a wrapper that implemented only <c>IShellCommand</c>, so it
+    /// answered where a command was expected — <c>Pin 15 0 10</c> — and not where a value
+    /// was: <c>Pin(15)</c> reported "Unable to resolve .NET access path". The un-aliased
+    /// import worked because nothing wrapped it. Both positions are asserted here because
+    /// only one of them was broken.
     /// </remarks>
     [Fact]
     public async Task Members_can_be_renamed_as_they_are_taken()
@@ -107,19 +107,15 @@ public sealed class ModuleSelectiveImportTests : IDisposable
         WriteMathModule();
 
         Assert.Equal("10|3", await RunAsync("""
-            require { Clamp as pin, IntegerPart as iPart } from Demo.Math
-            echo (pin(15, 0, 10))
+            require { Clamp as Pin, IntegerPart as iPart } from Demo.Math
+            echo (Pin(15, 0, 10))
             echo (iPart(3.7))
             """));
     }
 
-    /// <summary>A capitalised alias still binds, and answers where a command is expected.</summary>
-    /// <remarks>
-    /// Pinned so the gap above is recorded rather than merely avoided: the import works, and
-    /// only one of the two call positions can see it.
-    /// </remarks>
+    /// <summary>An alias answers in command position as well.</summary>
     [Fact]
-    public async Task A_capitalised_alias_binds_even_where_expression_position_cannot_see_it()
+    public async Task An_alias_answers_in_command_position_too()
     {
         WriteMathModule();
 
@@ -127,6 +123,33 @@ public sealed class ModuleSelectiveImportTests : IDisposable
             require { Clamp as Pin } from Demo.Math
             Pin 15 0 10
             """));
+    }
+
+    /// <summary>
+    /// And can be handed to the platform, like the function it renames.
+    /// </summary>
+    /// <remarks>
+    /// The wrapper forwards <c>ISelfHostedCallable</c>, which is what a CLR delegate
+    /// conversion looks for. Without it an alias could be called from tōsh and not passed to
+    /// .NET, which is a strange thing for a rename to change.
+    /// </remarks>
+    [Fact]
+    public async Task An_alias_can_still_become_a_clr_delegate()
+    {
+        Write("Cmp.tosh", """
+            export func ByLen(a, b) { return $a.Length - $b.Length }
+            """);
+
+        // `Sort` returns void, and a bare void call emits its receiver, so the List is in
+        // the results ahead of the echoed line.
+        var output = await RunAsync("""
+            require { ByLen as Shorter } from Cmp
+            var lst = new System.Collections.Generic.List<string>(["bbb", "a", "cc"])
+            $lst.Sort(&Shorter)
+            echo $"{$lst[0]},{$lst[1]},{$lst[2]}"
+            """);
+
+        Assert.EndsWith("a,cc,bbb", output, StringComparison.Ordinal);
     }
 
     /// <summary>

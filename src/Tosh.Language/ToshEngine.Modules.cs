@@ -178,7 +178,7 @@ public sealed partial class ToshEngine
                 DeclareCommand(
                     string.Equals(bindingName, command.Name, StringComparison.Ordinal)
                         ? command
-                        : new RenamedCommand(bindingName, command),
+                        : RenamedCommand.Create(bindingName, command),
                     DeclarationModifier.Default);
                 continue;
             }
@@ -264,7 +264,7 @@ public sealed partial class ToshEngine
             DeclareCommand(
                 string.Equals(binding, leafCommand.Name, StringComparison.Ordinal)
                     ? leafCommand
-                    : new RenamedCommand(binding, leafCommand),
+                    : RenamedCommand.Create(binding, leafCommand),
                 modifier);
             return true;
         }
@@ -1002,7 +1002,7 @@ public sealed partial class ToshEngine
                 DeclareCommand(
                     string.Equals(bindingName, command.Name, StringComparison.Ordinal)
                         ? command
-                        : new RenamedCommand(bindingName, command),
+                        : RenamedCommand.Create(bindingName, command),
                     statement.Modifier);
                 continue;
             }
