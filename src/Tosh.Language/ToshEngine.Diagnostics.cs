@@ -103,8 +103,50 @@ public sealed partial class ToshEngine
                 SourceName: sourceName,
                 SourceText: sourceText,
                 Span: span,
-                Label: "while evaluating this expression"),
+                Label: "while evaluating this expression",
+                Help: ScriptCauseWithin(exception)),
             exception);
+    }
+
+    /// <summary>
+    /// The script's own error, where a platform call has buried it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A CLR API that calls back into a script catches what the callback raises and reports
+    /// its own failure instead — <c>List&lt;T&gt;.Sort</c> answers "Failed to compare two
+    /// elements in the array" and keeps the real cause as an inner exception. That sentence
+    /// is then the whole of what the author is told, pointed at the line that called
+    /// <c>Sort</c>, with nothing to say that their own <c>Compare</c> threw.
+    /// </para>
+    /// <para>
+    /// This became reachable when a tōsh class could be handed to the platform as one of its
+    /// own: the language is now on both sides of such a call, so an error can leave a script,
+    /// cross into .NET, and come back wearing the platform's words.
+    /// </para>
+    /// <para>
+    /// The title is left as the platform's, because the platform's failure is real and is
+    /// what a .NET caller would be shown. This only adds the sentence that was missing.
+    /// </para>
+    /// </remarks>
+    private static string? ScriptCauseWithin(Exception exception)
+    {
+        // From the inner exception, never the outermost: if the script's error is itself what
+        // failed, the title is already saying so and repeating it helps nobody.
+        for (var inner = exception.InnerException; inner is not null; inner = inner.InnerException)
+        {
+            // `IToshFailure` is the language's word for "a declared error or a diagnostic"
+            // — `TOAST-0031` — and a bare `throw` of a value raises a signal that is neither.
+            // Both are the script failing rather than the platform.
+            if (inner is IToshFailure or ThrowSignalException &&
+                !string.IsNullOrWhiteSpace(inner.Message) &&
+                !exception.Message.Contains(inner.Message, StringComparison.Ordinal))
+            {
+                return $"Raised by this script inside that call: {inner.Message}";
+            }
+        }
+
+        return null;
     }
 
     private void WarnIfShadowingBuiltin(string commandName)
