@@ -74,7 +74,7 @@ internal static class TonWriter
             // its parts are not a shape to rebuild — `483.06`MW` is one value and its literal
             // says so.
             case Quantity quantity:
-                return $"{Format((decimal)quantity.Magnitude)}`{quantity.UnitSymbol}";
+                return $"{Format(ShellDecimal.FromDouble(quantity.Magnitude))}`{quantity.UnitSymbol}";
 
             case IShellEnumValue shellEnum:
                 // A path, not a member access. `TOAST-0090`'s operator is what makes the safety
@@ -439,7 +439,11 @@ internal static class TonWriter
         {
             byte or sbyte or short or ushort or int or uint or long or ulong
                 => Convert.ToString(value, CultureInfo.InvariantCulture) ?? "0",
-            float or double or decimal => Format(Convert.ToDecimal(value, CultureInfo.InvariantCulture)),
+            // `ShellDecimal`, not `Convert.ToDecimal`: the notation must round-trip to the
+            // same document whichever .NET the shell was built against, and that cast means
+            // different things on 10 and 11 — `483.06` became `483.0600000000000023`.
+            float or double or decimal when ShellDecimal.TryFrom(value, out var number)
+                => Format(number),
             // Round-trip format, not the current culture's. `ToString()` gave
             // "1/8/2026 8:57:52 PM -05:00" — unparseable anywhere else, and different on a
             // machine with different regional settings, which is not a thing a notation may do.

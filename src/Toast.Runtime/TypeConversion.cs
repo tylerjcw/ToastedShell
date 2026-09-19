@@ -567,6 +567,17 @@ public static class TypeConversion
                     return false;
                 }
 
+                // What a float means as a decimal is the language's rule, not the platform's
+                // — see `ShellDecimal`. Left to `Convert.ChangeType`, the answer to
+                // `0.1 as decimal` depends on which .NET the shell happens to be built
+                // against: through .NET 10 it is `0.1`, from .NET 11 it is
+                // `0.1000000000000000055511151231`.
+                if (effectiveType == typeof(decimal) && probe is double or float)
+                {
+                    converted = ShellDecimal.TryFrom(probe, out var asDecimal) ? asDecimal : null;
+                    return converted is not null;
+                }
+
                 converted = Convert.ChangeType(probe, effectiveType, CultureInfo.InvariantCulture);
                 return true;
             }

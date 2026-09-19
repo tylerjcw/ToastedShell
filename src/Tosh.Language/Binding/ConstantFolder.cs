@@ -155,7 +155,7 @@ public static class ConstantFolder
     {
         if (a is decimal || b is decimal)
         {
-            return Convert.ToDecimal(a!) == Convert.ToDecimal(b!);
+            return Dec(a!) == Dec(b!);
         }
 
         if (a is double || b is double)
@@ -187,7 +187,7 @@ public static class ConstantFolder
     {
         if (a is decimal || b is decimal)
         {
-            return Convert.ToDecimal(a!).CompareTo(Convert.ToDecimal(b!));
+            return Dec(a!).CompareTo(Dec(b!));
         }
 
         if (a is double || b is double)
@@ -228,11 +228,25 @@ public static class ConstantFolder
         Func<decimal, decimal, decimal> decimalOp)
     {
         if (a is decimal || b is decimal)
-            return decimalOp(Convert.ToDecimal(a!), Convert.ToDecimal(b!));
+            return decimalOp(Dec(a!), Dec(b!));
         if (a is double || b is double)
             return doubleOp(Convert.ToDouble(a!), Convert.ToDouble(b!));
         if (a is long || b is long)
             return longOp(Convert.ToInt64(a!), Convert.ToInt64(b!));
         return intOp((int)a!, (int)b!);
     }
+
+    /// <summary>
+    /// The decimal a folded operand is, by the language's rule rather than the platform's.
+    /// </summary>
+    /// <remarks>
+    /// The same conversion <c>OperatorEvaluator.ToDecimal</c> makes — see
+    /// <see cref="Tosh.Runtime.ShellDecimal"/>. A fold that converted differently would put
+    /// the meaning of <c>0.1 + 1m</c> back to depending on whether it happened to be
+    /// foldable, which is the bug <see cref="NumericEq"/> exists to describe.
+    /// </remarks>
+    private static decimal Dec(object value)
+        => Tosh.Runtime.ShellDecimal.TryFrom(value, out var number)
+            ? number
+            : Convert.ToDecimal(value);
 }

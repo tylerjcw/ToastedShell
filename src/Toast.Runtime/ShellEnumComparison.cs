@@ -84,14 +84,10 @@ public static class ShellEnumComparison
                 result = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
                 return true;
             case float or double:
-                var d = Convert.ToDouble(value, CultureInfo.InvariantCulture);
-                if (double.IsNaN(d) || double.IsInfinity(d))
-                {
-                    result = default;
-                    return false;
-                }
-                result = (decimal)d;
-                return true;
+                // `ShellDecimal`, not `(decimal)d`: what that cast means changed between
+                // .NET 10 and 11, and an enum's value must not compare differently because
+                // of it.
+                return ShellDecimal.TryFrom(value, out result);
             default:
                 result = default;
                 return false;

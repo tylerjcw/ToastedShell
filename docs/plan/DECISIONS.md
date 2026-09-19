@@ -28,8 +28,57 @@ silently changing an implementation.
 | Chained comparison | `a < b < c` is real chaining, desugaring to `(a < b) and (b < c)` with each middle operand evaluated once and short-circuit preserved. | Accepted |
 | `$this` in defaults | A method parameter default may reference `$this`. A constructor default may not: it would observe an instance whose properties are not yet initialised, so it gets a targeted diagnostic instead. | Accepted |
 | Breaking changes | TōSh has two users and no external consumers, so backward compatibility is not a constraint. Where a filed defect is caused by the grammar rather than the implementation, the grammar may change. Each such change lands with its specification, examples, and test updates in the same slice. | Accepted 2026-07-26 |
+| Float to decimal | A floating value asked for as a `decimal` becomes the decimal its *shortest round-trippable* spelling denotes, so `0.1 as decimal` is `0.1m`. The rule is the language's, implemented once in `Tosh.Runtime.ShellDecimal`, not the platform's cast. | Accepted 2026-09-18 |
 | Intrinsic literals | Temporal literals use only the documented exact ISO forms; canonical IPv4 requires four decimal octets. Storage suffixes are typed in expression context but remain strings as raw command arguments. `ToshRange` remains signed 32-bit integer-only. | Accepted |
 | Brace delimiters | In ordinary expression and command-argument grammar, `{ ... }` is a block. Records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}`. Grammar-owned structural groups such as member, arm, destructuring, accessor, and projection braces remain plain braces. | Accepted 2026-07-28 |
+
+### Float-to-decimal policy
+
+Accepted 2026-09-18, after the conversion changed underneath the project.
+
+`decimal` is the type people reach for when rounding is unacceptable, so what a
+`double` *means* as one is a semantic decision and not an implementation detail.
+The platform had been making it, and the platform changed its mind: through
+.NET 10 `(decimal)aDouble` rounded to 15 significant digits, and from .NET 11 it
+writes the double's full binary value. Nothing in this repository changed, and
+
+```tosh
+0.1 as decimal == 0.1        # true on .NET 10, false on .NET 11
+to ton 483.06`MW             # 483.06`MW, then 483.0600000000000023`MW
+```
+
+That is disqualifying on its own — a script's arithmetic must not depend on which
+runtime the shell was compiled against — and it is doubly so given the framework
+is meant to be one string to change.
+
+**The rule.** A floating value denotes the decimal its shortest round-trippable
+spelling denotes. `0.1` is the shortest spelling that reads back as that double,
+so `0.1 as decimal` is `0.1m`: the number the author wrote, rather than the binary
+approximation that stood in for it. A `float` round-trips at a float's precision,
+not as the double it widens to — `0.1f`'s extra digits are an artefact of widening.
+NaN, the infinities and values outside decimal's range denote nothing, and are
+declined rather than approximated.
+
+**Why not either platform answer.** The 15-digit round is not merely old, it is
+wrong: it is *not injective*, so `0.3` and `0.30000000000000004` collapsed onto one
+value and compared equal. That made a comparison mean something different depending
+on whether it happened to be constant-folded, which is the bug
+`ConstantFolder.NumericEq` was written to describe, and it made
+`2.718281828459045` look like it carried digits its double had not kept, which
+`ToshLexer.CarriesMorePrecisionThanDouble` had to work around. Round-tripping is
+injective, so both problems go away.
+
+The .NET 11 answer is faithful but answers a question nobody asked. `0.1 as decimal`
+yielding `0.1000000000000000055511151231` is the double's exact value, and it is
+never the value the author meant; it also makes `as decimal` useless for the thing
+it is for, since the result carries noise into every subsequent exact computation.
+
+**Where it lives.** `Tosh.Runtime.ShellDecimal`, used by the `as` conversion
+(`TypeConversion`), decimal arithmetic and equality (`OperatorEvaluator`), enum
+comparison (`ShellEnumComparison`), constant folding (`ConstantFolder`) and the TON
+writer. Folding and evaluation must convert identically or the fold-versus-runtime
+disagreement returns. `ShellDecimalTests` pins the rule, and passes on both .NET 10
+and .NET 11 — which is the point.
 
 ### Truthiness policy
 

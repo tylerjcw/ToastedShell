@@ -588,20 +588,12 @@ public static class OperatorEvaluator
         return false;
     }
 
+    // One rule, stated once: the decimal a double denotes is its shortest round-trippable
+    // spelling, and two values are equal when that decimal is this one. Comparing and
+    // converting used to spell the same idea separately, which is how `0.1 as decimal == 0.1`
+    // could stop being true without either of them changing.
     private static bool DecimalEqualsFloat(decimal value, double floating)
-    {
-        if (double.IsNaN(floating) || double.IsInfinity(floating))
-        {
-            return false;
-        }
-
-        return decimal.TryParse(
-                   floating.ToString("R", CultureInfo.InvariantCulture),
-                   NumberStyles.Float | NumberStyles.AllowLeadingSign,
-                   CultureInfo.InvariantCulture,
-                   out var asDecimal)
-               && asDecimal == value;
-    }
+        => ShellDecimal.TryFromDouble(floating, out var asDecimal) && asDecimal == value;
 
     private static bool IntegerEqualsFloat(long integer, double floating)
     {
@@ -2076,9 +2068,15 @@ public static class OperatorEvaluator
         ? (double)integer
         : Convert.ToDouble(value, CultureInfo.InvariantCulture);
 
-    private static decimal ToDecimal(object value) => value is BigInteger integer
-        ? (decimal)integer
-        : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+    // A float reaching decimal arithmetic converts by the language's rule rather than the
+    // platform's — see `ShellDecimal`. Without it, `0.1 + 1m` answers `1.1` on .NET 10 and
+    // `1.1000000000000000055511151231` on .NET 11.
+    private static decimal ToDecimal(object value) => value switch
+    {
+        BigInteger integer => (decimal)integer,
+        double or float when ShellDecimal.TryFrom(value, out var defined) => defined,
+        _ => Convert.ToDecimal(value, CultureInfo.InvariantCulture),
+    };
 
     private static bool IsNumeric(object? value) => value is not null && (IsIntegral(value) || IsFloating(value) || IsDecimal(value));
 
