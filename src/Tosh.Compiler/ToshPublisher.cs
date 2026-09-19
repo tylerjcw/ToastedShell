@@ -58,6 +58,81 @@ public static partial class ToshPublisher
         return appHostPath;
     }
 
+    /// <summary>
+    /// The framework version a compiled program should ask the host for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Environment.Version"/> looks like the obvious answer and is the wrong one:
+    /// it drops the prerelease label, reporting <c>11.0.0</c> on a runtime that calls itself
+    /// <c>11.0.0-rc.1.26425.128</c>. A program asking for <c>11.0.0</c> will not start on
+    /// that runtime, and cannot be made to — <c>11.0.0-rc.1</c> sorts <em>below</em>
+    /// <c>11.0.0</c>, so no roll-forward setting reaches it; rolling forward is the wrong
+    /// direction. The host exits 150, <c>FrameworkMissingFailure</c>, having found a runtime
+    /// it was not allowed to use.
+    /// </para>
+    /// <para>
+    /// So the version is read from
+    /// <see cref="RuntimeInformation.FrameworkDescription"/>, which is the one place the
+    /// label survives, and a program compiled on a prerelease runtime asks for the runtime it
+    /// was compiled on. On a released runtime this is exactly what
+    /// <see cref="Environment.Version"/> gave, so nothing else changes.
+    /// </para>
+    /// </remarks>
+    public static string RuntimeFrameworkVersion { get; } = DetectRuntimeFrameworkVersion();
+
+    private static string DetectRuntimeFrameworkVersion()
+    {
+        // ".NET 11.0.0-rc.1.26425.128". Anything else — a description this does not
+        // recognise — falls back to the number, which is what this did before.
+        const string Prefix = ".NET ";
+        var description = RuntimeInformation.FrameworkDescription;
+
+        if (description.StartsWith(Prefix, StringComparison.Ordinal))
+        {
+            var version = description[Prefix.Length..].Trim();
+
+            if (version.Length > 0 && char.IsAsciiDigit(version[0]))
+            {
+                return version;
+            }
+        }
+
+        return Environment.Version.ToString();
+    }
+
+    /// <summary>
+    /// The companion runtimeconfig that lets <c>dotnet &lt;out&gt;.dll</c> run without
+    /// staging.
+    /// </summary>
+    /// <remarks>
+    /// One writer for every caller. The CLI's `toshc`, the SDK task and the tests each wrote
+    /// this by hand — the SDK task's copy was commented "mirrors the CLI's emit step", which
+    /// is the thing a shared method says by existing.
+    /// </remarks>
+    public static string WriteRuntimeConfig(string dllPath)
+    {
+        var path = Path.ChangeExtension(Path.GetFullPath(dllPath), ".runtimeconfig.json");
+
+        File.WriteAllText(path, RuntimeConfigJson());
+
+        return path;
+    }
+
+    /// <summary>The contents <see cref="WriteRuntimeConfig"/> writes.</summary>
+    public static string RuntimeConfigJson() =>
+        $$"""
+          {
+            "runtimeOptions": {
+              "tfm": "net{{Environment.Version.Major}}.0",
+              "framework": {
+                "name": "Microsoft.NETCore.App",
+                "version": "{{RuntimeFrameworkVersion}}"
+              }
+            }
+          }
+          """;
+
     public static string WriteDepsJson(
         string dllPath,
         IReadOnlyCollection<string>? runtimeDependencyFileNames = null)

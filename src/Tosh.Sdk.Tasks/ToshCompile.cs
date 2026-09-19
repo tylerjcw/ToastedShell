@@ -241,22 +241,10 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote {refOutputPath}");
         }
 
-        // Companion runtimeconfig so `dotnet <out>.dll` can run
-        // without staging. Mirrors the CLI's emit step.
-        var runtimeConfigPath = Path.ChangeExtension(OutputPath, ".runtimeconfig.json");
-        var runtimeMajor = Environment.Version.Major;
-        var runtimeConfig = $$"""
-            {
-              "runtimeOptions": {
-                "tfm": "net{{runtimeMajor}}.0",
-                "framework": {
-                  "name": "Microsoft.NETCore.App",
-                  "version": "{{Environment.Version}}"
-                }
-              }
-            }
-            """;
-        File.WriteAllText(runtimeConfigPath, runtimeConfig);
+        // Companion runtimeconfig so `dotnet <out>.dll` can run without staging. The same
+        // writer the CLI's emit step uses, rather than a copy that has to be kept in step
+        // with it by hand.
+        var runtimeConfigPath = ToshPublisher.WriteRuntimeConfig(OutputPath);
 
         var runtimeDependencies = ToshPublisher.GetRuntimeDependencyFileNames(profile);
         StageCompilerRuntime(OutputPath, runtimeDependencies);

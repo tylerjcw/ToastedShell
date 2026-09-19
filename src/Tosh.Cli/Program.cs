@@ -738,19 +738,7 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
 
     // Emit a minimal runtimeconfig.json so `dotnet <out>.dll` runs.
     var runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
-    var runtimeMajor = Environment.Version.Major;
-    var runtimeConfig = $$"""
-        {
-          "runtimeOptions": {
-            "tfm": "net{{runtimeMajor}}.0",
-            "framework": {
-              "name": "Microsoft.NETCore.App",
-              "version": "{{Environment.Version}}"
-            }
-          }
-        }
-        """;
-    await File.WriteAllTextAsync(runtimeConfigPath, runtimeConfig);
+    await File.WriteAllTextAsync(runtimeConfigPath, ToshPublisher.RuntimeConfigJson());
 
     // Stage the runtime DLLs the emitted assembly depends on next
     // to the output so `dotnet <out>.dll` runs without the caller

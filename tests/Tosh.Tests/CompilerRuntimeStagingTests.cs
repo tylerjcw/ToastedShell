@@ -158,10 +158,7 @@ public sealed class CompilerRuntimeStagingTests
             ToshPublisher.StageRuntimeDependency(Path.Combine(AppContext.BaseDirectory, dependency),
                 Path.Combine(files.Directory, dependency));
         }
-        File.WriteAllText(Path.ChangeExtension(files.Destination, ".runtimeconfig.json"), $$"""
-            { "runtimeOptions": { "tfm": "net{{Environment.Version.Major}}.0",
-              "framework": { "name": "Microsoft.NETCore.App", "version": "{{Environment.Version}}" } } }
-            """);
+        ToshPublisher.WriteRuntimeConfig(files.Destination);
         ToshPublisher.WriteDepsJson(files.Destination);
         using var process = new Process
         {

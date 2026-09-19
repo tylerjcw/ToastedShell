@@ -104,20 +104,10 @@ public sealed class CompiledProgramDiagnosticTests
                 File.Copy(sourcePath, Path.Combine(directory.FullName, dependency));
             }
 
-            var runtimeConfigPath = Path.ChangeExtension(assemblyPath, ".runtimeconfig.json");
-            File.WriteAllText(
-                runtimeConfigPath,
-                $$"""
-                  {
-                    "runtimeOptions": {
-                      "tfm": "net{{Environment.Version.Major}}.0",
-                      "framework": {
-                        "name": "Microsoft.NETCore.App",
-                        "version": "{{Environment.Version}}"
-                      }
-                    }
-                  }
-                  """);
+            // The shipped writer, not a copy of it. Writing this by hand is how these tests
+            // came to ask for a framework version that does not exist on a prerelease
+            // runtime, while the thing they are meant to be testing did the same.
+            ToshPublisher.WriteRuntimeConfig(assemblyPath);
             ToshPublisher.WriteDepsJson(assemblyPath);
 
             return new CompiledOutput(directory, assemblyPath);
