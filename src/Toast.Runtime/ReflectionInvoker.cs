@@ -143,6 +143,34 @@ public sealed class ReflectionInvoker : IObjectInvoker
     public bool HasInstanceMethod(object target, string methodName)
         => MethodsNamed(target.GetType(), isStatic: false, methodName).Length > 0;
 
+    /// <summary>
+    /// Whether a type declares a static method of this name.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A <see cref="Type"/> used as a receiver is nearly always a stand-in for the type
+    /// itself, so a static of that name still wins — but it is also an object, and when it
+    /// has no such static it should behave like one. Without this check it never did:
+    /// <c>$t.GetMethods()</c> reported "No overload matched static method 'GetMethods' on
+    /// 'System.String'", having looked for a static on the type <em>described</em> rather
+    /// than an instance method on <see cref="Type"/> itself. Reflecting on a value from a
+    /// script was impossible, which is the point at which interop stops being debuggable
+    /// from inside the language.
+    /// </para>
+    /// <para>
+    /// Property access has always worked this way — it reads a static if there is one and
+    /// otherwise resolves against the object — so this makes methods agree with the
+    /// accessor rather than inventing a rule.
+    /// </para>
+    /// <para>
+    /// By name, not by overload: where a static of the name exists but no overload fits, the
+    /// failure should still say so rather than silently trying something else and reporting a
+    /// worse error.
+    /// </para>
+    /// </remarks>
+    private static bool HasStaticMethod(Type type, string methodName)
+        => MethodsNamed(type, isStatic: true, methodName).Length > 0;
+
     public InvocationResult InvokeInstance(object target, string methodName, IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -159,7 +187,7 @@ public sealed class ReflectionInvoker : IObjectInvoker
             return shellStaticType.InvokeStaticMethod(methodName, arguments);
         }
 
-        if (target is Type staticType)
+        if (target is Type staticType && HasStaticMethod(staticType, methodName))
         {
             return InvokeStatic(staticType, methodName, arguments);
         }
@@ -210,7 +238,7 @@ public sealed class ReflectionInvoker : IObjectInvoker
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (target is Type staticType)
+        if (target is Type staticType && HasStaticMethod(staticType, methodName))
         {
             return ValueTask.FromResult(InvokeStatic(staticType, methodName, arguments));
         }
