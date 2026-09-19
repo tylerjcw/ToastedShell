@@ -116,6 +116,11 @@ public static class TuiTreeBuilder
         out IReadOnlyList<TuiBinding> bindings)
     {
         var effective = registry ?? TuiWidgetRegistry.CreateDefault();
+
+        // After the built-ins, so a script's own widgets are nameable in markup — and so a
+        // caller that supplied its own registry gets them too. See `TuiWidgetContributions`.
+        TuiWidgetContributions.ApplyTo(effective);
+
         var context = new TuiBuildContext(effective, invoke);
 
         if (!TryBuildNode(node, effective, context, out var widget, out _))
