@@ -30,7 +30,10 @@ public sealed class StartupBudgetTests
     private const double MaxRatio = 2.0;
 
     private static string CliPath =>
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/Tosh.Cli/bin/Debug/net10.0/Tosh.Cli.dll"));
+        // Through ToshCli rather than a path of its own: this is one of the sites that
+        // escaped `PLAN-0002`, and it carried both hard-codings — the configuration and
+        // the framework.
+        ToshCli.AssemblyPath;
 
     private static long MinimumMilliseconds(string script)
     {

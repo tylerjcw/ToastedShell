@@ -735,7 +735,15 @@ public sealed class LspFeatureTests
 
         Assert.True(process.ExitCode == 0, $"Failed to build LSP fixture project.\nSTDOUT:\n{output}\nSTDERR:\n{error}");
 
-        var assemblyPath = Path.Combine(Path.GetDirectoryName(FixtureProjectPath)!, "bin", "Debug", "net10.0", "Tosh.LspFixture.dll");
+        // The framework the suite runs on, not one written down: the fixture project
+        // follows ToshTargetFramework like everything else, so a literal here goes stale
+        // at the next bump — quietly, because the old directory is still on disk.
+        var assemblyPath = Path.Combine(
+            Path.GetDirectoryName(FixtureProjectPath)!,
+            "bin",
+            "Debug",
+            ToshCli.TargetFramework,
+            "Tosh.LspFixture.dll");
         Assert.True(File.Exists(assemblyPath), $"Expected the built fixture assembly to exist at '{assemblyPath}'.");
         return assemblyPath;
     }

@@ -38,13 +38,32 @@ internal static class ToshCli
 
     /// <summary>
     /// Repository root, five levels above the test output directory
-    /// (<c>tests/Tosh.Tests/bin/&lt;config&gt;/net10.0</c>).
+    /// (<c>tests/Tosh.Tests/bin/&lt;config&gt;/&lt;tfm&gt;</c>).
     /// </summary>
     internal static string RepositoryRoot { get; } =
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 
+    /// <summary>
+    /// The framework the suite is running on, which is the one the CLI was built for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Hard-coded as <c>net10.0</c> until the bump to 11, which is the same mistake this
+    /// type already fixed for <see cref="Configuration"/> and for the same reason: a path
+    /// written down is a path that goes stale. It went stale quietly. Both framework
+    /// directories exist on a developer's machine, so every test that spawns the CLI went
+    /// on passing against a binary built from the source as it was before the bump —
+    /// proving something about a binary nobody ships.
+    /// </para>
+    /// <para>
+    /// On a clean checkout the old directory is absent and the failure is at least loud.
+    /// The quiet version is worse, which is why this is derived rather than declared.
+    /// </para>
+    /// </remarks>
+    internal static string TargetFramework { get; } = $"net{Environment.Version.Major}.0";
+
     private static string OutputDirectory =>
-        Path.Combine(RepositoryRoot, "src", "Tosh.Cli", "bin", Configuration, "net10.0");
+        Path.Combine(RepositoryRoot, "src", "Tosh.Cli", "bin", Configuration, TargetFramework);
 
     /// <summary>The native launcher — <c>Tosh.Cli</c>, or <c>Tosh.Cli.exe</c> on Windows.</summary>
     internal static string ExecutablePath =>

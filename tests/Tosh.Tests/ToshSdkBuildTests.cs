@@ -532,7 +532,7 @@ public sealed class ToshSdkBuildTests
 
             module MathBox {
                 var seed = 10
-                func plus_seed(n) { return $seed + $n }
+                func plus_seed(n: int) -> int { return $seed + $n }
             }
 
             class Point(x, y) {
