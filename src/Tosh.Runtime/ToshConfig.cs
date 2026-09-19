@@ -1212,6 +1212,19 @@ public sealed class ToshStartupConfig : IResettableShellConfig
     private string _configFilePath;
     private string _profilePath;
     private string _autoloadDirectory;
+    private string _libraryDirectory;
+    private string _bannerContents = DefaultBannerContents;
+
+    /// <summary>What the shell says when it opens, before anything is typed.</summary>
+    /// <remarks>
+    /// Held as the default rather than written into the printer so that
+    /// <c>$tosh.Config.Startup.BannerContents</c> reads back something a reader can edit
+    /// rather than an empty string standing in for "whatever is hard-coded".
+    /// </remarks>
+    public const string DefaultBannerContents =
+        "Tōast + TōSh (ToastedShell) + Tōme (TōSh Editor) + Crumb = ❤️\n" +
+        "Type 'help browse' for an interactive help browser, or 'help <command>' for details on a specific command.\n" +
+        "Everything is an Object.";
 
     public ToshStartupConfig(string rootDirectory)
     {
@@ -1221,6 +1234,7 @@ public sealed class ToshStartupConfig : IResettableShellConfig
         _configFilePath = Path.Combine(_rootDirectory, "config.tosh");
         _profilePath = Path.Combine(_rootDirectory, "profile.tosh");
         _autoloadDirectory = Path.Combine(_rootDirectory, "autoload");
+        _libraryDirectory = Path.Combine(_rootDirectory, "lib");
     }
 
     public string RootDirectory
@@ -1247,6 +1261,47 @@ public sealed class ToshStartupConfig : IResettableShellConfig
         set => _autoloadDirectory = NormalizeConfiguredPath(value, Path.Combine(_rootDirectory, "autoload"));
     }
 
+    /// <summary>Where the reader keeps their own library.</summary>
+    /// <remarks>
+    /// Unlike the autoload directory, nothing here is loaded at startup: this says where a
+    /// library <em>is</em>, so that code can later be asked for by name rather than by path.
+    /// Naming the root is the part that has to exist first — a dotted name means nothing
+    /// until there is a directory for it to be relative to.
+    /// </remarks>
+    public string LibraryDirectory
+    {
+        get => _libraryDirectory;
+        set => _libraryDirectory = NormalizeConfiguredPath(value, Path.Combine(_rootDirectory, "lib"));
+    }
+
+    /// <summary>Whether the banner is printed when an interactive shell opens.</summary>
+    /// <remarks>
+    /// Only the interactive REPL prints it. A script, a <c>-c</c> one-liner and a login
+    /// shell running a profile all produce output somebody may be piping, and a greeting in
+    /// the middle of that is a bug rather than a setting.
+    /// </remarks>
+    public bool DisplayBanner { get; set; } = true;
+
+    /// <summary>
+    /// What the banner says. Interpolation holes are evaluated when it is printed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The text is a template, so <c>{$env.USER}</c> or <c>{(tosh -V)}</c> read as they would
+    /// in any other interpolated string — which is the point of making it a setting rather
+    /// than a constant.
+    /// </para>
+    /// <para>
+    /// Empty means the same as <see cref="DisplayBanner"/> being off; there is no blank
+    /// greeting worth printing.
+    /// </para>
+    /// </remarks>
+    public string BannerContents
+    {
+        get => _bannerContents;
+        set => _bannerContents = value ?? string.Empty;
+    }
+
     public void ApplyRootDirectory(string rootDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootDirectory);
@@ -1254,6 +1309,7 @@ public sealed class ToshStartupConfig : IResettableShellConfig
         _configFilePath = Path.Combine(_rootDirectory, "config.tosh");
         _profilePath = Path.Combine(_rootDirectory, "profile.tosh");
         _autoloadDirectory = Path.Combine(_rootDirectory, "autoload");
+        _libraryDirectory = Path.Combine(_rootDirectory, "lib");
     }
 
     public string ResolvePath(string configuredPath)
@@ -1267,6 +1323,8 @@ public sealed class ToshStartupConfig : IResettableShellConfig
     public void Reset()
     {
         ApplyRootDirectory(_defaultRootDirectory);
+        DisplayBanner = true;
+        _bannerContents = DefaultBannerContents;
     }
 
     private string NormalizeConfiguredPath(string? configuredPath, string fallback)

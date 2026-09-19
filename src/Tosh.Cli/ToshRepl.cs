@@ -354,11 +354,76 @@ public sealed class ToshRepl
         }
     }
 
-    private static async Task PrintBannerAsync()
+    /// <summary>
+    /// Prints the greeting, if the reader wants one and it has anything to say.
+    /// </summary>
+    /// <remarks>
+    /// The text is a template rather than a constant, so <c>{$env.USER}</c> reads as it
+    /// would anywhere else. A banner that fails to evaluate prints as written instead of
+    /// stopping the shell: this runs before the first prompt of somebody's login shell, and
+    /// a greeting is never worth refusing to start over.
+    /// </remarks>
+    private async Task PrintBannerAsync()
     {
-        await Console.Out.WriteLineAsync("TōSh (ToastedShell) + ToastScript + Tōme (TōSh Editor) = ❤️");
-        await Console.Out.WriteLineAsync("Type 'help browse' for an interactive help browser, or 'help <command>' for details on a specific command.");
-        await Console.Out.WriteLineAsync("Everything is an Object.");
+        var startup = _runtime.Config.Startup;
+
+        if (!startup.DisplayBanner || string.IsNullOrWhiteSpace(startup.BannerContents))
+        {
+            return;
+        }
+
+        await Console.Out.WriteLineAsync(await RenderBannerAsync(startup.BannerContents));
         await Console.Out.WriteLineAsync(string.Empty);
+    }
+
+    /// <summary>Evaluates the banner's interpolation holes.</summary>
+    /// <remarks>
+    /// <para>
+    /// The template is wrapped in a triple-quoted interpolated string and evaluated, which
+    /// is what gives it the same holes every other string has. The fence is longer than the
+    /// longest run of quotes in the text, so a banner containing <c>"""</c> cannot close
+    /// it early — the rule C# raw strings use, for the same reason.
+    /// </para>
+    /// <para>
+    /// Written flush against the fence so the trimming rule leaves the text alone: a banner
+    /// is printed as it was typed.
+    /// </para>
+    /// </remarks>
+    private async Task<string> RenderBannerAsync(string template)
+    {
+        try
+        {
+            var fence = new string('"', Math.Max(3, LongestQuoteRun(template) + 1));
+            var rendered = new List<object?>();
+
+            await foreach (var value in _engine.EvaluateAsync($"${fence}\n{template}\n{fence}"))
+            {
+                rendered.Add(value);
+            }
+
+            return rendered.Count == 1 && rendered[0] is string text ? text : template;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Said once, quietly, on the stream nobody pipes: the shell still opens.
+            await Console.Error.WriteLineAsync(
+                $"tosh: the startup banner could not be evaluated ({exception.Message}); printing it as written.");
+
+            return template;
+        }
+    }
+
+    private static int LongestQuoteRun(string text)
+    {
+        var longest = 0;
+        var run = 0;
+
+        foreach (var character in text)
+        {
+            run = character == '"' ? run + 1 : 0;
+            longest = Math.Max(longest, run);
+        }
+
+        return longest;
     }
 }
