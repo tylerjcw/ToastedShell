@@ -1,3 +1,4 @@
+using Tosh.Tui.Rendering;
 using System.Text;
 
 namespace Tosh.Tui;
@@ -121,17 +122,76 @@ public sealed class TuiInputReader
             case '<':
                 return ReadSgrMouse(escapeKey, seen);
 
-            case '2':
-                return ReadBracketedPaste(escapeKey, seen);
-
             default:
+                // Digits begin a parameterised sequence, and which one it is depends on the
+                // final byte rather than the first digit: `200~` opens a paste, `13;5u` is a
+                // key report. Branching on the digit alone got that wrong the moment a
+                // second digit-led sequence existed.
+                if (char.IsAsciiDigit(introducer))
+                {
+                    return ReadParameterised(escapeKey, seen, introducer);
+                }
+
                 Replay(seen);
                 return TuiInputEvent.FromKey(escapeKey);
         }
     }
 
     /// <summary>
-    /// Reads the rest of a bracketed paste, <c>ESC [ 2</c> having been read.
+    /// Reads <c>CSI &lt;params&gt; &lt;final&gt;</c>, having read the first digit.
+    /// </summary>
+    /// <remarks>
+    /// Two finals matter here: <c>~</c> with a first parameter of 200 opens a bracketed
+    /// paste, and <c>u</c> is a Kitty key report. Anything else is a sequence this reader
+    /// does not claim, and is handed back as the keystrokes it arrived as.
+    /// </remarks>
+    private TuiInputEvent ReadParameterised(ConsoleKeyInfo escapeKey, StringBuilder seen, char first)
+    {
+        var parameters = new List<int>();
+        var current = first - '0';
+
+        while (true)
+        {
+            if (!TryTake(seen, out var next))
+            {
+                Replay(seen);
+                return TuiInputEvent.FromKey(escapeKey);
+            }
+
+            if (char.IsAsciiDigit(next))
+            {
+                current = (current * 10) + (next - '0');
+                continue;
+            }
+
+            if (next == ';')
+            {
+                parameters.Add(current);
+                current = 0;
+                continue;
+            }
+
+            parameters.Add(current);
+
+            switch (next)
+            {
+                case '~' when parameters[0] == 200:
+                    return ReadPasteBody();
+
+                case 'u':
+                    return TuiInputEvent.FromKey(TuiKittyKeyboard.ToKey(
+                        parameters[0],
+                        TuiKittyKeyboard.Modifiers(parameters.Count > 1 ? parameters[1] : 1)));
+
+                default:
+                    Replay(seen);
+                    return TuiInputEvent.FromKey(escapeKey);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads a paste's text, the opening <c>CSI 200 ~</c> having been read.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -145,17 +205,8 @@ public sealed class TuiInputReader
     /// bracket — yields what arrived rather than waiting for a bracket that is not coming.
     /// </para>
     /// </remarks>
-    private TuiInputEvent ReadBracketedPaste(ConsoleKeyInfo escapeKey, StringBuilder seen)
+    private TuiInputEvent ReadPasteBody()
     {
-        foreach (var expected in "00~")
-        {
-            if (!TryTake(seen, out var next) || next != expected)
-            {
-                Replay(seen);
-                return TuiInputEvent.FromKey(escapeKey);
-            }
-        }
-
         var text = new StringBuilder();
         var terminator = new StringBuilder();
 

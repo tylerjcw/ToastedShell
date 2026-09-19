@@ -63,6 +63,14 @@ public sealed class TuiTerminalSession : IDisposable
             _host.Write(TuiTerminalFocus.Enable);
         }
 
+        // Last of the input protocols, and the one that changes how ordinary keys arrive:
+        // with it, Ctrl+A is a key report rather than byte 1. The reader rebuilds the same
+        // ConsoleKeyInfo either way, so nothing downstream can tell.
+        if (TuiKittyKeyboard.Detect(Environment.GetEnvironmentVariable))
+        {
+            _host.Write(TuiKittyKeyboard.Enable);
+        }
+
         // A note for whoever comes next, in case this process never gets to clear it.
         TuiTerminalRepair.Taken();
 
@@ -170,7 +178,7 @@ public sealed class TuiTerminalSession : IDisposable
             var pictures = Rendering.TuiGraphics.DeleteAll();
 
             _host.WriteUrgent(
-                pictures + TuiBracketedPaste.Disable + TuiTerminalFocus.Disable + DisableSgrMouse + ResetStyles + ShowCursor +
+                pictures + TuiKittyKeyboard.Disable + TuiBracketedPaste.Disable + TuiTerminalFocus.Disable + DisableSgrMouse + ResetStyles + ShowCursor +
                 ExitAlternateScreen);
         }
         catch (IOException)
