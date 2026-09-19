@@ -28,7 +28,19 @@
   <PropertyGroup>
     <ToshCalYear>$([System.DateTime]::UtcNow.ToString('yy'))</ToshCalYear>
     <ToshCalMonth>$([System.DateTime]::UtcNow.Month)</ToshCalMonth>
+    <!--
+      The one place the framework is chosen. Change this and every project in the
+      solution moves with it; whether the source then compiles is a separate question.
+
+      It already drove the version's fourth field and did *not* drive
+      `TargetFramework`, which every project stated for itself — so the version could
+      say .10 while the build targeted something else, and a bump meant editing
+      twenty-seven files and hoping none was missed. The two projects that target
+      `netstandard2.0` still say so themselves: a project file is read after this one,
+      so what it states wins.
+    -->
     <ToshDotNetMajor>10</ToshDotNetMajor>
+    <ToshTargetFramework>net$(ToshDotNetMajor).0</ToshTargetFramework>
 
     <!-- Read publish state from .tosh-publish-state ("YY.M:N[:D]" format) -->
     <_ToshPubStateFile>$(MSBuildThisFileDirectory).tosh-publish-state</_ToshPubStateFile>
@@ -57,6 +69,10 @@
   </PropertyGroup>
 
   <!-- Redirect test results into artifacts/test-results/ so they don't accumulate next to test sources. -->
+  <PropertyGroup>
+    <TargetFramework>$(ToshTargetFramework)</TargetFramework>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(IsTestProject)' == 'true' or '$(IsPackable)' == 'false'">
     <VSTestResultsDirectory>$(ArtifactsRoot)test-results\</VSTestResultsDirectory>
   </PropertyGroup>

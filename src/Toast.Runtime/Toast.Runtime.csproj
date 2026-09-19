@@ -26,7 +26,6 @@
     renaming the namespace as well is `TOAST-0008`'s job and is a separate, larger move.
   -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Tosh.Runtime</RootNamespace>

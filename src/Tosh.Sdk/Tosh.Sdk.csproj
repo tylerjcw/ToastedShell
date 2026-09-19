@@ -48,9 +48,9 @@
     <None Include="Sdk\Sdk.targets" Pack="true" PackagePath="Sdk\Sdk.targets" />
     <!-- Pack the task assembly + every dependency it copies next to
          itself. Loaded by Sdk.targets via <UsingTask>. -->
-    <None Include="..\Tosh.Sdk.Tasks\bin\$(Configuration)\net10.0\*.dll"
+    <None Include="..\Tosh.Sdk.Tasks\bin\$(Configuration)\$(ToshTargetFramework)\*.dll"
           Pack="true"
-          PackagePath="tasks\net10.0\" />
+          PackagePath="tasks\$(ToshTargetFramework)\" />
   </ItemGroup>
 
   <!--
