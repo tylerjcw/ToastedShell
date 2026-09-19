@@ -1272,7 +1272,23 @@ public static class OperatorEvaluator
 
         if (typeSpecifier is Type type)
         {
-            return type.IsInstanceOfType(value);
+            if (type.IsInstanceOfType(value))
+            {
+                return true;
+            }
+
+            // A tōsh class that extends a CLR type is not a CLR instance of it — the base
+            // lives in a contained object — so the runtime's answer is "no" for exactly the
+            // classes that said `extends System.Uri`. The value knows its own base chain;
+            // ask it before agreeing.
+            //
+            // Only the *qualified* spelling was affected, because only a qualified name
+            // resolves to a `Type` and stops here. `$u is Uri` arrives as a string and walks
+            // the chain below, so `is Uri` was true while `is System.Uri` was false — and
+            // `System.Uri` is the spelling the extends clause is written with.
+            return value is IShellTypeCheckable clrCheckable &&
+                   (clrCheckable.IsInstanceOf(type.FullName ?? type.Name) ||
+                    clrCheckable.IsInstanceOf(type.Name));
         }
 
         // `TOAST-0105`. A declared type used as the right operand — `$t is IR.Thing` — arrives

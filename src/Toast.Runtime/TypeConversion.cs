@@ -33,6 +33,22 @@ public static class TypeConversion
             return true;
         }
 
+        // A class written `extends System.Uri` holds a `Uri` rather than being one, so a CLR
+        // parameter wanting a `Uri` matched nothing and the call failed overload resolution
+        // — `$plain.MakeRelativeUri($mine)` reported no matching overload for an argument
+        // whose whole purpose was to be a `Uri`. The contained instance is what the platform
+        // is asking for, so that is what it gets.
+        //
+        // Below the exact-instance check above, so it can only rescue a conversion that had
+        // already failed, and never reinterpret one that was going to succeed.
+        if (value is IShellClrDerivedObject derived &&
+            derived.ClrBaseInstance is { } clrBase &&
+            effectiveType.IsInstanceOfType(clrBase))
+        {
+            converted = clrBase;
+            return true;
+        }
+
         // An enum value converts through the number behind it, not through its name. Without
         // this the value fell to the string conversions below and `cast int Fuel.Uranium`
         // reported "Could not cast 'Uranium' to System.Int32" — the name, which is what

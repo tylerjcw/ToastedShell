@@ -5,8 +5,34 @@ namespace Tosh.Language;
 
 public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObject, IShellTypedObject, IShellEnumerableObject,
     IShellBinaryOperatorObject
-    , ICloneable, IShellTypeCheckable, IShellMemberDiagnostics
+    , ICloneable, IShellTypeCheckable, IShellMemberDiagnostics, IShellClrDerivedObject
 {
+    /// <inheritdoc />
+    /// <remarks>
+    /// Walked rather than read off <see cref="Definition"/>, because the base belongs to
+    /// whichever class in the chain named it: for `class E2 extends E1` over
+    /// `class E1 extends Error`, `E2.ClrBaseType` is null and `E1`'s is not. Reading only
+    /// this instance's own definition is the bug `TOAST-0018` describes on the `is` side.
+    /// </remarks>
+    Type? IShellClrDerivedObject.ClrBaseType
+    {
+        get
+        {
+            for (var current = Definition; current is not null; current = current.BaseClass)
+            {
+                if (current.ClrBaseType is { } clrBase)
+                {
+                    return clrBase;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    object? IShellClrDerivedObject.ClrBaseInstance => ClrBaseObject;
+
     /// <summary>
     /// Says whether a member exists but was refused — <c>TS-P2-18</c>.
     /// </summary>
