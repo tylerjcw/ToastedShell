@@ -32,8 +32,26 @@ namespace Tosh.Language;
 internal sealed class ToshBoundMethodReference(
     object receiver,
     string methodName,
-    IObjectInvoker invoker) : IShellCallable
+    IObjectInvoker invoker,
+    ToshEngine engine) : IShellCallable, ISelfHostedCallable
 {
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// Without this a bound method reference could be passed everywhere inside the language
+    /// and nowhere outside it: handing `&amp;$obj.Method` to anything wanting a delegate
+    /// failed overload resolution, while the lambda beside it — identical call, identical
+    /// signature — sorted the list. The only difference was that
+    /// <see cref="ToshLambda"/> could run itself and this could not.
+    /// </para>
+    /// <para>
+    /// Handing the callable somewhere else is the entire point of taking a reference to it,
+    /// and "somewhere else" includes the platform.
+    /// </para>
+    /// </remarks>
+    public object? InvokeWithoutContext(IReadOnlyList<object?> arguments)
+        => engine.InvokeCallableOnThisThread(this, arguments);
+
     public string CallableName { get; } = methodName;
 
     public int RequiredParameterCount => 0;

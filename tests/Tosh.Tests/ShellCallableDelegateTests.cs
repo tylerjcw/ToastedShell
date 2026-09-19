@@ -1,3 +1,4 @@
+using Tosh.Language;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -89,6 +90,48 @@ public sealed class ShellCallableDelegateTests
 
         var error = Assert.Throws<InvalidOperationException>(() => Assert.IsType<Func<int>>(created).Invoke());
         Assert.Contains("Int32", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A bound method reference can cross to the platform, exactly as a lambda can.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>&amp;$obj.Method</c> could be passed everywhere inside the language and nowhere
+    /// outside it. Handing it to <c>List&lt;T&gt;.Sort</c> failed overload resolution while
+    /// the lambda beside it — same call, same signature, same arguments — sorted the list.
+    /// </para>
+    /// <para>
+    /// The difference was never the signature: a lambda could run itself without a context
+    /// and a bound reference could not, and only a callable that can do that is convertible
+    /// to a delegate. Taking a reference in order to hand it somewhere else is the point of
+    /// taking one, and "somewhere else" includes a CLR API.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_bound_method_reference_converts_to_a_delegate_like_a_lambda()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            class Helper { func ByLen(a, b) { return $a.Length - $b.Length } }
+            var h = new Helper()
+
+            # Built from the sequence rather than with Add, because a bare void call emits
+            # its receiver and three Lists would land in the results.
+            var viaLambda = new System.Collections.Generic.List<string>(["bbb", "a", "cc"])
+            $viaLambda.Sort(func(a, b) => ($a.Length - $b.Length))
+            echo $"{$viaLambda[0]},{$viaLambda[1]},{$viaLambda[2]}"
+
+            var viaReference = new System.Collections.Generic.List<string>(["bbb", "a", "cc"])
+            $viaReference.Sort(&$h.ByLen)
+            echo $"{$viaReference[0]},{$viaReference[1]},{$viaReference[2]}"
+            """);
+
+        // The echoed lines only: `Sort` returns void, and a bare void call emits its
+        // receiver, so the two Lists are in the results too.
+        Assert.Equal(["a,cc,bbb", "a,cc,bbb"], results.OfType<string>());
     }
 
     private delegate void SpanHandler(ReadOnlySpan<char> text);

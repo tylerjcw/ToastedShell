@@ -2415,7 +2415,8 @@ public sealed partial class ToshEngine
                         return new ToshBoundMethodReference(
                             receiver,
                             funcRef.Name[(receiverDot + 1)..],
-                            LanguageRuntime.Invoker);
+                            LanguageRuntime.Invoker,
+                            this);
                     }
 
                     // A module-qualified function, by contrast, already evaluates
