@@ -59,24 +59,55 @@ public static class AurBuilder
     /// directory on success, or <c>null</c> if the package has no
     /// PKGBUILD (typo or removed package).
     /// </summary>
-    public static async Task<string?> EnsureClonedAsync(string pkg, CancellationToken ct)
+    public static async Task<string?> EnsureClonedAsync(
+        string pkg,
+        CancellationToken ct,
+        string? packageBase = null)
     {
         Directory.CreateDirectory(CacheDir);
         Directory.CreateDirectory(LogDir);
-        var dir = Path.Combine(CacheDir, pkg);
+
+        // The repo is named after the package *base*, not the package. A split PKGBUILD
+        // produces many packages from one repo — `dotnet-core-bin` produces
+        // `dotnet-sdk-bin`, `dotnet-runtime-bin`, `dotnet-targeting-pack-bin` and
+        // `aspnet-runtime-bin` — and cloning by package name asks the AUR for a repo that
+        // does not exist. It answers with an *empty* one rather than a failure, so the
+        // clone exits zero and there is simply no PKGBUILD in it.
+        var repo = packageBase ?? await ResolveRepoAsync(pkg, ct);
+
+        // Keyed by repo, so two packages out of one base share a checkout rather than
+        // cloning the same thing twice under different names.
+        var dir = Path.Combine(CacheDir, repo);
+        // A checkout with no PKGBUILD in it is not a checkout to fetch into — it is the
+        // wreckage of a clone that went wrong, and `git fetch` on an empty repo leaves it
+        // exactly as empty. Without this the name stays poisoned until someone runs
+        // `crumb clean`, which is a thing nobody thinks to try. Thrown away and cloned
+        // again instead.
+        if (Directory.Exists(dir) && !File.Exists(Path.Combine(dir, "PKGBUILD")))
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Left alone, and the PKGBUILD check at the end still reports the failure.
+            }
+        }
+
         var fresh = !Directory.Exists(dir);
         // Route git's chatter ("remote: Total 0...", "HEAD is now at ...")
         // into a log file rather than the user's terminal — paru does the
         // same. The log path is per-package so a later build failure can
         // still surface relevant fetch errors.
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-        var clonelog = Path.Combine(LogDir, $"{pkg}-clone-{stamp}.log");
+        var clonelog = Path.Combine(LogDir, $"{repo}-clone-{stamp}.log");
         if (fresh)
         {
             var clone = await RunAsync("git", new[]
             {
                 "clone", "--depth", "1", "--quiet",
-                $"https://aur.archlinux.org/{pkg}.git",
+                $"https://aur.archlinux.org/{repo}.git",
                 dir,
             }, workdir: CacheDir, clonelog, ct);
             if (clone != 0) return null;
@@ -90,6 +121,48 @@ public static class AurBuilder
         // Successful clones don't need their log kept around.
         try { if (File.Exists(clonelog) && new FileInfo(clonelog).Length == 0) File.Delete(clonelog); } catch { }
         return File.Exists(Path.Combine(dir, "PKGBUILD")) ? dir : null;
+    }
+
+    /// <summary>
+    /// Which AUR repo holds the PKGBUILD for <paramref name="pkg"/>.
+    /// </summary>
+    /// <remarks>
+    /// Falls back to the package name when the RPC cannot be reached. That is the right
+    /// answer for most packages — name and base agree unless the PKGBUILD is a split one —
+    /// so being offline degrades to what this did before rather than to nothing.
+    /// </remarks>
+    private static async Task<string> ResolveRepoAsync(string pkg, CancellationToken ct)
+    {
+        try
+        {
+            using var aur = new AurClient();
+
+            return RepoFor(pkg, await aur.InfoAsync(new[] { pkg }, ct));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or
+                                         System.Text.Json.JsonException or UriFormatException)
+        {
+            return pkg;
+        }
+    }
+
+    /// <summary>The repo to clone for a package, given what the AUR said about it.</summary>
+    /// <remarks>
+    /// Separated from the fetching so it can be tested without a network: the rule is the
+    /// part worth pinning, and the rule is that the base wins where the AUR gave one.
+    /// </remarks>
+    internal static string RepoFor(string pkg, IReadOnlyList<Models.Package> info)
+    {
+        foreach (var found in info)
+        {
+            if (string.Equals(found.Name, pkg, StringComparison.Ordinal) &&
+                found.Base is { Length: > 0 } packageBase)
+            {
+                return packageBase;
+            }
+        }
+
+        return pkg;
     }
 
     /// <summary>
@@ -165,7 +238,9 @@ public static class AurBuilder
         var dir = await EnsureClonedAsync(pkg, ct);
         if (dir is null)
         {
-            Console.Error.WriteLine($"crumb: no PKGBUILD in clone of '{pkg}' — is the package name correct?");
+            Console.Error.WriteLine(
+                $"crumb: no PKGBUILD in the AUR repo for '{pkg}' — check the name, " +
+                "and that the AUR is reachable if it is a split package.");
             return 1;
         }
 

@@ -439,14 +439,24 @@ public static partial class CrumbCommands
             var dir = await AurBuilder.EnsureClonedAsync(pkg, ct);
             if (dir is null)
             {
-                Console.Error.WriteLine($"crumb: no PKGBUILD in clone of '{pkg}' — is the package name correct?");
+                Console.Error.WriteLine(
+                    $"crumb: no PKGBUILD in the AUR repo for '{pkg}' — check the name, " +
+                    "and that the AUR is reachable if it is a split package.");
                 summary.Add((opt.DownloadOnly ? "AUR download" : "AUR build",
                     UpgradeListFormatter.ResultStatus.Failed,
                     $"clone failed: {pkg}"));
                 UpgradeListFormatter.RenderSummary(summary);
                 return null;
             }
-            clonedTargets.Add((pkg, dir));
+            // One repo can produce several packages, and asking for two of them gives two
+            // targets pointing at one checkout. Left in, the review pages the same PKGBUILD
+            // twice and makepkg runs twice in the same directory to build what it already
+            // built — which is how `dotnet-sdk-preview-bin` and its runtime dependency
+            // behave, since both come out of `dotnet-core-preview-bin`.
+            if (!clonedTargets.Any(target => string.Equals(target.Dir, dir, StringComparison.Ordinal)))
+            {
+                clonedTargets.Add((pkg, dir));
+            }
         }
 
         if (reviewAur)
