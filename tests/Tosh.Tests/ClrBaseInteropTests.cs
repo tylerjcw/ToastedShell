@@ -120,6 +120,113 @@ public sealed class ClrBaseInteropTests
     }
 
     /// <summary>
+    /// A CLR caller invoking a virtual runs the class's override.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of the emitted subclass. Before it, a class could declare
+    /// <c>func ToString()</c>, see it honoured everywhere in the language, and see it ignored
+    /// by the first CLR caller that asked — what crossed the boundary was the plain base
+    /// object, which had never heard of the class.
+    /// </remarks>
+    [Fact]
+    public async Task A_clr_caller_runs_the_classs_override()
+    {
+        var results = await RunAsync(
+            """
+            class MyUri(url) extends System.Uri($url) {
+                func ToString() { return "OVERRIDDEN" }
+            }
+            var u = new MyUri("https://example.com/a/b")
+            var crossed = new System.Collections.Generic.List<System.Uri>([$u])
+            echo $crossed[0].ToString()
+            """);
+
+        Assert.Equal(["OVERRIDDEN"], results.OfType<string>());
+    }
+
+    /// <summary>
+    /// <c>$super</c> reaches the base implementation rather than the override.
+    /// </summary>
+    /// <remarks>
+    /// The override is what the base's own name now resolves to, so calling it from inside
+    /// the override is infinite recursion — <c>$super.ToString()</c> inside
+    /// <c>func ToString()</c> recursed until the depth guard stopped it. Each override is
+    /// paired with a non-virtual thunk that reaches past it.
+    /// </remarks>
+    [Fact]
+    public async Task Super_reaches_the_base_implementation_without_recursing()
+    {
+        var results = await RunAsync(
+            """
+            class MyUri(url) extends System.Uri($url) {
+                func ToString() { return $"MINE<{ $super.ToString() }>" }
+            }
+            var u = new MyUri("https://example.com/a/b")
+            var crossed = new System.Collections.Generic.List<System.Uri>([$u])
+            echo $u.ToString()
+            echo $crossed[0].ToString()
+            """);
+
+        Assert.Equal(
+            ["MINE<https://example.com/a/b>", "MINE<https://example.com/a/b>"],
+            results.OfType<string>());
+    }
+
+    /// <summary>
+    /// A value-returning override answers the CLR with a value, not a box it cannot read.
+    /// </summary>
+    /// <remarks>
+    /// The emitted override unboxes what the dispatch returns into the declared return type,
+    /// so a member returning <c>int</c> has to come back as one. <c>HashSet&lt;object&gt;</c>
+    /// is the check that the platform is really using both: it calls <c>GetHashCode</c> and
+    /// then <c>Equals</c>, and collapses the two entries only if both answered.
+    /// </remarks>
+    [Fact]
+    public async Task A_value_returning_override_answers_the_platform()
+    {
+        var results = await RunAsync(
+            """
+            class FixedUri(url) extends System.Uri($url) {
+                func GetHashCode() { return 7 }
+                func Equals(other) { return true }
+            }
+            var a = new FixedUri("https://example.com/one")
+            var b = new FixedUri("https://example.com/two")
+            # Through a Uri-typed list first, so what the set receives is what crossed the
+            # boundary. A set of `object` would take the tosh instances themselves and never
+            # reach an emitted override at all.
+            var crossed = new System.Collections.Generic.List<System.Uri>([$a, $b])
+            var set = new System.Collections.Generic.HashSet<System.Object>([$crossed[0], $crossed[1]])
+            echo $set.Count
+            """);
+
+        Assert.Equal(["1"], results.Select(r => r?.ToString()));
+    }
+
+    /// <summary>
+    /// A class that overrides nothing still constructs and still forwards.
+    /// </summary>
+    /// <remarks>
+    /// Emitting is worth doing only where there is something to override; with nothing, the
+    /// plain base is constructed as before. That path is the same one a sealed base or a
+    /// runtime without Reflection.Emit takes, so it has to keep working.
+    /// </remarks>
+    [Fact]
+    public async Task A_class_with_nothing_to_override_still_works()
+    {
+        var results = await RunAsync(
+            """
+            class Plain(url) extends System.Uri($url) { prop Tag = "t" }
+            var p = new Plain("https://example.com/a/b")
+            echo $p.Host
+            echo $p.Tag
+            echo ($p is System.Uri)
+            """);
+
+        Assert.Equal(["example.com", "t", "True"], results.Select(r => r?.ToString()));
+    }
+
+    /// <summary>
     /// A class with no CLR base is not convertible to an unrelated type.
     /// </summary>
     /// <remarks>

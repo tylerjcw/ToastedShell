@@ -2360,12 +2360,92 @@ public sealed class ToshClassDefinition : IShellNamedType
     }
 
 
+    /// <summary>
+    /// Runs an instance method to completion on the calling thread.
+    /// </summary>
+    /// <remarks>
+    /// Routed through <see cref="ToshBoundMethodReference"/> rather than reaching into the
+    /// engine directly, so a method invoked from the platform takes exactly the path a method
+    /// invoked from a script does — overloads, visibility and all.
+    /// </remarks>
+    internal object? InvokeInstanceMethodOnThisThread(
+        ToshClassInstance instance,
+        string methodName,
+        IReadOnlyList<object?> arguments)
+        => _engine.InvokeCallableOnThisThread(
+            new ToshBoundMethodReference(instance, methodName, _engine.LanguageRuntime.Invoker, _engine),
+            arguments);
+
+    /// <summary>
+    /// Constructs the CLR base object for an instance — as a real subclass where it can be.
+    /// </summary>
+    /// <remarks>
+    /// The object the platform receives should be one of its own kind, overrides and all;
+    /// see <see cref="Bridge.ToshClrSubclassFactory"/>. Where it cannot be, the plain base is
+    /// constructed exactly as before, because a class that loses its overrides at the
+    /// boundary is what this replaces and is better than a class that will not construct.
+    /// </remarks>
+    internal static async Task<object> CreateClrBaseObjectAsync(
+        ToshEngine engine,
+        ToshClassInstance instance,
+        Type clrBaseType,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        var subclass = Bridge.ToshClrSubclassFactory.TryGetSubclass(
+            clrBaseType,
+            DeclaredMethodNames(instance.Definition));
+
+        var created = await engine.LanguageRuntime.Invoker.CreateInstanceAsync(
+            subclass ?? clrBaseType,
+            arguments,
+            cancellationToken);
+
+        // After construction, never before: a base constructor that calls a virtual — and
+        // plenty do — would otherwise dispatch into a tōsh object whose own construction has
+        // not begun. The emitted overrides call base while this is unset.
+        if (created is Bridge.IToshClrBackedObject backed)
+        {
+            backed.ToshInstance = instance;
+        }
+
+        return created;
+    }
+
+    /// <summary>
+    /// Every instance method name declared anywhere in a class's own chain.
+    /// </summary>
+    /// <remarks>
+    /// The whole chain, because a method declared on a middle class overrides the CLR base
+    /// just as surely as one declared on the leaf. Static methods are excluded: they are not
+    /// dispatched through an instance and cannot override anything.
+    /// </remarks>
+    private static IReadOnlyCollection<string> DeclaredMethodNames(ToshClassDefinition definition)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var current = definition; current is not null; current = current.BaseClass)
+        {
+            foreach (var method in current.Methods)
+            {
+                if (!method.IsStatic)
+                {
+                    names.Add(method.Name);
+                }
+            }
+        }
+
+        return names;
+    }
+
     private async Task InitializeClrBaseAsync(
         ToshClassInstance instance,
         IReadOnlyList<object?> arguments,
         CancellationToken cancellationToken)
     {
-        var clrObject = await _engine.LanguageRuntime.Invoker.CreateInstanceAsync(
+        var clrObject = await CreateClrBaseObjectAsync(
+            _engine,
+            instance,
             ClrBaseType!,
             arguments,
             cancellationToken);

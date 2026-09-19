@@ -25,7 +25,9 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
 
     public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
-        var clrObject = await _engine.LanguageRuntime.Invoker.CreateInstanceAsync(
+        var clrObject = await ToshClassDefinition.CreateClrBaseObjectAsync(
+            _engine,
+            _instance,
             _clrBaseType,
             context.Arguments,
             context.CancellationToken);
@@ -84,11 +86,38 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
         return [];
     }
 
+    /// <summary>
+    /// The name to invoke on the base object so that <c>$super.M()</c> reaches the base's
+    /// implementation of <c>M</c>.
+    /// </summary>
+    /// <remarks>
+    /// Where the base object is an emitted subclass, <c>M</c> is the override and calling it
+    /// would dispatch straight back into the tōsh method that asked — <c>$super.ToString()</c>
+    /// inside <c>func ToString()</c> recursing until the depth guard stopped it. The factory
+    /// pairs every override with a non-virtual thunk that reaches past it, and this is what
+    /// asks for it. A base with no such thunk is not an emitted subclass, and the name as
+    /// written is already the base's own.
+    /// </remarks>
+    private string BaseName(string methodName)
+    {
+        if (_instance.ClrBaseObject is not Bridge.IToshClrBackedObject)
+        {
+            return methodName;
+        }
+
+        var thunk = methodName + Bridge.ToshClrSubclassFactory.BaseThunkSuffix;
+
+        return _instance.ClrBaseObject.GetType().GetMethod(thunk) is not null ? thunk : methodName;
+    }
+
     public InvocationResult InvokeInstanceMethod(string methodName, IReadOnlyList<object?> arguments)
     {
         if (_instance.ClrBaseObject is not null)
         {
-            var result = _engine.LanguageRuntime.Invoker.InvokeInstance(_instance.ClrBaseObject, methodName, arguments);
+            var result = _engine.LanguageRuntime.Invoker.InvokeInstance(
+                _instance.ClrBaseObject,
+                BaseName(methodName),
+                arguments);
             return new InvocationResult(result, ReturnedVoid: false);
         }
 
@@ -104,7 +133,7 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
         {
             return await _engine.LanguageRuntime.Invoker.InvokeInstanceMethodAsync(
                 _instance.ClrBaseObject,
-                methodName,
+                BaseName(methodName),
                 arguments,
                 cancellationToken);
         }

@@ -308,6 +308,17 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         return true;
     }
 
+    /// <summary>
+    /// Runs one of this object's methods to completion on the calling thread.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that has nowhere to await: a CLR virtual overridden by this class, which
+    /// must return a value rather than a task. The same route a script function takes when a
+    /// widget calls it back.
+    /// </remarks>
+    internal object? InvokeMethodOnThisThread(string methodName, IReadOnlyList<object?> arguments)
+        => Definition.InvokeInstanceMethodOnThisThread(this, methodName, arguments);
+
     internal void CompleteInitialization() => IsInitializing = false;
 
     public IShellTypeDescriptor ShellTypeDescriptor => TypeArguments is { Count: > 0 }
