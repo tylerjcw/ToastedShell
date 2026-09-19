@@ -3910,6 +3910,32 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         return true;
     }
 
+    /// <summary>Whether a qualified path already resolves, without raising if it does not.</summary>
+    /// <remarks>
+    /// Asked before autoloading so the library is consulted only for a name nothing else
+    /// can answer. <see cref="PlanQualifiedInvocation"/> reports by throwing, which is the
+    /// right shape for the caller that has run out of options and the wrong one for a
+    /// question.
+    /// </remarks>
+    private bool CanPlanQualifiedInvocation(string path)
+    {
+        try
+        {
+            PlanQualifiedInvocation(path);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (ToshDiagnosticException)
+        {
+            // `ConstructInsteadOfInvoking` and friends: the path resolved to something, and
+            // what to do about it is not this question.
+            return true;
+        }
+    }
+
     private QualifiedInvocationPlan PlanQualifiedInvocation(string path)
     {
         if (ResolveTypeName(path) is not null)
@@ -4174,6 +4200,22 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         if (shellInvocation.Matched)
         {
             return shellInvocation.Value;
+        }
+
+        // Nothing here knows the name yet. Before giving up, ask whether the reader's
+        // library exports it under the module they named — `ToastLib.Math.Clamp(…)` says
+        // which module it wants, so loading it is a lookup rather than a guess. Only tried
+        // once the ordinary paths have all declined, so it can never shadow something that
+        // already resolves.
+        if (!CanPlanQualifiedInvocation(path) &&
+            await TryAutoloadQualifiedNameAsync(path, cancellationToken))
+        {
+            var afterLoad = await TryInvokeShellSymbolAsync(path, arguments, cancellationToken, typeArguments);
+
+            if (afterLoad.Matched)
+            {
+                return afterLoad.Value;
+            }
         }
 
         var plan = PlanQualifiedInvocation(path);
