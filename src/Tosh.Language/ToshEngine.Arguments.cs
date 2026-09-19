@@ -1362,7 +1362,23 @@ public sealed partial class ToshEngine
         StaticMemberAccessArgumentSyntax staticMemberAccess,
         CancellationToken cancellationToken)
     {
-                    return ResolveQualifiedAccessOrFallback(staticMemberAccess.Path);
+        var path = staticMemberAccess.Path;
+
+        // A name nothing has heard of falls back to the path *as a string*, which for a
+        // library member reads as success: `Demo.Consts.Answer` printed itself rather than
+        // 42. So the library is asked before that fallback, exactly as it is for a call —
+        // and only when nothing already resolves, so it can never shadow a name that does.
+        if (!TryResolveQualifiedAccess(path, out var resolved, out _))
+        {
+            if (await TryAutoloadQualifiedNameAsync(path, cancellationToken))
+            {
+                return ResolveQualifiedAccessOrFallback(path);
+            }
+
+            return path;
+        }
+
+        return resolved;
     }
     private async ValueTask<object?> EvaluateMemberProjectionAsync(
         string sourceName,

@@ -1258,7 +1258,7 @@ public sealed partial class ToshEngine
         RegexOptions.Multiline | RegexOptions.Compiled);
 
     private static readonly Regex ExportedMember = new(
-        @"^export\s+(?:partial\s+|sealed\s+|static\s+|shared\s+)*(?:func|class|record|enum|interface|union|trait)\s+([A-Za-z_][A-Za-z0-9_]*)",
+        @"^export\s+(?:partial\s+|sealed\s+|static\s+|shared\s+|fixed\s+)*(?:func|class|record|enum|interface|union|trait|var|const|type)\s+([A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Multiline | RegexOptions.Compiled);
 
     /// <summary>

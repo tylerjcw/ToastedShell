@@ -161,6 +161,62 @@ public sealed class QualifiedAutoloadTests : IDisposable
         Assert.Contains("Demo.Math.Nonesuch", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A member read rather than called loads its module too.
+    /// </summary>
+    /// <remarks>
+    /// This one failed quietly, which is worse than failing: an unresolved dotted name falls
+    /// back to the path <em>as a string</em>, so <c>Demo.Consts.Answer</c> printed itself and
+    /// looked like an answer.
+    /// </remarks>
+    [Fact]
+    public async Task A_member_that_is_read_loads_its_module()
+    {
+        Write("Consts.tosh", """
+            export partial module Demo.Consts
+
+            export var Answer = 42
+            """);
+
+        Assert.Equal("42", (await RunAsync("echo (Demo.Consts.Answer)")).Select(r => r?.ToString()).Last());
+    }
+
+    /// <summary>And inside an interpolation hole, which is where a constant usually appears.</summary>
+    [Fact]
+    public async Task A_member_read_inside_an_interpolation_hole_loads_its_module()
+    {
+        Write("Consts.tosh", """
+            export partial module Demo.Consts
+
+            export var Answer = 42
+            """);
+
+        var results = await RunAsync("""echo $"answer: { Demo.Consts.Answer }" """);
+
+        Assert.Equal("answer: 42", results.OfType<string>().Last());
+    }
+
+    /// <summary>
+    /// A dotted name the library does not hold is still just a bareword.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is deliberate — a bareword is a string — so autoload must not turn an
+    /// ordinary word into an error, only rescue one the library can answer.
+    /// </remarks>
+    [Fact]
+    public async Task An_unknown_dotted_name_is_still_a_bareword()
+    {
+        Write("Consts.tosh", """
+            export partial module Demo.Consts
+
+            export var Answer = 42
+            """);
+
+        Assert.Equal(
+            "Demo.Consts.Missing",
+            (await RunAsync("echo (Demo.Consts.Missing)")).Select(r => r?.ToString()).Last());
+    }
+
     /// <summary>A real CLR path is untouched by any of this.</summary>
     [Fact]
     public async Task Clr_paths_are_unaffected()
