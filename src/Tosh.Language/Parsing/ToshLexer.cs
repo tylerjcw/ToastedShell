@@ -1232,7 +1232,9 @@ public sealed class ToshLexer
             if (Current == '"' && Peek() == '"' && Peek(2) == '"')
             {
                 _position += 3; // skip closing """
-                FlushTripleQuotedInterpolatedLiteral(parts, literal, isFirstLiteral, isClosing: true);
+                var indent = FlushTripleQuotedInterpolatedLiteral(parts, literal, isFirstLiteral, isClosing: true);
+
+                TrimInterpolatedIndentation(parts, indent);
 
                 var text = _source[start.._position];
                 return new SyntaxToken(SyntaxTokenKind.InterpolatedString, start, text, parts.AsReadOnly());
@@ -1296,7 +1298,9 @@ public sealed class ToshLexer
             if (Current == '\'' && Peek() == '\'' && Peek(2) == '\'')
             {
                 _position += 3; // skip closing '''
-                FlushTripleQuotedInterpolatedLiteral(parts, literal, isFirstLiteral, isClosing: true);
+                var indent = FlushTripleQuotedInterpolatedLiteral(parts, literal, isFirstLiteral, isClosing: true);
+
+                TrimInterpolatedIndentation(parts, indent);
 
                 var text = _source[start.._position];
                 return new SyntaxToken(SyntaxTokenKind.InterpolatedString, start, text, parts.AsReadOnly());
@@ -1355,7 +1359,17 @@ public sealed class ToshLexer
             Help: "close the string with '''."));
     }
 
-    private static void FlushTripleQuotedInterpolatedLiteral(
+    /// <summary>
+    /// Adds the pending literal, and reports the closing line's indentation when this is the
+    /// last one.
+    /// </summary>
+    /// <remarks>
+    /// The indent is reported rather than applied here because this runs once per literal
+    /// part, and the closing line — which decides how much to remove — is not seen until the
+    /// last of them. Measuring it and throwing it away is what left
+    /// <c>$"""</c> indented while <c>"""</c> was not.
+    /// </remarks>
+    private static int FlushTripleQuotedInterpolatedLiteral(
         List<InterpolatedStringPart> parts,
         StringBuilder literal,
         bool isFirstLiteral,
@@ -1363,7 +1377,7 @@ public sealed class ToshLexer
     {
         if (literal.Length == 0)
         {
-            return;
+            return 0;
         }
 
         var text = literal.ToString();
@@ -1382,7 +1396,10 @@ public sealed class ToshLexer
             }
         }
 
-        // Strip trailing whitespace-only closing line
+        // Strip trailing whitespace-only closing line, keeping its width: that is the
+        // indentation every line is measured against.
+        var indent = 0;
+
         if (isClosing)
         {
             var lastNewline = text.LastIndexOf('\n');
@@ -1393,6 +1410,7 @@ public sealed class ToshLexer
 
                 if (closingLine.Length == 0 || closingLine.All(char.IsWhiteSpace))
                 {
+                    indent = closingLine.Length;
                     text = text[..lastNewline];
                 }
             }
@@ -1401,6 +1419,80 @@ public sealed class ToshLexer
         if (text.Length > 0)
         {
             parts.Add(new InterpolatedStringLiteralPart(text));
+        }
+
+        return indent;
+    }
+
+    /// <summary>
+    /// Removes the closing line's indentation from every line of an interpolated literal.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The plain form does this in one pass over one string. Interpolation breaks the text
+    /// into parts, so the walk carries "am I at the start of a line" across them: a line can
+    /// begin in one literal, be interrupted by <c>{…}</c>, and continue in the next.
+    /// </para>
+    /// <para>
+    /// Only the literals are touched, and only their leading whitespace. Indentation inside
+    /// an interpolated value is that value's own business — it was not written in the source
+    /// and cannot be measured against the closing quote.
+    /// </para>
+    /// <para>
+    /// A line shorter than the indent gives up what it has rather than eating the text after
+    /// it, which is what makes a blank line in the middle of a block harmless.
+    /// </para>
+    /// </remarks>
+    private static void TrimInterpolatedIndentation(List<InterpolatedStringPart> parts, int indent)
+    {
+        if (indent <= 0)
+        {
+            return;
+        }
+
+        var atLineStart = true;
+
+        for (var index = 0; index < parts.Count; index++)
+        {
+            if (parts[index] is not InterpolatedStringLiteralPart literal)
+            {
+                // A value in the middle of a line leaves the line in progress.
+                atLineStart = false;
+                continue;
+            }
+
+            var text = literal.Text;
+            var builder = new StringBuilder(text.Length);
+            var position = 0;
+
+            while (position < text.Length)
+            {
+                if (atLineStart)
+                {
+                    var removed = 0;
+
+                    while (removed < indent && position < text.Length && text[position] is ' ' or '\t')
+                    {
+                        position++;
+                        removed++;
+                    }
+
+                    atLineStart = false;
+                    continue;
+                }
+
+                var character = text[position];
+
+                builder.Append(character);
+                position++;
+
+                if (character == '\n')
+                {
+                    atLineStart = true;
+                }
+            }
+
+            parts[index] = new InterpolatedStringLiteralPart(builder.ToString());
         }
     }
 
