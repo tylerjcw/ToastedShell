@@ -2045,7 +2045,17 @@ StartupNotify=false
                 System.Environment.SetEnvironmentVariable("PKGDEST", $packageDirectory)
                 # Do not use makepkg --syncdeps here: package creation must not
                 # mutate the system before the explicit pacman transaction.
-                makepkg -fC --noconfirm PKGBUILD
+                #
+                # --nodeps because TOSH_PREBUILT_ROOT is set: `build()` reuses a bundle this
+                # script has already compiled and validated, so it runs no compiler and the
+                # PKGBUILD's makedepends describe a path not being taken. Without it, a
+                # publish that had built, verified and promoted its output died at the last
+                # step over an SDK it never needed — the one the bundle in its hands was
+                # built with.
+                #
+                # The declaration stays honest for `makepkg` run by hand, where nothing is
+                # prebuilt and the SDK is genuinely required.
+                makepkg -fC --nodeps --noconfirm PKGBUILD
                 Helpers.AssertOk("makepkg")
 
                 var packageProbe = spawn makepkg --packagelist PKGBUILD | wait-for | first
