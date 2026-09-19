@@ -31,6 +31,7 @@ public static class TuiTerminalRepair
         "\u001b_Ga=d,d=A,q=2;\u001b\\" +          // every picture, off
         "\u001b[?1000l\u001b[?1006l" +             // mouse reporting, off
         "\u001b[?2004l" +                          // bracketed paste, off
+        "\u001b[?1004l" +                          // focus reporting, off
         "\u001b[?2026l" +                          // any held frame, released
         "\u001b[0m" +                              // styling, reset
         "\u001b[?25h" +                            // cursor, shown

@@ -31,6 +31,15 @@ public readonly struct TuiInputEvent
         Text = text;
     }
 
+    private TuiInputEvent(bool hasFocus)
+    {
+        Kind = TuiInputEventKind.Focus;
+        Key = default;
+        Mouse = default;
+        Text = string.Empty;
+        HasFocus = hasFocus;
+    }
+
     public TuiInputEventKind Kind { get; }
 
     public ConsoleKeyInfo Key { get; }
@@ -51,12 +60,23 @@ public readonly struct TuiInputEvent
 
     public bool IsPaste => Kind == TuiInputEventKind.Paste;
 
+    public bool IsFocus => Kind == TuiInputEventKind.Focus;
+
+    /// <summary>
+    /// Whether the terminal's window now has focus, for a
+    /// <see cref="TuiInputEventKind.Focus"/> event.
+    /// </summary>
+    public bool HasFocus { get; }
+
     public static TuiInputEvent FromKey(ConsoleKeyInfo key) => new(key);
 
     public static TuiInputEvent FromMouse(TuiMouseEvent mouse) => new(mouse);
 
     /// <summary>Text the reader arrived at all at once.</summary>
     public static TuiInputEvent FromPaste(string text) => new(text ?? string.Empty);
+
+    /// <summary>The terminal's window gained or lost focus.</summary>
+    public static TuiInputEvent FromFocus(bool hasFocus) => new(hasFocus);
 }
 
 public enum TuiInputEventKind
@@ -66,4 +86,7 @@ public enum TuiInputEventKind
 
     /// <summary>Text that arrived as a paste rather than as typing.</summary>
     Paste,
+
+    /// <summary>The terminal's window gained or lost focus.</summary>
+    Focus,
 }

@@ -58,6 +58,11 @@ public sealed class TuiTerminalSession : IDisposable
             _host.Write(TuiBracketedPaste.Enable);
         }
 
+        if (TuiTerminalFocus.Detect(Environment.GetEnvironmentVariable))
+        {
+            _host.Write(TuiTerminalFocus.Enable);
+        }
+
         // A note for whoever comes next, in case this process never gets to clear it.
         TuiTerminalRepair.Taken();
 
@@ -165,7 +170,7 @@ public sealed class TuiTerminalSession : IDisposable
             var pictures = Rendering.TuiGraphics.DeleteAll();
 
             _host.WriteUrgent(
-                pictures + TuiBracketedPaste.Disable + DisableSgrMouse + ResetStyles + ShowCursor +
+                pictures + TuiBracketedPaste.Disable + TuiTerminalFocus.Disable + DisableSgrMouse + ResetStyles + ShowCursor +
                 ExitAlternateScreen);
         }
         catch (IOException)

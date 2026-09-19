@@ -37,7 +37,7 @@ public sealed class TuiInputReader
 
         if (key.Key == ConsoleKey.Escape && Console.KeyAvailable)
         {
-            return TryReadPaste(out var pasted) ? pasted : TryReadMouseSequence(key);
+            return ReadAfterEscape(key);
         }
 
         return TuiInputEvent.FromKey(key);
@@ -64,7 +64,7 @@ public sealed class TuiInputReader
 
         if (key.Key == ConsoleKey.Escape && Console.KeyAvailable)
         {
-            inputEvent = TryReadPaste(out var pasted) ? pasted : TryReadMouseSequence(key);
+            inputEvent = ReadAfterEscape(key);
             return true;
         }
 
@@ -78,7 +78,60 @@ public sealed class TuiInputReader
     /// If the sequence doesn't match, the consumed characters are re-enqueued as key events.
     /// </summary>
     /// <summary>
-    /// Reads a bracketed paste, if that is what this escape begins.
+    /// Decides what an escape begins, having already read the escape itself.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every sequence the reader understands starts <c>ESC [</c> and is told apart by the
+    /// character after it: <c>I</c> and <c>O</c> are focus reports, <c>&lt;</c> is an SGR
+    /// mouse report, and <c>2</c> begins a bracketed paste. One place reads that character,
+    /// because each parser used to be tried in turn and a failed attempt had already
+    /// consumed the bracket the next one needed.
+    /// </para>
+    /// <para>
+    /// Anything else is a real Escape followed by whatever was typed after it, which is
+    /// handed back in the order it arrived.
+    /// </para>
+    /// </remarks>
+    private TuiInputEvent ReadAfterEscape(ConsoleKeyInfo escapeKey)
+    {
+        var seen = new StringBuilder();
+
+        if (!TryTake(seen, out var bracket) || bracket != '[')
+        {
+            Replay(seen);
+            return TuiInputEvent.FromKey(escapeKey);
+        }
+
+        if (!TryTake(seen, out var introducer))
+        {
+            Replay(seen);
+            return TuiInputEvent.FromKey(escapeKey);
+        }
+
+        switch (introducer)
+        {
+            // `CSI I` and `CSI O` — the terminal's window gained or lost focus.
+            case 'I':
+                return TuiInputEvent.FromFocus(true);
+
+            case 'O':
+                return TuiInputEvent.FromFocus(false);
+
+            case '<':
+                return ReadSgrMouse(escapeKey, seen);
+
+            case '2':
+                return ReadBracketedPaste(escapeKey, seen);
+
+            default:
+                Replay(seen);
+                return TuiInputEvent.FromKey(escapeKey);
+        }
+    }
+
+    /// <summary>
+    /// Reads the rest of a bracketed paste, <c>ESC [ 2</c> having been read.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -88,38 +141,18 @@ public sealed class TuiInputReader
     /// between pasting three lines into a field and submitting the form three times.
     /// </para>
     /// <para>
-    /// Tried before the mouse sequence because the two share their first two characters and
-    /// the mouse parser would reject <c>2</c> where it wants <c>&lt;</c>, handing the rest
-    /// back as keystrokes — <c>[200~</c> typed into the field.
-    /// </para>
-    /// <para>
     /// An unterminated paste — the terminal was interrupted, or never sent the closing
     /// bracket — yields what arrived rather than waiting for a bracket that is not coming.
     /// </para>
     /// </remarks>
-    private bool TryReadPaste(out TuiInputEvent pasted)
+    private TuiInputEvent ReadBracketedPaste(ConsoleKeyInfo escapeKey, StringBuilder seen)
     {
-        pasted = default;
-
-        // `[200~`, already knowing an Escape was read.
-        const string Opening = "[200~";
-        var seen = new StringBuilder();
-
-        for (var index = 0; index < Opening.Length; index++)
+        foreach (var expected in "00~")
         {
-            if (!Console.KeyAvailable)
+            if (!TryTake(seen, out var next) || next != expected)
             {
                 Replay(seen);
-                return false;
-            }
-
-            var next = Console.ReadKey(intercept: true);
-            seen.Append(next.KeyChar);
-
-            if (next.KeyChar != Opening[index])
-            {
-                Replay(seen);
-                return false;
+                return TuiInputEvent.FromKey(escapeKey);
             }
         }
 
@@ -128,20 +161,17 @@ public sealed class TuiInputReader
 
         while (Console.KeyAvailable)
         {
-            var next = Console.ReadKey(intercept: true);
+            var next = Console.ReadKey(intercept: true).KeyChar;
 
-            // The closing bracket is matched as it arrives, so its characters never reach
-            // the text. A partial match that breaks off is text after all.
-            var expected = TuiBracketedPasteClose[terminator.Length];
-
-            if (next.KeyChar == expected)
+            // The closing bracket is matched as it arrives, so its characters never reach the
+            // text. A partial match that breaks off was text after all.
+            if (next == PasteClose[terminator.Length])
             {
-                terminator.Append(next.KeyChar);
+                terminator.Append(next);
 
-                if (terminator.Length == TuiBracketedPasteClose.Length)
+                if (terminator.Length == PasteClose.Length)
                 {
-                    pasted = TuiInputEvent.FromPaste(text.ToString());
-                    return true;
+                    return TuiInputEvent.FromPaste(text.ToString());
                 }
 
                 continue;
@@ -149,17 +179,29 @@ public sealed class TuiInputReader
 
             text.Append(terminator);
             terminator.Clear();
-            text.Append(next.KeyChar);
+            text.Append(next);
         }
 
-        // Ran out before the closing bracket. What arrived is still a paste.
         text.Append(terminator);
-        pasted = TuiInputEvent.FromPaste(text.ToString());
-        return true;
+        return TuiInputEvent.FromPaste(text.ToString());
     }
 
-    /// <summary>`ESC [ 2 0 1 ~`, without the escape that has already been matched.</summary>
-    private const string TuiBracketedPasteClose = "\x1b[201~";
+    /// <summary>`ESC [ 2 0 1 ~`, the sequence that ends a paste.</summary>
+    private const string PasteClose = "\x1b[201~";
+
+    /// <summary>Reads one character, if the console has one waiting.</summary>
+    private static bool TryTake(StringBuilder seen, out char character)
+    {
+        if (!Console.KeyAvailable)
+        {
+            character = default;
+            return false;
+        }
+
+        character = Console.ReadKey(intercept: true).KeyChar;
+        seen.Append(character);
+        return true;
+    }
 
     /// <summary>Hands characters back as keystrokes, in the order they were read.</summary>
     private void Replay(StringBuilder consumed)
@@ -171,10 +213,11 @@ public sealed class TuiInputReader
         }
     }
 
-    private TuiInputEvent TryReadMouseSequence(ConsoleKeyInfo escapeKey)
+    private TuiInputEvent ReadSgrMouse(ConsoleKeyInfo escapeKey, StringBuilder seen)
     {
         var buffer = new StringBuilder();
         buffer.Append(Escape);
+        buffer.Append(seen);
 
         // We need: [ < Pb ; Pc ; Pr M/m
         // Read character-by-character, checking for early bail.
@@ -182,7 +225,9 @@ public sealed class TuiInputReader
 
         const int maxSequenceLength = 32;
 
-        for (var i = 0; i < maxSequenceLength; i++)
+        // `[` and `<` were read by the dispatcher that decided this was a mouse report, so
+        // the position check continues from after them rather than expecting them again.
+        for (var i = seen.Length; i < maxSequenceLength; i++)
         {
             if (!Console.KeyAvailable)
             {
