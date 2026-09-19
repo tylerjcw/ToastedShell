@@ -79,6 +79,30 @@ module Build {
         ## @exception When `$tosh.Last.ExitCode != 0`. The thrown string embeds both the label and the numeric exit code.
         func AssertOk(label: Types.NonEmptyString) { if ($tosh.Last.ExitCode != 0) { throw $"{$label} failed (exit {$tosh.Last.ExitCode})" } }
 
+        ## @summary Refuses to start when the `dotnet` on PATH cannot build the framework.
+        ## @remarks
+        ##   The SDK that builds is whichever `dotnet` PATH resolves, which need not be the
+        ##   newest one installed. Building `net11.0` with a 10.x SDK fails as NETSDK1045,
+        ##   hundreds of lines into a publish that has already bumped the version and edited
+        ##   the PKGBUILD — so it is asked first, where the answer is still cheap.
+        ## @param=major The .NET major version the build targets.
+        ## @example Build.Helpers.AssertSdkSupports(11)
+        func AssertSdkSupports(major: int) {
+            var sdks = (spawn dotnet --list-sdks | wait-for | first)
+            if ($sdks.ExitCode != 0) {
+                throw "No 'dotnet' on PATH. Install the .NET SDK, or put the one you mean first."
+            }
+            var prefix = $"{$major}."
+            var usable = ($sdks.Output
+                | where { (($_ as string).Trim() starts-with $prefix) }
+                | count)
+            if ($usable == 0) {
+                var which = (spawn dotnet --version | wait-for | first)
+                var found = (($which.Output | first) as string).Trim()
+                throw $"'dotnet' on PATH is {$found}, which cannot target net{$major}.0. Put a .NET {$major} SDK first on PATH (for example ~/.dotnet), or install one."
+            }
+        }
+
         ## @summary Resolves the absolute path of the repository root.
         ## @returns The repository root directory as a `DirectoryPath`.
         func RepoRoot() -> Types.DirectoryPath {
@@ -848,6 +872,10 @@ module Build {
             $plan.SelfContained = (not $frameworkDependent)
             $plan.NoInstall = $noInstall
             $plan.NoBump = $noBump
+
+            # Before the lock and before anything is mutated: a publish that cannot compile
+            # should say so now rather than after it has bumped the version.
+            Helpers.AssertSdkSupports($DefaultDotnetMajor)
 
             var root = $plan.RepoRoot
             var workspaceLock = WorkspaceLock.Acquire($root, "publish")
