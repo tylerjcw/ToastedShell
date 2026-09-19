@@ -61,13 +61,24 @@ public static class Binder
         bool isInteractive = false,
         Func<string, bool>? isExecutableOnPath = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? ambientUnions = null,
-        Func<string, bool>? isKnownTypeName = null)
+        Func<string, bool>? isKnownTypeName = null,
+        IReadOnlyCollection<string>? declaredElsewhere = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commandRegistry);
 
         var localFunctions = new HashSet<string>(StringComparer.Ordinal);
         CollectLocalFunctions(parseResult.Statement, localFunctions);
+
+        // Names the caller already knows are callable, which the registry does not hold:
+        // a `func` is declared into a lexical scope, so a required file's exports are
+        // invisible here. The engine knows them, and passing them in is what keeps an
+        // interpolation hole — bound at evaluation, after the require has run — from
+        // reporting a function that is present and working.
+        if (declaredElsewhere is not null)
+        {
+            localFunctions.UnionWith(declaredElsewhere);
+        }
 
         var context = new BindContext(
             parseResult.SourceName,

@@ -613,6 +613,37 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
     }
 
+    /// <summary>
+    /// Every command name the running engine can already reach.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A <c>func</c> is declared into a lexical scope rather than the command registry, so
+    /// the binder — which is handed the registry — cannot see one. That is why a source
+    /// containing a <c>require</c> has its unknown-command check suppressed wholesale.
+    /// </para>
+    /// <para>
+    /// An interpolation hole is parsed at its first evaluation, by which time the requires
+    /// above it have run, so there the engine simply knows: <c>$"{ Whence() }"</c> reported
+    /// a function that <c>which</c> could find and the call itself ran. Handing the names
+    /// over keeps the typo check working instead of turning it off.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyCollection<string> VisibleCommandNames()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var scope in _scopes)
+        {
+            if (scope.HasCommands)
+            {
+                names.UnionWith(scope.Commands.Keys);
+            }
+        }
+
+        return names;
+    }
+
     private void ApplyBinder(ParseResult parseResult)
     {
         // Bailout: an undocumented escape hatch in case the binder misbehaves on some
@@ -631,7 +662,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             IsInteractiveSession,
             isExecutableOnPath: null,
             ambientUnions: CollectAmbientUnionShapes(),
-            isKnownTypeName: IsKnownTypeNameForBinder);
+            isKnownTypeName: IsKnownTypeNameForBinder,
+            declaredElsewhere: VisibleCommandNames());
         if (diagnostics.Count == 0) return;
 
         switch (BinderStrictness)
