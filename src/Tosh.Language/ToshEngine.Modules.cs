@@ -296,6 +296,10 @@ public sealed partial class ToshEngine
                 var moduleName = statement.Alias ?? GetDefaultNativeModuleName(statement.Target);
                 EnsureNativeModuleAvailable(sourceName, statement.Target, moduleName, statement.Modifier);
             }
+            else if (await TryImportFromModuleAsync(sourceName, sourceText, statement, cancellationToken))
+            {
+                // Named members taken from a module rather than a file.
+            }
             else
             {
                 var requirement = ResolveRequirement(statement.Target, GetExecutionDirectory(sourceName));
@@ -1138,6 +1142,104 @@ public sealed partial class ToshEngine
             ".csproj" => new RequireTarget(RequireTargetKind.Project, candidate, candidate),
             _ => throw new InvalidOperationException($"Unsupported require target '{candidate}'. ToSh currently supports .tosh, .dll, and .csproj targets."),
         };
+    }
+
+    /// <summary>
+    /// Imports named members from a module, rather than from a file.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>require { Clamp, IntegerPart as iPart } from ToastLib.Math</c>. A module is the
+    /// unit of meaning here and a file is where some of it happens to live: a partial module
+    /// is spread over as many files as it likes, so two members of one module can come from
+    /// two different files, and each is loaded only if it is asked for.
+    /// </para>
+    /// <para>
+    /// Tried before the path, but only when the module holds <em>every</em> name the
+    /// statement asks for. A name that is both — `ToastLib.Math` is a module here and also
+    /// the file that aggregates it — resolves to the module, which loads the one file
+    /// holding the member instead of the dozen the aggregator pulls in. Where the module
+    /// cannot supply them all, nothing is loaded and the path takes over unchanged, so a
+    /// require that worked before still means what it did.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<bool> TryImportFromModuleAsync(
+        string sourceName,
+        string sourceText,
+        RequireStatementSyntax statement,
+        CancellationToken cancellationToken)
+    {
+        if (statement.Imports.Count == 0 || !TryBuildLibraryExportIndex(out var index))
+        {
+            return false;
+        }
+
+        // Every requested member must be in the module before anything is loaded.
+        var wanted = new List<(RequireImportSyntax Import, string File)>();
+
+        foreach (var import in statement.Imports)
+        {
+            if (!index.TryGetValue((statement.Target, import.Name), out var files))
+            {
+                return false;
+            }
+
+            if (files.Count > 1)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.require.ambiguous_export",
+                    Title: $"'{statement.Target}.{import.Name}' is exported by more than one file.",
+                    Help: $"{string.Join(" and ", files)} both export it. Require the one you mean."));
+            }
+
+            wanted.Add((import, files[0]));
+        }
+
+        foreach (var (import, file) in wanted)
+        {
+            var artifact = await LoadRequiredScriptAsync(file, cancellationToken);
+
+            // Asked for by its full path inside the file, because the member lives in the
+            // module rather than at the file's top level — the dotted walk that already
+            // serves `require Outer.Inner from …`. It binds under the name written, or the
+            // alias if one was given.
+            ImportRequiredArtifact(
+                artifact,
+                [$"{statement.Target}.{import.Name}"],
+                [import.Alias ?? import.Name]);
+        }
+
+        return true;
+    }
+
+    /// <summary>Loads a script once, with the caching and cycle detection a require has.</summary>
+    private async ValueTask<ToshRequiredScriptArtifact> LoadRequiredScriptAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        if (_requiredScripts.TryGetValue(path, out var cached))
+        {
+            return cached;
+        }
+
+        if (!_currentlyRequiring.Add(path))
+        {
+            throw new InvalidOperationException(
+                $"Circular require detected: '{path}' is already being loaded.");
+        }
+
+        try
+        {
+            var source = await File.ReadAllTextAsync(path, cancellationToken);
+            var artifact = await ExecuteRequiredScriptAsync(source, path, cancellationToken);
+
+            _requiredScripts[path] = artifact;
+            return artifact;
+        }
+        finally
+        {
+            _currentlyRequiring.Remove(path);
+        }
     }
 
     /// <summary>
