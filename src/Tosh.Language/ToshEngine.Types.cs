@@ -323,7 +323,7 @@ public sealed partial class ToshEngine
                 var clrType = ResolveTypeName(@class.BaseClassName);
                 if (clrType is not null)
                 {
-                    definition.ClrBaseType = clrType;
+                    definition.ClrBaseType = CloseClrBaseType(clrType, @class, sourceName, sourceText);
                 }
                 else
                 {
@@ -633,6 +633,81 @@ public sealed partial class ToshEngine
         }
 
         yield break;
+    }
+
+    /// <summary>
+    /// Applies the type arguments written on a generic CLR base class.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>extends System.Collections.Generic.Comparer&lt;string&gt;</c> parses the name and
+    /// the arguments separately, and only the tōsh-class branch was putting them back
+    /// together. A CLR base was recorded open — <c>Comparer`1</c>, a type nothing can
+    /// construct or derive from — so every generic CLR base failed at construction with
+    /// "No constructor matched 'Comparer`1' with 0 argument(s)", which reads like the
+    /// constructor is wrong rather than the type.
+    /// </para>
+    /// <para>
+    /// A base that is not generic, or is already closed, is returned untouched.
+    /// </para>
+    /// </remarks>
+    private Type CloseClrBaseType(
+        Type clrType,
+        ClassDefinitionStatementSyntax @class,
+        string sourceName,
+        string sourceText)
+    {
+        if (!clrType.IsGenericTypeDefinition)
+        {
+            return clrType;
+        }
+
+        var written = @class.BaseTypeArguments ?? [];
+        var expected = clrType.GetGenericArguments().Length;
+
+        if (written.Count != expected)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.base_type_argument_arity",
+                Title: written.Count == 0
+                    ? $"Class '{@class.Name}' extends generic type '{clrType.Name}' without supplying type arguments."
+                    : $"Class '{@class.Name}' supplies {written.Count} type argument(s) to '{clrType.Name}', which expects {expected}.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: @class.Span,
+                Label: $"'{clrType.Name}' has {expected} type parameter(s)"));
+        }
+
+        var arguments = new Type[expected];
+
+        for (var index = 0; index < expected; index++)
+        {
+            arguments[index] = ResolveTypeName(written[index])
+                ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.unknown_base_class",
+                    Title: $"Class '{@class.Name}' extends '{clrType.Name}' with unknown type argument '{written[index]}'.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: $"'{written[index]}' is not a known type"));
+        }
+
+        try
+        {
+            return clrType.MakeGenericType(arguments);
+        }
+        catch (ArgumentException exception)
+        {
+            // A constraint the arguments do not satisfy. The CLR's message names the
+            // constraint, which is more use than anything restated here.
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.base_type_argument_arity",
+                Title: $"Class '{@class.Name}' cannot extend '{clrType.Name}' with those type arguments.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: @class.Span,
+                Label: exception.Message));
+        }
     }
 
     private async IAsyncEnumerable<object?> EvaluateInterfaceDefinitionAsync(

@@ -227,6 +227,57 @@ public sealed class ClrBaseInteropTests
     }
 
     /// <summary>
+    /// A generic CLR base is closed over the type arguments that were written.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The name and its type arguments are parsed separately, and only the tōsh-class branch
+    /// was putting them back together — a CLR base was recorded <em>open</em>, as
+    /// <c>Comparer`1</c>. Nothing can construct or derive from an open generic, so every
+    /// generic CLR base failed with "No constructor matched 'Comparer`1' with 0
+    /// argument(s)", which reads like the constructor is at fault rather than the type.
+    /// </para>
+    /// <para>
+    /// The payoff is a tōsh class that .NET can use as the interface it asked for: this one
+    /// is handed to <c>List&lt;string&gt;.Sort</c> as an <c>IComparer&lt;string&gt;</c>, and
+    /// the sort order proves the comparer ran.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_generic_clr_base_is_closed_over_its_type_arguments()
+    {
+        var results = await RunAsync(
+            """
+            class ByLength extends System.Collections.Generic.Comparer<string> {
+                func Compare(a, b) { return $a.Length - $b.Length }
+            }
+            var sorted = new System.Collections.Generic.List<string>(["bbb", "a", "cc"])
+            $sorted.Sort(new ByLength())
+            echo $"{$sorted[0]},{$sorted[1]},{$sorted[2]}"
+            """);
+
+        Assert.Equal(["a,cc,bbb"], results.OfType<string>());
+    }
+
+    /// <summary>Type arguments that do not match the base's arity are refused.</summary>
+    /// <remarks>
+    /// Including none at all. Left alone, <c>extends Comparer</c> recorded the open generic
+    /// and failed later at construction, naming the constructor rather than the omission.
+    /// </remarks>
+    [Fact]
+    public async Task A_generic_clr_base_without_type_arguments_is_refused()
+    {
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => RunAsync(
+                """
+                class Bad extends System.Collections.Generic.Comparer { }
+                var b = new Bad()
+                """));
+
+        Assert.Contains("type argument", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// A class with no CLR base is not convertible to an unrelated type.
     /// </summary>
     /// <remarks>

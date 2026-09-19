@@ -90,10 +90,13 @@ internal static class ToshClrSubclassFactory
     /// to be inferred from behaviour.
     /// </remarks>
     private static void Explain(Type baseType, string reason)
+        => Report($"tosh: no CLR subclass for '{baseType.Name}': {reason}");
+
+    private static void Report(string line)
     {
         if (Environment.GetEnvironmentVariable("TOSH_CLR_SUBCLASS_DIAGNOSTICS") == "1")
         {
-            Console.Error.WriteLine($"tosh: no CLR subclass for '{baseType.FullName}': {reason}");
+            Console.Error.WriteLine(line);
         }
     }
 
@@ -146,7 +149,7 @@ internal static class ToshClrSubclassFactory
 
             var created = builder.CreateType();
 
-            Explain(baseType, $"overrode {string.Join(", ", names)}");
+            Report($"tosh: emitted a CLR subclass of '{baseType.Name}' overriding {string.Join(", ", names)}");
 
             return created;
         }
