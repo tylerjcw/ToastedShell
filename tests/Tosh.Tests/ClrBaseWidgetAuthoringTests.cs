@@ -95,6 +95,89 @@ public sealed class ClrBaseWidgetAuthoringTests : IClassFixture<ToshRuntimeFixtu
             """));
 
     /// <summary>
+    /// A property the class declares is what the platform reads.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A widget says what it is through properties as much as through methods. Overriding
+    /// only methods left <c>prop IsFocusable = true</c> true to a script and false to the
+    /// framework — so the widget was never focusable, and therefore never received input,
+    /// however carefully it had written <c>OnInput</c>.
+    /// </para>
+    /// <para>
+    /// Both sides are asserted together, because one of them being right is what the bug
+    /// looked like.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_declared_property_overrides_the_virtual_one()
+    {
+        var engine = new ToshEngine(_runtime.Language);
+
+        var results = await engine.ExecuteToListAsync("""
+            class Focusable extends Tosh.Tui.Widgets.TuiWidget {
+                prop IsFocusable = true
+                func MeasureCore(c) { return new Tosh.Tui.TuiSize(1, 1) }
+                func Draw(s) { }
+            }
+            var w = new Focusable()
+            # Through a widget-typed list, so what is read is what crossed the boundary.
+            var crossed = new System.Collections.Generic.List<Tosh.Tui.Widgets.TuiWidget>([$w])
+            echo $crossed[0].IsFocusable
+            echo $w.IsFocusable
+            """);
+
+        Assert.Equal(["True", "True"], results.Select(r => r?.ToString()));
+    }
+
+    /// <summary>
+    /// Input dispatched by the framework reaches the class, and its state changes.
+    /// </summary>
+    /// <remarks>
+    /// The whole of interactivity in one assertion: the handler runs, its answer decides
+    /// whether the key was consumed, and the object it mutated is the same one the script
+    /// holds.
+    /// </remarks>
+    [Fact]
+    public async Task Input_dispatched_by_the_framework_reaches_the_class()
+    {
+        var engine = new ToshEngine(_runtime.Language);
+
+        var results = await engine.ExecuteToListAsync("""
+            class Counter extends Tosh.Tui.Widgets.TuiWidget {
+                prop Count = 0
+                prop IsFocusable = true
+                func MeasureCore(c) { return new Tosh.Tui.TuiSize(20, 1) }
+                func Draw(s) { }
+                func OnInput(input) {
+                    if ($input.Key.Key == System.ConsoleKey::UpArrow) {
+                        $this.Count = $this.Count + 1
+                        return true
+                    }
+                    return false
+                }
+            }
+
+            var c = new Counter()
+            var crossed = new System.Collections.Generic.List<Tosh.Tui.Widgets.TuiWidget>([$c])
+            var w = $crossed[0]
+
+            var up = Tosh.Tui.TuiInputEvent::FromKey(
+                new System.ConsoleKeyInfo(("u" as char), System.ConsoleKey::UpArrow, false, false, false))
+            var down = Tosh.Tui.TuiInputEvent::FromKey(
+                new System.ConsoleKeyInfo(("d" as char), System.ConsoleKey::DownArrow, false, false, false))
+
+            echo $w.OnInput($up)
+            echo $w.OnInput($up)
+            echo $w.OnInput($down)
+            echo $c.Count
+            """);
+
+        // Two handled, one refused, and the script's own object carries the result.
+        Assert.Equal(["True", "True", "False", "2"], results.Select(r => r?.ToString()));
+    }
+
+    /// <summary>
     /// And the widget renders, inside a container, through the framework's own pipeline.
     /// </summary>
     /// <remarks>

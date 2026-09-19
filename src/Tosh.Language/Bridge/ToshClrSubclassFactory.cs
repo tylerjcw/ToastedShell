@@ -47,6 +47,9 @@ internal static class ToshClrSubclassFactory
     private static readonly MethodInfo DispatchMethod =
         typeof(ToshClrDispatch).GetMethod(nameof(ToshClrDispatch.Invoke))!;
 
+    private static readonly MethodInfo GetPropertyMethod =
+        typeof(ToshClrDispatch).GetMethod(nameof(ToshClrDispatch.GetProperty))!;
+
     private static readonly MethodInfo GetTypeFromHandle =
         typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!;
 
@@ -59,11 +62,14 @@ internal static class ToshClrSubclassFactory
     /// overridden — overriding everything would route members the class never mentioned
     /// through a dispatch that would only fail to find them.
     /// </param>
-    public static Type? TryGetSubclass(Type baseType, IReadOnlyCollection<string> overriddenNames)
+    public static Type? TryGetSubclass(
+        Type baseType,
+        IReadOnlyCollection<string> overriddenNames,
+        IReadOnlyCollection<string> propertyNames)
     {
         ArgumentNullException.ThrowIfNull(baseType);
 
-        if (overriddenNames.Count == 0)
+        if (overriddenNames.Count == 0 && propertyNames.Count == 0)
         {
             Explain(baseType, "the class declares no instance methods");
             return null;
@@ -75,9 +81,11 @@ internal static class ToshClrSubclassFactory
             return null;
         }
 
-        var key = $"{baseType.AssemblyQualifiedName}|{string.Join(",", overriddenNames.OrderBy(n => n, StringComparer.Ordinal))}";
+        var key = $"{baseType.AssemblyQualifiedName}" +
+                  $"|m:{string.Join(",", overriddenNames.OrderBy(n => n, StringComparer.Ordinal))}" +
+                  $"|p:{string.Join(",", propertyNames.OrderBy(n => n, StringComparer.Ordinal))}";
 
-        return Cache.GetOrAdd(key, _ => Build(baseType, overriddenNames));
+        return Cache.GetOrAdd(key, _ => Build(baseType, overriddenNames, propertyNames));
     }
 
     /// <summary>
@@ -112,7 +120,10 @@ internal static class ToshClrSubclassFactory
     private static bool IsAwkward(ParameterInfo parameter) =>
         parameter.ParameterType.IsByRef || parameter.ParameterType.IsPointer;
 
-    private static Type? Build(Type baseType, IReadOnlyCollection<string> overriddenNames)
+    private static Type? Build(
+        Type baseType,
+        IReadOnlyCollection<string> overriddenNames,
+        IReadOnlyCollection<string> propertyNames)
     {
         try
         {
@@ -137,13 +148,21 @@ internal static class ToshClrSubclassFactory
                 names.Add(method.Name);
             }
 
+            foreach (var property in OverridableProperties(baseType, propertyNames))
+            {
+                DefineePropertyOverride(builder, property, toshField);
+                names.Add(property.Name);
+            }
+
             var overridden = names.Count;
 
             // Nothing was actually overridable, so a subclass would differ from the base in
             // name only and cost an emit for it.
             if (overridden == 0)
             {
-                Explain(baseType, $"none of [{string.Join(", ", overriddenNames)}] names an overridable virtual");
+                Explain(
+                    baseType,
+                    $"none of [{string.Join(", ", overriddenNames.Concat(propertyNames))}] names an overridable virtual");
                 return null;
             }
 
@@ -196,6 +215,88 @@ internal static class ToshClrSubclassFactory
                 yield return method;
             }
         }
+    }
+
+    /// <summary>
+    /// The virtual properties worth overriding: named by the class, and overridable.
+    /// </summary>
+    /// <remarks>
+    /// Only the getter is overridden. A framework reads what a widget <em>is</em> —
+    /// <c>IsFocusable</c>, <c>Value</c>, <c>Children</c> — and a tōsh property that also
+    /// wants to be written from the platform is a shape nothing has asked for yet.
+    /// </remarks>
+    private static IEnumerable<PropertyInfo> OverridableProperties(
+        Type baseType,
+        IReadOnlyCollection<string> propertyNames)
+    {
+        var wanted = new HashSet<string>(propertyNames, StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var property in baseType.GetProperties(
+                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            if (!wanted.Contains(property.Name) ||
+                property.GetIndexParameters().Length > 0 ||
+                property.GetMethod is not { } getter ||
+                !getter.IsVirtual ||
+                getter.IsFinal ||
+                getter.IsPrivate ||
+                property.PropertyType.IsByRef ||
+                property.PropertyType.IsPointer)
+            {
+                continue;
+            }
+
+            if (seen.Add(property.Name))
+            {
+                yield return property;
+            }
+        }
+    }
+
+    private static void DefineePropertyOverride(
+        TypeBuilder builder,
+        PropertyInfo property,
+        FieldBuilder toshField)
+    {
+        var getter = property.GetMethod!;
+
+        var over = builder.DefineMethod(
+            getter.Name,
+            (getter.Attributes & ~MethodAttributes.NewSlot & ~MethodAttributes.Abstract) | MethodAttributes.Virtual,
+            property.PropertyType,
+            Type.EmptyTypes);
+
+        var il = over.GetILGenerator();
+        var dispatch = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, toshField);
+        il.Emit(OpCodes.Brtrue, dispatch);
+
+        if (getter.IsAbstract)
+        {
+            EmitDefault(il, property.PropertyType);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, getter);
+        }
+
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dispatch);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, toshField);
+        il.Emit(OpCodes.Ldstr, property.Name);
+        il.Emit(OpCodes.Ldtoken, property.PropertyType);
+        il.Emit(OpCodes.Call, GetTypeFromHandle);
+        il.Emit(OpCodes.Call, GetPropertyMethod);
+        il.Emit(OpCodes.Unbox_Any, property.PropertyType);
+        il.Emit(OpCodes.Ret);
+
+        builder.DefineMethodOverride(over, getter);
     }
 
     private static void DefineToshInstanceProperty(TypeBuilder builder, FieldBuilder toshField)

@@ -2394,7 +2394,8 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         var subclass = Bridge.ToshClrSubclassFactory.TryGetSubclass(
             clrBaseType,
-            DeclaredMethodNames(instance.Definition));
+            DeclaredMethodNames(instance.Definition),
+            DeclaredPropertyNames(instance.Definition));
 
         var created = await engine.LanguageRuntime.Invoker.CreateInstanceAsync(
             subclass ?? clrBaseType,
@@ -2431,6 +2432,33 @@ public sealed class ToshClassDefinition : IShellNamedType
                 if (!method.IsStatic)
                 {
                     names.Add(method.Name);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// Every instance property name declared anywhere in a class's own chain.
+    /// </summary>
+    /// <remarks>
+    /// A widget says what it is through properties as much as through methods, and the
+    /// framework reads them off the object it holds rather than asking the language. Without
+    /// these, <c>prop IsFocusable = true</c> was true to a script and false to the thing
+    /// deciding whether the widget could be focused.
+    /// </remarks>
+    private static IReadOnlyCollection<string> DeclaredPropertyNames(ToshClassDefinition definition)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var current = definition; current is not null; current = current.BaseClass)
+        {
+            foreach (var property in current.Properties)
+            {
+                if (!property.IsStatic)
+                {
+                    names.Add(property.Name);
                 }
             }
         }

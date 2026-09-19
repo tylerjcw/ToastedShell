@@ -27,6 +27,41 @@ public static class ToshClrDispatch
     /// alternative is handing a CLR caller a zero it will treat as an answer.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Reads the named tōsh property and returns a value the caller's type will accept.
+    /// </summary>
+    /// <remarks>
+    /// A widget says what it is through properties as much as through methods —
+    /// <c>IsFocusable</c>, <c>Value</c>, <c>Children</c> — and a framework reads them off the
+    /// object it holds. Overriding only methods left <c>prop IsFocusable = true</c> visible
+    /// to the language and invisible to the platform: the widget answered <c>true</c> to a
+    /// script and <c>false</c> to the thing deciding whether it could be focused, so it never
+    /// received input at all.
+    /// </remarks>
+    public static object? GetProperty(object toshInstance, string propertyName, Type returnType)
+    {
+        ArgumentNullException.ThrowIfNull(toshInstance);
+        ArgumentNullException.ThrowIfNull(returnType);
+
+        var instance = (ToshClassInstance)toshInstance;
+
+        if (!instance.TryGetMember(propertyName, out var value))
+        {
+            throw new InvalidOperationException(
+                $"'{instance.Definition.Name}' declares no property '{propertyName}' to override with.");
+        }
+
+        if (TypeConversion.TryConvert(value, returnType, out var converted))
+        {
+            return converted;
+        }
+
+        throw new InvalidOperationException(
+            $"'{instance.Definition.Name}.{propertyName}' holds " +
+            $"{(value is null ? "nothing" : $"a {value.GetType().Name}")}, but it overrides a member " +
+            $"of type {returnType.Name}.");
+    }
+
     public static object? Invoke(object toshInstance, string methodName, object?[] arguments, Type returnType)
     {
         ArgumentNullException.ThrowIfNull(toshInstance);
