@@ -1425,6 +1425,21 @@ internal sealed class ReplCompletionEngine
         }
 
         var suggestions = GetPathSuggestions(tokenPrefix, IsQuotedTokenContext(text, replacementStart));
+
+        // A require can name a module or a file, so both are offered and the reader picks.
+        // Names come first, and never instead: `require Inventory from toa` still completes
+        // `toastlib.tosh` in the working directory even though `toa` also begins `ToastLib`.
+        // Skipped once the prefix has been written as a path, where they have said which
+        // they mean.
+        if (IsRequireContext(text, replacementStart) && !IsWrittenAsFile(tokenPrefix))
+        {
+            var names = GetLibraryNameSuggestions(tokenPrefix);
+
+            if (names.Count > 0)
+            {
+                suggestions = [.. names, .. suggestions];
+            }
+        }
         result = suggestions.Count == 0
             ? null
             : new ReplCompletionResult(replacementStart, replacementLength, suggestions);
@@ -1522,6 +1537,90 @@ internal sealed class ReplCompletionEngine
         }
 
         return OrderSuggestions(suggestions);
+    }
+
+    /// <summary>Whether the prefix has already been written as a file rather than a name.</summary>
+    /// <remarks>
+    /// <see cref="LooksLikePath"/> covers separators and the `./`, `~/` and rooted prefixes.
+    /// An extension is the other signal the resolver uses — `require foo.tosh` is the file —
+    /// and a quote means the reader is typing one of the quoted path forms.
+    /// </remarks>
+    private static bool IsWrittenAsFile(string tokenPrefix) =>
+        LooksLikePath(tokenPrefix) ||
+        tokenPrefix.StartsWith('"') ||
+        tokenPrefix.EndsWith(".tosh", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether the token being completed belongs to a <c>require</c>.</summary>
+    private static bool IsRequireContext(string text, int replacementStart)
+    {
+        var tokens = SplitSegmentTokens(GetCurrentSegmentPrefix(text, replacementStart));
+
+        return tokens.Count > 0 && string.Equals(tokens[0], "require", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The module names the reader's library offers, as <c>require</c> would resolve them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Enumerated rather than indexed: a library is tens of files, the walk costs less than
+    /// the keystroke that asked for it, and an index would go stale the moment a file is
+    /// added — which is exactly when someone reaches for completion.
+    /// </para>
+    /// <para>
+    /// A directory holding an <c>init.tosh</c> is offered under the directory's own name,
+    /// because that is what requiring it gets you.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<ReplCompletionSuggestion> GetLibraryNameSuggestions(string tokenPrefix)
+    {
+        var directory = _runtime.Config.Startup.LibraryDirectory;
+
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var root = Path.GetFullPath(directory);
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(root, "*.tosh", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
+                var parts = relative.Split('/');
+
+                if (parts[^1] == "init.tosh")
+                {
+                    if (parts.Length == 1)
+                    {
+                        continue;
+                    }
+
+                    names.Add(string.Join('.', parts[..^1]));
+                    continue;
+                }
+
+                parts[^1] = parts[^1][..^".tosh".Length];
+                names.Add(string.Join('.', parts));
+            }
+        }
+        catch (IOException)
+        {
+            return [];
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. names
+                .Where(name => name.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
+                .Select(name => new ReplCompletionSuggestion(name, "library module", Priority: 10)),
+        ];
     }
 
     private bool ShouldTreatAsPathContext(string text, int replacementStart, string tokenPrefix)
