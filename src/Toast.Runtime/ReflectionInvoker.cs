@@ -535,18 +535,31 @@ public sealed class ReflectionInvoker : IObjectInvoker
             // them, "no overload matched" describes the wrong problem — the method exists and
             // the arguments may be fine; what is missing is the type argument. Naming it says
             // what to supply.
-            var uninferable = named
-                .Where(static candidate => candidate.IsGenericMethodDefinition)
-                .SelectMany(static candidate => candidate.GetGenericArguments())
-                .Select(static parameter => parameter.Name)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
+            var generic = named.Where(static candidate => candidate.IsGenericMethodDefinition).ToArray();
 
-            if (uninferable.Length > 0 && named.All(static candidate => candidate.IsGenericMethodDefinition))
+            if (generic.Length > 0 && named.Length == generic.Length)
             {
-                var names = string.Join("', '", uninferable);
+                // The candidate that got closest: the one whose arguments left the fewest
+                // type parameters open. Listing every parameter of every overload instead
+                // named ones the arguments had already determined — `ConvertAll(ints, f)`
+                // reported that neither `TInput` nor `TOutput` could be inferred, when
+                // `int[]` fixes `TInput` and only the lambda's return type is unknown. Being
+                // told to supply something you already supplied is worse than no message.
+                var closest = generic
+                    .Select(candidate => (Candidate: candidate, Unbound: UnboundTypeParameters(candidate, arguments)))
+                    .OrderBy(pair => pair.Unbound.Length)
+                    .First();
+
+                var unbound = closest.Unbound.Length > 0
+                    ? closest.Unbound
+                    : [.. closest.Candidate.GetGenericArguments().Select(static parameter => parameter.Name)];
+
+                var spelled = string.Join(", ", closest.Candidate.GetGenericArguments().Select(static p => p.Name));
+
                 throw new InvalidOperationException(
-                    $"Cannot infer type argument '{names}' for {description} from {arguments.Count} argument(s).");
+                    $"Cannot infer type argument '{string.Join("', '", unbound)}' for {description} " +
+                    $"from {arguments.Count} argument(s). Supply them explicitly, as " +
+                    $"'{methodName}<{spelled}>(...)'.");
             }
 
             throw new InvalidOperationException($"No overload matched {description} with {arguments.Count} argument(s).");
@@ -609,6 +622,42 @@ public sealed class ReflectionInvoker : IObjectInvoker
     /// non-generic overload may still match, and the caller reports the failure once.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The type parameters this candidate's arguments did not determine.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unification is run for its bindings rather than its verdict: a call that cannot be
+    /// closed still fixes some of its type parameters on the way, and those are precisely
+    /// the ones not worth complaining about.
+    /// </para>
+    /// <para>
+    /// A script lambda is the usual reason something is left open. It carries no signature,
+    /// so a type parameter appearing only in a delegate's return position — <c>TOutput</c> in
+    /// <c>Converter&lt;TInput, TOutput&gt;</c> — has nothing to be inferred from. C# reads it
+    /// off the lambda body; a dynamically typed shell has no body to read.
+    /// </para>
+    /// </remarks>
+    private static string[] UnboundTypeParameters(MethodInfo candidate, IReadOnlyList<object?> arguments)
+    {
+        var parameters = candidate.GetParameters();
+        var bindings = new Dictionary<Type, Type>();
+
+        for (var index = 0; index < parameters.Length && index < arguments.Count; index++)
+        {
+            if (arguments[index] is null)
+            {
+                continue;
+            }
+
+            TryUnify(parameters[index].ParameterType, arguments[index]!.GetType(), bindings);
+        }
+
+        return [.. candidate.GetGenericArguments()
+            .Where(parameter => !bindings.ContainsKey(parameter))
+            .Select(static parameter => parameter.Name)];
+    }
+
     private static IEnumerable<MethodInfo> InferGenericCandidates(
         IReadOnlyList<MethodInfo> candidates,
         IReadOnlyList<object?> arguments)
