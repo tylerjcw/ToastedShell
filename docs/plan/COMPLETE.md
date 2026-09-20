@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | [`TOAST-0042`](items/TOAST-0042.md) | P2 | complete | 6/6 | A compiled program did not convert its arguments, and toshc named the one file you must not run |
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
+| [`TOAST-0097`](items/TOAST-0097.md) | P3 | complete | 6/6 | A type cannot be given a static member from outside, so `Option::from` has nowhere to live |
 | [`TOAST-0088`](items/TOAST-0088.md) | P2 | complete | 4/4 | A declared enum serialises its own internals, in every format |
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | complete | 5/5 | Divide the assemblies along the language/shell boundary |
 | [`TUI-0008`](items/TUI-0008.md) | P2 | complete | 6/6 | A live screen can only poll on a timer; it cannot be fed by a job, a channel or a pipeline |
@@ -18,8 +19,10 @@
 | [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
 | [`TOAST-0113`](items/TOAST-0113.md) | P2 | complete | 6/6 | A qualified refinement type in a type test is evaluated as module member access |
 | [`TOAST-0134`](items/TOAST-0134.md) | P1 | complete | 5/5 | The persisted type cache answers a miss authoritatively, so a type added since it was written does not exist |
+| [`TOAST-0090`](items/TOAST-0090.md) | P2 | complete | 9/9 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
 | [`TOAST-0089`](items/TOAST-0089.md) | P2 | complete | 4/4 | A declared record's collection fields vanish from a table, but an anonymous record's do not |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
+| [`TOAST-0053`](items/TOAST-0053.md) | P1 | complete | 11/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
 | [`TOAST-0130`](items/TOAST-0130.md) | P1 | complete | 6/6 | A module-qualified generic annotation never matched, so every generic type in a library was unusable in one |
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | complete | 5/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TOAST-0027`](items/TOAST-0027.md) | P2 | complete | 5/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
@@ -32,6 +35,7 @@
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOAST-0072`](items/TOAST-0072.md) | P2 | complete | 5/5 | A rune's block argument ran in the current scope, so a macro calling a macro never worked |
 | [`TOAST-0120`](items/TOAST-0120.md) | P3 | complete | 7/7 | Every file in a library repeats its module path as wrapping, two levels deep |
+| [`TOAST-0091`](items/TOAST-0091.md) | P2 | complete | 7/7 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0064`](items/TOAST-0064.md) | P2 | complete | 7/7 | A CLR type annotation blocks start-up on a 17,000-name platform index |
 | [`TOAST-0077`](items/TOAST-0077.md) | P2 | complete | 7/7 | Native writes take their width from the value, so a buffer's layout depends on its data |
 | [`TUI-0014`](items/TUI-0014.md) | P2 | complete | 5/5 | The config browser re-renders its live previews every frame, so a keystroke on Prompt cost 10.9 ms |
@@ -58,6 +62,7 @@
 | [`TOAST-0038`](items/TOAST-0038.md) | P2 | complete | 6/6 | The readiness probe is untyped and does not compile, and it is Phase B's exit |
 | [`TUI-0024`](items/TUI-0024.md) | P3 | complete | 6/6 | A status bar is a hand-built string, so it cannot be aligned, segmented or styled per part |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
+| [`TOAST-0092`](items/TOAST-0092.md) | P2 | complete | 10/10 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0123`](items/TOAST-0123.md) | P2 | complete | 5/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | complete | — | Type highlighting misses real contexts, differently per surface |
@@ -98,6 +103,7 @@
 | [`TUI-0004`](items/TUI-0004.md) | P2 | complete | 8/8 | Building a screen from a script is seven lines of scaffolding, string ids and `| ignore` |
 | [`TUI-0018`](items/TUI-0018.md) | P2 | complete | 7/7 | Both browsers hand-render a tree, and a script cannot show one at all |
 | [`TOAST-0067`](items/TOAST-0067.md) | P2 | complete | 4/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
+| [`TOAST-0095`](items/TOAST-0095.md) | P2 | complete | 6/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | complete | 6/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0052`](items/TOAST-0052.md) | P1 | complete | 8/8 | A union variant has no field types, and a union cannot be generic |
 | [`TOAST-0036`](items/TOAST-0036.md) | P2 | complete | 6/6 | There is no concrete function type, so no higher-order value can be typed |
@@ -144,5 +150,6 @@
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | complete | — | A lexical scope allocated ten collections it almost never used |
 | [`TOAST-0045`](items/TOAST-0045.md) | P2 | complete | 4/4 | A compiled function returning `record` cannot return a record literal |
 | [`TOAST-0124`](items/TOAST-0124.md) | P2 | complete | 6/6 | A value bound to a type parameter is checked for an exact type, so an integer literal cannot fill a double |
+| [`TOAST-0083`](items/TOAST-0083.md) | P2 | complete | 10/10 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).

@@ -5,20 +5,14 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
-| [`TOAST-0097`](items/TOAST-0097.md) | P3 | partial | 5/6 | A type cannot be given a static member from outside, so `Option::from` has nowhere to live |
-| [`TOAST-0090`](items/TOAST-0090.md) | P2 | partial | 8/9 | Static member access and instance member access are the same operator, so a path cannot be told from a lookup |
-| [`TOAST-0053`](items/TOAST-0053.md) | P1 | partial | 10/11 | `match` cannot bind a union's fields, so dispatch is a switch on a string |
+| [`TOAST-0135`](items/TOAST-0135.md) | P3 | open | — | The compiled backend diverges from the interpreter in six recorded places |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |
-| [`TOAST-0091`](items/TOAST-0091.md) | P2 | partial | 6/7 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0125`](items/TOAST-0125.md) | P1 | partial | 10/12 | Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 7/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
-| [`TOAST-0092`](items/TOAST-0092.md) | P2 | partial | 9/10 | A value cannot be written to a file and read back as itself, in any format |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
-| [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0035`](items/TOAST-0035.md) | P2 | partial | 1/5 | Source replay and implicit dynamic are how the compiler handles what it cannot emit |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
-| [`TOAST-0083`](items/TOAST-0083.md) | P2 | partial | 9/10 | Generic unions can spell `Option` and `Result`, but the core library does not provide their contract |

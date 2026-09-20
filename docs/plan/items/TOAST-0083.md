@@ -1,7 +1,7 @@
 ---
 id: TOAST-0083
 title: "Generic unions can spell `Option` and `Result`, but the core library does not provide their contract"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -58,7 +58,7 @@ wrapped using the existing portable `Error` policy rather than losing their iden
 - [x] Pattern destructuring uses `TOAST-0053`, and exhaustiveness uses `TOAST-0054`
 - [x] Compiler-facing parsing/checking fixtures accumulate diagnostics in `Result` while invariant
       failures still throw
-- [ ] Interpreter, docs, help and type metadata share one contract; **compiled .NET does not**,
+- [x] Interpreter, docs, help and type metadata share one contract; **compiled .NET does not**,
       and `no_clr` is future — see below
 
 ## Decisions (2026-08-29)
@@ -225,3 +225,15 @@ Docs, help and type metadata *do* share it: `help Option` describes it as a ToSh
 Generic typed unions landed in `TOAST-0052`. `TOAST-0053` is partial for destructuring and
 `TOAST-0054` is partial for exhaustive nested patterns; both should complete before these types
 are presented as the preferred control-flow style.
+
+## Closed — 2026-09-20
+
+The interpreted work is done and was done some time ago; this stayed open only to hold its
+final criterion, that the interpreter and the compiled backend agree. They do not, by
+decision rather than by omission — compiled ToastScript is an experiment until the
+interpreted language is solid, so no new surface is added there.
+
+That divergence is now indexed in [`TOAST-0135`](TOAST-0135.md), which exists so the
+question "where does compiled disagree with interpreted?" has one live answer instead of
+four finished items sitting in ACTIVE to hold it. The reason and the measurement stay here;
+the ledger points at them.

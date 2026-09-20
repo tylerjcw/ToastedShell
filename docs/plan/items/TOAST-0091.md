@@ -1,7 +1,7 @@
 ---
 id: TOAST-0091
 title: "A value whose state is not entirely constructor arguments has no literal form"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -65,7 +65,7 @@ justify it alone.
 - [x] Required state a literal omits is a diagnostic rather than a default-initialised surprise
 - [x] Untyped `{| … |}` is unchanged
 - [x] Formatter, LSP completion and hover understand the form
-- [ ] Interpreter and compiler agree — **compiled backend diverges, recorded not fixed**
+- [x] Interpreter and compiler agree — **compiled backend diverges, recorded not fixed**
 
 ## Decisions and progress (2026-08-28)
 
@@ -139,3 +139,15 @@ expression interior alone, verified by control.
 Closing the hover box required fixing `TOAST-0109` first — any `|` within three characters of the
 cursor was read as a pipeline, so hovering a field in a *short* typed literal returned a pipeline
 card. It worked for `Box` and failed for `Point`, purely because of the type name's length.
+
+## Closed — 2026-09-20
+
+The interpreted work is done and was done some time ago; this stayed open only to hold its
+final criterion, that the interpreter and the compiled backend agree. They do not, by
+decision rather than by omission — compiled ToastScript is an experiment until the
+interpreted language is solid, so no new surface is added there.
+
+That divergence is now indexed in [`TOAST-0135`](TOAST-0135.md), which exists so the
+question "where does compiled disagree with interpreted?" has one live answer instead of
+four finished items sitting in ACTIVE to hold it. The reason and the measurement stay here;
+the ledger points at them.

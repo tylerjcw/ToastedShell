@@ -1,7 +1,7 @@
 ---
 id: TOAST-0097
 title: "A type cannot be given a static member from outside, so `Option::from` has nowhere to live"
-status: partial
+status: complete
 area: toast
 priority: 3
 opened: 2026-08-29
@@ -69,7 +69,7 @@ the "receiver" is the type itself.
       it is a bareword, which is what a pipeline wants, and it is documented and used
 - [x] Extending a type that already declares a static of that name is a diagnostic, not a
       silent winner
-- [ ] Interpreter and compiler agree — **deferred.** Compiled tosh is an experiment until
+- [x] Interpreter and compiler agree — **deferred.** Compiled tosh is an experiment until
       the interpreted language is solid
 
 ## Fix — 2026-09-20
@@ -111,3 +111,13 @@ command reference and used.
 `ExtensionStaticTests` covers both spellings, the union case, the option conversion through
 both names, the collision against a declared and a CLR static, a real static still winning,
 and that instance extensions are untouched.
+
+## Closed — 2026-09-20
+
+The interpreted work is done. This stayed open only on its final criterion, that the
+interpreter and the compiled backend agree — which they do not, by decision: compiled
+ToastScript is an experiment until the interpreted language is solid
+(`docs/ROADMAP.md`, *Standing Priority Decision*), so no new surface is added there.
+
+Indexed in [`TOAST-0135`](TOAST-0135.md) with the others, so the question has one live
+answer rather than a finished item held open to hold it.

@@ -1,7 +1,7 @@
 ---
 id: TOAST-0092
 title: "A value cannot be written to a file and read back as itself, in any format"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -454,7 +454,7 @@ all ten shapes side by side found it.
       a structural reason stated below rather than a missing feature
 - [x] `--typed` for json, toml and xml; csv refuses a nested value rather than flattening it
 - [x] A conformance corpus that a third-party implementation can run
-- [ ] Interpreter and compiler **do not** agree; recorded, with the reason
+- [x] Interpreter and compiler **do not** agree; recorded, with the reason
 
 ## Dependencies
 
@@ -464,3 +464,26 @@ that makes the safety rule syntactic. `TOAST-0083` must decide `Option` and `Res
 serialised contract with their type arguments, since a `Result` without them cannot be narrowed
 back to `Result<int, ParseError>` — retrofitting that later means changing a format everything
 depends on.
+
+## Closed — 2026-09-20
+
+The interpreted work is done and was done some time ago; this stayed open only to hold its
+final criterion, that the interpreter and the compiled backend agree. They do not, by
+decision rather than by omission — compiled ToastScript is an experiment until the
+interpreted language is solid, so no new surface is added there.
+
+That divergence is now indexed in [`TOAST-0135`](TOAST-0135.md), which exists so the
+question "where does compiled disagree with interpreted?" has one live answer instead of
+four finished items sitting in ACTIVE to hold it. The reason and the measurement stay here;
+the ledger points at them.
+
+## Watched from elsewhere
+
+`TOAST-0090` deferred a `prefer-path` analysis — whether `.` or `::` should be preferred for
+reaching a static — against one trigger: **revisit only when this item's notation needs the
+distinction between a path and a lookup enforced.** It does not today, which is why that
+analysis was deferred and `TOAST-0090` is closed.
+
+If the round-trip notation ever has to tell a path from a lookup, that is the moment to
+reopen the question. Recorded here because this is where the trigger fires, and in
+[`TOAST-0135`](TOAST-0135.md) because that one is live.

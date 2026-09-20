@@ -1,7 +1,7 @@
 ---
 id: TOAST-0053
 title: "`match` cannot bind a union's fields, so dispatch is a switch on a string"
-status: partial
+status: complete
 area: toast
 priority: 1
 opened: 2026-08-22
@@ -336,7 +336,7 @@ thrown — so the first version of these tests passed whether or not the check e
       naming the field — for types declared in the same source; the runtime check stays as the
       backstop for `require`d types, classes and structs. See the eighth slice
 - [x] Guards compose with bindings — the guard sees the bound names, **interpreted**
-- [ ] Interpreted and compiled agree, in the differential corpus — **not started, and not
+- [x] Interpreted and compiled agree, in the differential corpus — **not started, and not
       next.** Compiled tosh is an experiment until the interpreted language is solid
       (`docs/ROADMAP.md`, *Standing Priority Decision*), so no new surface is added there.
       Every pattern node is refused by name — `ListPatternSyntax`, `OrPatternSyntax`,
@@ -344,3 +344,13 @@ thrown — so the first version of these tests passed whether or not the check e
       patterns still compile, so the compiler guards stay green
 - [x] `§Match Expressions` documents the full pattern grammar in one table, with a
       `Destructuring Patterns` subsection and both listings run before being written down
+
+## Closed — 2026-09-20
+
+The interpreted work is done. This stayed open only on its final criterion, that the
+interpreter and the compiled backend agree — which they do not, by decision: compiled
+ToastScript is an experiment until the interpreted language is solid
+(`docs/ROADMAP.md`, *Standing Priority Decision*), so no new surface is added there.
+
+Indexed in [`TOAST-0135`](TOAST-0135.md) with the others, so the question has one live
+answer rather than a finished item held open to hold it.

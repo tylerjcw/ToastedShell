@@ -1,7 +1,7 @@
 ---
 id: TOAST-0095
 title: "`is` answers false for a nested type, and a qualified variant pattern never matches"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -81,7 +81,7 @@ pattern case once it matches.
 - [x] A qualified variant pattern matches exactly when its bare form does
 - [x] A pattern naming a variant of the wrong union is a diagnostic, not a silent non-match
 - [x] Exhaustiveness checking counts qualified arms as covering their variant
-- [ ] Interpreter and compiler agree — **deferred.** Compiled tosh is an experiment until the
+- [x] Interpreter and compiler agree — **deferred.** Compiled tosh is an experiment until the
       interpreted language is solid, so no new surface is added there.
 
 ## Qualified variant patterns — fixed 2026-08-29
@@ -120,3 +120,15 @@ The nested-type half was carried by `TOAST-0105`'s scoped resolver: both `Outer.
 `Outer::Inner` answer `is` for an instance of the nested type, verified directly. The qualified
 variant pattern, the wrong-union diagnostic and the exhaustiveness counting shipped with the
 core-prelude work.
+
+## Closed — 2026-09-20
+
+The interpreted work is done and was done some time ago; this stayed open only to hold its
+final criterion, that the interpreter and the compiled backend agree. They do not, by
+decision rather than by omission — compiled ToastScript is an experiment until the
+interpreted language is solid, so no new surface is added there.
+
+That divergence is now indexed in [`TOAST-0135`](TOAST-0135.md), which exists so the
+question "where does compiled disagree with interpreted?" has one live answer instead of
+four finished items sitting in ACTIVE to hold it. The reason and the measurement stay here;
+the ledger points at them.

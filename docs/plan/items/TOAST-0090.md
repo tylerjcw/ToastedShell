@@ -1,7 +1,7 @@
 ---
 id: TOAST-0090
 title: "Static member access and instance member access are the same operator, so a path cannot be told from a lookup"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-28
@@ -61,7 +61,7 @@ validator can admit it.
 - [x] `::` resolves a name inside a type: enum members, union variants, static members, nested types
 - [x] `.` continues to resolve members of a value; the two are distinguishable in the AST
 - [x] Existing `Type.Member` source keeps working
-- [ ] A stated migration and a `prefer-path` analysis — **deferred by decision, 2026-08-28.**
+- [x] A stated migration and a `prefer-path` analysis — **deferred by decision, 2026-08-28.**
       Neither spelling is preferred; `.` on a type is not being deprecated. Revisit only when
       `TOAST-0092`'s notation needs the distinction enforced.
 - [x] Formatter, LSP, hover, completion and syntax highlighting treat the two distinctly
@@ -179,3 +179,15 @@ grammar refuses — the one divergence a portable notation cannot have. The call
 the operator, as the member-access node already did, and both spellings are refused with the
 path form named. Two cases added to `docs/spec/ton-conformance/refuse/`, where a third party
 can run them.
+
+## Closed — 2026-09-20
+
+Everything but the deferred analysis was done. That analysis has a trigger rather than a
+date — revisit only when `TOAST-0092`'s notation needs the distinction between a path and a
+lookup *enforced* — so it was holding the item open against a condition that may never fire.
+
+The condition is recorded where it fires, in [`TOAST-0092`](TOAST-0092.md), and again in
+[`TOAST-0135`](TOAST-0135.md), which is live. A condition on future work is no use in a
+closed item alone.
+
+Unchanged: neither spelling is preferred, and `.` on a type is not being deprecated.
