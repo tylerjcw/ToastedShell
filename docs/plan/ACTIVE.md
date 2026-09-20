@@ -15,6 +15,7 @@
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 6/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0092`](items/TOAST-0092.md) | P2 | partial | 9/10 | A value cannot be written to a file and read back as itself, in any format |
+| [`TOAST-0123`](items/TOAST-0123.md) | P2 | partial | 4/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TOAST-0102`](items/TOAST-0102.md) | P2 | partial | 4/5 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |

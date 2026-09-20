@@ -778,7 +778,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             var nativeValues = await _engine.InvokeNativeMemberAsync(
                 nativeMember.Command, arguments, cancellationToken);
 
-            return new InvocationResult(FlattenCallResult(nativeValues), ReturnedVoid: false);
+            return new InvocationResult(FlattenMethodCallResult(nativeValues), ReturnedVoid: false);
         }
 
         // Statics are inherited, so a name this class does not declare is asked of its base —
@@ -847,7 +847,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         // instead of what the call site asked for.
         var values = await ExecuteMethodBlockAsync(
             method, locals, instance: null, cancellationToken, typeArguments);
-        return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
+        return new InvocationResult(FlattenMethodCallResult(values), ReturnedVoid: false);
     }
 
     /// <summary>
@@ -1949,7 +1949,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var values = await owner.ExecuteMethodBlockAsync(method, locals, instance, cancellationToken, explicitTypeArguments);
-        return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
+        return new InvocationResult(FlattenMethodCallResult(values), ReturnedVoid: false);
     }
 
     /// <summary>
@@ -2073,7 +2073,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var values = ExecuteMethodBlock(method, locals, instance);
-        value = FlattenCallResult(values);
+        value = FlattenMethodCallResult(values);
         return true;
     }
 
@@ -2100,7 +2100,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             selection.Locals!,
             instance,
             cancellationToken);
-        return (true, FlattenCallResult(values));
+        return (true, FlattenMethodCallResult(values));
     }
 
     internal object? GetInitialPropertyValue(ToshClassInstance instance, ToshClassPropertyDefinition property, IReadOnlyDictionary<string, object?> constructorLocals)
@@ -4182,6 +4182,27 @@ public sealed class ToshClassDefinition : IShellNamedType
         return unwrapped.Count switch
         {
             0 => null,
+            1 => unwrapped[0],
+            _ => unwrapped.ToArray(),
+        };
+    }
+
+    /// <summary>
+    /// As <see cref="FlattenCallResult"/>, but says so when the body produced nothing —
+    /// <c>TOAST-0123</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only the *method* paths use this. A property getter that yields nothing is a
+    /// property with no value, which is null and reads correctly as null; a method that
+    /// yields nothing is a method that produced no items, and a pipeline asking it for
+    /// items should receive none rather than one null.
+    /// </remarks>
+    private static object? FlattenMethodCallResult(IReadOnlyList<object?> values)
+    {
+        var unwrapped = UnwrapValues(values);
+        return unwrapped.Count switch
+        {
+            0 => ToshEmptyCallResult.Instance,
             1 => unwrapped[0],
             _ => unwrapped.ToArray(),
         };

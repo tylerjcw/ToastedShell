@@ -1,7 +1,7 @@
 ---
 id: TOAST-0123
 title: "A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline"
-status: proposed
+status: partial
 area: toast
 priority: 2
 opened: 2026-09-10
@@ -63,8 +63,40 @@ to be considered — which is why this is filed rather than changed in passing.
 
 ## Acceptance
 
-- [ ] A method whose body yields nothing yields an empty stream
-- [ ] `($e.Loop(0) | collect)` is empty, and `($e.Loop(3) | collect)` is unchanged
-- [ ] The same for a free function, a `for` loop, and a non-firing `if`
-- [ ] `var x = (call-that-yields-nothing)` has a defined, documented meaning
+- [x] A method whose body yields nothing yields an empty stream
+- [x] `($e.Loop(0) | collect)` is empty, and `($e.Loop(3) | collect)` is unchanged
+- [x] The same for a free function, a `for` loop, and a non-firing `if` — the free
+      function was *already* correct, because it reaches a pipeline as a command and
+      streams; only the method path collapsed
+- [x] `var x = (call-that-yields-nothing)` has a defined, documented meaning — it binds
+      null, as it always has. Only a pipeline, which asked for items, is told there were
+      none; a value position is unchanged, so no existing call site changes meaning
 - [ ] `ToastLib.Sdl`'s `Events.Drain` can go back to yielding, if that reads better
+
+## What was done
+
+The cause was structural rather than a bad branch. A free function reaches a pipeline as an
+`IShellCommand` and streams, so producing nothing is naturally an empty stream. A class
+method returns one `InvocationResult`, whose `object?` cannot express "no values" — so
+`FlattenCallResult` collapsed zero to null and the pipeline carried one null item.
+`ReturnedVoid` looks like the missing channel but every consumer maps it to null as well.
+
+`ToshEmptyCallResult` carries the distinction the short distance from the invocation to the
+pipeline head, which is the only place it means anything:
+
+- `FlattenMethodCallResult` returns it for zero values, at the **five method paths**. The
+  **three property getters** keep the old behaviour deliberately: a property that yields
+  nothing is a property with no value, and null reads correctly there.
+- `EvaluateArgumentAsync` unwraps it at the one funnel every other reader passes through,
+  so a binding, an argument and a condition all still see null.
+- `EvaluateArgumentPreservingEmptyAsync` keeps it and has exactly one caller — the pipeline
+  head, which `yield break`s. The synchronous fast path is untouched: it handles shapes that
+  cannot call a method, so it can never produce the marker.
+
+`EmptyCallResultTests` pins all of it, including the two boundaries that are easy to lose:
+the property getter, and that the marker is never visible to a script. Note that a method
+yielding *three* values contributes **one** item, an array — a call's collection is a value
+rather than a sequence (`TOAST-0039`) — so zero contributing no item is consistent with it,
+and `collect` is where a reader sees the difference.
+
+Suite: 8559 pass, 0 fail.

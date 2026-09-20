@@ -772,7 +772,44 @@ public sealed partial class ToshEngine
 
     internal void ResetSlowArgumentEvaluations() => SlowArgumentEvaluations = 0;
 
+    /// <remarks>
+    /// `TOAST-0123`. A method whose body produced nothing answers with
+    /// <see cref="ToshEmptyCallResult"/>, which means "no values" and is not a value a
+    /// script may hold. Every reader but the pipeline head wants null for that — a
+    /// binding, an argument, a condition — so it is unwrapped here, at the one funnel they
+    /// all pass through. <see cref="EvaluateArgumentPreservingEmptyAsync"/> is the
+    /// exception, and it has exactly one caller.
+    /// </remarks>
     private ValueTask<object?> EvaluateArgumentAsync(
+        string sourceName,
+        string sourceText,
+        ArgumentSyntax argument,
+        CancellationToken cancellationToken)
+    {
+        // The fast path handles shapes that cannot call a method, so it cannot produce the
+        // marker — and is left synchronous rather than paying for an unwrap it never needs.
+        if (!SuppressSimpleArgumentFastPath &&
+            TryEvaluateSimpleArgument(sourceName, sourceText, argument, out var value))
+        {
+            return new ValueTask<object?>(value);
+        }
+
+        return UnwrapEmptyCallResultAsync(
+            EvaluateArgumentSlowAsync(sourceName, sourceText, argument, cancellationToken));
+    }
+
+    private static async ValueTask<object?> UnwrapEmptyCallResultAsync(ValueTask<object?> evaluation)
+        => ToshEmptyCallResult.Unwrap(await evaluation);
+
+    /// <summary>
+    /// Evaluates an argument, leaving a <see cref="ToshEmptyCallResult"/> intact.
+    /// </summary>
+    /// <remarks>
+    /// Only a pipeline head can act on the distinction: a call that produced no values
+    /// contributes no items, rather than one null item. Everywhere else the marker would be
+    /// a value nothing knows how to read, which is why this is separate and narrow.
+    /// </remarks>
+    private ValueTask<object?> EvaluateArgumentPreservingEmptyAsync(
         string sourceName,
         string sourceText,
         ArgumentSyntax argument,

@@ -3049,7 +3049,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         try
         {
-            value = await EvaluateArgumentAsync(sourceName, sourceText, effective, cancellationToken);
+            value = await EvaluateArgumentPreservingEmptyAsync(sourceName, sourceText, effective, cancellationToken);
         }
         catch (ToshDiagnosticException)
         {
@@ -3088,6 +3088,16 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 yield return item;
             }
 
+            yield break;
+        }
+
+        // `TOAST-0123`. A call whose body produced no values contributes no items. It used
+        // to contribute one null, so `$win.Events.Drain() | where Kind == …` failed on
+        // every idle frame — at the `where`, naming the caller rather than the method that
+        // yielded nothing. A value position still reads null; only a pipeline, which asked
+        // for items, is told there were none.
+        if (ReferenceEquals(value, ToshEmptyCallResult.Instance))
+        {
             yield break;
         }
 
