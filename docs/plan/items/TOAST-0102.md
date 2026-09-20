@@ -1,7 +1,7 @@
 ---
 id: TOAST-0102
 title: "A capitalised command name stops parsing as a command when its first argument is parenthesised"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-30
@@ -66,8 +66,8 @@ The workaround is to write the call in comma form — `Scale(($s.Points[0].X), $
 - [x] `(Upper ($x.Y) 1 2 3)` and `(lower ($x.Y) 1 2 3)` parse the same way
 - [x] Case does not change how an identifier in command position is parsed
 - [x] A callee defined in another file parses like one defined above the call
-- [ ] If the ambiguity is genuine, the diagnostic names it rather than reporting a missing pipe
-      — **moot.** Whitespace decides it outright, so there is no residual ambiguity to report.
+- [x] If the ambiguity is genuine, the diagnostic names it rather than reporting a missing pipe
+      — **moot, and verified so.** Whitespace decides it outright, so there is no residual ambiguity to report.
 - [x] Corpus covers: unknown callee, capitalised, parenthesised first argument, in a module
 
 ## Fix — 2026-09-04: whitespace, not capitalisation
@@ -100,3 +100,14 @@ needs a type and a member, so it is always dotted.
 Full suite green with no changes: 7,135 passing. The author's `Plot` library, which carries the
 comma workaround in 56 places, still loads — and the space form it was working around now parses,
 so the workaround can be reverted at leisure rather than needing to be.
+
+## Closed — 2026-09-20
+
+Verified against the report's own shape: `a.tosh` declares `lower` and `Upper`, `b.tosh`
+requires it and calls each as `(Upper ($s.X) 1 2 3)`. Both parse and both answer 42 — a
+capitalised callee, in another file, with a parenthesised first argument, which is the exact
+combination that failed.
+
+The last criterion stays moot rather than done. Whitespace decides the two readings outright,
+so there is no residual ambiguity for a diagnostic to describe; a rule that needed one would
+be a rule that still guessed.

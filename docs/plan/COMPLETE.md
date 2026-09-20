@@ -69,6 +69,7 @@
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | complete | 8/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOAST-0119`](items/TOAST-0119.md) | P2 | complete | 4/4 | The argument-cost guard measures a body the fast-path flag does not control, so its two budgets are vacuous |
+| [`TOAST-0102`](items/TOAST-0102.md) | P2 | complete | 5/5 | A capitalised command name stops parsing as a command when its first argument is parenthesised |
 | [`TUI-0007`](items/TUI-0007.md) | P3 | complete | 6/6 | Scrolling is re-implemented per widget instead of being a container |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0114`](items/TOAST-0114.md) | P3 | complete | 7/7 | A struct is invisible to the editor: no outline entry, no hover, no completion |
@@ -120,6 +121,7 @@
 | [`TUI-0021`](items/TUI-0021.md) | P3 | complete | 5/5 | A widget cannot be padded or aligned, so spacing is done with blank text |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
+| [`TOAST-0104`](items/TOAST-0104.md) | P2 | complete | 5/5 | A refinement type derived from a sibling in the same module silently fails to register |
 | [`TOAST-0105`](items/TOAST-0105.md) | P2 | complete | 5/5 | `is` silently returns false for a declared type when the type name is qualified |
 | [`TOAST-0044`](items/TOAST-0044.md) | P1 | complete | 5/5 | A compiled `new` of a declared class can resolve to an unrelated CLR type of the same name |
 | [`TOAST-0050`](items/TOAST-0050.md) | P2 | complete | 8/8 | A tuple type resolves but cannot be written in an annotation |

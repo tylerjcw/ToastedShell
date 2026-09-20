@@ -1,7 +1,7 @@
 ---
 id: TOAST-0104
 title: "A refinement type derived from a sibling in the same module silently fails to register"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-30
@@ -58,7 +58,7 @@ They may share a cause. This one is the worst of the three because it is silent.
 ## Acceptance
 
 - [x] `export type Derived = Base where …` inside a module resolves Base to the sibling
-- [ ] A base that genuinely cannot be resolved is a diagnostic — **at the use site, not the
+- [x] A base that genuinely cannot be resolved is a diagnostic — **at the use site, not the
       declaration.** See below: bases resolve lazily and forward references are legal, so an
       eager check would refuse working code.
 - [x] The diagnostic names the declaration and the unresolved base
@@ -105,3 +105,24 @@ walked to the deepest break, so a broken link three aliases down is the one repo
 member access before `is` sees it, and a refinement type is not in a module's `Types` table.
 `TOAST-0111` fixed the unqualified spelling; this is the qualified one, and it is filed separately
 rather than folded in here.
+
+## Closed — 2026-09-20
+
+Both halves verified. A sibling base named unqualified inside a module now resolves —
+`M.T.Unqualified` derived from `M.T.Base` accepts a value — and an unresolvable base reports
+at the use site naming the declaration, the base, and what to do:
+
+```
+Type 'Broken' is declared over 'NoSuchBase', which does not name a type.
+  'M.Broken' cannot be resolved because 'NoSuchBase' does not exist
+  help: 'NoSuchBase' is the base of 'Broken'. Declare it, correct the spelling, or
+        qualify it if it lives in another module.
+```
+
+The criterion is met at the use site rather than the declaration, which is the only place it
+can be met: bases resolve lazily and forward references are legal, so an eager check would
+refuse working code. That was measured before anything was written, and is why the check was
+not written.
+
+The second defect recorded above — `"hi" is M.T.Base`, the qualified spelling in a type test
+— is still open and still filed separately. Closing this one does not close that.
