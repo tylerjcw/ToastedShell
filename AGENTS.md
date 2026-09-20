@@ -427,9 +427,24 @@ suggested. Accepting a typo does not leave the constraint unchecked, it
 deletes it, while the declaration still reads as though it constrained
 something.
 
-⚠️ A built-in constraint is *not* enforced when the type argument is a
-ToastScript class: `where T: Numeric` accepts `new B<Thing>(…)`. The CLR
-bound is null there and the check is skipped. Tracked, not fixed.
+A built-in constraint is also answered for a type *you* declared, not only
+for a CLR type. Nothing declared is a CLR numeric primitive, so `Numeric`
+refuses it; a class is a reference and an enum or struct is a value, so
+`class` and `struct` answer accordingly; `Comparable` takes an enum or a
+class overloading a comparison; and `Add`/`Sub`/`Mul`/`Div` are satisfied
+by declaring the matching operator, inherited overloads included:
+
+```tosh
+class Money { prop V = 0
+    func +(o) { return $this.V + $o.V }
+}
+class Sum<T>(v: T) where T: Add { prop value: T = $v }
+new Sum<Money>(new Money())     # accepted — Money declares '+'
+```
+
+A trait cannot declare an operator (the parser refuses `func +` in a
+trait body), so trait-provided arithmetic is not a way to satisfy `Add`.
+`unmanaged` refuses every declared type, conservatively.
 
 The same constraint names also work as right-hand operands for the
 `is` / `is-not` operators on values, so runtime checks reuse the same

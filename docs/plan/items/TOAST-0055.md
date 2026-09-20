@@ -66,8 +66,8 @@ seen from the two ends.
       one registry, as today
 - [ ] Interpreted and compiled agree, in the differential corpus
 - [x] `§Type-Parameter Constraints` replaces the "accepted conservatively" sentence
-- [ ] A built-in constraint is enforced when the type argument is a ToastScript class
-      (**found while doing the above — see below**)
+- [x] A built-in constraint is enforced when the type argument is a ToastScript class
+      (**found while doing the above**)
 
 ## Measured before starting — 2026-09-20
 
@@ -102,27 +102,54 @@ the *name*, asked before any question about the type argument, so the four valid
 resolver, so a declared interface read as "unrecognised" there; refusing on that flag alone
 would have turned this into the wrong error the conservative rule existed to prevent.
 
+## A declared type as the argument
+
+The larger half, found while verifying the first. `where T: Numeric` accepted
+`new B<Thing>(…)` for any class `Thing`, and `where T: struct` accepted it too: the built-ins
+are predicates over a CLR `Type`, a ToastScript class has none of its own — user classes share
+a backing type — so the bound arrived null and every check was skipped, on the ground that
+precise enforcement happens at the next concrete instantiation. For a declared type that
+instantiation never comes.
+
+`ToshDeclaredTypeConstraints` answers the same constraints from the declaration instead. A
+null answer still means no opinion, so a genuinely forwarded or unresolved argument stays
+conservative — the old rule was right, it was simply applied to everything rather than to the
+cases that warrant it.
+
+| Constraint | A declared type |
+|---|---|
+| `Numeric` / `Number` / `INumber` | refused — nothing declared is a CLR numeric primitive |
+| `Add` / `Sub` / `Mul` / `Div` | the class declares the matching operator, inherited included |
+| `Comparable` | an enum, or a class overloading `<`, `<=`, `>` or `>=` |
+| `class` | a class, record or interface |
+| `struct` | a struct or enum |
+| `Eq`, `notnull` | satisfied |
+| `unmanaged` | refused — a declared value type may still hold references |
+| `new` / `new()` | constructible with no arguments |
+
+`Add` is the one the item was really about: it is the constraint a math or graphics type
+wants, and it is now answered by whether the class says it can be added, which is what an
+operator overload is.
+
+### Two things measured while building it
+
+**A trait cannot declare an operator.** `func +` inside a trait body is refused by the parser
+with "Expected a variable name", so trait-provided arithmetic is not a route to satisfying
+`Add`. The first draft walked used traits looking for one; that code could never run and was
+removed rather than left in untested. The author's own vector types are the case worth
+checking against, and they declare `func +(o) => $this.Combine($o, "+")` on the class while
+`uses Componentwise` supplies the ordinary method it delegates to.
+
+**A record or struct type argument fails earlier, for an unrelated reason.**
+`new B<Rec>(new Rec(1))` reports `tosh.runtime.annotation_conversion_failed` — "'B.value'
+produced a value that is not a 'Rec'" — before any constraint is consulted. Not touched here.
+
 ## What is still open
 
-**A built-in constraint is not enforced against a ToastScript class argument.** Found while
-verifying the above:
+Method-level type parameters, and the compiled-mode agreement; the second is compiler work.
+Two unrelated limitations found while probing, neither a regression — both reproduce on the
+installed binary:
 
-```tosh
-class Thing { }
-class B<T>(v: T) where T: Numeric { prop value: T = $v }
-new B<Thing>(new Thing())      # accepted
-```
-
-`where T: struct` accepts it too. The CLR bound is null for a ToastScript class — user
-classes share a backing type — and the registry branch skips the check on the stated ground
-that precise enforcement happens at the next concrete instantiation, which for a user class
-never comes. This is a larger hole than the typo one and a different mechanism, so it is
-recorded rather than absorbed.
-
-Doing it properly is a design question, not a patch: `Numeric`, `struct` and `unmanaged`
-definitively fail for a user class and `class` definitively passes, but `Add` and `Comparable`
-should consult the class's own operator overloads — which is what would make `where T: Add`
-work for the user math and graphics types this item cares about.
-
-Method-level type parameters and the compiled-mode agreement remain untouched; the second is
-compiler work.
+- `new Mod.Class<T>(…)` cannot construct a generic class through a module alias or a
+  qualified module path.
+- `record R<T>(x: T)` cannot annotate a field with its own type parameter.

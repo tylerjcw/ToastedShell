@@ -428,13 +428,31 @@ public sealed class ToshClassDefinition : IShellNamedType
                 {
                     if (bound is null)
                     {
-                        // Forwarded / unresolved CLR type — skip the
-                        // built-in predicate check; precise enforcement
-                        // happens at the next concrete instantiation.
-                        continue;
+                        // `TOAST-0055`. A ToastScript declaration has no CLR type of its own —
+                        // user classes share a backing type — so the bound arrives null and
+                        // every built-in check used to be skipped here, on the ground that
+                        // precise enforcement happens at the next concrete instantiation. For a
+                        // declared type that instantiation never comes, so `where T: Numeric`
+                        // accepted any class at all. Ask the declaration instead; a null answer
+                        // still means no opinion, and only then is it forwarded or unresolved.
+                        var declared = ResolveDeclaredTypeArgument(argDisplay);
+                        var verdict = declared is null
+                            ? null
+                            : ToshDeclaredTypeConstraints.Evaluate(constraintName, declared);
+
+                        if (verdict is null)
+                        {
+                            continue;
+                        }
+
+                        satisfied = verdict.Value;
+                        known = true;
                     }
-                    satisfied = predicate(bound);
-                    known = true;
+                    else
+                    {
+                        satisfied = predicate(bound);
+                        known = true;
+                    }
                 }
                 else
                 {
@@ -583,6 +601,15 @@ public sealed class ToshClassDefinition : IShellNamedType
         known = false;
         return false;
     }
+
+    /// <summary>The declaration a type-argument name refers to, if it names one.</summary>
+    /// <remarks>
+    /// `TOAST-0055`. The display name is what the caller wrote — `Thing`, or `Box&lt;int&gt;`
+    /// — because a declared type cannot be identified by its CLR backing, which every user
+    /// class shares.
+    /// </remarks>
+    private object? ResolveDeclaredTypeArgument(string argDisplay)
+        => _engine.TryGetNamedType(StripGenericTypeArguments(argDisplay), out var named) ? named : null;
 
     private static string StripGenericTypeArguments(string typeName)
     {
@@ -761,6 +788,56 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         return BaseClass is not null && BaseClass.HasInstanceMember(name);
     }
+
+    /// <summary>
+    /// Whether this class itself declares an instance method of this name — no base chain, no
+    /// traits, no CLR fall-through.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0055`. <see cref="HasInstanceMember"/> cannot answer this: it reports true for
+    /// any name at all once <c>ClrBaseType</c> is set, which is right for member dispatch and
+    /// useless for asking whether an operator was overloaded. Walking the chain is the
+    /// caller's job, because it also has traits to consult.
+    /// </remarks>
+    internal bool DeclaresInstanceMethodNamed(string methodName)
+        => _methodsByName.TryGetValue(methodName, out var candidates) &&
+           candidates.Any(method => !method.IsStatic);
+
+    /// <summary>Whether <c>new T()</c> would have every parameter it needs.</summary>
+    /// <remarks>
+    /// `TOAST-0055`, for <c>where T: new()</c>. A class with no constructor at all takes no
+    /// arguments; otherwise some constructor — primary or declared — must be satisfiable with
+    /// none, which means every parameter is optional or a rest parameter.
+    /// </remarks>
+    internal bool IsConstructibleWithoutArguments
+    {
+        get
+        {
+            if (_constructors.Count == 0 && _primaryConstructorParameters.Count == 0)
+            {
+                return true;
+            }
+
+            if (TakesNoRequiredArguments(_primaryConstructorParameters) &&
+                _primaryConstructorParameters.Count > 0)
+            {
+                return true;
+            }
+
+            foreach (var constructor in _constructors)
+            {
+                if (TakesNoRequiredArguments(constructor.Parameters))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    private static bool TakesNoRequiredArguments(IReadOnlyList<FunctionParameterDefinition> parameters)
+        => parameters.All(parameter => parameter.IsOptional || parameter.IsRest);
 
     public bool HasStaticMethod(string methodName)
     {

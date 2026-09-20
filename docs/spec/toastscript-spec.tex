@@ -6246,6 +6246,23 @@ then it means what it says: an interface bound is satisfied by a class
 fulfilling it, a class bound by that class and anything extending it, and a CLR
 type bound by anything assignable to it.
 
+A built-in constraint is answered for a declared type as well as a CLR one.
+Nothing declared is one of the CLR numeric primitives, so \code{Numeric}
+refuses it; a class is a reference and an enum or struct is a value, so
+\code{class} and \code{struct} answer accordingly; \code{Comparable} takes an
+enum, or a class overloading a comparison; and \code{Add}, \code{Sub},
+\code{Mul} and \code{Div} are satisfied by declaring the matching operator,
+inherited overloads included.  A trait cannot declare an operator, so it is not
+a route to satisfying them.  \code{unmanaged} refuses every declared type.
+
+\begin{lstlisting}
+class Money { prop V = 0
+    func +(o) { return $this.V + $o.V }
+}
+class Sum<T>(v: T) where T: Add { prop value: T = $v }
+new Sum<Money>(new Money())     # accepted -- Money declares '+'
+\end{lstlisting}
+
 \noindent \textbf{A name that resolves to nothing is refused}
 (\code{tosh.runtime.unknown\_type\_constraint}), and the diagnostic suggests the
 nearest real constraint.  It was once accepted, on the reasoning that refusing

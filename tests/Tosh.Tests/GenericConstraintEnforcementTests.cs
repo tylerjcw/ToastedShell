@@ -254,4 +254,71 @@ public sealed class GenericConstraintEnforcementTests
 
         Assert.Contains($"to satisfy '{constraint}'", error.Message, StringComparison.Ordinal);
     }
+
+    // ---- `TOAST-0055`, second half: a declared type as the argument ----
+
+    /// <summary>
+    /// A built-in constraint is answered for a type the reader declared.
+    /// </summary>
+    /// <remarks>
+    /// The built-ins are predicates over a CLR <see cref="System.Type"/>, and a ToastScript
+    /// class has none of its own — user classes share a backing type — so the bound arrived
+    /// null and every check was skipped, on the ground that precise enforcement happens at
+    /// the next concrete instantiation. For a declared type that instantiation never comes,
+    /// so `where T: Numeric` took any class at all.
+    /// </remarks>
+    [Theory]
+    [InlineData("class Thing { }", "Numeric", "Thing", "new Thing()")]
+    [InlineData("enum Col { Red }", "Numeric", "Col", "Col.Red")]
+    [InlineData("class Thing { }", "struct", "Thing", "new Thing()")]
+    [InlineData("class Thing { }", "Comparable", "Thing", "new Thing()")]
+    [InlineData("class Thing { }", "Add", "Thing", "new Thing()")]
+    public async Task A_builtin_constraint_refuses_a_declaration_that_cannot_satisfy_it(
+        string declaration, string constraint, string argument, string construction)
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            $"{declaration}\nclass B<T>(v: T) where T: {constraint} {{ prop value: T = $v }}\n"
+            + $"new B<{argument}>({construction})"));
+
+        Assert.Contains($"to satisfy '{constraint}'", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("class Thing { }", "class", "Thing", "new Thing()")]
+    [InlineData("enum Col { Red }", "struct", "Col", "Col.Red")]
+    [InlineData("enum Col { Red }", "Comparable", "Col", "Col.Red")]
+    [InlineData("class Thing { }", "Eq", "Thing", "new Thing()")]
+    public async Task A_builtin_constraint_accepts_a_declaration_that_does_satisfy_it(
+        string declaration, string constraint, string argument, string construction)
+        => await RunAsync(
+            $"{declaration}\nclass B<T>(v: T) where T: {constraint} {{ prop value: T = $v }}\n"
+            + $"new B<{argument}>({construction})");
+
+    /// <summary>
+    /// `where T: Add` is the constraint a math or graphics type actually wants, and it is
+    /// answered by whether the class says it can be added — which is what an operator
+    /// overload is.
+    /// </summary>
+    [Fact]
+    public async Task Add_is_satisfied_by_overloading_the_operator()
+        => await RunAsync(
+            "class Money { prop V = 0\n    func +(o) { return 1 } }\n"
+            + "class B<T>(v: T) where T: Add { prop value: T = $v }\n"
+            + "new B<Money>(new Money())");
+
+    /// <summary>An inherited overload counts: the operator is there to be called.</summary>
+    [Fact]
+    public async Task Add_is_satisfied_by_an_inherited_operator()
+        => await RunAsync(
+            "class Base { func +(o) { return 1 } }\nclass Derived extends Base { }\n"
+            + "class B<T>(v: T) where T: Add { prop value: T = $v }\n"
+            + "new B<Derived>(new Derived())");
+
+    /// <summary>
+    /// A CLR type argument still goes through the registry predicate, unchanged.
+    /// </summary>
+    [Fact]
+    public async Task A_clr_argument_is_unaffected()
+        => Assert.Equal("1", await RunAsync(
+            "class B<T>(v: T) where T: Numeric { prop value: T = $v }\n(new B<int>(1)).value"));
 }
