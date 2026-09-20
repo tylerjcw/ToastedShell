@@ -718,6 +718,26 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. The enum picker the config browser built a row at a time. A question
+        // with one answer, which is not the same shape as a list you move through.
+        registry.Register("choice", static (spec, context) =>
+        {
+            var picker = new TuiChoice(spec.PrimaryItems())
+            {
+                DisplayProperty = spec.Text("display"),
+                Style = spec.Style(),
+
+                // Opt-in, as a button's is: a picker is usually one field among several.
+                ClosesOnChoose = spec.Flag("exit"),
+            };
+
+            context.OnHandler(spec, "onchoose", handler => picker.Chosen = item => handler(item));
+            context.OnHandler(spec, "oncancel", handler => picker.Cancelled = () => handler(null));
+            context.OnHandler(spec, "onchange", handler => picker.SelectionChanged = item => handler(item));
+
+            return picker;
+        });
+
         // `TUI-0002`. The confirmation dialog the config browser used to lay out by hand.
         // A script asks a question without knowing how a dialog is drawn, which is what the
         // widget contract is for.

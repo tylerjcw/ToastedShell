@@ -646,6 +646,29 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{Choice}}
+
+\begin{lstlisting}
+{| Choice = ["Always", "Never", "When asked"], OnChoose = &Decide |}
+{| Choice = $themes, Display = "Name", OnChoose = &Apply, OnCancel = &Keep |}
+\end{lstlisting}
+
+One choice out of several, drawn as radio rows: the marked option carries
+\code{(*)} and the rest \code{( )}, so the reader can see which one \emph{is} the
+value rather than only which one the cursor is on.
+
+The arrows, \code{PageUp}, \code{PageDown}, \code{Home} and \code{End} move the
+mark. \code{Enter} settles it and calls \code{OnChoose} with the option;
+\code{Esc} abandons the choice and calls \code{OnCancel}. \code{OnChange} fires as
+the mark moves, before anything is settled.
+
+\code{Display} names a property to read off each option for its label, for a list
+of records rather than of strings.
+
+This is not \code{List}. A list is something you move through and activate; this is
+a question with one answer, and it keeps that answer's key so redrawing with the
+same options leaves the choice where it was.
+
 \subsection{\texttt{Confirm}}
 
 \begin{lstlisting}
