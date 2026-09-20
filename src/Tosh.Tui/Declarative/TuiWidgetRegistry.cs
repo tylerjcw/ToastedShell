@@ -718,6 +718,32 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. The confirmation dialog the config browser used to lay out by hand.
+        // A script asks a question without knowing how a dialog is drawn, which is what the
+        // widget contract is for.
+        registry.Register("confirm", static (spec, context) =>
+        {
+            var confirm = new TuiConfirm(spec.PrimaryText() ?? string.Empty, spec.Text("title"))
+            {
+                Style = spec.Style(),
+                ConfirmLabel = spec.Text("confirmlabel") ?? "Confirm",
+                CancelLabel = spec.Text("cancellabel") ?? "Cancel",
+                ConfirmSelected = spec.Flag("confirmselected", fallback: true),
+                MaxWidth = spec.Number("maxwidth", 72),
+                MinWidth = spec.Number("minwidth", 24),
+
+                // Spelled `Exit`, as a button's is, but defaulting the other way: a button
+                // rarely ends anything and a dialog nearly always does.
+                ClosesOnAnswer = spec.Flag("exit", fallback: true),
+            };
+
+            // One handler, given the answer, rather than an `onconfirm` and an `oncancel`
+            // that make it easy to write only the first and silently ignore a dismissal.
+            context.OnHandler(spec, "onanswer", handler => confirm.Answered = answered => handler(answered));
+
+            return confirm;
+        });
+
         registry.Register("image", static (spec, _) => new TuiImage
         {
             Path = spec.PrimaryText(),

@@ -646,6 +646,28 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{Confirm}}
+
+\begin{lstlisting}
+{| Confirm = "Discard your changes?", OnAnswer = &Decide |}
+{| Confirm = "Delete it?", Title = "Careful",
+   ConfirmLabel = "Delete", CancelLabel = "Keep", OnAnswer = &Decide |}
+\end{lstlisting}
+
+A question with two answers, drawn in its own frame. \code{OnAnswer} is given
+\code{true} for the affirmative answer and \code{false} for the other --- one handler
+rather than two, because a dialog that is dismissed has been answered, and a caller
+given only an \code{OnConfirm} finds it easy to ignore the cancellation.
+
+Left, right and \code{Tab} move the selection; \code{Enter} takes it. \code{y} and
+\code{n} answer outright, as does \code{Esc}, which cancels.
+
+Answering ends the screen, which is the opposite default to \code{Button}: a button
+rarely finishes anything and a dialog nearly always does. \code{Exit = false} keeps
+one embedded in a larger form. \code{MaxWidth} and \code{MinWidth} bound the frame,
+which is sized to the question rather than to the window --- a confirmation that
+fills the screen is a screen, and the reader loses the thing they are deciding about.
+
 \subsection{\texttt{Button}}
 
 \begin{lstlisting}
