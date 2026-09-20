@@ -5101,6 +5101,68 @@ exports that declares none raises
 \code{tosh.runtime.require\_exports\_nothing}, since importing nothing at all
 is never the intent and used to happen in silence.
 
+\subsection*{Requiring by name from your library}
+\label{sec:library-require}
+
+A target written as a plain name --- no extension, no separator, no \code{./},
+\code{\textasciitilde} or rooted prefix --- is looked for in the reader's
+library rather than beside the script.  The library is
+\code{\$tosh.Config.Startup.LibraryDirectory}, which defaults to
+\code{\textasciitilde/.config/tosh/lib}.
+
+\begin{lstlisting}
+require Core.Shell          # <library>/Core/Shell.tosh
+require Pkg                 # <library>/Pkg.tosh, or <library>/Pkg/init.tosh
+require ToastLib.Gl as Gl   # named, as above
+\end{lstlisting}
+
+Dots are the separator, so a dotted name is a path through the library.  A
+directory holding an \code{init.tosh} is a module exactly as a file is, which is
+how a module grows from one file into a folder without every caller changing.
+
+\noindent \textbf{The library is searched before the directory the script lives
+in.}  That order is the whole point of naming something: a name means the same
+thing wherever it is required from, and a stray \code{Shell.tosh} beside a
+script cannot quietly take the place of the library's.
+
+An extension is how you say you mean a file instead.  \code{require Shell.tosh}
+and \code{require "./Shell.tosh"} both name the file beside the script; so does
+anything written with a separator, or a \code{\textasciitilde} or rooted prefix.
+\code{require Shell} names the library's.
+
+A name is refused rather than guessed at when it is unclear:
+
+\begin{itemize}
+  \item \code{Core.Shell} resolving to both \code{Core/Shell.tosh} and
+        \code{Core/Shell/init.tosh} raises
+        \code{tosh.require.ambiguous\_library\_name}.  It is what a half-finished
+        move from the one to the other looks like, and picking either would hide
+        it.
+  \item A name cannot climb out of the library.  \code{..} is not a library name
+        at all --- an empty segment disqualifies it --- so it falls through to
+        the path form, which is the spelling for reaching somewhere else on
+        purpose.
+  \item A name that is not there reports the library it searched, not only the
+        path beside the script that nobody wrote.
+\end{itemize}
+
+\subsection*{Calling the library without requiring it}
+
+A qualified call that nothing else can answer is looked up in the library, and
+the file exporting it is required as though the \code{require} had been written:
+
+\begin{lstlisting}
+ToastLib.Math.Clamp(15, 0, 10)   # 10, with no require anywhere
+\end{lstlisting}
+
+This is tried only once every ordinary resolution has declined, so it can never
+shadow a name that already resolves, and the longest module prefix wins ---
+\code{A.B.C} prefers module \code{A.B} over module \code{A}.  The loading is the
+same code a written \code{require} runs, so caching and circular-require
+detection are shared rather than reimplemented.  A member exported by two files
+in the library is ambiguous and raises \code{tosh.require.ambiguous\_export}
+instead of one of them being chosen.
+
 \subsection*{How a relative path is resolved}
 \label{sec:relative-load-paths}
 

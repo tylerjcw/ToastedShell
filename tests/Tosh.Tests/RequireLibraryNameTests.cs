@@ -112,9 +112,11 @@ public sealed class RequireLibraryNameTests : IDisposable
     /// write a <c>module</c> line, and fail complaining about an export nobody asked for.
     /// </remarks>
     /// <remarks>
-    /// Naming it does not hide it: a module in scope has always made its commands callable
-    /// unqualified, so <c>Speak()</c> still resolves here as it does after the doubled form.
-    /// That is the language's existing rule about modules, not something the alias decides.
+    /// Naming it does not hide it: <c>(Speak())</c> still resolves in expression position
+    /// here, as it does after the doubled form and after a plain <c>require</c> of any file
+    /// that exports a module. That reach predates the alias and is not what it decides — it
+    /// is also inconsistent, since the command form <c>Speak</c> does not resolve and a
+    /// module declared in the same file grants nothing. Filed as <c>TOAST-0136</c>.
     /// </remarks>
     [Fact]
     public async Task A_module_less_file_can_be_named_too()
