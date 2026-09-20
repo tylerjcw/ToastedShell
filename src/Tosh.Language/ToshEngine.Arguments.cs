@@ -2349,6 +2349,39 @@ public sealed partial class ToshEngine
                         cancellationToken);
                     return invocation.ReturnedVoid ? target : invocation.Value;
     }
+    /// <summary>
+    /// Finds a <c>static func</c> added by <c>extend</c> for a <c>Type::name</c> or
+    /// <c>Type.name</c> path — <c>TOAST-0097</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both spellings reach the same declaration: <c>::</c> and <c>.</c> differ in what they
+    /// read to a person, not in what they resolve. The split takes the last segment either
+    /// way, so a dotted type name keeps working.
+    /// </remarks>
+    private bool TryGetExtensionStatic(string path, out FunctionDefinition definition)
+    {
+        definition = null!;
+
+        if (_extensionStatics.Count == 0)
+        {
+            return false;
+        }
+
+        var separator = path.LastIndexOf("::", StringComparison.Ordinal);
+        var nameStart = separator >= 0 ? separator + 2 : path.LastIndexOf('.') + 1;
+
+        if (nameStart <= 0 || nameStart >= path.Length)
+        {
+            return false;
+        }
+
+        var typeName = path[..(separator >= 0 ? separator : nameStart - 1)];
+        var methodName = path[nameStart..];
+
+        return _extensionStatics.TryGetValue(typeName, out var statics) &&
+               statics.TryGetValue(methodName, out definition!);
+    }
+
     private async ValueTask<object?> EvaluateStaticMethodCallAsync(
         string sourceName,
         string sourceText,
@@ -2397,6 +2430,30 @@ public sealed partial class ToshEngine
                     {
                         return await InvokeCallableInExpressionAsync(
                             scopedCallable,
+                            methodArguments,
+                            sourceName,
+                            sourceText,
+                            staticMethodCall.Span,
+                            staticMethodCall.Arguments.Select(argument => argument.Span).ToArray(),
+                            cancellationToken);
+                    }
+
+                    // `TOAST-0097`. A `static func` added by `extend` lives where the type
+                    // itself is the receiver, so it is consulted here rather than from the
+                    // instance path.
+                    //
+                    // Before ordinary resolution rather than after, which the instance path
+                    // does the other way round. `CanPlanQualifiedInvocation` answers whether
+                    // the *type* resolves, not whether it has the member, so `string::Shout`
+                    // planned successfully against System.String and then failed to find
+                    // anything — the extension was skipped for a member that does not exist.
+                    // Ordering it first is safe because a name that would displace a declared
+                    // static is refused at its declaration, so nothing reachable here can
+                    // shadow a real member.
+                    if (TryGetExtensionStatic(staticMethodCall.Path, out var extensionStatic))
+                    {
+                        return await InvokeCallableInExpressionAsync(
+                            new Bridge.FunctionCommand(this, extensionStatic),
                             methodArguments,
                             sourceName,
                             sourceText,

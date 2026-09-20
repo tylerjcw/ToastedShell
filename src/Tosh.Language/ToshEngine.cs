@@ -2126,6 +2126,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     private readonly Dictionary<string, Dictionary<string, FunctionDefinition>> _extensionMethods =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Statics added by <c>extend</c>, keyed the same way as <see cref="_extensionMethods"/>
+    /// — <c>TOAST-0097</c>.
+    /// </summary>
+    /// <remarks>
+    /// Kept separate because the two are reached from different places: an instance method
+    /// needs a receiver, a static needs only the type. Before this, a <c>static func</c> in
+    /// an <c>extend</c> block was filed in the instance table with its modifier discarded,
+    /// so <c>Type::name()</c> found nothing while <c>$value.name()</c> found it — the
+    /// declaration was not merely unreachable, it answered to the wrong call.
+    /// </remarks>
+    private readonly Dictionary<string, Dictionary<string, FunctionDefinition>> _extensionStatics =
+        new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The names an <c>extend</c> declaration may have used for this value.</summary>
     /// <summary>
     /// Union names this engine already knows, mapped to their variants, for the binder's

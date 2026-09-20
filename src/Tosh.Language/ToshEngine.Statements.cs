@@ -770,28 +770,8 @@ public sealed partial class ToshEngine
             }
         }
 
-        Dictionary<string, FunctionDefinition>? methods = null;
-
-        foreach (var key in registrationKeys)
-        {
-            if (_extensionMethods.TryGetValue(key, out var existing))
-            {
-                // An alias and its CLR name are the same type, so `extend int` and
-                // `extend Int32` must add to one table rather than two that shadow.
-                methods ??= existing;
-                continue;
-            }
-
-            methods ??= new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
-            _extensionMethods[key] = methods;
-        }
-
-        methods ??= new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var key in registrationKeys)
-        {
-            _extensionMethods[key] = methods;
-        }
+        var methods = ShareExtensionTable(_extensionMethods, registrationKeys);
+        var statics = ShareExtensionTable(_extensionStatics, registrationKeys);
 
         foreach (var member in extend.Members)
         {
@@ -807,7 +787,7 @@ public sealed partial class ToshEngine
                     Help: "an extension has nowhere to put state, so it cannot add properties or fields."));
             }
 
-            methods[method.Method.Name] = CreateFunctionDefinition(
+            var definition = CreateFunctionDefinition(
                 method.Method.Name,
                 method.Method.Parameters,
                 method.Method.ReturnTypeName,
@@ -817,9 +797,109 @@ public sealed partial class ToshEngine
                 sourceText,
                 method.Span,
                 method.Method.DocComment);
+
+            // `TOAST-0097`. The modifier was discarded here, so a `static func` went into the
+            // instance table: `Type::name()` found nothing while `$value.name()` answered it.
+            // A declaration that is accepted has to be findable as what it was written as —
+            // the rule `TOAST-0016` established for `extend int` and the same failure mode.
+            if (method.IsStatic)
+            {
+                EnsureExtensionStaticDoesNotCollide(sourceName, sourceText, extend.TypeName, method);
+                statics[method.Method.Name] = definition;
+            }
+            else
+            {
+                methods[method.Method.Name] = definition;
+            }
         }
 
         yield break;
+    }
+
+    /// <summary>
+    /// Refuses a static extension that would displace a static the type already declares —
+    /// <c>TOAST-0097</c>.
+    /// </summary>
+    /// <remarks>
+    /// An extension is reached only after ordinary resolution declines, so a colliding one
+    /// would never run: it would be accepted, stored, and silently lose — the same shape of
+    /// failure this item exists to remove, one step further along. Refused at the
+    /// declaration, where the name was written and can be changed.
+    /// </remarks>
+    private void EnsureExtensionStaticDoesNotCollide(
+        string sourceName,
+        string sourceText,
+        string typeName,
+        ClassMethodMemberSyntax method)
+    {
+        var name = method.Method.Name;
+        var declaredBy =
+            TryGetClassDefinition(typeName, out var definition) && definition.HasStaticMethod(name)
+                ? typeName
+                : ResolveTypeName(typeName) is { } clrType && HasPublicStatic(clrType, name)
+                    ? clrType.FullName ?? clrType.Name
+                    : null;
+
+        if (declaredBy is null)
+        {
+            return;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.extension_static_conflict",
+            Title: $"'{typeName}' already declares a static '{name}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: method.Span,
+            Label: "this would never be reached",
+            Help: $"'{declaredBy}.{name}' wins, because an extension is consulted only after the "
+                  + "type's own members decline. Rename the extension, or change the type itself."));
+    }
+
+    private static bool HasPublicStatic(Type type, string name)
+    {
+        foreach (var candidate in type.GetMethods(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+        {
+            if (string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The one table every name a type answers to shares, created if this is the first
+    /// <c>extend</c> for it.
+    /// </summary>
+    /// <remarks>
+    /// An alias and its CLR name are the same type, so <c>extend int</c> and
+    /// <c>extend Int32</c> must add to one table rather than two that shadow.
+    /// </remarks>
+    private static Dictionary<string, FunctionDefinition> ShareExtensionTable(
+        Dictionary<string, Dictionary<string, FunctionDefinition>> tables,
+        IReadOnlyList<string> registrationKeys)
+    {
+        Dictionary<string, FunctionDefinition>? shared = null;
+
+        foreach (var key in registrationKeys)
+        {
+            if (tables.TryGetValue(key, out var existing))
+            {
+                shared ??= existing;
+            }
+        }
+
+        shared ??= new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in registrationKeys)
+        {
+            tables[key] = shared;
+        }
+
+        return shared;
     }
 
     /// <summary>

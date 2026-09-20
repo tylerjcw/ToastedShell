@@ -4,7 +4,6 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TOAST-0097`](items/TOAST-0097.md) | P3 | proposed | 0/6 | A type cannot be given a static member from outside, so `Option::from` has nowhere to live |
 | [`TUI-0002`](items/TUI-0002.md) | P1 | proposed | 0/8 | There is no widget contract: widget state cannot draw itself, and layout is four fixed arrangements |
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |

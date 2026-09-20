@@ -182,15 +182,28 @@ internal static class CorePrelude
 
         # option-from: a nullable value as an Option.
         #
-        # The other half of `or-null`. Spelled as a function rather than `Option::from` because
-        # a union body takes variants only and `extend` adds instance methods, so there is no
-        # place to hang a static on a union today.
+        # The other half of `or-null`. A bareword, which is what a pipeline wants; `Option::from`
+        # below is the same conversion spelled as an expression reads best. Both are kept
+        # deliberately (`TOAST-0097`) — this one was the only spelling until `extend` could add
+        # a static, and it is documented, used, and the natural one at a prompt.
         func option-from(value) {
             if ($value is null) {
                 return Option::None<dynamic>()
             }
 
             return Option::Some($value)
+        }
+
+        # Option::from: the same conversion, spelled as a static.
+        #
+        # `TOAST-0083` described this surface and it could not exist: a union body takes
+        # variants only, and `extend` added instance methods alone, so there was nowhere to
+        # hang a static. `TOAST-0097` made one reachable, so the spelling that decision was
+        # written in is now the spelling that runs.
+        extend Option {
+            static func from(value) {
+                return (option-from $value)
+            }
         }
 
         # attempt: run a block and report its outcome as a Result rather than raising.
