@@ -127,6 +127,7 @@
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
 | [`TOAST-0121`](items/TOAST-0121.md) | P2 | complete | 6/6 | A range whose left operand is a variable is read as member access |
 | [`TOAST-0054`](items/TOAST-0054.md) | P1 | complete | 8/8 | A `match` over a closed union is not checked for exhaustiveness |
+| [`TUI-0005`](items/TUI-0005.md) | P1 | complete | 6/6 | Text width is UTF-16 code units, so any wide or combining character misaligns every box |
 | [`TUI-0016`](items/TUI-0016.md) | P2 | complete | 8/8 | A script cannot attach an event handler, so a form's result is read back from a dictionary |
 | [`TUI-0021`](items/TUI-0021.md) | P3 | complete | 5/5 | A widget cannot be padded or aligned, so spacing is done with blank text |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
