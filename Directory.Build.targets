@@ -62,8 +62,20 @@
           Condition="'$(DesignTimeBuild)' != 'true'
                      and '$(DisableToshSpecBuild)' != 'true'
                      and '$(MSBuildProjectName)' == 'Tosh.Cli'">
-    <Exec Command="dotnet run --project &quot;$(RepoRoot)src/Tosh.Cli/Tosh.Cli.csproj&quot; --no-build -- --export-command-metadata --latex -o &quot;$(SpecCommandRef)&quot;"
+    <!--
+      `$(DOTNET_HOST_PATH)` rather than a bare `dotnet`, the way `Sdk.targets` already
+      does it. A bare `dotnet` resolves through PATH, which is not necessarily the SDK
+      running this build: on a machine with both installed it started a *different* SDK's
+      MSBuild, which registered reusable nodes that then answered this build's task-host
+      pipe and failed it with MSB4216, "could not create or connect to a task host".
+    -->
+    <PropertyGroup>
+      <_ToshDotNetExe Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</_ToshDotNetExe>
+      <_ToshDotNetExe Condition="'$(_ToshDotNetExe)' == ''">dotnet</_ToshDotNetExe>
+    </PropertyGroup>
+    <Exec Command="&quot;$(_ToshDotNetExe)&quot; run --project &quot;$(RepoRoot)src/Tosh.Cli/Tosh.Cli.csproj&quot; --no-build -- --export-command-metadata --latex -o &quot;$(SpecCommandRef)&quot;"
           WorkingDirectory="$(RepoRoot)"
+          EnvironmentVariables="MSBUILDDISABLENODEREUSE=1"
           IgnoreExitCode="true"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ExitCode" PropertyName="_ManifestExit" />
@@ -126,8 +138,14 @@
           Condition="'$(DesignTimeBuild)' != 'true'
                      and '$(DisableToshParityCheck)' != 'true'
                      and '$(MSBuildProjectName)' == 'Tosh.Cli'">
-    <Exec Command="dotnet run --project &quot;$(RepoRoot)tools/Tosh.ParityCheck/Tosh.ParityCheck.csproj&quot; -c $(Configuration) --nologo"
+    <!-- Same as GenerateCommandRef above: the child must be the SDK running this build. -->
+    <PropertyGroup>
+      <_ToshDotNetExe Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</_ToshDotNetExe>
+      <_ToshDotNetExe Condition="'$(_ToshDotNetExe)' == ''">dotnet</_ToshDotNetExe>
+    </PropertyGroup>
+    <Exec Command="&quot;$(_ToshDotNetExe)&quot; run --project &quot;$(RepoRoot)tools/Tosh.ParityCheck/Tosh.ParityCheck.csproj&quot; -c $(Configuration) --nologo"
           WorkingDirectory="$(RepoRoot)"
+          EnvironmentVariables="MSBUILDDISABLENODEREUSE=1"
           IgnoreExitCode="true"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ExitCode" PropertyName="_ToshParityExit" />
