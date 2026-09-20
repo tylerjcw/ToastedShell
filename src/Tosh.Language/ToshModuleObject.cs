@@ -160,18 +160,59 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
         //
         // Only reached once the module has no such export, so this cannot change which
         // member an existing call resolves to; it only turns a hard failure into a hit.
-        if (_engine.TryResolveTypeName(Name) is { } shadowedType)
+        // `TOAST-0135`. The fall-through belongs to a module reached by its own name:
+        // `module Math { … }` calling `Math.Max(3, 7)` still finds the shadowed type,
+        // which is the whole of TS-P1-35. A module reached as a nested segment has been
+        // named unambiguously — a reader who writes `ToastLib.Math.Floor(…)` means this
+        // library's module, so inheriting every `System.Math` static there answered calls
+        // the module never defined (`ToastLib.Math.Floor(3.7)` returned 3) and reported a
+        // miss against `System.Math`, a type that appears nowhere in what was written.
+        var qualifiedName = _exports.QualifiedName is { Length: > 0 } qualified ? qualified : Name;
+        var isNested = !string.Equals(qualifiedName, Name, StringComparison.Ordinal);
+
+        if (!isNested && _engine.TryResolveTypeName(Name) is { } shadowedType)
         {
-            return _engine.LanguageRuntime.Invoker.InvokeStatic(shadowedType, methodName, arguments);
+            // Asked before invoking rather than by catching: a failure thrown from inside
+            // a method that does exist is the method's own, and must not be relabelled a
+            // missing member.
+            if (HasStaticMethod(shadowedType, methodName))
+            {
+                return _engine.LanguageRuntime.Invoker.InvokeStatic(shadowedType, methodName, arguments);
+            }
+
+            throw new InvalidOperationException(
+                $"Member '{methodName}' was not found on module '{qualifiedName}', " +
+                $"nor as a static method on the shadowed type '{shadowedType.FullName}'.");
         }
 
         throw new InvalidOperationException(
-            $"Member '{methodName}' was not found on module '{Name}'.");
+            $"Member '{methodName}' was not found on module '{qualifiedName}'.");
     }
 
     public bool TryGetExport(string name, out object? value)
     {
         return TryGetMember(name, out value);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> declares a public static method of this name.
+    /// </summary>
+    /// <remarks>
+    /// Case-insensitive, matching how the invoker resolves one: a stricter test here
+    /// would refuse the fall-through for a call the invoker would have answered.
+    /// </remarks>
+    private static bool HasStaticMethod(Type type, string methodName)
+    {
+        foreach (var method in type.GetMethods(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+        {
+            if (string.Equals(method.Name, methodName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static object? Flatten(IReadOnlyList<object?> values)

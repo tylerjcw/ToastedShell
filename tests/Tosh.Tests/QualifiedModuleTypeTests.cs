@@ -239,6 +239,77 @@ public sealed class QualifiedModuleTypeTests
         Assert.Equal(7, await EvaluateAsync($"{ShadowingModule}\nMath.widest()"));
     }
 
+    /// <summary>
+    /// `TOAST-0135`. The fall-through belongs to a module reached by its own name. A module
+    /// reached as a *nested* segment has already been named unambiguously, so it must not
+    /// answer with the statics of a CLR type that happens to share its leaf name:
+    /// `ToastLib.Math.Floor(3.7)` returned 3 from `System.Math`, a type the reader never
+    /// wrote, and `ToastLib.Math.Modules()` reported the miss against `System.Math` too.
+    /// </summary>
+    [Fact]
+    public async Task A_nested_module_does_not_inherit_the_shadowed_types_statics()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(
+            async () => await EvaluateAsync(
+                """
+                module Lib {
+                    export module Math { export func Mine() { return 1 } }
+                }
+                Lib.Math.Floor(3.7)
+                """));
+
+        Assert.Contains("Floor", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Lib.Math", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Math", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The nested module still answers everything it does export.</summary>
+    [Fact]
+    public async Task A_nested_module_still_answers_its_own_exports()
+        => Assert.Equal(
+            1,
+            await EvaluateAsync(
+                """
+                module Lib {
+                    export module Math { export func Mine() { return 1 } }
+                }
+                Lib.Math.Mine()
+                """));
+
+    /// <summary>
+    /// The dotted spelling the library actually uses. `export partial module Lib.Math` must
+    /// reach the same rule as the nested braces above.
+    /// </summary>
+    [Fact]
+    public async Task A_dotted_module_declaration_does_not_inherit_them_either()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(
+            async () => await EvaluateAsync(
+                """
+                export partial module Lib.Math
+                export func Mine() { return 1 }
+                Lib.Math.Floor(3.7)
+                """));
+
+        Assert.Contains("Floor", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Math", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A top-level shadowing module keeps its fall-through, but a name that neither it nor
+    /// the shadowed type has now says so, rather than reporting only against `System.Math`
+    /// and sending the reader to a type they did not write.
+    /// </summary>
+    [Fact]
+    public async Task A_miss_on_both_the_module_and_the_shadowed_type_names_both()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(
+            async () => await EvaluateAsync($"{ShadowingModule}\nMath.Nope()"));
+
+        Assert.Contains("Nope", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Math", error.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_miss_on_a_module_shadowing_nothing_still_fails()
     {
