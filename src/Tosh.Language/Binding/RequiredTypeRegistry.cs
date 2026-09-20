@@ -111,6 +111,15 @@ internal sealed class RequiredTypeRegistry
         var exported = scope.Exports(require.Modifier);
         if (require.Imports.Count == 0)
         {
+            // `require ToastLib.Gl as Gl` binds one name, not the file's exports. As at
+            // runtime, that name is the module the file declares, or the file itself when it
+            // declares none.
+            if (require.Alias is { Length: > 0 } moduleAlias)
+            {
+                scope.Modules[moduleAlias] = new(Walk(library, require.Target) ?? library, exported);
+                return;
+            }
+
             foreach (var (name, entry) in library.Types)
                 if (entry.Exported) scope.Types[name] = new(entry.Value, exported);
             foreach (var (name, entry) in library.Modules)
@@ -121,16 +130,7 @@ internal sealed class RequiredTypeRegistry
         foreach (var import in require.Imports)
         {
             var segments = import.Name.Split('.');
-            var container = library;
-            foreach (var segment in segments[..^1])
-            {
-                if (!container.Modules.TryGetValue(segment, out var nested) || !nested.Exported)
-                {
-                    container = null;
-                    break;
-                }
-                container = nested.Value;
-            }
+            var container = Walk(library, string.Join('.', segments[..^1]));
             if (container is null) continue;
             var leaf = segments[^1];
             var binding = import.Alias ?? leaf;
@@ -139,6 +139,20 @@ internal sealed class RequiredTypeRegistry
             else if (container.Types.TryGetValue(leaf, out var type) && type.Exported)
                 scope.Types[binding] = new(type.Value, exported);
         }
+    }
+
+    /// <summary>The scope a dotted path names, or null when any segment is not an export.</summary>
+    private static Scope? Walk(Scope library, string path)
+    {
+        var container = library;
+
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!container.Modules.TryGetValue(segment, out var nested) || !nested.Exported) return null;
+            container = nested.Value;
+        }
+
+        return container;
     }
 
     private Scope? ReadLibrary(string target, string directory)

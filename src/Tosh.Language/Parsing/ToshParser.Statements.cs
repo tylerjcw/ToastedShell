@@ -1017,6 +1017,36 @@ public static partial class ToshParser
                     TextSpan.FromBounds(declarationStart, end));
             }
 
+            // `require ToastLib.Gl as Gl`. The alias was parsed for a native require and
+            // nowhere else, so this left `as` unconsumed and reported a missing statement
+            // separator — and the only way to name an imported module was to say it twice,
+            // `require ToastLib.Gl from ToastLib.Gl as Gl`, which is what the examples carry.
+            //
+            // It rides the statement's own alias slot, which native requires already use for
+            // exactly this, rather than being desugared into a selective import of a member
+            // named after the file. The doubled form asks for an export called `ToastLib.Gl`;
+            // this form asks to name whatever was required, which is not the same question
+            // once the file declares no module of its own.
+            //
+            // Only for a module name — a quoted path names a file, and importing a member
+            // called "./x.tosh" from itself is not what `require "./x.tosh" as X` would mean.
+            if (!isNative &&
+                firstToken.Kind == SyntaxTokenKind.Bareword &&
+                Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "as", StringComparison.OrdinalIgnoreCase))
+            {
+                var moduleAlias = TryParseRequireAlias(out var moduleAliasToken);
+                var moduleTarget = GetRequireTargetText(firstToken);
+
+                return new RequireStatementSyntax(
+                    moduleTarget,
+                    Array.Empty<RequireImportSyntax>(),
+                    false,
+                    moduleAlias,
+                    modifier,
+                    TextSpan.FromBounds(declarationStart, moduleAliasToken?.Span.End ?? firstToken.Span.End));
+            }
+
             var legacyTarget = GetRequireTargetText(firstToken);
             SyntaxToken? nativeAliasToken = null;
             var nativeAlias = isNative ? TryParseRequireAlias(out nativeAliasToken) : null;

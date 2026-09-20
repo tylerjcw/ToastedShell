@@ -929,6 +929,27 @@ public sealed partial class ToshEngine
                         + $"'source \"{statement.Target}\"' to run the file in the current scope."));
             }
 
+            // `require ToastLib.Gl as Gl`. The name goes on the module the file declares,
+            // found the same way a dotted selective import finds it. A file that declares no
+            // module still has exports, so the name goes on a module view of those instead —
+            // otherwise naming a library would depend on whether its author wrote a `module`
+            // line, and the failure would read as a missing export nobody had asked for.
+            if (statement.Alias is { Length: > 0 } moduleAlias)
+            {
+                if (!TryResolveNestedExport(artifact, statement.Target, moduleAlias, statement.Modifier))
+                {
+                    DeclareModule(
+                        moduleAlias,
+                        artifact.Exports.Modules.TryGetValue(statement.Target, out var declared)
+                            && declared is ToshModuleObject declaredModule
+                                ? declaredModule
+                                : new ToshModuleObject(this, moduleAlias, artifact.Exports),
+                        statement.Modifier);
+                }
+
+                return;
+            }
+
             foreach (var (name, value) in artifact.Exports.Variables)
             {
                 DeclareVariable(name, ToVariableBinding(value), statement.Modifier);

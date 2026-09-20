@@ -64,6 +64,75 @@ public sealed class RequireLibraryNameTests : IDisposable
     private async Task<string> TextOf(string source) =>
         (await RunAsync(source)).Select(r => r?.ToString()).Last(r => !string.IsNullOrEmpty(r))!;
 
+    /// <summary>
+    /// A module can be given a name where it is required — <c>TUI-0002</c>'s neighbour, and
+    /// the form the examples wanted.
+    /// </summary>
+    /// <remarks>
+    /// The alias was parsed for a native require and nowhere else, so `as` was left
+    /// unconsumed and reported a missing statement separator. The only way to name an
+    /// imported module was to say it twice — `require ToastLib.Gl from ToastLib.Gl as Gl` —
+    /// which is what the graphics examples carry.
+    /// </remarks>
+    [Fact]
+    public async Task A_required_module_can_be_given_a_name()
+    {
+        WriteLibrary(
+            Path.Combine("Deep", "Thing.tosh"),
+            """
+            export partial module Deep.Thing
+            export func Speak() { return "named" }
+            """);
+
+        Assert.Equal("named", await TextOf("require Deep.Thing as T\necho (T.Speak())"));
+    }
+
+    /// <summary>And it means the same as saying it twice, which is what it replaces.</summary>
+    [Fact]
+    public async Task The_short_form_means_what_the_doubled_one_did()
+    {
+        WriteLibrary(
+            Path.Combine("Deep", "Thing.tosh"),
+            """
+            export partial module Deep.Thing
+            export func Speak() { return "named" }
+            """);
+
+        Assert.Equal(
+            await TextOf("require Deep.Thing from Deep.Thing as T\necho (T.Speak())"),
+            await TextOf("require Deep.Thing as T\necho (T.Speak())"));
+    }
+
+    /// <summary>
+    /// A file that declares no module of its own can still be named.
+    /// </summary>
+    /// <remarks>
+    /// The alias names whatever was required. Reading it as an import of a member called
+    /// <c>Deep.Thing</c> would make naming a library depend on whether its author happened to
+    /// write a <c>module</c> line, and fail complaining about an export nobody asked for.
+    /// </remarks>
+    /// <remarks>
+    /// Naming it does not hide it: a module in scope has always made its commands callable
+    /// unqualified, so <c>Speak()</c> still resolves here as it does after the doubled form.
+    /// That is the language's existing rule about modules, not something the alias decides.
+    /// </remarks>
+    [Fact]
+    public async Task A_module_less_file_can_be_named_too()
+    {
+        WriteLibrary(Path.Combine("Deep", "Thing.tosh"), """export func Speak() { return "flat" }""");
+
+        Assert.Equal("flat", await TextOf("require Deep.Thing as T\necho (T.Speak())"));
+    }
+
+    /// <summary>The unaliased form is untouched: the module keeps its own name.</summary>
+    [Fact]
+    public async Task An_unaliased_require_is_unchanged()
+    {
+        WriteLibrary(Path.Combine("Deep", "Thing.tosh"), """export func Speak() { return "plain" }""");
+
+        Assert.Equal("plain", await TextOf("require Deep.Thing\necho (Speak())"));
+    }
+
     /// <summary>A dotted name is a path through the library.</summary>
     [Fact]
     public async Task A_dotted_name_resolves_under_the_library()

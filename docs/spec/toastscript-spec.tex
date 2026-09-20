@@ -5063,7 +5063,18 @@ require Inventory from "./toastlib.tosh" as Inv
 
 # Multiple modules
 require { Reporting, Utilities } from "./toastlib.tosh"
+
+# Name what you required
+require ToastLib.Gl as Gl
 \end{lstlisting}
+
+\noindent \code{as} after a bare \code{require} names whatever was required,
+without having to say it twice as \code{require ToastLib.Gl from ToastLib.Gl as
+Gl}.  The name goes on the module the file declares; a file that declares none
+is named as a module of its own exports, so naming a library does not depend on
+whether its author wrote a \code{module} line.  A quoted path is not named this
+way, since \code{require "./x.tosh" as X} would be asking for a member called
+\code{./x.tosh}.
 
 \noindent \textbf{\code{require} imports exports; it does not run the file in
 your scope.}  A required file is executed once per session in a scope of its
