@@ -321,4 +321,81 @@ public sealed class GenericConstraintEnforcementTests
     public async Task A_clr_argument_is_unaffected()
         => Assert.Equal("1", await RunAsync(
             "class B<T>(v: T) where T: Numeric { prop value: T = $v }\n(new B<int>(1)).value"));
+
+    // ---- `TOAST-0055`, third half: how the type parameter got its type ----
+
+    /// <summary>
+    /// A `where` clause means the same thing whether the type argument was inferred or
+    /// written out.
+    /// </summary>
+    /// <remarks>
+    /// Only inference reached the check: a constraint was verified on the *first binding* of
+    /// a type parameter, and an explicit call-site type argument seeds the binding directly,
+    /// so the check was already behind it. `F("a")` was refused while `F<string>("a")` was
+    /// accepted — same function, same constraint, opposite answers depending on whether the
+    /// caller spelled the type out. A method was unaffected, which is what made it look like
+    /// methods were the gap.
+    /// </remarks>
+    [Theory]
+    [InlineData("F<string>(\"a\")")]
+    [InlineData("F(\"a\")")]
+    public async Task A_function_constraint_is_enforced_however_the_argument_arrives(string call)
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            $"func F<T>(x: T) -> T where T: Numeric {{ return $x }}\n{call}"));
+
+        Assert.Contains("to satisfy 'Numeric'", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The label blames the type argument, since that is what the caller wrote.</summary>
+    /// <remarks>
+    /// On the diagnostic rather than the message: `Message` carries the title only.
+    /// </remarks>
+    [Fact]
+    public async Task An_explicit_type_argument_is_what_the_diagnostic_blames()
+    {
+        var error = await Assert.ThrowsAsync<ToshDiagnosticException>(() => RunAsync(
+            "func F<T>(x: T) -> T where T: Numeric { return $x }\nF<string>(\"a\")"));
+
+        Assert.Contains(
+            error.Diagnostics,
+            diagnostic => diagnostic.Label is not null &&
+                          diagnostic.Label.Contains("type argument 'string'", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("F<int>(1)")]
+    [InlineData("F(1)")]
+    public async Task A_satisfied_function_constraint_still_runs(string call)
+        => Assert.Equal("1", await RunAsync(
+            $"func F<T>(x: T) -> T where T: Numeric {{ return $x }}\n{call}"));
+
+    /// <summary>An unrecognised name is refused on this path too.</summary>
+    [Fact]
+    public async Task An_unrecognised_constraint_is_refused_on_an_explicit_type_argument()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "func F<T>(x: T) -> T where T: TotallyMadeUp { return $x }\nF<int>(1)"));
+
+        Assert.Contains("not a known constraint", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>An unconstrained type parameter is untouched by any of this.</summary>
+    [Fact]
+    public async Task An_unconstrained_function_takes_whatever_it_is_given()
+        => Assert.Equal("a", await RunAsync(
+            "func F<T>(x: T) -> T { return $x }\nF<string>(\"a\")"));
+
+    /// <summary>A method's own type parameter was already enforced, and stays so.</summary>
+    [Theory]
+    [InlineData("F<string>(\"a\")")]
+    [InlineData("F(\"a\")")]
+    public async Task A_method_type_parameter_constraint_is_still_enforced(string call)
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "class C {\n    func F<T>(x: T) -> T where T: Numeric { return $x }\n}\n"
+            + $"(new C()).{call}"));
+
+        Assert.Contains("to satisfy 'Numeric'", error.Message, StringComparison.Ordinal);
+    }
 }

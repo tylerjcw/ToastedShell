@@ -59,7 +59,7 @@ seen from the two ends.
 - [x] `where T: struct` and `where T: class` — *interpreted only; boxing in the emitted
       generic is compiler work and out of scope while compiled ToastScript is an experiment*
 - [x] `where T: new()`
-- [ ] Constraints on method type parameters, not only on the declaring type
+- [x] Constraints on method type parameters, not only on the declaring type
 - [x] Each constraint is enforced at instantiation with a diagnostic naming the argument,
       the parameter, and the unsatisfied bound
 - [x] `is`/`is-not` against a constraint name stays consistent with the generic check —
@@ -144,9 +144,34 @@ checking against, and they declare `func +(o) => $this.Combine($o, "+")` on the 
 `new B<Rec>(new Rec(1))` reports `tosh.runtime.annotation_conversion_failed` — "'B.value'
 produced a value that is not a 'Rec'" — before any constraint is consulted. Not touched here.
 
+## However the type parameter got its type
+
+The remaining criterion read "constraints on method type parameters, not only on the
+declaring type". Measured, a method's own type parameter was *already* enforced, both for an
+explicit type argument and an inferred one. The gap was somewhere else and narrower:
+
+| Call | Before | After |
+|---|---|---|
+| `func F<T>(x) where T: Numeric` then `F("a")` — inferred | refused | unchanged |
+| the same, `F<string>("a")` — explicit | **accepted** | **refused** |
+| `(new C()).F<string>("a")` — method, explicit | refused | unchanged |
+
+A constraint was verified on the *first binding* of a type parameter, and an explicit
+call-site type argument seeds that binding directly, so the check was already behind it.
+Inference reached it. The same function and the same constraint therefore gave opposite
+answers depending on whether the caller wrote the type out — and a method was unaffected,
+which is what made the gap look like it was about methods.
+
+`EnforceTypeParameterConstraints` is that check, lifted out of the inference path so the seed
+path can run it too. It is validated after the whole seeding loop rather than inside it, so a
+constraint mentioning another type parameter sees every explicit binding rather than only the
+ones seeded before it. The diagnostic blames the type argument the caller wrote —
+`type argument 'string' does not satisfy 'Numeric'` — rather than an ordinary argument that
+was not at fault.
+
 ## What is still open
 
-Method-level type parameters, and the compiled-mode agreement; the second is compiler work.
+The compiled-mode agreement in the differential corpus; that is compiler work.
 Two unrelated limitations found while probing, neither a regression — both reproduce on the
 installed binary:
 

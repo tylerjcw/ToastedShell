@@ -7543,59 +7543,98 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         // First binding — verify any `where` constraints declared
         // for this type parameter.
-        if (target.TypeParameterConstraints is { Count: > 0 } constraints)
+        EnforceTypeParameterConstraints(
+            target,
+            typeParameterName,
+            clrType,
+            typeBindings,
+            context,
+            argumentIndex,
+            subject: $"'{parameterName}' (CLR {clrType.Name})");
+
+        typeBindings[typeParameterName] = clrType;
+    }
+
+    /// <summary>
+    /// Checks every <c>where</c> clause declared for one type parameter against the type it
+    /// is being bound to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0055`. Lifted out of the inference path because that is not the only way a type
+    /// parameter gets a binding: an explicit call-site type argument — <c>F&lt;string&gt;(…)</c>
+    /// — seeds it directly, and seeding skipped straight past this. Inference reached it, so
+    /// <c>F("a")</c> was refused while <c>F&lt;string&gt;("a")</c> was not, for the same
+    /// function and the same constraint.
+    /// </para>
+    /// <para>
+    /// <paramref name="subject"/> is what the label blames, because the two callers blame
+    /// different things: an argument whose type implied the binding, or the type argument the
+    /// caller wrote.
+    /// </para>
+    /// </remarks>
+    private void EnforceTypeParameterConstraints(
+        GenericInferenceTarget target,
+        string typeParameterName,
+        Type clrType,
+        Dictionary<string, Type> typeBindings,
+        CommandContext context,
+        int? argumentIndex,
+        string subject)
+    {
+        if (target.TypeParameterConstraints is not { Count: > 0 } constraints)
         {
-            foreach (var clause in constraints)
+            return;
+        }
+
+        foreach (var clause in constraints)
+        {
+            if (!string.Equals(clause.TypeParameter, typeParameterName, StringComparison.Ordinal)) continue;
+            foreach (var constraintName in clause.ConstraintNames)
             {
-                if (!string.Equals(clause.TypeParameter, typeParameterName, StringComparison.Ordinal)) continue;
-                foreach (var constraintName in clause.ConstraintNames)
+                if (ToshTypeParameterConstraintRegistry.TryGet(constraintName, out var predicate))
                 {
-                    if (ToshTypeParameterConstraintRegistry.TryGet(constraintName, out var predicate))
+                    if (predicate(clrType)) continue;
+                    throw context.CreateDiagnostic(
+                        code: "tosh.runtime.generic_constraint_failed",
+                        title: $"'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
+                        argumentIndex: argumentIndex,
+                        label: $"{subject} does not satisfy '{constraintName}'");
+                }
+
+                // Phase 4.5 — substitute type-parameter references
+                // in the constraint name (e.g. `IComparable<T>`
+                // becomes `IComparable<Int32>` once T binds to int).
+                var resolvedConstraintName = SubstituteTypeParametersInAnnotation(
+                    constraintName, target, typeBindings, typeParameterName, clrType);
+                var constraintType = TryResolveTypeName(resolvedConstraintName);
+                if (constraintType is not null)
+                {
+                    if (!constraintType.IsAssignableFrom(clrType))
                     {
-                        if (predicate(clrType)) continue;
                         throw context.CreateDiagnostic(
                             code: "tosh.runtime.generic_constraint_failed",
                             title: $"'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
                             argumentIndex: argumentIndex,
-                            label: $"'{parameterName}' (CLR {clrType.Name}) does not satisfy '{constraintName}'");
+                            label: $"{subject} is not assignable to '{constraintName}'");
                     }
+                    continue;
+                }
 
-                    // Phase 4.5 — substitute type-parameter references
-                    // in the constraint name (e.g. `IComparable<T>`
-                    // becomes `IComparable<Int32>` once T binds to int).
-                    var resolvedConstraintName = SubstituteTypeParametersInAnnotation(
-                        constraintName, target, typeBindings, typeParameterName, clrType);
-                    var constraintType = TryResolveTypeName(resolvedConstraintName);
-                    if (constraintType is not null)
-                    {
-                        if (!constraintType.IsAssignableFrom(clrType))
-                        {
-                            throw context.CreateDiagnostic(
-                                code: "tosh.runtime.generic_constraint_failed",
-                                title: $"'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
-                                argumentIndex: argumentIndex,
-                                label: $"'{parameterName}' (CLR {clrType.Name}) is not assignable to '{constraintName}'");
-                        }
-                        continue;
-                    }
-
-                    // `TOAST-0055`. Recognised-but-unresolvable stays conservative; a name
-                    // that resolves to nothing is a typo, and silently dropping the
-                    // constraint is the one outcome the author cannot see.
-                    if (!IsRecognisedConstraintName(constraintName))
-                    {
-                        throw context.CreateDiagnostic(
-                            code: "tosh.runtime.unknown_type_constraint",
-                            title: $"'{target.OwnerLabel}' constrains '{typeParameterName}' to "
-                                + $"'{constraintName}', which is not a known constraint.",
-                            argumentIndex: argumentIndex,
-                            label: $"'{constraintName}' names nothing");
-                    }
+                // `TOAST-0055`. Recognised-but-unresolvable stays conservative; a name
+                // that resolves to nothing is a typo, and silently dropping the
+                // constraint is the one outcome the author cannot see.
+                if (!IsRecognisedConstraintName(constraintName))
+                {
+                    throw context.CreateDiagnostic(
+                        code: "tosh.runtime.unknown_type_constraint",
+                        title: $"'{target.OwnerLabel}' constrains '{typeParameterName}' to "
+                            + $"'{constraintName}', which is not a known constraint.",
+                        argumentIndex: argumentIndex,
+                        label: $"'{constraintName}' names nothing");
                 }
             }
         }
-
-        typeBindings[typeParameterName] = clrType;
     }
 
     private static void EnsureReservedBindingName(string name)

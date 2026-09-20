@@ -15,6 +15,6 @@
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |
 | [`TOAST-0035`](items/TOAST-0035.md) | P2 | partial | 1/5 | Source replay and implicit dynamic are how the compiler handles what it cannot emit |
-| [`TOAST-0055`](items/TOAST-0055.md) | P2 | partial | 9/11 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
+| [`TOAST-0055`](items/TOAST-0055.md) | P2 | partial | 10/11 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
 | [`TOAST-0136`](items/TOAST-0136.md) | P2 | open | 0/5 | A required module's functions are callable unqualified in an expression, but nowhere else |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |

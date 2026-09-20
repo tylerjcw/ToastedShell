@@ -3297,6 +3297,34 @@ public sealed partial class ToshEngine
                     }
                     typeBindings[typeParamsForSeed[i]] = resolved;
                 }
+
+                // `TOAST-0055`. A seeded binding is still a binding, and the `where` clause
+                // means the same thing however the type parameter got its type. Only
+                // inference used to reach the check, so `F("a")` was refused while
+                // `F<string>("a")` was accepted — same function, same constraint, opposite
+                // answers depending on whether the caller wrote the type out.
+                //
+                // Validated after the whole loop rather than inside it, so a constraint that
+                // mentions another type parameter sees every explicit binding rather than
+                // only the ones seeded before it.
+                // The bare name, as the inference path passes it: the diagnostic wraps the
+                // label in quotes itself, so `function 'F'` would come out as `'function 'F''`.
+                var seedTargetForConstraints = new GenericInferenceTarget(
+                    OwnerLabel: definition.Name,
+                    TypeParameters: typeParamsForSeed,
+                    TypeParameterConstraints: definition.TypeParameterConstraints);
+
+                for (var i = 0; i < typeParamsForSeed.Count; i++)
+                {
+                    EnforceTypeParameterConstraints(
+                        seedTargetForConstraints,
+                        typeParamsForSeed[i],
+                        typeBindings[typeParamsForSeed[i]],
+                        typeBindings,
+                        context,
+                        argumentIndex: null,
+                        subject: $"type argument '{explicitList[i]}'");
+                }
             }
 
             // Phase 3.2 — seed bindings from the LHS target-type
