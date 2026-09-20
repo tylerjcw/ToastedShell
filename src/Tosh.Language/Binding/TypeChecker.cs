@@ -1180,14 +1180,27 @@ public static class TypeChecker
 
         if (ctx.UserFunctions.TryGetValue(call.Name, out var fn))
         {
-            CheckUserFunctionCommandCall(call, fn, ctx);
+            CheckUserFunctionCommandCall(call, fn, ctx, receivesPipedInput);
             return;
         }
 
         CheckBuiltinCommandCall(call, ctx, receivesPipedInput);
     }
 
-    private static void CheckUserFunctionCommandCall(BoundCommandCall call, BoundFunctionDefinition fn, CheckContext ctx)
+    /// <remarks>
+    /// `TOAST-0101`. <paramref name="receivesPipedInput"/> does not change the arity — a
+    /// pipeline does not bind to a declared parameter, and that is the decision rather than
+    /// an omission. It changes what the diagnostic *says*. "Received 0 arguments" is true of
+    /// the parenthesised list and false of the invocation the author wrote, and it points
+    /// away from <c>$tosh.Function.Input</c>, which is the answer. A builtin decrements its
+    /// required count here instead, because a builtin genuinely does take its subject from
+    /// the pipe; a ToastScript function does not, so it is told how to read one.
+    /// </remarks>
+    private static void CheckUserFunctionCommandCall(
+        BoundCommandCall call,
+        BoundFunctionDefinition fn,
+        CheckContext ctx,
+        bool receivesPipedInput = false)
     {
 
         // Strip splatted / named arguments — the checker can't reason
@@ -1216,6 +1229,11 @@ public static class TypeChecker
             ctx.Diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.type.arity",
                 Title: $"Function '{call.Name}' expects {DescribeArity(required, maxAccepted)} but received {positionals.Count}.",
+                Help: receivesPipedInput
+                    ? $"A pipeline reaches '{call.Name}' through $tosh.Function.Input, not through its "
+                      + "parameter list. Read it there, give the parameter a default, or pass the value "
+                      + "as an argument."
+                    : null,
                 SourceName: ctx.SourceName,
                 SourceText: ctx.SourceText,
                 Span: call.NameSpan,

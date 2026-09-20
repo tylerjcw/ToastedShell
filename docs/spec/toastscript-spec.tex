@@ -4136,6 +4136,35 @@ func greet(name) {
 greet "World"
 \end{lstlisting}
 
+\subsection{Consuming a Pipeline}
+
+A function reads pipeline input through \code{\$tosh.Function.Input}. A pipeline does
+\emph{not} bind to a declared parameter: \code{[1, 2, 3] | mine} supplies no positional
+argument, so a \code{func mine(items)} is still a function called with none.
+
+\begin{lstlisting}
+func count-items() {
+    return (($tosh.Function.Input ?? []) | count)
+}
+[1, 2, 3] | count-items      # 3
+\end{lstlisting}
+
+\code{\$tosh.Function.Input} is null when the function was called without a pipeline, so
+\code{??} is how a function accepts its subject from either place:
+
+\begin{lstlisting}
+func count-or(items = []) {
+    return (($tosh.Function.Input ?? $items) | count)
+}
+[1, 2, 3] | count-or         # 3 -- the pipeline
+count-or [4, 5]              # 2 -- the argument
+\end{lstlisting}
+
+This differs from a builtin, which does take its subject from the pipe, and so accepts one
+fewer written argument when a pipeline is present. A function that declares a required
+parameter and is given only a pipeline is warned \code{tosh.type.arity}, and the diagnostic
+names \code{\$tosh.Function.Input} rather than leaving the author to find it.
+
 \section{Arrow Functions (Wrappers)}
 
 Arrow functions are single-expression functions. Inside arrow functions,

@@ -151,6 +151,53 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
         Assert.Contains("2", diags[0].Title);
     }
 
+    /// <summary>
+    /// `TOAST-0101`. A pipeline supplies values through <c>$tosh.Function.Input</c>, never
+    /// through the parameter list — that is the decision, not an omission. So the arity
+    /// warning still fires, and says where the pipeline actually arrives.
+    /// </summary>
+    /// <remarks>
+    /// "Received 0 arguments" is true of the parenthesised list and false of the invocation
+    /// the author wrote, and on its own it points away from the answer. A builtin decrements
+    /// its required count for a piped subject instead, because a builtin genuinely takes one
+    /// from the pipe; these two behaving differently at the definition while reading
+    /// identically at the call site is what the item was filed about.
+    /// </remarks>
+    [Fact]
+    public void A_required_parameter_with_a_pipeline_is_told_where_the_pipeline_arrives()
+    {
+        var diags = Check("""
+            func mine(items) { return 1 }
+            [1, 2, 3] | mine
+            """);
+
+        var arity = Assert.Single(diags, d => d.Code == "tosh.type.arity");
+        Assert.Contains("$tosh.Function.Input", arity.Help ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    /// <summary>Without a pipeline there is nothing to explain, so nothing is said.</summary>
+    [Fact]
+    public void A_required_parameter_without_a_pipeline_is_not_told_about_the_pipeline()
+    {
+        var diags = Check("""
+            func mine(items) { return 1 }
+            mine
+            """);
+
+        var arity = Assert.Single(diags, d => d.Code == "tosh.type.arity");
+        Assert.DoesNotContain("Function.Input", arity.Help ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The two shapes that consume a pipeline correctly warn about nothing: a function that
+    /// declares no parameter, and one whose parameter is defaulted.
+    /// </summary>
+    [Theory]
+    [InlineData("func mine() { return 1 }\n[1, 2, 3] | mine")]
+    [InlineData("func mine(items = []) { return 1 }\n[1, 2, 3] | mine")]
+    public void Consuming_a_pipeline_correctly_warns_about_nothing(string source)
+        => Assert.DoesNotContain(Check(source), d => d.Code == "tosh.type.arity");
+
     [Fact]
     public void Reports_arity_too_many_args()
     {
