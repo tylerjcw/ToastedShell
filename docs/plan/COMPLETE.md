@@ -67,6 +67,7 @@
 | [`TOAST-0069`](items/TOAST-0069.md) | P2 | complete | 7/7 | A rune call site forces whole-script source replay, so a program using a macro is not compiled at all |
 | [`TOAST-0101`](items/TOAST-0101.md) | P3 | complete | 5/5 | A pipeline into a user function does not bind to a parameter, and the arity error misdescribes why |
 | [`TUI-0028`](items/TUI-0028.md) | P3 | complete | 7/7 | A chart with an axis has to be drawn by hand, so nobody draws one |
+| [`TOAST-0103`](items/TOAST-0103.md) | P3 | complete | 5/5 | unfold cannot terminate: returning null raises instead of ending the sequence |
 | [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | complete | 8/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOAST-0119`](items/TOAST-0119.md) | P2 | complete | 4/4 | The argument-cost guard measures a body the fast-path flag does not control, so its two budgets are vacuous |
