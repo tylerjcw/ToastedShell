@@ -20,6 +20,9 @@ public sealed class CrumbOptions
     public bool OrphansOnly { get; set; }
     public string SearchBy { get; set; } = "name-desc";
 
+    /// <summary>Overrides the AUR endpoint, for a mirror or a test double.</summary>
+    public string? AurBaseUrl { get; set; }
+
     // Mutation flags (install / remove / update).
     public bool Refresh { get; set; }       // -y
     public bool Upgrade { get; set; }       // -u
@@ -74,6 +77,13 @@ public sealed class CrumbOptions
                 case "--group-by":
                     if (++i >= args.Count) throw new ArgumentException("--group-by requires a value");
                     opt.GroupBy = args[i];
+                    break;
+                case "--aur-base-url":
+                    if (++i >= args.Count) throw new ArgumentException("--aur-base-url requires a value");
+                    opt.AurBaseUrl = args[i];
+                    break;
+                case var s when s.StartsWith("--aur-base-url=", StringComparison.Ordinal):
+                    opt.AurBaseUrl = a["--aur-base-url=".Length..];
                     break;
                 case var s when s.StartsWith("--group-by=", StringComparison.Ordinal):
                     opt.GroupBy = a["--group-by=".Length..];

@@ -1,7 +1,7 @@
 ---
 id: TOAST-0123
 title: "A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-09-10
@@ -71,7 +71,12 @@ to be considered — which is why this is filed rather than changed in passing.
 - [x] `var x = (call-that-yields-nothing)` has a defined, documented meaning — it binds
       null, as it always has. Only a pipeline, which asked for items, is told there were
       none; a value position is unchanged, so no existing call site changes meaning
-- [ ] `ToastLib.Sdl`'s `Events.Drain` can go back to yielding, if that reads better
+- [x] `ToastLib.Sdl`'s `Events.Drain` can go back to yielding, if that reads better —
+      **it does not.** Measured: with the fix in place, three yielded values and a
+      returned array of three reach a pipeline identically, and both iterate nothing
+      when empty. A call's collection is a value rather than a sequence (`TOAST-0039`),
+      so yielding buys no streaming here. The array stays and the comment in `Sdl.tosh`
+      now records that it is a choice rather than a workaround.
 
 ## What was done
 

@@ -26,7 +26,7 @@ validation, and focused test coverage. What is below is the remainder.
 - [ ] Conflict-resolution UX beyond binary proceed/abort: name the installed package the conflict is with, and offer remove-or-skip per conflict
 - [ ] Pacnew/pacsave detection after install
 - [ ] Downgrade support via the Arch archive
-- [ ] `--aur-base-url` wired to the CLI — `AurClient` already takes the constructor argument
+- [x] `--aur-base-url` wired to the CLI — `AurClient` already takes the constructor argument
 - [ ] Implicit behaviour documented: pager precedence (`pagerOverride` > `CRUMB_PAGER` > `PAGER` > `less`), pacman-flag expansion, format-flag last-wins
 - [x] `crumb --help` lists no command that throws "not implemented" — it never did, and
       `-Qd` is now implemented rather than throwing, so one fewer exists to hide
@@ -144,3 +144,31 @@ The config file is the highest-leverage remaining box. Everything is environment
 variables today (`CRUMB_SUDO`, `CRUMB_PAGER`, `CRUMB_REVIEW`, `CRUMB_NO_TRUECOLOR`,
 `CRUMB_NO_COLOR`, `TOSH_TTY`), which is fine for one machine and poor for persisting
 preferences.
+
+## `--aur-base-url` — 2026-09-20
+
+`AurClient` took a `baseUrl` from its first day and nothing ever passed one, so a mirror or
+a test double had no way in. Wired the way the pager already is, because it is the same
+shape of question:
+
+```
+--aur-base-url  >  CRUMB_AUR_BASE_URL  >  the config file's aurBaseUrl  >  the real AUR
+```
+
+One shorter than the pager's chain, which has a system-wide `PAGER` to sit below the file;
+there is no system-wide AUR endpoint to defer to.
+
+`AurClient` defaults through the resolver rather than straight to `DefaultBaseUrl`, and the
+flag is published as `CrumbConfig.AurBaseUrlOverride`, set once in `Program` before any work
+starts. That is a process-wide value rather than a threaded parameter deliberately: of the
+five places an `AurClient` is built, **one** has the parsed options in scope, and giving the
+other four a string they have no other reason to know about would be a worse change than the
+static. `CrumbConfig.Current` is already read the same way.
+
+### A correction to this item
+
+The remaining documentation bullet states the pager precedence as
+`pagerOverride > CRUMB_PAGER > PAGER > less`. The code is
+`explicit > CRUMB_PAGER > the config file > PAGER > less` — the file is missing from the
+bullet. Worth having the right chain before it is written down, since writing down the wrong
+one is how the bullet's own problem started.

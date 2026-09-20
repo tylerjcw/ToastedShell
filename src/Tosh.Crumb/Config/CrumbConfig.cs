@@ -64,6 +64,9 @@ public sealed class CrumbConfig
     /// <summary>Extra arguments passed to every <c>makepkg</c> invocation.</summary>
     public IReadOnlyList<string> MakepkgFlags { get; init; } = Array.Empty<string>();
 
+    /// <summary>The AUR endpoint, for a mirror or a test double.</summary>
+    public string? AurBaseUrl { get; init; }
+
     /// <summary>The path the config is read from, honouring <c>XDG_CONFIG_HOME</c>.</summary>
     public static string DefaultPath
     {
@@ -130,6 +133,7 @@ public sealed class CrumbConfig
             Review = Bool(record, "review"),
             Exclude = Strings(record, "exclude"),
             MakepkgFlags = Strings(record, "makepkgFlags"),
+            AurBaseUrl = Text(record, "aurBaseUrl"),
         };
     }
 
@@ -193,4 +197,31 @@ public sealed class CrumbConfig
         ?? (string.IsNullOrEmpty(Current.Pager) ? null : Current.Pager)
         ?? Environment.GetEnvironmentVariable("PAGER")
         ?? "less";
+
+    /// <summary>
+    /// The AUR endpoint, in precedence order: an explicit <c>--aur-base-url</c>, then
+    /// <c>CRUMB_AUR_BASE_URL</c>, then the config file, then the real AUR.
+    /// </summary>
+    /// <remarks>
+    /// The same ordering as <see cref="ResolvePager"/> and for the same reason: the file is
+    /// a choice made about Crumb, the environment variable is a choice made about this run,
+    /// and the flag is a choice made about this command. There is no system-wide default to
+    /// sit below the file, so the chain is one shorter.
+    /// </remarks>
+    public static string ResolveAurBaseUrl(string? explicitBaseUrl) =>
+        explicitBaseUrl
+        ?? Environment.GetEnvironmentVariable("CRUMB_AUR_BASE_URL")
+        ?? (string.IsNullOrEmpty(Current.AurBaseUrl) ? null : Current.AurBaseUrl)
+        ?? Aur.AurClient.DefaultBaseUrl;
+
+    /// <summary>
+    /// The endpoint an <c>AurClient</c> built without one uses — <c>CRUMB-0001</c>.
+    /// </summary>
+    /// <remarks>
+    /// A process-wide value because the alternative is threading a string through four
+    /// call chains that have no other reason to know about it: of the five places an
+    /// <c>AurClient</c> is built, one has the parsed options in scope. Set once from the
+    /// command line before any work starts, exactly as <see cref="Current"/> is read once.
+    /// </remarks>
+    public static string? AurBaseUrlOverride { get; set; }
 }

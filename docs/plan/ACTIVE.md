@@ -13,10 +13,9 @@
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |
 | [`TOAST-0091`](items/TOAST-0091.md) | P2 | partial | 6/7 | A value whose state is not entirely constructor arguments has no literal form |
 | [`TOAST-0125`](items/TOAST-0125.md) | P1 | partial | 10/12 | Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced |
-| [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 6/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
+| [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 7/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0092`](items/TOAST-0092.md) | P2 | partial | 9/10 | A value cannot be written to a file and read back as itself, in any format |
-| [`TOAST-0123`](items/TOAST-0123.md) | P2 | partial | 4/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | partial | 5/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0037`](items/TOAST-0037.md) | P3 | open | 0/5 | The compiler has four diagnostic codes and no performance budget |

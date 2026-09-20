@@ -59,6 +59,7 @@
 | [`TUI-0024`](items/TUI-0024.md) | P3 | complete | 6/6 | A status bar is a hand-built string, so it cannot be aligned, segmented or styled per part |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
+| [`TOAST-0123`](items/TOAST-0123.md) | P2 | complete | 5/5 | A function that yields nothing yields one null, so a 'zero or more' method poisons its own pipeline |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | complete | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0046`](items/TOAST-0046.md) | P2 | complete | 4/4 | `-> void` is unspecified, and disagrees with `-> nothing` for the same declared type |

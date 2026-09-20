@@ -24,7 +24,15 @@ public sealed class AurClient : IDisposable
     {
         if (http is null)
         {
-            _http = new HttpClient { BaseAddress = new Uri(baseUrl ?? DefaultBaseUrl) };
+            // `CRUMB-0001`. Defaulted through the resolver rather than straight to the
+            // constant, so a mirror or a test double set on the command line, in the
+            // environment or in the config file reaches every client — including the four
+            // built where the parsed options are not in scope.
+            _http = new HttpClient
+            {
+                BaseAddress = new Uri(
+                    baseUrl ?? Config.CrumbConfig.ResolveAurBaseUrl(Config.CrumbConfig.AurBaseUrlOverride)),
+            };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("crumb/0.1 (+https://github.com/komradbobo/tosh)");
             _ownsClient = true;
         }

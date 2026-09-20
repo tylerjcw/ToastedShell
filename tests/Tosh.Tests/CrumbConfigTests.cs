@@ -32,6 +32,59 @@ public sealed class CrumbConfigTests : IDisposable
         return path;
     }
 
+    /// <summary>
+    /// `CRUMB-0001`. The endpoint resolves the way the pager does, and for the same reason:
+    /// the file is a choice about Crumb, the environment is a choice about this run, and the
+    /// flag is a choice about this command.
+    /// </summary>
+    [Fact]
+    public void Aur_base_url_prefers_the_explicit_value()
+        => Assert.Equal("https://flag.example", CrumbConfig.ResolveAurBaseUrl("https://flag.example"));
+
+    /// <summary>With nothing set anywhere, it is the real AUR.</summary>
+    [Fact]
+    public void Aur_base_url_falls_back_to_the_real_aur()
+    {
+        var previous = Environment.GetEnvironmentVariable("CRUMB_AUR_BASE_URL");
+        Environment.SetEnvironmentVariable("CRUMB_AUR_BASE_URL", null);
+
+        try
+        {
+            Assert.Equal(Tosh.Crumb.Aur.AurClient.DefaultBaseUrl, CrumbConfig.ResolveAurBaseUrl(null));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CRUMB_AUR_BASE_URL", previous);
+        }
+    }
+
+    /// <summary>The environment sits above the file and below the flag.</summary>
+    [Fact]
+    public void Aur_base_url_reads_the_environment_below_the_flag()
+    {
+        var previous = Environment.GetEnvironmentVariable("CRUMB_AUR_BASE_URL");
+        Environment.SetEnvironmentVariable("CRUMB_AUR_BASE_URL", "https://env.example");
+
+        try
+        {
+            Assert.Equal("https://env.example", CrumbConfig.ResolveAurBaseUrl(null));
+            Assert.Equal("https://flag.example", CrumbConfig.ResolveAurBaseUrl("https://flag.example"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CRUMB_AUR_BASE_URL", previous);
+        }
+    }
+
+    /// <summary>And the file supplies it when neither of those does.</summary>
+    [Fact]
+    public void Aur_base_url_is_read_from_the_file()
+    {
+        var cfg = CrumbConfig.Load(Write("{| aurBaseUrl: \"https://file.example\" |}"));
+
+        Assert.Equal("https://file.example", cfg.AurBaseUrl);
+    }
+
     [Fact]
     public void A_missing_file_gives_defaults()
     {

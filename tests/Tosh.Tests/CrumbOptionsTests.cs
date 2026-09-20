@@ -21,6 +21,30 @@ public class CrumbOptionsTests
         Assert.Equal(new[] { "foo", "bar", "baz" }, o.Positional);
     }
 
+    /// <summary>
+    /// `CRUMB-0001`. `AurClient` took a base URL from its first day and nothing ever passed
+    /// one, so a mirror or a test double had no way in.
+    /// </summary>
+    [Theory]
+    [InlineData("--aur-base-url", "https://aur.example")]
+    [InlineData("--aur-base-url=https://aur.example", null)]
+    public void Aur_base_url_is_parsed_in_both_spellings(string first, string? second)
+    {
+        var args = second is null ? new[] { first } : new[] { first, second };
+
+        Assert.Equal("https://aur.example", CrumbOptions.Parse(args).AurBaseUrl);
+    }
+
+    /// <summary>Absent means absent, so the resolver falls through to its next source.</summary>
+    [Fact]
+    public void Aur_base_url_is_null_when_not_given()
+        => Assert.Null(CrumbOptions.Parse(new[] { "foo" }).AurBaseUrl);
+
+    /// <summary>A value-taking flag with no value is an error rather than a silent default.</summary>
+    [Fact]
+    public void Aur_base_url_requires_a_value()
+        => Assert.Throws<ArgumentException>(() => CrumbOptions.Parse(new[] { "--aur-base-url" }));
+
     [Fact]
     public void DoubleDash_stops_flag_parsing()
     {

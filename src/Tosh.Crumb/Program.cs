@@ -1,4 +1,5 @@
 using Tosh.Crumb.Commands;
+using Tosh.Crumb.Config;
 
 namespace Tosh.Crumb;
 
@@ -47,6 +48,12 @@ internal static class Program
             }
 
             var opt = CrumbOptions.Parse(rest);
+
+            // `CRUMB-0001`. Set once, before any work starts, because four of the five
+            // places an AurClient is built have no parsed options in scope and no other
+            // reason to be given them.
+            CrumbConfig.AurBaseUrlOverride = opt.AurBaseUrl;
+
             using var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
