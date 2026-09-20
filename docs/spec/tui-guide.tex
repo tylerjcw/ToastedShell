@@ -646,6 +646,27 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{Path}}
+
+\begin{lstlisting}
+{| Path = "~/notes.md", Mode = "file", OnSubmit = &Save |}
+{| Path = $target, From = "/etc", Mode = "directory", OnChange = &Preview |}
+\end{lstlisting}
+
+A path you can type, or browse for. Typing edits it, \code{F2} opens a filesystem
+browser, and choosing there puts the chosen path back into the text --- browse when
+you do not know it, type when you do. \code{Enter} settles the path and \code{Esc}
+abandons the edit; \code{Esc} \emph{while browsing} only closes the browser, and the
+text is still there.
+
+The browse key is \code{F2} rather than a letter because it is checked before the
+text input, so whatever it is cannot be typed into the path. A path field that
+cannot spell \code{/usr/bin} is not a path field. The config browser's own editor
+uses \code{b} and offers a separate raw-text editor for the paths that contain one.
+
+\code{From} is where browsing starts when it should not be the path already typed;
+\code{Mode} is \code{"file"}, \code{"directory"} or \code{"any"}.
+
 \subsection{\texttt{FilePicker}}
 
 \begin{lstlisting}

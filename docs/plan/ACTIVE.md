@@ -6,7 +6,6 @@
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
 | [`TOAST-0135`](items/TOAST-0135.md) | P3 | open | — | The compiled backend diverges from the interpreter in six recorded places |
-| [`TUI-0002`](items/TUI-0002.md) | P1 | partial | 7/8 | There is no widget contract: widget state cannot draw itself, and layout is four fixed arrangements |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |

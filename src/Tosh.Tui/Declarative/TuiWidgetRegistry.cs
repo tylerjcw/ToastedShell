@@ -718,6 +718,30 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. A path you can type or browse for — the text input and the picker
+        // sharing one key handler.
+        registry.Register("path", static (spec, context) =>
+        {
+            var path = new TuiPathEditor(spec.PrimaryText())
+            {
+                BrowseDirectory = spec.Text("from"),
+                Mode = spec.Text("mode")?.ToLowerInvariant() switch
+                {
+                    "file" => TuiFilePickerSelectionMode.File,
+                    "directory" or "dir" => TuiFilePickerSelectionMode.Directory,
+                    _ => TuiFilePickerSelectionMode.Any,
+                },
+                Style = spec.Style(),
+                ClosesOnAnswer = spec.Flag("exit"),
+            };
+
+            context.OnHandler(spec, "onchange", handler => path.Changed = text => handler(text));
+            context.OnHandler(spec, "onsubmit", handler => path.Submitted = text => handler(text));
+            context.OnHandler(spec, "oncancel", handler => path.Cancelled = () => handler(null));
+
+            return path;
+        });
+
         // `TUI-0002`. The filesystem browser, which was only ever a whole screen — usable
         // from the shell, unusable as one field on somebody else's form.
         registry.Register("filepicker", static (spec, context) =>

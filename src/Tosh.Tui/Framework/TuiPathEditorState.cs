@@ -23,6 +23,17 @@ public sealed class TuiPathEditorState
 
     public bool IsBrowsing => _picker.IsOpen;
 
+    /// <summary>
+    /// The key that opens the browser instead of being typed. <c>b</c> by default.
+    /// </summary>
+    /// <remarks>
+    /// `TUI-0002`. It is checked before the text input, so whatever it is set to cannot be
+    /// typed into the path. The config browser offers <c>b</c> and a separate raw-text editor
+    /// for the paths that contain one, which is a fair trade there. A widget standing alone
+    /// has no such second editor, so it picks a key that is not a character.
+    /// </remarks>
+    public ConsoleKey BrowseKey { get; set; } = ConsoleKey.B;
+
     public string Text => _textInput.Text;
 
     public void Open(string initialText)
@@ -65,7 +76,7 @@ public sealed class TuiPathEditorState
             };
         }
 
-        if (key.Key == ConsoleKey.B && !key.Modifiers.HasFlag(ConsoleModifiers.Control) && !key.Modifiers.HasFlag(ConsoleModifiers.Alt))
+        if (key.Key == BrowseKey && !key.Modifiers.HasFlag(ConsoleModifiers.Control) && !key.Modifiers.HasFlag(ConsoleModifiers.Alt))
         {
             return new TuiPathEditorAction(TuiPathEditorActionKind.BrowseRequested);
         }
