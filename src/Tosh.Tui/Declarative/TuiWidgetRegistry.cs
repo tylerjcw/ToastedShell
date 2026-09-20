@@ -718,6 +718,29 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. The filesystem browser, which was only ever a whole screen — usable
+        // from the shell, unusable as one field on somebody else's form.
+        registry.Register("filepicker", static (spec, context) =>
+        {
+            var picker = new TuiFilePicker(spec.PrimaryText())
+            {
+                Mode = spec.Text("mode")?.ToLowerInvariant() switch
+                {
+                    "file" => TuiFilePickerSelectionMode.File,
+                    "directory" or "dir" => TuiFilePickerSelectionMode.Directory,
+                    _ => TuiFilePickerSelectionMode.Any,
+                },
+                InitialPath = spec.Text("start"),
+                Style = spec.Style(),
+                ClosesOnAnswer = spec.Flag("exit", fallback: true),
+            };
+
+            context.OnHandler(spec, "onselect", handler => picker.Selected = path => handler(path));
+            context.OnHandler(spec, "oncancel", handler => picker.Cancelled = () => handler(null));
+
+            return picker;
+        });
+
         // `TUI-0002`. The prompt-layout editor: which entries to use, and in what order.
         registry.Register("arrange", static (spec, context) =>
         {

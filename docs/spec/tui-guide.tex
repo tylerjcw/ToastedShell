@@ -646,6 +646,27 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{FilePicker}}
+
+\begin{lstlisting}
+{| FilePicker = "~/projects", Mode = "file", OnSelect = &Open |}
+{| FilePicker = ".", Mode = "directory", OnSelect = &Chdir, OnCancel = &Stay |}
+\end{lstlisting}
+
+A filesystem browser that answers with the path the reader chose. Up and Down move
+through the entries, Right enters a directory, Left or \code{Backspace} goes to the
+parent, \code{Enter} opens a directory or chooses a file, and \code{Space} chooses
+the highlighted path outright. \code{Esc} abandons the browse.
+
+\code{Mode} is \code{"file"}, \code{"directory"} or \code{"any"}, and decides what
+may be chosen rather than what is shown --- a file picker still walks directories.
+\code{Start} puts the cursor on a path within the starting directory.
+
+Choosing or abandoning ends the screen, as \code{Confirm} does and unlike the
+editors: a picker is asked a question and answers it, and one that stayed up
+afterwards would leave the reader browsing a filesystem they had finished with.
+\code{Exit = false} keeps it embedded.
+
 \subsection{\texttt{Arrange}}
 
 \begin{lstlisting}
