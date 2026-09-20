@@ -68,7 +68,7 @@ public sealed record TuiSpinnerStyle(IReadOnlyList<string> Frames, TimeSpan Inte
     /// right as it turns. Several of these characters are "ambiguous width" and render as
     /// two columns on some terminals, which is exactly the case that would jitter.
     /// </remarks>
-    public int Width { get; } = Frames.Count == 0 ? 0 : Frames.Max(TuiTextMeasure.MeasureWidth);
+    public int Width { get; } = Frames.Count == 0 ? 0 : Frames.Max(TextMeasure.MeasureWidth);
 
     private static TuiSpinnerStyle Of(int milliseconds, params string[] frames)
         => new(frames, TimeSpan.FromMilliseconds(milliseconds));
@@ -166,7 +166,7 @@ public sealed class TuiSpinner : TuiWidget
     /// <inheritdoc />
     protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
-        var width = Style.Width + (Text.Length > 0 ? TuiTextMeasure.MeasureWidth(Text) + 1 : 0);
+        var width = Style.Width + (Text.Length > 0 ? TextMeasure.MeasureWidth(Text) + 1 : 0);
 
         return constraints.Constrain(new TuiSize(width, 1));
     }
@@ -187,6 +187,6 @@ public sealed class TuiSpinner : TuiWidget
         // move when a frame happens to be narrower than its neighbours.
         var at = Style.Width + 1;
 
-        surface.DrawText(at, 0, TuiTextMeasure.Elide(Text, Math.Max(0, surface.Width - at)), TextStyle);
+        surface.DrawText(at, 0, TextMeasure.Elide(Text, Math.Max(0, surface.Width - at)), TextStyle);
     }
 }

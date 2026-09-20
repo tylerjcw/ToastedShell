@@ -51,7 +51,7 @@ public sealed class TuiField : TuiWidget
             // sized to its content loses the gap that separates it from the input.
             _caption.Size = field.Length == 0
                 ? TuiLength.Auto
-                : TuiLength.Fixed(TuiTextMeasure.MeasureWidth(field) + 2);
+                : TuiLength.Fixed(TextMeasure.MeasureWidth(field) + 2);
         }
     } = string.Empty;
 

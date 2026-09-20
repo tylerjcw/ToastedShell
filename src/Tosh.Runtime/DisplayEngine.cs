@@ -3402,8 +3402,9 @@ public sealed class DisplayEngine
             return value;
         }
 
-        var plainText = StyledText.StripAnsi(value);
-        return width == 1 ? plainText[..1] : $"{plainText[..Math.Min(width - 1, plainText.Length)]}…";
+        // `TUI-0005`, the same cut as `InlineTablePlan.ClipCell`: a column budget used as a
+        // character index. `Elide` counts columns and never splits a cluster.
+        return TextMeasure.Elide(StyledText.StripAnsi(value), width);
     }
 
     private static IReadOnlyList<string> BuildRecordRows(
@@ -3850,8 +3851,13 @@ public sealed class DisplayEngine
         {
             var trimmed = result.Take(MaxWrappedLinesPerCell - 1).ToList();
             var lastFull = result[MaxWrappedLinesPerCell - 1];
+            // `TUI-0005`, the same character-index cut as the two ClipCell twins: `Length`
+            // is code units and `width` is columns, so this both mismeasured and sliced
+            // mid-character. `Elide` marks the cut itself when the text does not fit.
             trimmed.Add(lastFull.Length > 0
-                ? (lastFull.Length > width - 1 ? lastFull[..(width - 1)] + "…" : lastFull + "…")
+                ? (StyledText.GetVisibleLength(lastFull) > width - 1
+                    ? TextMeasure.Elide(lastFull, width)
+                    : lastFull + "…")
                 : "…");
             return trimmed;
         }
@@ -3887,17 +3893,48 @@ public sealed class DisplayEngine
         while (i < line.Length)
         {
             var budget = isFirst ? firstBudget : width;
-            var remaining = line.Length - i;
+            var rest = line.AsSpan(i);
 
-            if (remaining <= budget)
+            if (TextMeasure.MeasureWidth(rest) <= budget)
             {
                 output.Add(isFirst ? FirstLineIndent + line[i..] : line[i..]);
                 return;
             }
 
-            var slice = line.AsSpan(i, budget);
-            var breakAt = slice.LastIndexOf(' ');
-            var take = breakAt > 0 ? breakAt : budget;
+            // `TUI-0005`. This measured the budget in characters — `line.AsSpan(i, budget)`
+            // — so a 36-column cell was handed 36 CJK characters and drew 72 columns. The
+            // walk counts what a terminal draws, and the break still prefers a space.
+            var used = 0;
+            var chars = 0;
+            var lastSpace = -1;
+            var firstClusterLength = 0;
+
+            foreach (var cluster in TextMeasure.Clusters(rest))
+            {
+                if (firstClusterLength == 0)
+                {
+                    firstClusterLength = cluster.Length;
+                }
+
+                var clusterWidth = TextMeasure.ClusterWidth(cluster);
+
+                if (used + clusterWidth > budget)
+                {
+                    break;
+                }
+
+                if (cluster.Length == 1 && cluster[0] == ' ')
+                {
+                    lastSpace = chars;
+                }
+
+                used += clusterWidth;
+                chars += cluster.Length;
+            }
+
+            // A cluster wider than the whole budget still has to advance, and it advances
+            // whole: taking one code unit of it would split the character.
+            var take = lastSpace > 0 ? lastSpace : chars > 0 ? chars : firstClusterLength;
             var chunk = line.Substring(i, take);
             output.Add(isFirst ? FirstLineIndent + chunk : chunk);
             i += take;

@@ -91,8 +91,8 @@ public sealed class TuiTextField : TuiWidget
         // One column wider than the text, so there is somewhere for the caret to sit at
         // the end of the longest line.
         var width = Math.Max(
-            lines.Max(TuiTextMeasure.MeasureWidth) + 1,
-            TuiTextMeasure.MeasureWidth(Placeholder ?? string.Empty));
+            lines.Max(TextMeasure.MeasureWidth) + 1,
+            TextMeasure.MeasureWidth(Placeholder ?? string.Empty));
 
         return constraints.Constrain(new TuiSize(width, Multiline ? lines.Length : 1));
     }
@@ -125,7 +125,7 @@ public sealed class TuiTextField : TuiWidget
             var before = Text[..Math.Min(_state.CursorIndex, Text.Length)];
             var lastBreak = before.LastIndexOf('\n');
 
-            return TuiTextMeasure.MeasureWidth(lastBreak < 0 ? before : before[(lastBreak + 1)..]);
+            return TextMeasure.MeasureWidth(lastBreak < 0 ? before : before[(lastBreak + 1)..]);
         }
     }
 

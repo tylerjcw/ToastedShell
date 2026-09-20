@@ -17,7 +17,7 @@ namespace Tosh.Tui.Rendering;
 public readonly record struct TuiSpan(string Text, TuiStyle Style = default)
 {
     /// <summary>How many columns this run occupies.</summary>
-    public int Width => TuiTextMeasure.MeasureWidth(Text);
+    public int Width => TextMeasure.MeasureWidth(Text);
 
     public static implicit operator TuiSpan(string text) => new(text);
 }

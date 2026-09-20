@@ -209,9 +209,18 @@ public sealed record StyledText(
         return text.Contains('\x1B') ? AnsiSequenceRegex.Replace(text, string.Empty) : text;
     }
 
+    /// <summary>Columns <paramref name="text"/> occupies once its escapes are removed.</summary>
+    /// <remarks>
+    /// `TUI-0005`. This counted UTF-16 code units, which is the right answer for ASCII and
+    /// wrong for everything else a terminal draws: `日本語` is three code units and six
+    /// columns, so every caller padding to a width pushed the right border of its box out
+    /// by three on exactly the rows with CJK in them. The TUI already measures properly and
+    /// had the same bug fixed under `TUI-0012`; these callers kept the old answer because
+    /// the measurement lived above them. It now lives here, so there is one of it.
+    /// </remarks>
     public static int GetVisibleLength(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return text.Contains('\x1B') ? StripAnsi(text).Length : text.Length;
+        return TextMeasure.MeasureWidth(StripAnsi(text));
     }
 }

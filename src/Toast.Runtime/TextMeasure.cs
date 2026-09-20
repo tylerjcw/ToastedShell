@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace Tosh.Tui.Rendering;
+namespace Tosh.Runtime;
 
 /// <summary>
 /// How many terminal columns a piece of text occupies.
@@ -25,7 +25,7 @@ namespace Tosh.Tui.Rendering;
 /// character — and its width is decided by the character it starts with.
 /// </para>
 /// </remarks>
-public static class TuiTextMeasure
+public static class TextMeasure
 {
     /// <summary>
     /// One string per printable ASCII character, so a cell can hold one without allocating.

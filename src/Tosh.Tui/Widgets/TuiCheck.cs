@@ -33,7 +33,7 @@ public sealed class TuiCheck : TuiWidget
 
     /// <summary>Two cells for the marker, four for the box, and the label.</summary>
     protected override TuiSize MeasureCore(TuiConstraints constraints)
-        => constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(Label) + 6, 1));
+        => constraints.Constrain(new TuiSize(TextMeasure.MeasureWidth(Label) + 6, 1));
 
     public override void Draw(TuiSurface surface)
     {

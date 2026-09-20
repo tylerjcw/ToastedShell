@@ -234,7 +234,7 @@ public sealed class TuiList : TuiWidget
 
         foreach (var item in Items)
         {
-            width = Math.Max(width, TuiTextMeasure.MeasureWidth(Format(item)) + MarkerWidth);
+            width = Math.Max(width, TextMeasure.MeasureWidth(Format(item)) + MarkerWidth);
         }
 
         // As tall as its contents, but never taller than the room on offer: what does not

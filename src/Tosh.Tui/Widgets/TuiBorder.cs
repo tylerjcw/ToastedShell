@@ -45,7 +45,7 @@ public sealed class TuiBorder : TuiWidget
     protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var inner = Child?.Measure(constraints.Shrink(2, 2)) ?? new TuiSize(0, 0);
-        var titleWidth = EffectiveTitle is not { } heading ? 0 : TuiTextMeasure.MeasureWidth(heading) + 4;
+        var titleWidth = EffectiveTitle is not { } heading ? 0 : TextMeasure.MeasureWidth(heading) + 4;
 
         return constraints.Constrain(new TuiSize(
             Math.Max(inner.Width, titleWidth) + 2,
@@ -129,7 +129,7 @@ public sealed class TuiBorder : TuiWidget
             return;
         }
 
-        var text = TuiTextMeasure.Truncate(EffectiveTitle, available);
+        var text = TextMeasure.Truncate(EffectiveTitle, available);
 
         if (text.Length == 0)
         {

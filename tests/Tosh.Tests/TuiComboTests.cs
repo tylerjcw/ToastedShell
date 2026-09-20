@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui;
 using Tosh.Tui.Declarative;
 using Tosh.Tui.Rendering;
@@ -42,7 +43,7 @@ public sealed class TuiComboTests
         // does, which is what makes a form of them read as a form.
         var combo = Sample();
 
-        Assert.Equal(TuiTextMeasure.MeasureWidth("Sodium") + 4, combo.Measure(TuiConstraints.Unbounded).Width);
+        Assert.Equal(TextMeasure.MeasureWidth("Sodium") + 4, combo.Measure(TuiConstraints.Unbounded).Width);
     }
 
     [Fact]

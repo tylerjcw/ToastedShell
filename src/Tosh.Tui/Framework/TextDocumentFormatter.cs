@@ -58,7 +58,7 @@ public static class TextDocumentFormatter
         // Measured in columns rather than code units, like everything else that decides
         // whether text fits (`TUI-0005`).
         if (text.AsSpan().IndexOfAny('\n', '\r', '\t') < 0 &&
-            TuiTextMeasure.MeasureWidth(indent) + TuiTextMeasure.MeasureWidth(text) <= width)
+            TextMeasure.MeasureWidth(indent) + TextMeasure.MeasureWidth(text) <= width)
         {
             return [indent + text];
         }
@@ -81,7 +81,7 @@ public static class TextDocumentFormatter
                 ? currentIndent + word
                 : current + " " + word;
 
-            if (TuiTextMeasure.MeasureWidth(candidate) <= width ||
+            if (TextMeasure.MeasureWidth(candidate) <= width ||
                 current.Length == currentIndent.Length)
             {
                 if (current.Length > currentIndent.Length)

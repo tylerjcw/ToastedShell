@@ -217,7 +217,7 @@ public sealed class TuiImage : TuiWidget
 
         var text = IsLoading ? Loading : Placeholder;
 
-        return constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(text), text.Length > 0 ? 1 : 0));
+        return constraints.Constrain(new TuiSize(TextMeasure.MeasureWidth(text), text.Length > 0 ? 1 : 0));
     }
 
     /// <inheritdoc />
@@ -229,7 +229,7 @@ public sealed class TuiImage : TuiWidget
 
             if (text.Length > 0)
             {
-                surface.DrawText(0, 0, TuiTextMeasure.Elide(text, surface.Width), Style);
+                surface.DrawText(0, 0, TextMeasure.Elide(text, surface.Width), Style);
             }
 
             return;

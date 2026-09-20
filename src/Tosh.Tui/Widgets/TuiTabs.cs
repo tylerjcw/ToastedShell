@@ -232,7 +232,7 @@ public sealed class TuiTabs : TuiWidget, ITuiCaption
 
         foreach (var tab in _tabs)
         {
-            total += TuiTextMeasure.MeasureWidth(tab.Label);
+            total += TextMeasure.MeasureWidth(tab.Label);
         }
 
         return total;

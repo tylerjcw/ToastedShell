@@ -115,7 +115,7 @@ public static class TuiGlyphs
     {
         ArgumentNullException.ThrowIfNull(cluster);
 
-        return TuiTextMeasure.ClusterWidth(cluster) == 1 &&
+        return TextMeasure.ClusterWidth(cluster) == 1 &&
                Ascii.TryGetValue(cluster, out var ascii)
             ? ascii
             : cluster;

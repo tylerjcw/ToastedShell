@@ -143,8 +143,8 @@ public sealed class TuiBars : TuiWidget
             return;
         }
 
-        var labels = LabelWidth ?? _bars.Max(bar => TuiTextMeasure.MeasureWidth(bar.Label));
-        var values = ShowValues ? _bars.Max(bar => TuiTextMeasure.MeasureWidth(Format(bar.Amount))) : 0;
+        var labels = LabelWidth ?? _bars.Max(bar => TextMeasure.MeasureWidth(bar.Label));
+        var values = ShowValues ? _bars.Max(bar => TextMeasure.MeasureWidth(Format(bar.Amount))) : 0;
 
         // A label column and a value column, each with one space of air, and the bar takes
         // whatever is left. Too narrow for a bar at all and the numbers are what survive.
@@ -156,7 +156,7 @@ public sealed class TuiBars : TuiWidget
             var bar = _bars[row];
             var ratio = top <= 0 ? 0 : Math.Clamp(bar.Amount / top, 0, 1);
 
-            surface.DrawText(0, row, TuiTextMeasure.Truncate(bar.Label, labels), LabelStyle, labels);
+            surface.DrawText(0, row, TextMeasure.Truncate(bar.Label, labels), LabelStyle, labels);
 
             if (bars > 0)
             {
@@ -180,7 +180,7 @@ public sealed class TuiBars : TuiWidget
                 var text = Format(bar.Amount);
 
                 surface.DrawText(
-                    surface.Width - TuiTextMeasure.MeasureWidth(text),
+                    surface.Width - TextMeasure.MeasureWidth(text),
                     row,
                     text,
                     LabelStyle);
@@ -190,7 +190,7 @@ public sealed class TuiBars : TuiWidget
 
     /// <summary>How wide one vertical bar is: enough for its label, and at least one.</summary>
     private int ColumnWidth()
-        => Math.Max(1, _bars.Count == 0 ? 1 : _bars.Max(bar => TuiTextMeasure.MeasureWidth(bar.Label)));
+        => Math.Max(1, _bars.Count == 0 ? 1 : _bars.Max(bar => TextMeasure.MeasureWidth(bar.Label)));
 
     /// <summary>
     /// A column per value, growing upwards from a row of labels.
@@ -247,7 +247,7 @@ public sealed class TuiBars : TuiWidget
 
             if (numbers > 0)
             {
-                surface.DrawText(left, 0, TuiTextMeasure.Truncate(Format(bar.Amount), width), LabelStyle, width);
+                surface.DrawText(left, 0, TextMeasure.Truncate(Format(bar.Amount), width), LabelStyle, width);
             }
 
             if (labels > 0)
@@ -255,7 +255,7 @@ public sealed class TuiBars : TuiWidget
                 surface.DrawText(
                     left,
                     surface.Height - 1,
-                    TuiTextMeasure.Truncate(bar.Label, width),
+                    TextMeasure.Truncate(bar.Label, width),
                     LabelStyle,
                     width);
             }

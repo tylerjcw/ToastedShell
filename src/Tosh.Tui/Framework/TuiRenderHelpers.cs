@@ -270,7 +270,7 @@ public static class TuiRenderHelpers
     /// <para>
     /// It also measured in UTF-16 code units, so a line with an emoji or a CJK character in
     /// it was clipped to the wrong place (<c>TUI-0005</c>). Both go away by deferring to
-    /// <see cref="TuiTextMeasure"/>, which counts columns and walks the text once.
+    /// <see cref="TextMeasure"/>, which counts columns and walks the text once.
     /// </para>
     /// </remarks>
     public static string ClipPlain(string text, int width)
@@ -283,7 +283,7 @@ public static class TuiRenderHelpers
         // The overwhelmingly common case, and the one the measure already answers.
         return text.Contains('\x1b', StringComparison.Ordinal)
             ? ClipStyled(text, width)
-            : TuiTextMeasure.Elide(text, width);
+            : TextMeasure.Elide(text, width);
     }
 
     /// <summary>
@@ -323,7 +323,7 @@ public static class TuiRenderHelpers
 
             var length = StringInfo.GetNextTextElementLength(text.AsSpan(index));
             var cluster = text.Substring(index, length);
-            var columns = TuiTextMeasure.ClusterWidth(cluster);
+            var columns = TextMeasure.ClusterWidth(cluster);
 
             // One column is kept back for the mark.
             if (used + columns > width - 1)
@@ -346,7 +346,7 @@ public static class TuiRenderHelpers
     /// branch (<c>TUI-0012</c>).
     /// </remarks>
     private static int VisibleColumns(string text)
-        => TuiTextMeasure.MeasureWidth(
+        => TextMeasure.MeasureWidth(
             text.Contains('\x1b', StringComparison.Ordinal) ? StyledText.StripAnsi(text) : text);
 
     /// <summary>Where the escape sequence starting at <paramref name="start"/> ends.</summary>

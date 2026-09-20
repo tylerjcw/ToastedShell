@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui;
 using Tosh.Tui.Rendering;
 
@@ -101,7 +102,7 @@ public sealed class TuiGlyphsTests
     {
         foreach (var (glyph, ascii) in TuiGlyphs.Table)
         {
-            Assert.Equal(TuiTextMeasure.MeasureWidth(glyph), TuiTextMeasure.MeasureWidth(ascii));
+            Assert.Equal(TextMeasure.MeasureWidth(glyph), TextMeasure.MeasureWidth(ascii));
             Assert.All(ascii, character => Assert.InRange(character, ' ', '~'));
         }
     }

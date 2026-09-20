@@ -648,11 +648,11 @@ public sealed class TuiTable : TuiWidget
 
     private int NaturalWidth(TuiColumn column)
     {
-        var width = ShowHeader ? TuiTextMeasure.MeasureWidth(column.Header) : 0;
+        var width = ShowHeader ? TextMeasure.MeasureWidth(column.Header) : 0;
 
         foreach (var row in _rows)
         {
-            width = Math.Max(width, TuiTextMeasure.MeasureWidth(Text(column.ValueOf(row))));
+            width = Math.Max(width, TextMeasure.MeasureWidth(Text(column.ValueOf(row))));
         }
 
         return width;
@@ -725,7 +725,7 @@ public sealed class TuiTable : TuiWidget
 
     private static string Align(string text, int width, TuiAlignment alignment)
     {
-        var measured = TuiTextMeasure.MeasureWidth(text);
+        var measured = TextMeasure.MeasureWidth(text);
 
         // An ellipsis where a value was cut, so a reader can tell a truncated cell from one
         // that merely happens to be exactly that wide. Not worth it at one column, where
@@ -733,8 +733,8 @@ public sealed class TuiTable : TuiWidget
         if (measured > width)
         {
             return width <= 1
-                ? TuiTextMeasure.Truncate(text, width)
-                : TuiTextMeasure.Truncate(text, width - 1) + "…";
+                ? TextMeasure.Truncate(text, width)
+                : TextMeasure.Truncate(text, width - 1) + "…";
         }
 
         if (measured == width)

@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui.Rendering;
 
 namespace Tosh.Tests;
@@ -5,7 +6,7 @@ namespace Tosh.Tests;
 /// <summary>
 /// Width measurement, against the cases that made counting code units wrong.
 /// </summary>
-public sealed class TuiTextMeasureTests
+public sealed class TextMeasureTests
 {
     [Theory]
     [InlineData("", 0)]
@@ -13,7 +14,7 @@ public sealed class TuiTextMeasureTests
     [InlineData("│─╮", 3)]            // box drawing is narrow
     public void Ascii_and_box_drawing_measure_one_column_each(string text, int expected)
     {
-        Assert.Equal(expected, TuiTextMeasure.MeasureWidth(text));
+        Assert.Equal(expected, TextMeasure.MeasureWidth(text));
     }
 
     [Fact]
@@ -21,19 +22,19 @@ public sealed class TuiTextMeasureTests
     {
         // Three characters, six columns — but only three UTF-16 code units, which is
         // what the old measurement returned.
-        Assert.Equal(6, TuiTextMeasure.MeasureWidth("日本語"));
+        Assert.Equal(6, TextMeasure.MeasureWidth("日本語"));
         Assert.Equal(3, "日本語".Length);
     }
 
     [Fact]
     public void Emoji_occupies_two_columns_however_many_code_units_it_takes()
     {
-        Assert.Equal(2, TuiTextMeasure.MeasureWidth("😀"));
+        Assert.Equal(2, TextMeasure.MeasureWidth("😀"));
 
         // A family emoji: several emoji joined by zero-width joiners. One thing on
         // screen, five code units.
         var family = "\U0001F469‍\U0001F4BB";
-        Assert.Equal(2, TuiTextMeasure.MeasureWidth(family));
+        Assert.Equal(2, TextMeasure.MeasureWidth(family));
         Assert.True(family.Length > 2);
     }
 
@@ -43,21 +44,21 @@ public sealed class TuiTextMeasureTests
         var composed = "é";           // é as one code point
         var decomposed = "é";        // e followed by a combining acute
 
-        Assert.Equal(1, TuiTextMeasure.MeasureWidth(composed));
-        Assert.Equal(1, TuiTextMeasure.MeasureWidth(decomposed));
+        Assert.Equal(1, TextMeasure.MeasureWidth(composed));
+        Assert.Equal(1, TextMeasure.MeasureWidth(decomposed));
     }
 
     [Fact]
     public void An_emoji_presentation_selector_widens_its_character()
     {
-        Assert.Equal(1, TuiTextMeasure.MeasureWidth("❤"));          // ❤ as a dingbat
-        Assert.Equal(2, TuiTextMeasure.MeasureWidth("❤️"));    // ❤️ as an emoji
+        Assert.Equal(1, TextMeasure.MeasureWidth("❤"));          // ❤ as a dingbat
+        Assert.Equal(2, TextMeasure.MeasureWidth("❤️"));    // ❤️ as an emoji
     }
 
     [Fact]
     public void Clusters_are_whole_characters_not_code_units()
     {
-        Assert.Equal(["a", "😀", "é"], TuiTextMeasure.EnumerateClusters("a😀é"));
+        Assert.Equal(["a", "😀", "é"], TextMeasure.EnumerateClusters("a😀é"));
     }
 
     [Fact]
@@ -65,21 +66,21 @@ public sealed class TuiTextMeasureTests
     {
         // Each is two columns, so four fit in five and the fifth column goes unused
         // rather than being filled with half a character.
-        Assert.Equal("日本", TuiTextMeasure.Truncate("日本語", 5));
-        Assert.Equal("日本語", TuiTextMeasure.Truncate("日本語", 6));
+        Assert.Equal("日本", TextMeasure.Truncate("日本語", 5));
+        Assert.Equal("日本語", TextMeasure.Truncate("日本語", 6));
     }
 
     [Fact]
     public void Truncating_keeps_a_combining_mark_with_its_base()
     {
-        Assert.Equal("é", TuiTextMeasure.Truncate("éx", 1));
+        Assert.Equal("é", TextMeasure.Truncate("éx", 1));
     }
 
     [Fact]
     public void Truncating_to_nothing_returns_nothing()
     {
-        Assert.Equal(string.Empty, TuiTextMeasure.Truncate("anything", 0));
-        Assert.Equal(string.Empty, TuiTextMeasure.Truncate("anything", -3));
+        Assert.Equal(string.Empty, TextMeasure.Truncate("anything", 0));
+        Assert.Equal(string.Empty, TextMeasure.Truncate("anything", -3));
     }
 
     [Theory]
@@ -90,16 +91,16 @@ public sealed class TuiTextMeasureTests
     [InlineData("hello", 0, "")]
     [InlineData("", 4, "")]
     public void Text_that_does_not_fit_is_cut_and_says_so(string text, int columns, string expected)
-        => Assert.Equal(expected, TuiTextMeasure.Elide(text, columns));
+        => Assert.Equal(expected, TextMeasure.Elide(text, columns));
 
     [Fact]
     public void A_cut_counts_columns_rather_than_characters()
     {
         // Two columns for the emoji, one for the mark: three columns of "ab" is
         // exactly what a cell grid can show, and the mark has to be paid for out of them.
-        var elided = TuiTextMeasure.Elide("\U0001F680ab", 3);
+        var elided = TextMeasure.Elide("\U0001F680ab", 3);
 
-        Assert.Equal(3, TuiTextMeasure.MeasureWidth(elided));
+        Assert.Equal(3, TextMeasure.MeasureWidth(elided));
         Assert.EndsWith("\u2026", elided, StringComparison.Ordinal);
     }
 
@@ -124,7 +125,7 @@ public sealed class TuiTextMeasureTests
     [InlineData("\u65e5", false)]
     [InlineData("\U0001F680", false)]
     public void The_fast_path_is_taken_only_where_it_is_right(string text, bool expected)
-        => Assert.Equal(expected, TuiTextMeasure.IsPrintableAscii(text));
+        => Assert.Equal(expected, TextMeasure.IsPrintableAscii(text));
 
     /// <summary>
     /// The fast path and the slow path agree, which is the only thing that matters.
@@ -140,7 +141,7 @@ public sealed class TuiTextMeasureTests
     [InlineData("caf\u00e9", 4)]
     [InlineData("tab\there", 7)]
     public void Both_paths_report_the_same_width(string text, int expected)
-        => Assert.Equal(expected, TuiTextMeasure.MeasureWidth(text));
+        => Assert.Equal(expected, TextMeasure.MeasureWidth(text));
 
     /// <summary>
     /// A printable ASCII character is always the same string instance.
@@ -153,11 +154,11 @@ public sealed class TuiTextMeasureTests
     [Fact]
     public void An_ascii_cell_string_comes_from_a_table_rather_than_the_heap()
     {
-        Assert.Same(TuiTextMeasure.Text("x"), TuiTextMeasure.Text("x"));
-        Assert.Same(TuiTextMeasure.Text(" "), TuiTextMeasure.Text(" "));
+        Assert.Same(TextMeasure.Text("x"), TextMeasure.Text("x"));
+        Assert.Same(TextMeasure.Text(" "), TextMeasure.Text(" "));
 
         // And the answer is still right for what the table cannot hold.
-        Assert.Equal("\u65e5", TuiTextMeasure.Text("\u65e5"));
+        Assert.Equal("\u65e5", TextMeasure.Text("\u65e5"));
     }
 
     /// <summary>The span walk sees the same clusters the string one does.</summary>
@@ -169,11 +170,11 @@ public sealed class TuiTextMeasureTests
     {
         var walked = new List<string>();
 
-        foreach (var cluster in TuiTextMeasure.Clusters(text))
+        foreach (var cluster in TextMeasure.Clusters(text))
         {
             walked.Add(new string(cluster));
         }
 
-        Assert.Equal(TuiTextMeasure.EnumerateClusters(text), walked);
+        Assert.Equal(TextMeasure.EnumerateClusters(text), walked);
     }
 }

@@ -91,5 +91,5 @@ public static class TuiFormLayout
     /// never cuts inside a cluster.
     /// </remarks>
     private static string ClipPlain(string text, int width)
-        => string.IsNullOrEmpty(text) ? string.Empty : TuiTextMeasure.Elide(text, width);
+        => string.IsNullOrEmpty(text) ? string.Empty : TextMeasure.Elide(text, width);
 }

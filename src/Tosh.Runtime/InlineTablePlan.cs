@@ -55,8 +55,12 @@ public sealed class InlineTablePlan
         if (value.Contains('\n'))
             value = value.ReplaceLineEndings(" ");
         if (StyledText.GetVisibleLength(value) <= width) return value;
-        var plain = StyledText.StripAnsi(value);
-        return width == 1 ? plain[..1] : $"{plain[..Math.Min(width - 1, plain.Length)]}…";
+
+        // `TUI-0005`. The cut was `plain[..width - 1]`: a column budget used as a character
+        // index, so CJK overflowed the cell by up to double and an emoji lost half of its
+        // surrogate pair, which a terminal draws as a replacement box. Styling is still
+        // dropped on the cut, as it always was here — only the cut itself changed.
+        return TextMeasure.Elide(StyledText.StripAnsi(value), width);
     }
 
     /// <summary>Right-pad cell text to fill the given width.</summary>

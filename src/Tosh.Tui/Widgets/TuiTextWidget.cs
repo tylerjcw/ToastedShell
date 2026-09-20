@@ -68,11 +68,11 @@ public sealed class TuiTextWidget : TuiWidget
         // fitted when only its first line did.
         if (constraints.MaxHeight == 1)
         {
-            return constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(FirstLine()), 1));
+            return constraints.Constrain(new TuiSize(TextMeasure.MeasureWidth(FirstLine()), 1));
         }
 
         var lines = LayOut(constraints.MaxWidth);
-        var width = lines.Count == 0 ? 0 : lines.Max(TuiTextMeasure.MeasureWidth);
+        var width = lines.Count == 0 ? 0 : lines.Max(TextMeasure.MeasureWidth);
 
         return constraints.Constrain(new TuiSize(width, lines.Count));
     }
@@ -104,7 +104,7 @@ public sealed class TuiTextWidget : TuiWidget
             surface.DrawText(
                 0,
                 row,
-                Wrap ? lines[row] : TuiTextMeasure.Elide(lines[row], surface.Width),
+                Wrap ? lines[row] : TextMeasure.Elide(lines[row], surface.Width),
                 Style);
         }
     }
@@ -116,7 +116,7 @@ public sealed class TuiTextWidget : TuiWidget
     /// </remarks>
     private void DrawLabel(TuiSurface surface)
     {
-        surface.DrawText(0, 0, TuiTextMeasure.Elide(FirstLine(), surface.Width), Style);
+        surface.DrawText(0, 0, TextMeasure.Elide(FirstLine(), surface.Width), Style);
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ public sealed class TuiTextWidget : TuiWidget
     /// </remarks>
     private IReadOnlyList<string> LayOut(int width)
     {
-        var effective = Math.Max(1, width == int.MaxValue ? TuiTextMeasure.MeasureWidth(Text) + 1 : width);
+        var effective = Math.Max(1, width == int.MaxValue ? TextMeasure.MeasureWidth(Text) + 1 : width);
 
         if (_wrappedAt == effective)
         {

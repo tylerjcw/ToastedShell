@@ -142,8 +142,8 @@ public sealed class TuiMenu : TuiWidget
     /// </remarks>
     protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
-        var labels = _items.Count == 0 ? 0 : _items.Max(item => TuiTextMeasure.MeasureWidth(item.Label));
-        var keys = _items.Count == 0 ? 0 : _items.Max(item => TuiTextMeasure.MeasureWidth(item.Key));
+        var labels = _items.Count == 0 ? 0 : _items.Max(item => TextMeasure.MeasureWidth(item.Label));
+        var keys = _items.Count == 0 ? 0 : _items.Max(item => TextMeasure.MeasureWidth(item.Key));
 
         return constraints.Constrain(new TuiSize(
             labels + (keys > 0 ? keys + 2 : 0) + 2,
@@ -179,16 +179,16 @@ public sealed class TuiMenu : TuiWidget
                 surface.DrawText(0, row, "\u25b8", style);
             }
 
-            surface.DrawText(1, row, TuiTextMeasure.Elide(item.Label, Math.Max(0, surface.Width - 2)), style);
+            surface.DrawText(1, row, TextMeasure.Elide(item.Label, Math.Max(0, surface.Width - 2)), style);
 
             if (item.Key.Length == 0)
             {
                 continue;
             }
 
-            var at = surface.Width - 1 - TuiTextMeasure.MeasureWidth(item.Key);
+            var at = surface.Width - 1 - TextMeasure.MeasureWidth(item.Key);
 
-            if (at > TuiTextMeasure.MeasureWidth(item.Label) + 1)
+            if (at > TextMeasure.MeasureWidth(item.Label) + 1)
             {
                 surface.DrawText(at, row, item.Key, selected ? style : KeyStyle);
             }

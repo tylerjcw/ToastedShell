@@ -113,12 +113,12 @@ public sealed class TuiHelp : TuiWidget
 
         if (!ShowsEverything)
         {
-            return constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(Line()), keys.Count == 0 ? 0 : 1));
+            return constraints.Constrain(new TuiSize(TextMeasure.MeasureWidth(Line()), keys.Count == 0 ? 0 : 1));
         }
 
         var width = keys.Count == 0
             ? 0
-            : keys.Max(key => TuiTextMeasure.MeasureWidth(key.Label) + TuiTextMeasure.MeasureWidth(key.Description) + 3);
+            : keys.Max(key => TextMeasure.MeasureWidth(key.Label) + TextMeasure.MeasureWidth(key.Description) + 3);
 
         return constraints.Constrain(new TuiSize(width, keys.Count));
     }
@@ -136,7 +136,7 @@ public sealed class TuiHelp : TuiWidget
 
         // The label column is as wide as the widest key, so the descriptions line up and
         // the list reads as a table rather than as sentences of different lengths.
-        var column = keys.Count == 0 ? 0 : keys.Max(key => TuiTextMeasure.MeasureWidth(key.Label));
+        var column = keys.Count == 0 ? 0 : keys.Max(key => TextMeasure.MeasureWidth(key.Label));
 
         for (var row = 0; row < keys.Count && row < surface.Height; row += 1)
         {

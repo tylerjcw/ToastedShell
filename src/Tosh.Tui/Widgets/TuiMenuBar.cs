@@ -35,11 +35,11 @@ public sealed class TuiMenuTitle : TuiWidget
 
     /// <inheritdoc />
     protected override TuiSize MeasureCore(TuiConstraints constraints)
-        => constraints.Constrain(new TuiSize(TuiTextMeasure.MeasureWidth(Label) + 2, 1));
+        => constraints.Constrain(new TuiSize(TextMeasure.MeasureWidth(Label) + 2, 1));
 
     /// <inheritdoc />
     public override void Draw(TuiSurface surface)
-        => surface.DrawText(1, 0, TuiTextMeasure.Elide(Label, Math.Max(0, surface.Width - 2)), default);
+        => surface.DrawText(1, 0, TextMeasure.Elide(Label, Math.Max(0, surface.Width - 2)), default);
 }
 
 /// <summary>

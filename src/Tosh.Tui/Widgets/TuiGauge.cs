@@ -104,10 +104,10 @@ public sealed class TuiGauge : TuiWidget
 
         // Centred over the bar, each cell keeping the side it sits on, so the caption stays
         // legible whether the bar has reached it or not.
-        var start = Math.Max(0, (width - TuiTextMeasure.MeasureWidth(caption)) / 2);
+        var start = Math.Max(0, (width - TextMeasure.MeasureWidth(caption)) / 2);
         var at = start;
 
-        foreach (var cluster in TuiTextMeasure.EnumerateClusters(caption))
+        foreach (var cluster in TextMeasure.EnumerateClusters(caption))
         {
             if (at >= width)
             {
@@ -115,7 +115,7 @@ public sealed class TuiGauge : TuiWidget
             }
 
             surface.DrawText(at, 0, cluster, at < filled ? style : EmptyStyle);
-            at += TuiTextMeasure.ClusterWidth(cluster);
+            at += TextMeasure.ClusterWidth(cluster);
         }
     }
 }

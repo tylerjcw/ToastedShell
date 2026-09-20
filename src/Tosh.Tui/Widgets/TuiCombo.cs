@@ -126,8 +126,8 @@ public sealed class TuiCombo : TuiWidget, ITuiPopupHost
     protected override TuiSize MeasureCore(TuiConstraints constraints)
     {
         var widest = _items.Count == 0
-            ? TuiTextMeasure.MeasureWidth(Placeholder)
-            : _items.Max(item => TuiTextMeasure.MeasureWidth(Display(item)));
+            ? TextMeasure.MeasureWidth(Placeholder)
+            : _items.Max(item => TextMeasure.MeasureWidth(Display(item)));
 
         return constraints.Constrain(new TuiSize(widest + 4, 1));
     }
@@ -141,10 +141,10 @@ public sealed class TuiCombo : TuiWidget, ITuiPopupHost
 
         // The glyph is kept at the right edge so a column of these lines up, which is what
         // makes a form of them read as a form.
-        var room = Math.Max(0, surface.Width - used - TuiTextMeasure.MeasureWidth(Glyph) - 1);
+        var room = Math.Max(0, surface.Width - used - TextMeasure.MeasureWidth(Glyph) - 1);
 
-        surface.DrawText(used, 0, TuiTextMeasure.Elide(Text, room), style);
-        surface.DrawText(surface.Width - TuiTextMeasure.MeasureWidth(Glyph), 0, Glyph, style);
+        surface.DrawText(used, 0, TextMeasure.Elide(Text, room), style);
+        surface.DrawText(surface.Width - TextMeasure.MeasureWidth(Glyph), 0, Glyph, style);
     }
 
     /// <inheritdoc />

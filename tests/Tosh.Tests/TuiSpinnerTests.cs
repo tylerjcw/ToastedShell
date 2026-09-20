@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Tui;
 using Tosh.Tui.Declarative;
 using Tosh.Tui.Rendering;
@@ -80,7 +81,7 @@ public sealed class TuiSpinnerTests
 
         Assert.True(style.Frames.Count > 1, $"'{name}' has nothing to turn through.");
         Assert.True(style.Interval > TimeSpan.Zero, $"'{name}' has no pace.");
-        Assert.All(style.Frames, frame => Assert.Equal(style.Width, TuiTextMeasure.MeasureWidth(frame)));
+        Assert.All(style.Frames, frame => Assert.Equal(style.Width, TextMeasure.MeasureWidth(frame)));
     }
 
     [Fact]

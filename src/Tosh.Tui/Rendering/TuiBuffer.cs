@@ -139,7 +139,7 @@ public sealed class TuiBuffer
         // Overwriting the left half of a wide character: blank its continuation.
         if (column + 1 < Width &&
             _cells[index + 1].IsContinuation &&
-            TuiTextMeasure.ClusterWidth(_cells[index].Text) == 2)
+            TextMeasure.ClusterWidth(_cells[index].Text) == 2)
         {
             _cells[index + 1] = new TuiCell(" ", _cells[index + 1].Style);
         }
@@ -174,9 +174,9 @@ public sealed class TuiBuffer
         // every frame, and a string per cluster was most of what a frame allocated
         // (`TUI-0012`). The cell still needs a string, but a printable ASCII one comes from
         // a table rather than the heap.
-        foreach (var cluster in TuiTextMeasure.Clusters(text))
+        foreach (var cluster in TextMeasure.Clusters(text))
         {
-            var width = TuiTextMeasure.ClusterWidth(cluster);
+            var width = TextMeasure.ClusterWidth(cluster);
 
             if (width == 0)
             {
@@ -189,7 +189,7 @@ public sealed class TuiBuffer
                     Set(
                         column + used - 1,
                         row,
-                        previous with { Text = previous.Text + TuiTextMeasure.Text(cluster) });
+                        previous with { Text = previous.Text + TextMeasure.Text(cluster) });
                 }
 
                 continue;
@@ -200,7 +200,7 @@ public sealed class TuiBuffer
                 break;
             }
 
-            Set(column + used, row, new TuiCell(TuiTextMeasure.Text(cluster), style));
+            Set(column + used, row, new TuiCell(TextMeasure.Text(cluster), style));
 
             if (width == 2)
             {
