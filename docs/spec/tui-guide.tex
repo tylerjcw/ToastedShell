@@ -646,6 +646,27 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{Group}}
+
+\begin{lstlisting}
+{| Group = $settings, Label = "Name", Value = "Current",
+   OnToggle = &Flip, OnEdit = &Prompt |}
+\end{lstlisting}
+
+A list of named values, drawn as \code{name: value} with a cursor. The arrows,
+\code{Home} and \code{End} move it; \code{Space} asks for the row under the cursor
+to be toggled, \code{Enter} or \code{e} to edit it, \code{t} to edit it as raw text,
+and \code{Esc} closes the group.
+
+Unlike \code{Collection}, this does \emph{not} act on the rows. A collection is a
+list of values and ``add this one'' means the same thing everywhere; a group is a
+list of settings, and what toggling one means belongs to whoever defined it --- so
+the handler is told which row was asked about and decides.
+
+\code{Label} and \code{Value} name the properties read off each row. A row with no
+value is drawn as its name alone. This is a list of fields, not a layout: \code{Row},
+\code{Column} and \code{Box} are how markup groups widgets on screen.
+
 \subsection{\texttt{Collection}}
 
 \begin{lstlisting}

@@ -718,6 +718,27 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. The config browser's sub-editor: a list of named values, each one
+        // toggled or edited in place. Unlike `collection` it does not act on the rows — what
+        // toggling a setting means belongs to whoever defined it.
+        registry.Register("group", static (spec, context) =>
+        {
+            var group = new TuiGroupEditor(spec.PrimaryItems())
+            {
+                LabelProperty = spec.Text("label"),
+                ValueProperty = spec.Text("value"),
+                Style = spec.Style(),
+                ClosesOnClose = spec.Flag("exit"),
+            };
+
+            context.OnHandler(spec, "ontoggle", handler => group.Toggled = row => handler(row));
+            context.OnHandler(spec, "onedit", handler => group.Edited = row => handler(row));
+            context.OnHandler(spec, "onrawedit", handler => group.RawEdited = row => handler(row));
+            context.OnHandler(spec, "onclose", handler => group.Closed = () => handler(null));
+
+            return group;
+        });
+
         // `TUI-0002`. The collection editor the config browser drew into a detail pane.
         // Unlike the browser's use it applies the edit itself, so a script asking for a list
         // of tags does not have to implement add, replace and remove first.
