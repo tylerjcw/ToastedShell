@@ -718,6 +718,24 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. The collection editor the config browser drew into a detail pane.
+        // Unlike the browser's use it applies the edit itself, so a script asking for a list
+        // of tags does not have to implement add, replace and remove first.
+        registry.Register("collection", static (spec, context) =>
+        {
+            var editor = new TuiCollectionEditor(spec.PrimaryItems())
+            {
+                DisplayProperty = spec.Text("display"),
+                Style = spec.Style(),
+                ClosesOnClose = spec.Flag("exit"),
+            };
+
+            context.OnHandler(spec, "onchange", handler => editor.Changed = items => handler(items));
+            context.OnHandler(spec, "onclose", handler => editor.Closed = () => handler(null));
+
+            return editor;
+        });
+
         // `TUI-0002`. The enum picker the config browser built a row at a time. A question
         // with one answer, which is not the same shape as a list you move through.
         registry.Register("choice", static (spec, context) =>

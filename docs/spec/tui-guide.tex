@@ -646,6 +646,26 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{Collection}}
+
+\begin{lstlisting}
+{| Collection = ["*.tmp", "node_modules"], OnChange = &Save |}
+{| Collection = $rules, Display = "Name", Exit = true, OnClose = &Done |}
+\end{lstlisting}
+
+A list you can add to, edit and remove from. \code{n} adds an entry, \code{Enter}
+or \code{e} edits the one under the cursor, \code{Delete} or \code{r} removes it,
+and \code{Esc} closes the editor. While typing, \code{Esc} abandons the line rather
+than the editor, and \code{Enter} keeps it.
+
+The widget applies the edit to its own list and then calls \code{OnChange} with the
+whole list --- not with the change. A caller almost always wants the result, and one
+given only the delta has to keep its own copy in step to find out what it now holds.
+
+\code{Display} names a property to read off each entry for its label. \code{Exit =
+true} ends the screen when the editor closes; it is off by default, because an
+editor is usually one field among several.
+
 \subsection{\texttt{Choice}}
 
 \begin{lstlisting}
