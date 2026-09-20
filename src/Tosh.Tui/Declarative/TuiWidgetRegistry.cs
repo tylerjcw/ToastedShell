@@ -718,6 +718,25 @@ public sealed class TuiWidgetRegistry
             return button;
         });
 
+        // `TUI-0002`. The prompt-layout editor: which entries to use, and in what order.
+        registry.Register("arrange", static (spec, context) =>
+        {
+            var arrange = new TuiArrange(spec.PrimaryItems())
+            {
+                DisplayProperty = spec.Text("display"),
+                MinimumIncluded = spec.Number("minimum", 0),
+                Style = spec.Style(),
+                ClosesOnCommit = spec.Flag("exit"),
+            };
+
+            context.OnHandler(spec, "onchange", handler => arrange.Changed = included => handler(included));
+            context.OnHandler(spec, "oncommit", handler => arrange.Committed = included => handler(included));
+            context.OnHandler(spec, "oncancel", handler => arrange.Cancelled = () => handler(null));
+            context.OnHandler(spec, "onrefuse", handler => arrange.Refused = entry => handler(entry));
+
+            return arrange;
+        });
+
         // `TUI-0002`. The config browser's sub-editor: a list of named values, each one
         // toggled or edited in place. Unlike `collection` it does not act on the rows — what
         // toggling a setting means belongs to whoever defined it.

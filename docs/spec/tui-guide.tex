@@ -646,6 +646,26 @@ thing it is deciding:
 func Following(on) { $follow = $on }
 \end{lstlisting}
 
+\subsection{\texttt{Arrange}}
+
+\begin{lstlisting}
+{| Arrange = ["Time", "Directory", "Git", "Exit code"],
+   Minimum = 1, OnCommit = &SaveLayout |}
+\end{lstlisting}
+
+Which of these to use, and in what order. Each entry carries a box --- \code{[x]}
+for in, \code{[ ]} for out --- and the arrows move the cursor while \code{Shift}
+with them moves the \emph{entry}. \code{Space} toggles one, \code{Enter} settles
+the arrangement and \code{Esc} abandons it.
+
+\code{Minimum} is how few entries may be left in. A toggle that would go below it
+is refused rather than applied, and \code{OnRefuse} is told which entry was asked
+about --- a prompt with nothing in it is not a prompt.
+
+\code{OnChange} and \code{OnCommit} are both given the included entries in their
+current order, which is the answer the caller wanted; the entries handed in are the
+entries handed back, so a list of strings stays a list of strings.
+
 \subsection{\texttt{Group}}
 
 \begin{lstlisting}
