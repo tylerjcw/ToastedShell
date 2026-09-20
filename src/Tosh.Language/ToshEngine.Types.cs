@@ -1237,6 +1237,21 @@ public sealed partial class ToshEngine
                     }
                 }
 
+                // `TOAST-0055`. Unrecognised is a different answer from unchecked.
+                if (!known && !IsRecognisedConstraintName(constraintName))
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.unknown_type_constraint",
+                        Title: $"Generic interface '{ifaceDefinition.Name}' constrains "
+                            + $"'{clause.TypeParameter}' to '{constraintName}', which is not a "
+                            + "known constraint.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"'{constraintName}' names nothing",
+                        Help: UnrecognisedConstraintHelp(constraintName)));
+                }
+
                 if (satisfied || !known) continue;
 
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(

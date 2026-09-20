@@ -395,6 +395,11 @@ header to restrict acceptable type arguments. Built-in constraints:
 | `Add` / `Sub` / `Mul` / `Div` | Any numeric type, or any CLR type with the matching `op_*` static method |
 | `Comparable`          | Any type implementing `IComparable` |
 | `Eq`                  | Always satisfied (placeholder) |
+| `new` / `new()`       | A type with a public parameterless constructor |
+| `class`               | A reference type |
+| `struct`              | A non-nullable value type |
+| `notnull`             | Always satisfied at runtime |
+| `unmanaged`           | A value type whose fields are all unmanaged |
 
 ```tosh
 class Box<T>(initial: T) where T: Numeric {
@@ -408,8 +413,23 @@ var bf = new Box<double>(1.5); $bf.bump(2.5)    # 4
 ```
 
 Multiple `where` clauses may follow each other to constrain different
-type parameters. Unknown constraint names are accepted conservatively
-(reserved for future user-defined constraints).
+type parameters. Bounds on one parameter are separated by a comma or a
+`+` — `where T: Numeric + Comparable` — and every bound is enforced.
+
+A constraint may also name an interface, a trait, a class or a CLR type:
+an interface bound is satisfied by a class fulfilling it, a class bound
+by that class and anything extending it, a CLR bound by anything
+assignable to it.
+
+**A name that resolves to nothing is refused** —
+`tosh.runtime.unknown_type_constraint`, with the nearest real constraint
+suggested. Accepting a typo does not leave the constraint unchecked, it
+deletes it, while the declaration still reads as though it constrained
+something.
+
+⚠️ A built-in constraint is *not* enforced when the type argument is a
+ToastScript class: `where T: Numeric` accepts `new B<Thing>(…)`. The CLR
+bound is null there and the check is skipped. Tracked, not fixed.
 
 The same constraint names also work as right-hand operands for the
 `is` / `is-not` operators on values, so runtime checks reuse the same

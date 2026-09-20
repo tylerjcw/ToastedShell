@@ -157,6 +157,18 @@ public sealed class ToshRecordDefinition : IShellNamedType
                     }
                 }
 
+                // `TOAST-0055`, as on a class. This site never consulted declared types at
+                // all, so `where T: Drawable` on a record was "unknown" even where the
+                // interface was right there — recognition has to ask the engine, not only
+                // the CLR resolver above.
+                if (!known && !_engine.IsRecognisedConstraintName(constraintName))
+                {
+                    throw new InvalidOperationException(
+                        $"Generic record '{Name}' constrains '{clause.TypeParameter}' to "
+                        + $"'{constraintName}', which is not a known constraint — "
+                        + _engine.UnrecognisedConstraintHelp(constraintName));
+                }
+
                 if (satisfied) continue;
                 if (!known) continue;
 

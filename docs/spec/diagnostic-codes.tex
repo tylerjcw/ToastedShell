@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 585 diagnostic codes currently emitted by the
+This chapter lists all 586 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -657,6 +657,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unknown\_trait}] Class '\{@class.Name\}' uses unknown trait '\{traitName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_type}] Type '\{name\}' was not found.
 \item[\texttt{\small tosh.runtime.unknown\_type\_argument}] Type '\{name\}' could not be resolved as a type argument for '\{methodName\}'.
+\item[\texttt{\small tosh.runtime.unknown\_type\_constraint}] Generic interface '\{ifaceDefinition.Name\}' constrains 
 \item[\texttt{\small tosh.runtime.unknown\_type\_name}] Type '\{typeName\}' could not be resolved for type parameter '\{typeParamsForSeed[i]\}' of function '\{definition.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_variable}] '\$\{variableReference.Name\}' is a constructor parameter of 
 \item[\texttt{\small tosh.runtime.unsupported\_native\_allocation\_type}] '\{type.FullName ?? type.Name\}' is not a supported native allocation type.

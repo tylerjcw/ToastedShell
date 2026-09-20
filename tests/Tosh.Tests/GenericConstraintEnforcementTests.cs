@@ -138,4 +138,120 @@ public sealed class GenericConstraintEnforcementTests
         // Names `int`, not `T` — the reader is told what the contract actually requires.
         Assert.Contains("declares int", $"{diagnostic.Label}", StringComparison.Ordinal);
     }
+
+    // ---- `TOAST-0055` ----
+
+    /// <summary>
+    /// A constraint name that resolves to nothing is a typo, not a vocabulary this session
+    /// has not heard of yet.
+    /// </summary>
+    /// <remarks>
+    /// It used to be accepted, which did not leave the constraint unchecked — it deleted it,
+    /// while the declaration went on reading as though it constrained something. Silent, and
+    /// in the safe-looking direction.
+    /// </remarks>
+    [Fact]
+    public async Task An_unrecognised_constraint_name_is_refused()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "class B<T>(v: T) where T: TotallyMadeUp { prop value: T = $v }\nnew B<string>(\"hi\")"));
+
+        Assert.Contains("TotallyMadeUp", error.Message, StringComparison.Ordinal);
+        Assert.Contains("not a known constraint", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>And a near miss says what was probably meant.</summary>
+    [Fact]
+    public async Task A_misspelt_constraint_suggests_the_real_one()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "class B<T>(v: T) where T: Numric { prop value: T = $v }\nnew B<int>(1)"));
+
+        Assert.Contains("did you mean 'Numeric'?", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Recognition asks about the name, not the argument.
+    /// </summary>
+    /// <remarks>
+    /// The record and interface sites never consulted declared types at all — only the CLR
+    /// resolver — so a real interface read as unrecognised there. Refusing on that would have
+    /// turned this into a wrong error, which is the failure the conservative rule existed to
+    /// avoid.
+    /// </remarks>
+    [Fact]
+    public async Task A_declared_interface_is_recognised_by_a_record()
+    {
+        // No annotation on the field: `record R<T>(x: T)` is a separate gap — a generic
+        // record cannot annotate a field with its own type parameter, which reports
+        // "'R.x' uses unknown type annotation 'T'". Not what this measures.
+        var source =
+            "interface HasGet { func Get() -> int }\n"
+            + "class Getter() fulfills HasGet { func Get() -> int => 7 }\n"
+            + "record R<T>(x) where T: HasGet\n"
+            + "new R<Getter>(new Getter())\n";
+
+        await RunAsync(source);
+    }
+
+    /// <summary>And the record site refuses a name that resolves to nothing, as a class does.</summary>
+    [Fact]
+    public async Task An_unrecognised_constraint_name_is_refused_by_a_record()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "record R<T>(x) where T: TotallyMadeUp\nnew R<int>(1)"));
+
+        Assert.Contains("TotallyMadeUp", error.Message, StringComparison.Ordinal);
+        Assert.Contains("not a known constraint", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Bounds may be separated by `+`, which used to end the clause mid-declaration.</summary>
+    /// <remarks>
+    /// There is no `Plus` token — `+` is an ordinary shell word — so the clause simply
+    /// stopped, the class parser met a bareword where it wanted a body, and the error said
+    /// the class needed one. A comma has always worked and still does.
+    /// </remarks>
+    [Fact]
+    public async Task Bounds_can_be_separated_by_a_plus()
+        => Assert.Equal("1", await RunAsync(
+            "class B<T>(v: T) where T: Numeric + Comparable { prop value: T = $v }\n(new B<int>(1)).value"));
+
+    [Fact]
+    public async Task A_plus_separated_bound_is_still_enforced()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "class B<T>(v: T) where T: Numeric + Comparable { prop value: T = $v }\nnew B<string>(\"x\")"));
+
+        Assert.Contains("to satisfy 'Numeric'", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// `new()` is spellable. The registry has carried the entry all along and nothing could
+    /// write it: the parens ended the clause, so the declaration failed asking for a body.
+    /// </summary>
+    [Fact]
+    public async Task The_new_constraint_can_be_written_with_parentheses()
+        => Assert.Equal("1", await RunAsync(
+            "class B<T>(v: T) where T: new() { prop value: T = $v }\n(new B<int>(1)).value"));
+
+    [Theory]
+    [InlineData("struct", "new B<int>(1)", "1")]
+    [InlineData("class", "new B<string>(\"s\")", "s")]
+    [InlineData("unmanaged", "new B<int>(1)", "1")]
+    public async Task The_special_constraints_accept_what_they_should(
+        string constraint, string construction, string expected)
+        => Assert.Equal(expected, await RunAsync(
+            $"class B<T>(v: T) where T: {constraint} {{ prop value: T = $v }}\n({construction}).value"));
+
+    [Theory]
+    [InlineData("struct", "new B<string>(\"s\")")]
+    [InlineData("class", "new B<int>(1)")]
+    [InlineData("unmanaged", "new B<string>(\"s\")")]
+    public async Task The_special_constraints_refuse_what_they_should(string constraint, string construction)
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            $"class B<T>(v: T) where T: {constraint} {{ prop value: T = $v }}\n{construction}"));
+
+        Assert.Contains($"to satisfy '{constraint}'", error.Message, StringComparison.Ordinal);
+    }
 }

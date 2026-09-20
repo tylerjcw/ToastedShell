@@ -7578,7 +7578,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                         }
                         continue;
                     }
-                    // Unknown name — accept conservatively.
+
+                    // `TOAST-0055`. Recognised-but-unresolvable stays conservative; a name
+                    // that resolves to nothing is a typo, and silently dropping the
+                    // constraint is the one outcome the author cannot see.
+                    if (!IsRecognisedConstraintName(constraintName))
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh.runtime.unknown_type_constraint",
+                            title: $"'{target.OwnerLabel}' constrains '{typeParameterName}' to "
+                                + $"'{constraintName}', which is not a known constraint.",
+                            argumentIndex: argumentIndex,
+                            label: $"'{constraintName}' names nothing");
+                    }
                 }
             }
         }

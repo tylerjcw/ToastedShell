@@ -2020,6 +2020,35 @@ public static partial class ToshParser
         /// <c>where</c> bareword. Returns false if a parse error occurred
         /// (the caller should stop the where-loop).
         /// </summary>
+        private bool IsConstraintSeparatorWord()
+            => Current.Kind == SyntaxTokenKind.Bareword &&
+               string.Equals(Current.Text, "+", StringComparison.Ordinal);
+
+        /// <summary>One bound, with whatever follows its name that belongs to it.</summary>
+        /// <remarks>
+        /// `TOAST-0055`. Two shapes hang off a bound: `<...>` for a parameterised constraint
+        /// such as `IComparable<T>`, and the empty argument list on `new()`. The registry has
+        /// carried a `new()` entry all along and nothing could spell it — the parens ended the
+        /// clause, so the declaration failed asking for a class body. Only `new` takes them,
+        /// because only `new` means anything with them.
+        /// </remarks>
+        private string ParseConstraintName()
+        {
+            var name = NextToken().Text;
+
+            if (string.Equals(name, "new", StringComparison.OrdinalIgnoreCase) &&
+                Current.Kind == SyntaxTokenKind.OpenParen &&
+                Peek(1).Kind == SyntaxTokenKind.CloseParen)
+            {
+                NextToken();
+                NextToken();
+
+                return "new()";
+            }
+
+            return ParseTypeNameSuffix(name) ?? name;
+        }
+
         private bool TryParseWhereClause(out TypeParameterConstraintSyntax clause)
         {
             clause = default!;
@@ -2048,17 +2077,19 @@ public static partial class ToshParser
             }
             if (expectsFollowingConstraint && Current.Kind == SyntaxTokenKind.Bareword)
             {
-                var name = NextToken().Text;
-                var suffixed = ParseTypeNameSuffix(name);
-                constraints.Add(suffixed ?? name);
+                constraints.Add(ParseConstraintName());
             }
-            while (Current.Kind == SyntaxTokenKind.Comma)
+
+            // `TOAST-0055`. A comma has always separated bounds; `+` is accepted for the
+            // same thing because it is what a reader arriving from C#, Rust or TypeScript
+            // writes, and it used to derail the whole declaration — the clause stopped, the
+            // class parser met a bareword where it wanted a body, and the error said the
+            // class needed one. There is no `Plus` token: `+` is an ordinary shell word.
+            while (Current.Kind == SyntaxTokenKind.Comma || IsConstraintSeparatorWord())
             {
                 NextToken();
                 if (Current.Kind != SyntaxTokenKind.Bareword) break;
-                var name = NextToken().Text;
-                var suffixed = ParseTypeNameSuffix(name);
-                constraints.Add(suffixed ?? name);
+                constraints.Add(ParseConstraintName());
             }
             var whereEnd = Current.Span.Start;
             clause = new TypeParameterConstraintSyntax(paramName, constraints, TextSpan.FromBounds(whereStart, whereEnd));

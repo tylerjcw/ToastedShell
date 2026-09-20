@@ -441,8 +441,20 @@ public sealed class ToshClassDefinition : IShellNamedType
                     satisfied = TrySatisfyUserConstraint(constraintName, bound, argDisplay, out known);
                 }
 
+                // `TOAST-0055`. A name that resolves to nothing is a typo, and accepting it
+                // does not leave the constraint unchecked — it deletes it, while the
+                // declaration goes on reading as though it constrained something. Asked
+                // before `satisfied`, which is defaulted true for a name nobody could check.
+                if (!known && !_engine.IsRecognisedConstraintName(constraintName))
+                {
+                    throw new InvalidOperationException(
+                        $"Generic class '{Name}' constrains '{clause.TypeParameter}' to "
+                        + $"'{constraintName}', which is not a known constraint — "
+                        + _engine.UnrecognisedConstraintHelp(constraintName));
+                }
+
                 if (satisfied) continue;
-                if (!known) continue; // unknown name — accept conservatively
+                if (!known) continue; // recognised, but not checkable from here
 
                 // The CLR name is worth showing when there is one and worth omitting when
                 // there is not: a ToastScript class has no CLR type of its own, and saying

@@ -6237,9 +6237,23 @@ generic classes behave identically in REPL and compiled execution.
 A \code{where T: <Constraint>[, <Constraint>\ldots]} clause may follow
 the class header to restrict acceptable type arguments.  Built-in
 constraints are summarised below; multiple \code{where} clauses may
-follow one another to constrain different type parameters.  Unknown
-constraint names are accepted conservatively (reserved for future
-user-defined constraints).
+follow one another to constrain different type parameters.  Bounds on one
+parameter are separated by a comma or a \code{+} --- \code{where T: Numeric +
+Comparable} --- and every bound is enforced.
+
+A constraint may also name an interface, a trait, a class or a CLR type, and
+then it means what it says: an interface bound is satisfied by a class
+fulfilling it, a class bound by that class and anything extending it, and a CLR
+type bound by anything assignable to it.
+
+\noindent \textbf{A name that resolves to nothing is refused}
+(\code{tosh.runtime.unknown\_type\_constraint}), and the diagnostic suggests the
+nearest real constraint.  It was once accepted, on the reasoning that refusing
+what cannot be checked turns an unenforced constraint into a wrong error.  That
+reasoning holds for a name which resolves to something not checkable yet, and
+fails for one which resolves to nothing: accepting a typo does not leave the
+constraint unchecked, it deletes it, while the declaration goes on reading as
+though it constrained something.
 
 \begin{center}
 \begin{tabular}{L{3.6cm}L{9cm}}
@@ -6253,6 +6267,11 @@ user-defined constraints).
   Any numeric type, or any CLR type with a matching \code{op\_*} static method \\
 \code{Comparable} & Any type implementing \code{IComparable} \\
 \code{Eq} & Always satisfied (placeholder) \\
+\code{new} / \code{new()} & A type with a public parameterless constructor \\
+\code{class} & A reference type \\
+\code{struct} & A non-nullable value type \\
+\code{notnull} & Always satisfied at runtime \\
+\code{unmanaged} & A value type whose fields are all unmanaged \\
 \bottomrule
 \end{tabular}
 \end{center}

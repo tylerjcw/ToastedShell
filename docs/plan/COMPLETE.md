@@ -103,6 +103,7 @@
 | [`TUI-0020`](items/TUI-0020.md) | P3 | complete | 7/7 | A script that wants a progress bar, a gauge or a sparkline draws it out of block characters |
 | [`TUI-0004`](items/TUI-0004.md) | P2 | complete | 8/8 | Building a screen from a script is seven lines of scaffolding, string ids and `| ignore` |
 | [`TUI-0018`](items/TUI-0018.md) | P2 | complete | 7/7 | Both browsers hand-render a tree, and a script cannot show one at all |
+| [`TOAST-0094`](items/TOAST-0094.md) | P3 | complete | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
 | [`TOAST-0067`](items/TOAST-0067.md) | P2 | complete | 4/4 | `echo` with several arguments emits one value each interpreted and one joined string compiled |
 | [`TOAST-0095`](items/TOAST-0095.md) | P2 | complete | 6/6 | `is` answers false for a nested type, and a qualified variant pattern never matches |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | complete | 6/6 | A TōSh closure cannot be passed where C wants a function pointer |
