@@ -1,7 +1,7 @@
 ---
 id: TOAST-0133
 title: "The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent"
-status: proposed
+status: complete
 area: toast
 priority: 3
 opened: 2026-09-12
@@ -68,8 +68,40 @@ Two independent halves, each small, and worth measuring before either is assumed
 
 ## Acceptance
 
-- [ ] `class Box<int>` warns, or a recorded decision says why it should not
-- [ ] Whatever set is chosen, the same set is used from every declaration kind, so the
+- [x] `class Box<int>` warns, or a recorded decision says why it should not
+- [x] Whatever set is chosen, the same set is used from every declaration kind, so the
       answer does not depend on which keyword was written
-- [ ] The count of real-world hits is measured first, so the noise cost is known rather
+- [x] The count of real-world hits is measured first, so the noise cost is known rather
       than guessed
+
+## Fix — 2026-09-20
+
+Both halves, because either alone leaves the answer depending on how the declaration was
+spelled.
+
+**The set.** `WarnIfShadowingCoreType` guarded `CorePrelude.TypeNames` — `Option` and
+`Result`. It now also guards the built-in aliases, through the
+`TypeNameResolver.IsPrimitiveAlias` that already existed for the purpose. The two read
+differently, because they are different things:
+
+```
+'Option' shadows the core type 'Option'.
+'int' shadows the built-in type 'int'.
+```
+
+**The call sites.** It was reached from union declarations alone. It is now reached from
+class, record, struct, raw struct, enum, trait, interface and type alias, and from the
+type-parameter list of every kind that has one — which is the case this item was filed for.
+
+**The measurement, first.** Across 121 `.tosh` files — ToastLib, the repository's examples
+and its test corpus — **no declaration and no type parameter takes any of these names**. The
+counting script was checked against a positive control containing all four categories before
+its zero was believed. Confirmed twice since: the full suite passes with no existing test
+disturbed, and `require ToastLib` loads with no warning at all.
+
+The `func double` case the engine calls out as intended is untouched — that is a *function*
+shadowing a type alias, and this warns about type declarations only. The resolution rule is
+unchanged: a declaration still wins. What it no longer does is win silently.
+
+`ShadowedTypeNameTests` covers every declaration kind against both sets, the two message
+forms, and the ordinary names that must stay silent. The warning had no test at all before.

@@ -520,6 +520,7 @@ public sealed partial class ToshEngine
         TypeAliasStatementSyntax statement)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, statement.Name, statement.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(statement.Name);
         DeclareRefinementType(
             CreateRefinementTypeDefinition(sourceName, sourceText, statement),
             statement.Modifier,

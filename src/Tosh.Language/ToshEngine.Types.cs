@@ -25,6 +25,8 @@ public sealed partial class ToshEngine
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, @class.Name, @class.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(@class.Name);
+        WarnIfTypeParametersShadow(@class.TypeParameters);
 
         var duplicateProperties = @class.Members
             .OfType<ClassPropertyMemberSyntax>()
@@ -717,6 +719,8 @@ public sealed partial class ToshEngine
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, @interface.Name, @interface.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(@interface.Name);
+        WarnIfTypeParametersShadow(@interface.TypeParameters);
 
         var methods = @interface.Methods
             .Select(m => new InterfaceMethodSignature(
@@ -749,6 +753,7 @@ public sealed partial class ToshEngine
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, @enum.Name, @enum.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(@enum.Name);
 
         var underlyingType = string.IsNullOrWhiteSpace(@enum.UnderlyingTypeName)
             ? typeof(int)
@@ -867,6 +872,7 @@ public sealed partial class ToshEngine
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, trait.Name, trait.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(trait.Name);
 
         var methods = trait.Methods
             .Select(m => new TraitMethodDefinition(

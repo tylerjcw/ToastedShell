@@ -290,18 +290,71 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// because `Option` and `Result` are names a user may take without meaning to displace
     /// anything, and the displacement is otherwise invisible.
     /// </remarks>
-    private void WarnIfShadowingCoreType(string typeName)
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0133`. This guarded two names and was reached from union declarations alone,
+    /// so `union Option` warned while `class Option` did not, and neither did `class
+    /// Box&lt;int&gt;` — where a property annotated `int` then holds a string, with no
+    /// warning, no note and nothing in the hover. The argument the warning was written for
+    /// applies word for word to a built-in alias, and more strongly: `Option` is a name a
+    /// user might reasonably take, while `int` is one they almost certainly did not mean to
+    /// redefine.
+    /// </para>
+    /// <para>
+    /// Both halves were measured before either was changed. Across 121 `.tosh` files —
+    /// ToastLib, the repository's examples and its test corpus — no declaration and no type
+    /// parameter takes any of these names, so the widening costs nothing in noise. The
+    /// `func double` case the code calls out as intended is a *function*, not a type, and is
+    /// untouched: this warns about type declarations only.
+    /// </para>
+    /// <para>
+    /// The resolution rule is unchanged and deliberate — a declaration still wins. What was
+    /// missing is the notice the language had already decided this displacement deserves.
+    /// </para>
+    /// </remarks>
+    private void WarnIfShadowingCoreType(string? typeName)
     {
-        if (_loadingCorePrelude || !CorePrelude.TypeNames.Contains(typeName))
+        if (_loadingCorePrelude || string.IsNullOrEmpty(typeName))
+        {
+            return;
+        }
+
+        var isCore = CorePrelude.TypeNames.Contains(typeName);
+        var isBuiltIn = !isCore && Binding.TypeNameResolver.IsPrimitiveAlias(typeName);
+
+        if (!isCore && !isBuiltIn)
         {
             return;
         }
 
         WriteWarning(
             code: "tosh.naming.shadowed_core_type",
-            title: $"'{typeName}' shadows the core type '{typeName}'.",
+            title: isCore
+                ? $"'{typeName}' shadows the core type '{typeName}'."
+                : $"'{typeName}' shadows the built-in type '{typeName}'.",
             help: "Rename it, or hush this code: hush tosh.naming.shadowed_core_type",
             category: ToshDiagnosticCategory.Naming);
+    }
+
+    /// <summary>
+    /// Warns for each type parameter that displaces a type name — <c>TOAST-0133</c>.
+    /// </summary>
+    /// <remarks>
+    /// A type parameter is the case the item was filed for: inside
+    /// <c>class Box&lt;int&gt;</c> the name <c>int</c> means the parameter, so every
+    /// annotation written <c>int</c> in that body means it too.
+    /// </remarks>
+    private void WarnIfTypeParametersShadow(IReadOnlyList<string>? typeParameters)
+    {
+        if (typeParameters is null)
+        {
+            return;
+        }
+
+        foreach (var parameter in typeParameters)
+        {
+            WarnIfShadowingCoreType(parameter);
+        }
     }
 
     /// <summary>
@@ -2231,6 +2284,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, union.Name, union.Span, "reserved runtime namespace");
         WarnIfShadowingCoreType(union.Name);
+        WarnIfTypeParametersShadow(union.TypeParameters);
 
         var variants = union.Variants
             .Select(v => new UnionVariantDefinition(
@@ -2261,6 +2315,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, record.Name, record.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(record.Name);
+        WarnIfTypeParametersShadow(record.TypeParameters);
 
         var runtimeFields = record.Fields
             .Select(field => new ToshRecordFieldDefinition(
@@ -2339,6 +2395,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, rawStruct.Name, rawStruct.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(rawStruct.Name);
 
         if (rawStruct.Fields.Count == 0)
         {
@@ -2477,6 +2534,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, @struct.Name, @struct.Span, "reserved runtime namespace");
+        WarnIfShadowingCoreType(@struct.Name);
 
         var runtimeFields = @struct.Fields
             .Select(field => new ToshRecordFieldDefinition(

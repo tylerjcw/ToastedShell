@@ -80,6 +80,7 @@
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
 | [`TOAST-0018`](items/TOAST-0018.md) | P2 | complete | 10/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
 | [`TOAST-0040`](items/TOAST-0040.md) | P2 | complete | 6/6 | Two forms the parser accepts do not lower, and one of them takes the whole file with it |
+| [`TOAST-0133`](items/TOAST-0133.md) | P3 | complete | 3/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
 | [`TOAST-0021`](items/TOAST-0021.md) | P2 | complete | 6/6 | DisplayEngine walks values itself, so a table cell shows an enum's implementation |
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0068`](items/TOAST-0068.md) | P2 | complete | 5/5 | A refinement's coercer can put the wrong CLR type in a refined slot |

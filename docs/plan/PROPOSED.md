@@ -26,7 +26,6 @@
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
-| [`TOAST-0133`](items/TOAST-0133.md) | P3 | proposed | 0/3 | The shadowing warning covers one declaration kind and one pair of names, so displacing `int` is silent |
 | [`TUI-0011`](items/TUI-0011.md) | P3 | proposed | 0/5 | Nothing checks that the TUI surface survives compilation to a Tōast program |
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
 | [`TOAST-0094`](items/TOAST-0094.md) | P3 | proposed | — | The platform type index cache grows without bound — 1,327 files, 1.5 GB |
