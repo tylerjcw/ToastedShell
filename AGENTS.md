@@ -461,7 +461,7 @@ if $x > 10 {
     echo "small"
 }
 
-for $item in $list {
+for item in $list {
     echo $item
 }
 
@@ -481,14 +481,14 @@ trailing `if <cond>` or `unless <cond>` guard:
 
 ```tosh
 func find(items, pred) {
-    for $x in $items {
+    for x in $items {
         return $x if ($pred $x)        # only return when pred is truthy
     }
     return null
 }
 
 func emit-evens(n) {
-    for $i in 0..$n {
+    for i in 0..$n {
         yield $i if ($i % 2 == 0)
     }
 }
@@ -681,7 +681,7 @@ The value after `switch` must be parenthesised.
 
 ```tosh
 func log-all(args...) {
-    for $a in $args { writeline $a }
+    for a in $args { writeline $a }
 }
 log-all "first" "second" "third"     # collects positional args into a list
 ```

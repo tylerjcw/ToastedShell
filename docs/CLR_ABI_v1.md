@@ -464,7 +464,7 @@ sealed class Circle(name, radius) : Shape(name) {
 
 func sum(...nums: long): long {
     var total: long = 0
-    for $n in $nums { $total = $total + $n }
+    for n in $nums { $total = $total + $n }
     return $total
 }
 
