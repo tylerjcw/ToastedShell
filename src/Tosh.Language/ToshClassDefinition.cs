@@ -3812,11 +3812,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         var typeName = boundType.FullName ?? boundType.Name;
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: "tosh.runtime.annotation_conversion_failed",
-            Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
+            Title: $"'{owner}' produced {DescribeConversionSource(value)}, which could not be converted to '{typeName}'.",
             SourceName: sourceName,
             SourceText: sourceText,
             Span: span,
-            Label: $"the value does not match '{typeName}'"));
+            Label: $"{DescribeConversionSource(value)} does not become '{typeName}'"));
     }
 
 
@@ -4364,4 +4364,16 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         return string.IsNullOrWhiteSpace(typeName) ? typeof(object).FullName ?? typeof(object).Name : typeName;
     }
+    /// <summary>What the value was, for a message about what it could not become.</summary>
+    /// <remarks>
+    /// The message used to say only "a value", which is the one thing the reader already knows.
+    /// Two adjacent fields annotated `System.DateOnly` and `System.TimeOnly`, constructed in the
+    /// wrong order, reported that a value could not become a `DateOnly` — true, and silent about
+    /// the `TimeOnly` that would have named the mistake at a glance. The truncation branch beside
+    /// this has always shown the value; for a conversion failure the *type* is the part that
+    /// explains it.
+    /// </remarks>
+    private static string DescribeConversionSource(object? value) =>
+        value is null ? "null" : $"a {value.GetType().FullName ?? value.GetType().Name}";
+
 }

@@ -193,4 +193,38 @@ public sealed class NumericAnnotationTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("var x: bigint = 5")]
     public void An_ordinary_literal_is_untouched(string source)
         => Assert.False(Wide(CheckWith(source)), source);
+
+    // ── The conversion failure says what it got ───────────────────────────────
+
+    /// <summary>
+    /// A failed annotation conversion names the type it was handed.
+    /// </summary>
+    /// <remarks>
+    /// It used to say only "a value could not be converted", which is the one thing the reader
+    /// already knows. Two adjacent fields annotated `System.DateOnly` and `System.TimeOnly`,
+    /// constructed in the wrong order, reported that a value could not become a `DateOnly` —
+    /// true, and silent about the `TimeOnly` that names the mistake at a glance. Found on a
+    /// real script, where the swap took a full publish run to locate.
+    /// </remarks>
+    [Fact]
+    public async Task A_failed_conversion_names_the_type_it_was_given()
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => RunAsync(
+            "record R(StartDate: System.DateOnly, StartTime: System.TimeOnly)\n"
+            + "var d: System.DateOnly = date -d now\n"
+            + "var t: System.TimeOnly = date -t now\n"
+            + "new R($t, $d)"));
+
+        Assert.Contains("System.TimeOnly", error.Message, StringComparison.Ordinal);
+        Assert.Contains("System.DateOnly", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>And the right order is accepted, which is what makes the message a diagnosis.</summary>
+    [Fact]
+    public async Task The_same_record_accepts_the_arguments_in_order()
+        => await RunAsync(
+            "record R(StartDate: System.DateOnly, StartTime: System.TimeOnly)\n"
+            + "var d: System.DateOnly = date -d now\n"
+            + "var t: System.TimeOnly = date -t now\n"
+            + "new R($d, $t)");
 }
