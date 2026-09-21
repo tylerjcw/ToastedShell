@@ -110,6 +110,20 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["dict"] = typeof(Dictionary<string, object?>),
         ["map"] = typeof(Dictionary<string, object?>),
         ["file"] = typeof(FileInfo),
+
+        // `TOAST-0140`. `file` was blessed and its counterpart was not, so `dir` did not
+        // resolve at all and `directory` reached the platform-index fallback — which finds a
+        // CLR type by simple name and handed back the *static* `System.IO.Directory`, a type
+        // no annotation can ever hold a value of. The specification documented both as
+        // `DirectoryInfo` throughout.
+        ["dir"] = typeof(DirectoryInfo),
+        ["directory"] = typeof(DirectoryInfo),
+
+        // Documented in `§Built-in Type Aliases` and resolving only through that same
+        // fallback. Blessed so they mean what the table says rather than whatever a simple
+        // name search finds.
+        ["datetimeoffset"] = typeof(DateTimeOffset),
+        ["version"] = typeof(Version),
         ["float"] = typeof(float),
         ["guid"] = typeof(Guid),
         ["ip"] = typeof(IPAddress),

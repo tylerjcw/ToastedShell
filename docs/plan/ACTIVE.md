@@ -20,4 +20,4 @@
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | partial | 10/11 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
 | [`TOAST-0136`](items/TOAST-0136.md) | P2 | open | 0/5 | A required module's functions are callable unqualified in an expression, but nowhere else |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
-| [`TOAST-0140`](items/TOAST-0140.md) | P2 | open | 0/5 | The type-alias table is documented in one place and defined in two, and the two have drifted |
+| [`TOAST-0140`](items/TOAST-0140.md) | P2 | open | 4/6 | The type-alias table is documented in one place and defined in two, and the two have drifted |

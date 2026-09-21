@@ -1116,6 +1116,21 @@ physical quantity additionally answers to its long name
 \code{Vector} / \code{vec} & \code{ToSh.Vector} & Numeric vector shell type \\
 \code{Matrix} / \code{matrix} / \code{mat} & \code{ToSh.Matrix} & Numeric matrix shell type \\
 \code{Complex} / \code{complex} & \code{ToSh.Complex} & Complex number shell type \\
+\code{bigint} / \code{biginteger} & \code{System.Numerics.BigInteger} & Arbitrary-width integer \\
+\code{dynamic} / \code{any} & \code{System.Object} & Opts out of static checking \\
+\code{cstr} / \code{cstring} & \code{System.String} & Text at a native boundary \\
+\code{map} & \code{System.Collections.Generic.Dictionary} & Second name for \code{dict} \\
+\code{queue} & \code{System.Collections.Generic.Queue} & FIFO \\
+\code{stack} & \code{System.Collections.Generic.Stack} & LIFO \\
+\code{linkedlist} & \code{System.Collections.Generic.LinkedList} & Doubly linked \\
+\code{sortedset} & \code{System.Collections.Generic.SortedSet} & Ordered set \\
+\code{sorteddict} / \code{sortedmap} & \code{System.Collections.Generic.SortedDictionary} & Ordered dictionary \\
+\code{storagesize} & \code{Tosh.Runtime.StorageSize} & Bytes with a unit \\
+\code{temporalamount} & \code{Tosh.Runtime.TemporalAmount} & Long name for \code{duration} \\
+\code{failure} & \code{Tosh.Runtime.IToshFailure} & Anything the language raised (\S\ref{sec:exception-semantics}) \\
+\code{error} & \code{Tosh.Runtime.ToshError} & A program raised it \\
+\code{diagnostic} & \code{Tosh.Runtime.ToshDiagnosticException} & The language raised it \\
+\code{nativeerror} & \code{Tosh.Runtime.NativeError} & A native call failed, carrying errno \\
 \code{Vector2} & \code{System.Numerics.Vector2} & Two floats, by value \\
 \code{Vector3} & \code{System.Numerics.Vector3} & Three floats, by value \\
 \code{Vector4} & \code{System.Numerics.Vector4} & Four floats, by value \\
