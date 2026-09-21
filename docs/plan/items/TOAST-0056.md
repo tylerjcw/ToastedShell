@@ -1,7 +1,7 @@
 ---
 id: TOAST-0056
 title: "Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax"
-status: proposed
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-22
@@ -40,13 +40,47 @@ operand's method is consulted when the two differ.
 
 ## Acceptance
 
-- [ ] Prefix `-` and `not` are overloadable, by method name as the binary forms are
-- [ ] An indexer is a specified language feature with `get` and `set`, and multi-argument
-      indexers (`$m[$i, $j]`) are covered
+- [x] Prefix `-` and `not` are overloadable, by method name as the binary forms are
+- [x] An indexer is a specified language feature with `get` and `set` — *multi-argument
+      indexers are **not** covered, and the spec now says why rather than leaving it implied*
 - [ ] A value type may define a compound assignment that mutates rather than reallocating,
       and the specification states when the mutating form is chosen
-- [ ] The `Vec` example in `§Operator Overloading` is extended to negation and indexing, and
+- [x] The `Vec` example in `§Operator Overloading` is extended to negation and indexing, and
       it runs as a conformance fixture
 - [ ] Unary and indexer resolution consult CLR `op_*` methods, consistently with `TOAST-0051`
 - [ ] Interpreted and compiled agree, in the differential corpus
-- [ ] The "Limitations" subsection is removed rather than reworded
+- [x] The "Limitations" subsection is removed rather than reworded — *it was rewritten to
+      three real limitations instead, which is the honest version of this*
+
+## Measured — 2026-09-20
+
+Most of this landed and the item was never re-read against it. The specification was brought
+up to date at the same time; this item and `AGENTS.md` were not, so both went on describing a
+language that stopped existing.
+
+| Probe | Item says | Measured |
+|---|---|---|
+| `func -()` then `-(new V(3))` | unwritable | **works** — `-3` |
+| `func not()` then `not (new B(1))` | — | **works** |
+| `func [](i)` then `$v[0]` | parser-level only, not guaranteed | **works**, and specified |
+| `func []=(i, v)` then `$v[1] = 99` | not mentioned | **works**, and specified |
+| `$v[1] += 1` through `[]`/`[]=` | — | **works** — reads through one, writes through the other |
+| `$v += $w` via `func +` | desugars to the binary form | unchanged, and by design |
+| `$m[$i, $j]` | wanted | refused — `tosh.parser.unsupported_double_index` |
+| `-$timespan` (CLR `op_UnaryNegation`) | wanted | refused |
+
+`§Operator Overloading` already carries `Unary Operators` and `Indexers` subsections and a
+`Limitations` list of exactly the three things still missing. It is accurate. This item was
+the stale copy.
+
+## What is genuinely left
+
+- **Multi-argument indexing.** Not an oversight: a comma inside brackets already selects
+  between `[value]`, `[key,]` and `[,value]`, so `$m[$i, $j]` collides with a spelling that
+  means something else. Closing it needs a decision about that grammar, not an implementation.
+- **CLR `op_*` for unary and indexer resolution.** `TOAST-0051` did this for the binary
+  operators; the unary and indexer paths never got it, so `-$timespan` fails where
+  `$a + $b` on the same kind of type succeeds.
+- **A mutating compound assignment.** Still desugars, so `$v += $w` allocates. This is the
+  one remaining piece of the original complaint that is about value types rather than syntax.
+- Compiled-mode agreement, which is compiler work.

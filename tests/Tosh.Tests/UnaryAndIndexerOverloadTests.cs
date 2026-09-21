@@ -204,4 +204,72 @@ public sealed class UnaryAndIndexerOverloadTests : IClassFixture<ToshRuntimeFixt
     {
         Assert.Equal(expected, await RunAsync(source));
     }
+
+    // ── `TOAST-0056`: the three limitations, pinned ───────────────────────────
+    //
+    // The unary and indexer surface landed and the plan item went on describing it as
+    // missing, so `AGENTS.md` did too. What is *not* there has the same problem in reverse:
+    // nothing held these three shut, so a reader had only the prose's word for it. Each is
+    // deliberate or tracked, and each should fail loudly enough that closing it means
+    // updating the specification in the same change.
+
+    /// <summary>
+    /// An indexer takes one argument.
+    /// </summary>
+    /// <remarks>
+    /// Not an oversight: a comma inside brackets already selects between the three lookup
+    /// forms — <c>[value]</c>, <c>[key,]</c> and <c>[,value]</c> — so <c>$m[$i, $j]</c>
+    /// collides with a spelling that means something else. Closing it is a decision about
+    /// that grammar, not an implementation.
+    /// </remarks>
+    [Fact]
+    public void Multi_argument_indexing_is_refused_by_the_parser()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var parse = engine.Parse("class V { func [](i) => $i }\n(new V())[0, 1]", "<double-index>");
+
+        Assert.Contains(
+            parse.Diagnostics,
+            diagnostic => diagnostic.Code == "tosh.parser.unsupported_double_index_lookup");
+    }
+
+    /// <summary>
+    /// Unary resolution does not consult CLR <c>op_*</c> methods, unlike the binary
+    /// operators.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0051` gave the binary operators a CLR fallback and the unary path never got
+    /// one, so the same value answers one and not the other. Asserted as a pair, because the
+    /// asymmetry is the finding — a bare failure would read as "TimeSpan does not do
+    /// arithmetic", which is not true.
+    /// </remarks>
+    [Fact]
+    public async Task Unary_does_not_fall_back_to_a_clr_operator_although_binary_does()
+    {
+        Assert.Equal(
+            "00:10:00",
+            await RunAsync("var a = System.TimeSpan.FromMinutes(5)\n($a + $a).ToString()"));
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => RunAsync("var a = System.TimeSpan.FromMinutes(5)\n-$a"));
+    }
+
+    /// <summary>
+    /// Compound assignment is not its own operator: it desugars, so <c>+</c> covers <c>+=</c>
+    /// and there is no hook that would let a value type write in place.
+    /// </summary>
+    [Fact]
+    public async Task Compound_assignment_desugars_to_the_binary_form()
+    {
+        Assert.Equal(
+            "3",
+            await RunAsync(
+                "class V(a) { prop A = $a\n    func +(o) => (new V(($this.A + $o.A))) }\n"
+                + "var v = (new V(1))\n$v += (new V(2))\n$v.A"));
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
+        var parse = engine.Parse("class V { func +=(o) => 99 }", "<compound-overload>");
+
+        Assert.NotEmpty(parse.Diagnostics);
+    }
 }

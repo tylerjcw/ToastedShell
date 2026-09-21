@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
 | [`TOAST-0135`](items/TOAST-0135.md) | P3 | open | — | The compiled backend diverges from the interpreter in six recorded places |
+| [`TOAST-0056`](items/TOAST-0056.md) | P2 | partial | 4/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |

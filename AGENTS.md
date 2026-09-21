@@ -353,7 +353,35 @@ Overloadable symbols: `+ - * / // % ** == != < <= > >= =~ !~`.
 
 **Operator dispatch is symmetric:** For all overloadable and comparison operators, both operands are checked for overloads. The left operand is checked first; if no overload is found, the right operand is checked. If neither defines an overload, the built-in operator is used. This matches C#-like behavior and allows mixed-type arithmetic and comparisons to resolve to either operand's overload.
 
-Unary operators and compound assignment (`+=`, etc.) are **not** directly overloadable (but `+=` desugars to `+`, so overloading `+` covers it).
+**Unary operators and indexers are overloadable too.** Prefix `-` and `not`
+take a zero-argument method named for the symbol; an indexer reads through
+`[]` and writes through `[]=`:
+
+```tosh
+class Vec(x, y, z) {
+    shy prop Items = [$x, $y, $z]
+
+    func -()           => new Vec(0 - $x, 0 - $y, 0 - $z)
+    func [](i)         => $this.Items[$i]
+    func []=(i, v)     { $this.Items[$i] = $v }
+}
+
+var v = new Vec(3, 4, 5)
+$v[0]        # 3
+$v[1] = 99
+$v[1] += 1   # 100 — reads through [], writes through []=
+```
+
+Three limitations remain, and they are deliberate or tracked rather than
+accidental:
+
+- Compound assignment (`+=`, etc.) is not directly overloadable; it
+  desugars to the binary form, so defining `+` covers `+=`.
+- An indexer takes **one** argument. `$m[$i, $j]` is refused with
+  `tosh.parser.unsupported_double_index` because a comma inside brackets
+  already selects between `[value]`, `[key,]` and `[,value]`.
+- Unary and indexer resolution do **not** consult CLR `op_*` methods, so
+  `-$timespan` fails where `$a + $b` on the same type succeeds (`TOAST-0056`).
 
 #### Generic Classes
 
