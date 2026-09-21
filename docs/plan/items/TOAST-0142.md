@@ -93,6 +93,43 @@ asking each. A full type-to-assembly map is also affordable at 5,266 entries if 
 precision turns out to be worth it — `SHA256` resolves to `System.Security.Cryptography`,
 `Color` to `System.Drawing.Primitives`, `Vector3` to `System.Private.CoreLib`.
 
+## Where the assembly count went — 193 against 183
+
+Both numbers were reported without reconciling them, which was sloppy. Diffed:
+
+- **In TPA, not on disk (11):** nine `Microsoft.Extensions.*`, plus `Toast.Runtime` and
+  `Toast.Stdlib`.
+- **On disk, not in TPA (1):** `Tosh.Cli.r2r.dll`, 64 MB.
+
+193 − 11 + 1 = 183. The eleven are compiled into the ReadyToRun **composite** image, so they
+exist as names in the trusted-platform list and not as files. Nothing is missing; two views
+count different things.
+
+That matters for generation: a scan of the *extracted* directory silently misses whatever the
+composite swallowed. The first feasibility pass did exactly that and reported 172 namespaces.
+Scanned from the reference pack instead — the public contract, version-matched to the SDK, and
+naming assemblies the way `Assembly.Load` accepts them — the honest figures are **176
+assemblies, 4,292 exported types, 145 namespaces, 46 of them spanning more than one assembly,
+about 10 KB**.
+
+## The generator has to be C#, not ToastScript
+
+A first attempt wrote `scripts/extract-framework-index.tosh`, following the convention
+`extract-diagnostic-codes.tosh` sets. It produced a 649 KB file in which every namespace's
+value was a dump of the whole dictionary — the accumulation idiom
+`$index[$ns] = [...$index[$ns], $simple]` does not do what it reads like. Removed rather than
+left in the tree.
+
+Two reasons not to retry it there. The equivalent twenty lines of C# were correct first time
+and are already written. And a ToastScript generator means a working `tosh` is needed to build
+`tosh`, which the diagnostic generator already accepts but which is a worse trade for something
+on the critical path of type resolution.
+
+Open question for whoever picks this up: a standalone tool under `tools/` matching
+`Tosh.DevCompanion`, or an MSBuild task in the existing `Tosh.Sdk.Tasks`. The task is the
+tidier home and introduces a build-ordering dependency; the tool is inert and has to be run by
+hand, like the generators already in the repository.
+
 ## What would close this
 
 - [ ] A build-time index maps type full names to the assembly that holds them
