@@ -126,6 +126,7 @@
 | [`TOAST-0115`](items/TOAST-0115.md) | P3 | complete | 10/10 | Unary minus glued to a variable is read as a command name outside brackets |
 | [`TOAST-0079`](items/TOAST-0079.md) | P2 | complete | 6/6 | An array cannot reach native memory, so the FFI has no data plane |
 | [`TUI-0003`](items/TUI-0003.md) | P2 | complete | 6/6 | The two browsers hand-render what should be widgets, and are the proof the widget layer works |
+| [`TOSH-0002`](items/TOSH-0002.md) | P2 | complete | 4/4 | Tosh.DevCompanion floats its Microsoft.Data.Sqlite reference, so its dependency set is whatever restore last chose |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
 | [`TOAST-0121`](items/TOAST-0121.md) | P2 | complete | 6/6 | A range whose left operand is a variable is read as member access |

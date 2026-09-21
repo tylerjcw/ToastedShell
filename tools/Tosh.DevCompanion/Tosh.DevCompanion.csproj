@@ -12,8 +12,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Zero references to TōSh projects — this tool is fully independent. -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
+    <!--
+      Zero references to TōSh projects — this tool is fully independent.
+
+      `TOSH-0002`. Pinned exactly, not floated. `Version="9.*"` meant two restores months
+      apart could build differently from the same commit with nothing recording which one
+      was tested. It is also how the old board's security note resolved itself: the
+      advisory on `SQLitePCLRaw.lib.e_sqlite3` 2.1.10 (GHSA-2m69-gcr7-jv3q) stopped
+      applying because the float moved on its own — which means it could equally have
+      *started* applying the same way, unremarked.
+
+      Transitively, at the time of pinning: `Microsoft.Data.Sqlite.Core` 9.0.20,
+      `SQLitePCLRaw.bundle_e_sqlite3` / `.core` / `.lib.e_sqlite3` 2.1.12. The advisory
+      names 2.1.10 and does not apply to 2.1.12. Recorded here so a reader can check
+      without running a restore, which is the point of pinning.
+    -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.20" />
   </ItemGroup>
 
 </Project>
