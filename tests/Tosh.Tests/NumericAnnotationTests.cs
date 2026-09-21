@@ -143,4 +143,54 @@ public sealed class NumericAnnotationTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public async Task An_ordinary_suffixed_literal_is_unchanged()
         => Assert.Equal(100L, await RunAsync("return 100L"));
+
+    // ── `TOAST-0139`: a wide literal nothing vouched for ──────────────────────
+
+    private IReadOnlyList<ToshDiagnostic> CheckWith(string source) => Check(source);
+
+    private static bool Wide(IEnumerable<ToshDiagnostic> diagnostics) =>
+        diagnostics.Any(d => d.Code == "tosh.type.wide_integer_literal");
+
+    /// <summary>
+    /// An annotation that can hold the width vouches for it, and nothing is said.
+    /// </summary>
+    [Theory]
+    [InlineData("var y: Int128 = 170141183460469231731687303715884105727")]
+    [InlineData("var y: UInt128 = 340282366920938463463374607431768211455")]
+    [InlineData("var b: bigint = 99999999999999999999999")]
+    public void An_annotated_wide_literal_is_not_questioned(string source)
+        => Assert.False(Wide(CheckWith(source)), source);
+
+    /// <summary>
+    /// With nothing to vouch for it, a literal too wide for any 64-bit type is far more
+    /// often a typed digit too many than an intention.
+    /// </summary>
+    /// <remarks>
+    /// This is the half of the literal-widening change that keeps it from being silent. The
+    /// lexer produces the value so it can be expressed at all; noticing that nobody asked for
+    /// that width is a separate question, with different information available.
+    /// </remarks>
+    [Theory]
+    [InlineData("var x = 99999999999999999999999")]
+    [InlineData("echo 99999999999999999999999")]
+    [InlineData("99999999999999999999999")]
+    public void An_unvouched_wide_literal_is_questioned(string source)
+        => Assert.True(Wide(CheckWith(source)), source);
+
+    /// <summary>
+    /// The inferred type does not count as vouching. Without a *written* annotation the
+    /// declared type is whatever the inferrer read off the literal — `BigInteger` for a wide
+    /// one — so the literal would vouch for itself and the warning could never fire.
+    /// </summary>
+    [Fact]
+    public void An_inferred_type_does_not_vouch_for_the_literal_that_produced_it()
+        => Assert.True(Wide(CheckWith("var x = 99999999999999999999999")));
+
+    [Theory]
+    [InlineData("var x = 5")]
+    [InlineData("var x = 9223372036854775807")]
+    [InlineData("var s = \"hello\"")]
+    [InlineData("var x: bigint = 5")]
+    public void An_ordinary_literal_is_untouched(string source)
+        => Assert.False(Wide(CheckWith(source)), source);
 }

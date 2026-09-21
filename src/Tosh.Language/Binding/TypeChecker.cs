@@ -348,6 +348,17 @@ public static class TypeChecker
         /// </remarks>
         public string? VoidFunctionName { get; set; }
 
+        /// <summary>
+        /// Wide integer literals an annotation has vouched for — <c>TOAST-0139</c>.
+        /// </summary>
+        /// <remarks>
+        /// `var y: Int128 = 170141183460469231731687303715884105727` is a value; the same
+        /// digits with no annotation to hold them is more often a typed digit too many. The
+        /// declaration check runs before the expression walk reaches the literal, so it
+        /// records the ones it has accounted for and the walk warns about the rest.
+        /// </remarks>
+        public HashSet<BoundLiteral> VouchedWideLiterals { get; } = new(ReferenceEqualityComparer.Instance as IEqualityComparer<BoundLiteral>);
+
         public Dictionary<string, BoundFunctionDefinition> UserFunctions { get; } =
             new(StringComparer.Ordinal);
         public Dictionary<string, BoundInterfaceDefinition> Interfaces { get; } =
@@ -1017,6 +1028,10 @@ public static class TypeChecker
     {
         switch (expression)
         {
+            case BoundLiteral wide when IsWiderThan64Bits(wide) && !ctx.VouchedWideLiterals.Contains(wide):
+                ctx.Diagnostics.Add(WideIntegerLiteralDiagnostic(wide, ctx));
+                return;
+
             case BoundLiteral:
             case BoundVariableReference:
             case BoundStaticMemberAccess:
@@ -2263,8 +2278,31 @@ public static class TypeChecker
         var declared = decl.Symbol.DeclaredType;
         if (decl.Value is null) return;
         var value = TypeInferrer.InferPipelineValue(decl.Value);
-        if (!IsAssignable(value, declared, out var reason) &&
-            !LiteralFitsNumericTarget(decl.Value, declared))
+        var literalFits = LiteralFitsNumericTarget(decl.Value, declared);
+        var assignable = IsAssignable(value, declared, out var reason);
+
+        // Only a *written* annotation vouches. Without one, `declared` is the type the
+        // inferrer read off the literal itself — `BigInteger` for a wide one — so the literal
+        // would vouch for itself and the warning could never fire.
+        if (literalFits && decl.Symbol.DeclaredTypeName is not null && SingleLiteral(decl.Value) is { } vouched)
+        {
+            ctx.VouchedWideLiterals.Add(vouched);
+        }
+        else if (assignable && WideLiteralIn(decl.Value) is { } unvouched)
+        {
+            // `TOAST-0139`. `var x = <wide literal>` lowers with the literal as a command
+            // argument rather than an expression stage, and nothing walks a command call's
+            // arguments — so the expression walk never sees it. This is the likeliest place
+            // for a typed digit too many, so it is checked here rather than left silent.
+            //
+            // Only when the declaration otherwise *accepts* the value: `var x: int = <wide>`
+            // already reports a mismatch that says the useful thing, and a second diagnostic
+            // about the same digits would be noise.
+            ctx.VouchedWideLiterals.Add(unvouched);
+            ctx.Diagnostics.Add(WideIntegerLiteralDiagnostic(unvouched, ctx));
+        }
+
+        if (!assignable && !literalFits)
         {
             ctx.Diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.type.mismatch",
@@ -2662,6 +2700,55 @@ public static class TypeChecker
     /// not a literal keeps the widening rule exactly.
     /// </para>
     /// </remarks>
+    private static ToshDiagnostic WideIntegerLiteralDiagnostic(BoundLiteral literal, CheckContext ctx) =>
+        new(Code: "tosh.type.wide_integer_literal",
+            Title: "This integer literal is wider than 64 bits and nothing says it should be.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: literal.Span,
+            Label: "it becomes a 'bigint'",
+            Help: "annotate the target — 'var x: bigint = …', 'Int128' or 'UInt128' — if the "
+                + "width is intended; otherwise check the digits.",
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Type,
+            Lifecycle: ToshDiagnosticLifecycle.Preview);
+
+    /// <summary>A wide literal anywhere in a single-stage pipeline, whatever its shape.</summary>
+    private static BoundLiteral? WideLiteralIn(BoundPipeline? pipeline)
+    {
+        if (pipeline is not { Stages.Count: 1 }) return null;
+
+        return pipeline.Stages[0] switch
+        {
+            BoundExpressionStage { Value: BoundLiteral literal } when IsWiderThan64Bits(literal) => literal,
+            BoundCommandCall call => call.Arguments
+                .Select(argument => argument.Value)
+                .OfType<BoundLiteral>()
+                .FirstOrDefault(IsWiderThan64Bits),
+            _ => null,
+        };
+    }
+
+    /// <summary>The literal a pipeline assigns directly, if it assigns one.</summary>
+    private static BoundLiteral? SingleLiteral(BoundPipeline? pipeline) =>
+        pipeline is { Stages.Count: 1 } &&
+        pipeline.Stages[0] is BoundExpressionStage { Value: BoundLiteral { IsBareword: false } literal }
+            ? literal
+            : null;
+
+    /// <summary>
+    /// Whether a literal is an integer no 64-bit type could have held.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0139`. Only a `BigInteger` reaches this: the lexer produces one exactly when a
+    /// decimal literal overflowed 64 bits, so the question is already answered by the type.
+    /// Checked against both `long` and `ulong`, because a literal that fits either was
+    /// representable and is not what this is looking for.
+    /// </remarks>
+    private static bool IsWiderThan64Bits(BoundLiteral literal) =>
+        literal.Value is System.Numerics.BigInteger big &&
+        (big > (System.Numerics.BigInteger)ulong.MaxValue || big < (System.Numerics.BigInteger)long.MinValue);
+
     private static bool LiteralFitsNumericTarget(BoundPipeline? pipeline, BoundType declared)
     {
         if (pipeline is null ||
@@ -2707,6 +2794,42 @@ public static class TypeChecker
         if (value is Half half)
         {
             return FitsExactly((double)half, target);
+        }
+
+        // Neither `BigInteger` nor the 128-bit integers are `IConvertible` against each
+        // other, so `Convert.ChangeType` throws rather than answering — and this is exactly
+        // the pair that matters, since a decimal literal wider than 64 bits lexes as a
+        // `BigInteger` and the annotation asking for it is `Int128` or `UInt128`. Without
+        // this, the case `TOAST-0138` exists to serve warned about itself.
+        if (value is System.Numerics.BigInteger big)
+        {
+            if (target == typeof(System.Numerics.BigInteger)) return true;
+            if (target == typeof(Int128)) return big >= (System.Numerics.BigInteger)Int128.MinValue
+                                              && big <= (System.Numerics.BigInteger)Int128.MaxValue;
+            if (target == typeof(UInt128)) return big >= System.Numerics.BigInteger.Zero
+                                               && big <= (System.Numerics.BigInteger)UInt128.MaxValue;
+
+            try
+            {
+                return (System.Numerics.BigInteger)Convert.ChangeType(
+                    big, target, CultureInfo.InvariantCulture) is var round && round == big;
+            }
+            catch (Exception exception) when (exception is OverflowException or InvalidCastException or FormatException)
+            {
+                return false;
+            }
+        }
+
+        if (target == typeof(System.Numerics.BigInteger))
+        {
+            try
+            {
+                return FitsExactly(value, typeof(long)) || FitsExactly(value, typeof(ulong));
+            }
+            catch (Exception exception) when (exception is OverflowException or InvalidCastException)
+            {
+                return false;
+            }
         }
 
         try

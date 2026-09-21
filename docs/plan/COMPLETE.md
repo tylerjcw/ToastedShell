@@ -123,6 +123,7 @@
 | [`TUI-0023`](items/TUI-0023.md) | P3 | complete | 8/8 | There is no menu: a command a screen offers is either a key you have to know or a button taking up room |
 | [`TUI-0012`](items/TUI-0012.md) | P3 | complete | 6/6 | There is no performance budget, so 'fast enough' is a feeling |
 | [`TUI-0013`](items/TUI-0013.md) | P2 | complete | 5/5 | The result of a full-screen TUI cannot be captured into a variable |
+| [`TOAST-0139`](items/TOAST-0139.md) | P2 | complete | 6/6 | A wide integer literal nothing asked for is silent |
 | [`TOAST-0115`](items/TOAST-0115.md) | P3 | complete | 10/10 | Unary minus glued to a variable is read as a command name outside brackets |
 | [`TOAST-0079`](items/TOAST-0079.md) | P2 | complete | 6/6 | An array cannot reach native memory, so the FFI has no data plane |
 | [`TUI-0003`](items/TUI-0003.md) | P2 | complete | 6/6 | The two browsers hand-render what should be widgets, and are the proof the widget layer works |
