@@ -144,6 +144,33 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["ptr"] = typeof(IntPtr),
         ["uptr"] = typeof(UIntPtr),
         ["uintptr"] = typeof(UIntPtr),
+
+        // `TOAST-0061`. The shapes graphics and physics code is written in. `Vector` is a
+        // shell-native dense vector of doubles — right for numeric and data work, close to
+        // worst case for a transform hierarchy, which wants twelve bytes and not a
+        // heap-allocated variable-length sequence. Both families are kept; see
+        // `§Built-in Type Aliases`.
+        //
+        // These resolved already, but only through the platform-index fallback that finds a
+        // CLR type by simple name. That fallback is why `func` resolved to `System.Func`1` —
+        // concrete and wrong — so a name worth relying on is worth aliasing explicitly.
+        ["vector2"] = typeof(System.Numerics.Vector2),
+        ["vector3"] = typeof(System.Numerics.Vector3),
+        ["vector4"] = typeof(System.Numerics.Vector4),
+        ["quaternion"] = typeof(System.Numerics.Quaternion),
+        ["matrix3x2"] = typeof(System.Numerics.Matrix3x2),
+        ["matrix4x4"] = typeof(System.Numerics.Matrix4x4),
+        ["plane"] = typeof(System.Numerics.Plane),
+
+        // `TOAST-0061`. General numeric shapes with no alias of their own. `nint`/`nuint` name
+        // the same CLR types as `ptr`/`uptr` and are kept separate on purpose: one says
+        // "pointer-sized integer", the other says "pointer", and an annotation should be able
+        // to say which it meant.
+        ["half"] = typeof(Half),
+        ["int128"] = typeof(Int128),
+        ["uint128"] = typeof(UInt128),
+        ["nint"] = typeof(IntPtr),
+        ["nuint"] = typeof(UIntPtr),
     };
     private static readonly IReadOnlyDictionary<string, int> GenericAliasArities = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
     {

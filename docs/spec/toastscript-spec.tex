@@ -1113,6 +1113,16 @@ annotations, casts, and \code{new} expressions.
 \code{Vector} / \code{vec} & \code{ToSh.Vector} & Numeric vector shell type \\
 \code{Matrix} / \code{matrix} / \code{mat} & \code{ToSh.Matrix} & Numeric matrix shell type \\
 \code{Complex} / \code{complex} & \code{ToSh.Complex} & Complex number shell type \\
+\code{Vector2} & \code{System.Numerics.Vector2} & Two floats, by value \\
+\code{Vector3} & \code{System.Numerics.Vector3} & Three floats, by value \\
+\code{Vector4} & \code{System.Numerics.Vector4} & Four floats, by value \\
+\code{Quaternion} & \code{System.Numerics.Quaternion} & Rotation \\
+\code{Matrix3x2} & \code{System.Numerics.Matrix3x2} & 2D affine transform \\
+\code{Matrix4x4} & \code{System.Numerics.Matrix4x4} & 3D transform \\
+\code{Plane} & \code{System.Numerics.Plane} & Normal and distance \\
+\code{Half} & \code{System.Half} & 16-bit IEEE float \\
+\code{Int128} / \code{UInt128} & \code{System.Int128} / \code{UInt128} & 128-bit integers \\
+\code{nint} / \code{nuint} & \code{System.IntPtr} / \code{UIntPtr} & Pointer-sized integers \\
 \bottomrule
 \caption{Built-in type aliases}
 \label{tab:types}
@@ -1274,6 +1284,24 @@ recur (0, 1) func(a, b) => ($a + $b) | first 8
 
 \subsection{Vector}
 \ikw{Vector}\ikw{vec}
+
+\paragraph{Two vector families, on purpose.}
+\code{Vector}, \code{Matrix} and \code{Complex} are shell-native numeric types;
+\code{Vector2}--\code{Vector4}, \code{Quaternion} and the matrices are
+\code{System.Numerics} value types. They are not alternatives to each other and neither
+is being replaced.
+
+\code{Vector} is heap-allocated, variable-length and double-precision, which is what
+numeric and data work wants: a column of readings whose length is decided at runtime, and
+which is enumerable because iterating it is the normal thing to do with it. A transform
+hierarchy wants the opposite --- a fixed three or four single-precision components,
+by value, small enough to sit in a register --- and using \code{Vector} for one allocates
+per node per frame.
+
+The \code{System.Numerics} types also carry the hardware-accelerated operations a renderer
+needs, and their arithmetic reaches TōSh through the ordinary CLR operator fallback
+(\S\ref{sec:operator-overloading}) rather than through a special case, so
+\code{\$a + \$b} on two \code{Vector3} values is the same mechanism as any other operator.
 
 \code{Vector} is a shell-native dense vector of \code{double} values.  Create
 vectors with the \code{vec} command, \code{new Vector(...)}, or static factory

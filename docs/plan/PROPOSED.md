@@ -6,7 +6,6 @@
 |---|---|---|---|---|
 | [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
-| [`TOAST-0061`](items/TOAST-0061.md) | P3 | proposed | 0/8 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
 | [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
 | [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
@@ -37,7 +36,6 @@
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
-| [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
 | [`TOAST-0099`](items/TOAST-0099.md) | P2 | proposed | 0/7 | A declared type cannot say where it lives, so nothing can write its qualified name back |
 | [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |

@@ -6414,24 +6414,23 @@ public static class BuiltInDisplayProfiles
                 });
     }
 
+    // `TOAST-0061`. The vectors and the quaternion print as values — `Vector3(1, 2, 3)` —
+    // rather than as a transposed table of components. They are values: twelve bytes with
+    // names, not records with fields, and a reader asking for one wants to see it rather than
+    // read a four-row table to learn three numbers. The type leads the form because
+    // `(1, 2, 3)` alone does not say whether the fourth component was dropped or never there.
+    //
+    // A matrix keeps its table. Sixteen numbers on one line is not a reading of anything.
     private static DisplayProfile CreateVector2Profile()
     {
         return DisplayProfile
             .For<Vector2>()
-            .AddTableCase(
-                context => context.Rows.Count == 1,
-                _ =>
-                [
-                    new DisplayTableColumn("X", row => ((Vector2)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Y", row => ((Vector2)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Length", row => ((Vector2)row).Length().ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 10),
-                ])
             .AddValueCase(
                 DisplaySurface.Any,
                 context =>
                 {
                     var v = (Vector2)context.Value;
-                    return $"({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)})";
+                    return $"Vector2({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)})";
                 });
     }
 
@@ -6439,21 +6438,12 @@ public static class BuiltInDisplayProfiles
     {
         return DisplayProfile
             .For<Vector3>()
-            .AddTableCase(
-                context => context.Rows.Count == 1,
-                _ =>
-                [
-                    new DisplayTableColumn("X", row => ((Vector3)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Y", row => ((Vector3)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Z", row => ((Vector3)row).Z.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Length", row => ((Vector3)row).Length().ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 10),
-                ])
             .AddValueCase(
                 DisplaySurface.Any,
                 context =>
                 {
                     var v = (Vector3)context.Value;
-                    return $"({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)}, {v.Z.ToString(CultureInfo.InvariantCulture)})";
+                    return $"Vector3({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)}, {v.Z.ToString(CultureInfo.InvariantCulture)})";
                 });
     }
 
@@ -6461,22 +6451,12 @@ public static class BuiltInDisplayProfiles
     {
         return DisplayProfile
             .For<Vector4>()
-            .AddTableCase(
-                context => context.Rows.Count == 1,
-                _ =>
-                [
-                    new DisplayTableColumn("X", row => ((Vector4)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Y", row => ((Vector4)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Z", row => ((Vector4)row).Z.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("W", row => ((Vector4)row).W.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Length", row => ((Vector4)row).Length().ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 10),
-                ])
             .AddValueCase(
                 DisplaySurface.Any,
                 context =>
                 {
                     var v = (Vector4)context.Value;
-                    return $"({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)}, {v.Z.ToString(CultureInfo.InvariantCulture)}, {v.W.ToString(CultureInfo.InvariantCulture)})";
+                    return $"Vector4({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)}, {v.Z.ToString(CultureInfo.InvariantCulture)}, {v.W.ToString(CultureInfo.InvariantCulture)})";
                 });
     }
 
@@ -6484,22 +6464,12 @@ public static class BuiltInDisplayProfiles
     {
         return DisplayProfile
             .For<Quaternion>()
-            .AddTableCase(
-                context => context.Rows.Count == 1,
-                _ =>
-                [
-                    new DisplayTableColumn("W", row => ((Quaternion)row).W.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("X", row => ((Quaternion)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Y", row => ((Quaternion)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Z", row => ((Quaternion)row).Z.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("IsIdentity", row => ((Quaternion)row).IsIdentity ? "Yes" : "No", DisplayTableAlignment.Left, MinWidth: 3, MaxWidth: 10, Priority: 10),
-                ])
             .AddValueCase(
                 DisplaySurface.Any,
                 context =>
                 {
                     var q = (Quaternion)context.Value;
-                    return $"({q.W.ToString(CultureInfo.InvariantCulture)}; {q.X.ToString(CultureInfo.InvariantCulture)}, {q.Y.ToString(CultureInfo.InvariantCulture)}, {q.Z.ToString(CultureInfo.InvariantCulture)})";
+                    return $"Quaternion({q.W.ToString(CultureInfo.InvariantCulture)}; {q.X.ToString(CultureInfo.InvariantCulture)}, {q.Y.ToString(CultureInfo.InvariantCulture)}, {q.Z.ToString(CultureInfo.InvariantCulture)})";
                 });
     }
 

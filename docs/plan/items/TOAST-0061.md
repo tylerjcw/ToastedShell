@@ -1,7 +1,7 @@
 ---
 id: TOAST-0061
 title: "The value types graphics and physics code is written in have no Tōast spelling"
-status: proposed
+status: partial
 area: toast
 priority: 3
 opened: 2026-08-22
@@ -54,14 +54,57 @@ skinning and particle work that is written against them.
 
 ## Acceptance
 
-- [ ] The `System.Numerics` value types have aliases and appear in the type table
-- [ ] `Half`, `Int128`, `UInt128`, `nint`, `nuint` are general aliases, and `var h: Half = 1.5`
+- [x] The `System.Numerics` value types have aliases and appear in the type table
+- [~] `Half`, `Int128`, `UInt128`, `nint`, `nuint` are general aliases, and `var h: Half = 1.5`
+      — *aliases done; the assignment works but warns, which is [`TOAST-0138`](TOAST-0138.md)*
       binds
-- [ ] `Vector`, `Matrix` and `Complex` are unchanged, and the specification states why the two
+- [x] `Vector`, `Matrix` and `Complex` are unchanged, and the specification states why the two
       families are separate
-- [ ] Arithmetic on the blessed types works through `TOAST-0051`, not a special case
-- [ ] They render as values rather than as enumerables — `Vector3(1, 2, 3)`, not a table of
+- [x] Arithmetic on the blessed types works through `TOAST-0051`, not a special case
+- [x] They render as values rather than as enumerables — `Vector3(1, 2, 3)`, not a table of
       three cells
 - [ ] Swizzle accessors on the vector and colour types, resolved at compile time
 - [ ] `Vector128<T>`/`Vector256<T>` are reachable and annotatable
 - [ ] A rotating-transform fixture allocates zero bytes per frame, measured
+
+## Done — 2026-09-20
+
+**Aliases.** `Vector2`, `Vector3`, `Vector4`, `Quaternion`, `Matrix3x2`, `Matrix4x4` and
+`Plane`, plus `Half`, `Int128`, `UInt128`, `nint` and `nuint`, are entries in
+`DotNetTypeResolver.Aliases` and rows in `§Built-in Type Aliases`.
+
+They resolved before this — but only through the platform-index fallback that finds a CLR type
+by simple name, which is the same mechanism that made `func` resolve to `System.Func`1`,
+concrete and wrong ([`TOAST-0048`](TOAST-0048.md)). A name worth relying on is worth aliasing
+explicitly rather than leaving to a lookup that can find something else.
+
+`nint` and `ptr` name the same CLR type and are kept apart deliberately: one says
+"pointer-sized integer", the other says "pointer", and an annotation should be able to say
+which it meant.
+
+**Rendering.** A vector or quaternion prints as a value named by its type — `Vector3(1, 2, 3)`
+— where it used to print a transposed four-row table to say three numbers. The type leads the
+form because `(1, 2, 3)` alone does not say whether a fourth component was dropped or was never
+there. A matrix keeps its table; sixteen numbers on one line is not a reading of anything.
+
+**Arithmetic** already went through `TOAST-0051`'s CLR `op_*` fallback rather than a special
+case, and now has a test saying so.
+
+**The specification** states why the two families coexist, beside the `Vector` prose: one is
+heap-allocated, variable-length and double-precision for numeric and data work; the other is
+fixed, single-precision and by value for a transform hierarchy, which allocates per node per
+frame if built on the first.
+
+### A test that measured the wrong layer
+
+The rendering tests first asserted against `results[^1].ToString()`, which is the CLR
+`ToString()` — `<1, 2, 3>` for a `Vector3`, `{X:0 Y:0 Z:0 W:1}` for a `Quaternion`. A display
+profile applies in the display pipeline, so those assertions would have passed whatever the
+profile did. They render through `DisplayEngine` now, and the reason is written beside the
+helper.
+
+## Still open
+
+Swizzle accessors, `Vector128<T>`/`Vector256<T>`, and the zero-allocation rotating-transform
+fixture — each its own piece of work. `var h: Half = 1.5` warning is
+[`TOAST-0138`](TOAST-0138.md), which is not specific to these types.

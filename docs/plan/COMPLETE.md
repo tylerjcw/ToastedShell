@@ -147,6 +147,7 @@
 | [`TUI-0006`](items/TUI-0006.md) | P2 | complete | 7/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | complete | — | Reverse/static operator hooks |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
+| [`TS-P3-05`](items/TS-P3-05.md) | P3 | withdrawn | — | Uniform thrown-value protocol |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | complete | 1/1 | Class and member doc comments never reach `help` |
 | [`TOAST-0070`](items/TOAST-0070.md) | P3 | complete | 4/4 | Whether a rune is called is decided by a textual scan, so a name in a string disables compilation |
 | [`TOAST-0024`](items/TOAST-0024.md) | P3 | complete | 5/5 | A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails |
