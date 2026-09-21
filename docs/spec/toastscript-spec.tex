@@ -1285,6 +1285,26 @@ recur (0, 1) func(a, b) => ($a + $b) | first 8
 \subsection{Vector}
 \ikw{Vector}\ikw{vec}
 
+\paragraph{Numeric annotations narrow.}
+An annotation may name a type narrower than the value's — \code{var x: byte = 5},
+\code{var factor: float = 0.5}, \code{var h: Half = 1.5} — and the conversion is performed.
+Whether it succeeds depends on the value rather than the types: \code{var x: byte = 5} is a
+\code{Byte} and \code{var x: byte = 300} is refused, as are \code{byte = 1.5} and
+\code{int = 1.9}, because neither is that value. A conversion that is not numeric at all,
+such as \code{var x: int = [1, 2]}, is reported before it runs.
+
+A decimal integer literal that does not fit 64 bits is a \code{BigInteger}, so the widest
+\code{Int128} and \code{UInt128} values can be written down:
+
+\begin{lstlisting}
+var y: Int128 = 170141183460469231731687303715884105727
+var b: bigint = 170141183460469231731687303715884105727
+\end{lstlisting}
+
+A literal that states its own width does not widen: \code{100L} is an \code{Int64} and
+\code{99999999999999999999999999L} overflows, as does an oversized \code{0x} literal. Each
+says which width it meant.
+
 \paragraph{Two vector families, on purpose.}
 \code{Vector}, \code{Matrix} and \code{Complex} are shell-native numeric types;
 \code{Vector2}--\code{Vector4}, \code{Quaternion} and the matrices are

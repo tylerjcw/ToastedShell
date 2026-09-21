@@ -1,3 +1,4 @@
+using System.Globalization;
 using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
@@ -2262,7 +2263,8 @@ public static class TypeChecker
         var declared = decl.Symbol.DeclaredType;
         if (decl.Value is null) return;
         var value = TypeInferrer.InferPipelineValue(decl.Value);
-        if (!IsAssignable(value, declared, out var reason))
+        if (!IsAssignable(value, declared, out var reason) &&
+            !LiteralFitsNumericTarget(decl.Value, declared))
         {
             ctx.Diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.type.mismatch",
@@ -2612,11 +2614,112 @@ public static class TypeChecker
         };
     }
 
+    /// <summary>Whether one numeric type widens into another.</summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0138`. This asked only about *widening*, so every narrowing annotation was
+    /// reported as a mistake: `var x: float = 1.5`, `var x: byte = 5`, `var index: short = 0`
+    /// each warned `tosh.type.mismatch` — "no implicit conversion from 'Double' to 'Float'" —
+    /// and then assigned the right value anyway. Narrowing is the ordinary reason to annotate
+    /// a numeric at all, so the rule fired on the code it exists to serve.
+    /// </para>
+    /// <para>
+    /// Whether a narrowing conversion succeeds depends on the *value*, not the types: the
+    /// runtime takes `byte = 5` and refuses `byte = 300` and `byte = 1.5`. A check over types
+    /// alone cannot tell those apart, and the precedent for what to do about that is
+    /// `TS-P2-84` a few hundred lines above — a bareword skips this check entirely because
+    /// "the runtime's conversion is not modelled by this pass", after typing it structurally
+    /// reported four false positives against working scripts.
+    /// </para>
+    /// <para>
+    /// So numeric-to-numeric is assignable here and the runtime decides. What is given up is a
+    /// static catch for a literal that cannot fit; the runtime still refuses it, and a
+    /// value-aware check is recorded in the item rather than guessed at here.
+    /// </para>
+    /// </remarks>
     private static bool IsNumericWidening(Type from, Type to)
     {
         var fr = NumericRank(from);
         var tr = NumericRank(to);
         return fr > 0 && tr > 0 && fr <= tr;
+    }
+
+    /// <summary>
+    /// Whether a literal narrows into a numeric target without losing anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0138`. The false positives were all a literal that fits: `var x: byte = 5`,
+    /// `var factor: float = 0.5`, `var h: Half = 1.5`. The type rule cannot admit them,
+    /// because whether a narrowing conversion succeeds depends on the *value* — `byte = 5`
+    /// is a `Byte` and `byte = 300` is refused — and because relaxing it to
+    /// numeric-to-numeric breaks two things that are right: `var x: int = 1.5` is a genuine
+    /// error the checker was correct to report, and the variance rules need `long` to be
+    /// non-assignable to `int` or an invariant slot accepts anything numeric.
+    /// </para>
+    /// <para>
+    /// So the question is asked of the value, and only where there is one. Anything that is
+    /// not a literal keeps the widening rule exactly.
+    /// </para>
+    /// </remarks>
+    private static bool LiteralFitsNumericTarget(BoundPipeline? pipeline, BoundType declared)
+    {
+        if (pipeline is null ||
+            pipeline.Stages.Count != 1 ||
+            pipeline.Stages[0] is not BoundExpressionStage { Value: BoundLiteral { IsBareword: false } literal } ||
+            declared.ClrType is not { } target ||
+            NumericRank(target) <= 0)
+        {
+            return false;
+        }
+
+        return FitsExactly(literal.Value, target);
+    }
+
+    /// <summary>Whether a constant survives conversion to <paramref name="target"/> unchanged.</summary>
+    /// <remarks>
+    /// Round-tripped rather than range-checked: converting and converting back is the same
+    /// question the runtime answers, and it rejects a fractional value for an integral target
+    /// without a separate rule for it.
+    /// </remarks>
+    private static bool FitsExactly(object? value, Type target)
+    {
+        if (value is null || NumericRank(value.GetType()) <= 0) return false;
+        if (value.GetType() == target) return true;
+
+        // `Half` is numeric and not `IConvertible`, so `Convert.ChangeType` throws for it
+        // rather than answering. Round-tripped through `double`, which is what the runtime's
+        // own conversion does.
+        if (target == typeof(Half))
+        {
+            try
+            {
+                var asDouble = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+
+                return (double)(Half)asDouble == asDouble;
+            }
+            catch (Exception exception) when (exception is OverflowException or InvalidCastException or FormatException)
+            {
+                return false;
+            }
+        }
+
+        if (value is Half half)
+        {
+            return FitsExactly((double)half, target);
+        }
+
+        try
+        {
+            var converted = Convert.ChangeType(value, target, CultureInfo.InvariantCulture);
+            var back = Convert.ChangeType(converted, value.GetType(), CultureInfo.InvariantCulture);
+
+            return Equals(back, value);
+        }
+        catch (Exception exception) when (exception is OverflowException or InvalidCastException or FormatException)
+        {
+            return false;
+        }
     }
 
     private static int NumericRank(Type t) => t switch
@@ -2632,6 +2735,17 @@ public static class TypeChecker
         _ when t == typeof(float) => 5,
         _ when t == typeof(double) => 6,
         _ when t == typeof(decimal) => 7,
+
+        // `TOAST-0061` blessed these; without a rank they are not numeric to this pass, so
+        // `var h: Half = 1.5` would keep warning after the widening rule was relaxed.
+        // `Half` sits below `float`, the 128-bit integers above `long`, and the
+        // pointer-sized ones with the machine word they are.
+        _ when t == typeof(Half) => 4,
+        _ when t == typeof(Int128) => 8,
+        _ when t == typeof(UInt128) => 8,
+        _ when t == typeof(IntPtr) => 4,
+        _ when t == typeof(UIntPtr) => 4,
+        _ when t == typeof(System.Numerics.BigInteger) => 9,
         _ => 0,
     };
 }

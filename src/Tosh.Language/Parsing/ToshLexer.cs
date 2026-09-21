@@ -2014,6 +2014,26 @@ public sealed class ToshLexer
         }
         catch (OverflowException)
         {
+            // `TOAST-0138`. A decimal literal wider than 64 bits stopped being a mistake when
+            // `Int128`, `UInt128` and `bigint` became nameable: the annotation could ask for a
+            // width the literal could not be written at, so
+            // `var y: Int128 = 170141183460469231731687303715884105727` failed in the lexer
+            // before any annotation was consulted, and the help line said to "compute it at
+            // runtime where a wider numeric type applies" — which is the language declining to
+            // express a value it has a type for.
+            //
+            // It becomes a `BigInteger`, which every wider numeric annotation converts from. A
+            // suffixed or non-decimal literal still overflows: `100L` and `0xFFFF…` each state
+            // the width they meant, and widening them would be overruling the author rather
+            // than serving them.
+            if (radix == 10 &&
+                suffix == IntegerSuffix.None &&
+                BigInteger.TryParse(magnitude, NumberStyles.None, CultureInfo.InvariantCulture, out var wide))
+            {
+                token = new SyntaxToken(SyntaxTokenKind.Number, start, text, negative ? -wide : wide);
+                return true;
+            }
+
             throw CreateNumericOverflowDiagnostic(text, start, DescribeRadix(radix));
         }
         catch (FormatException)

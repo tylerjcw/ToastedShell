@@ -113,11 +113,37 @@ public class NumericLiteralWidthTests
         => Assert.Equal(expected, await TypeOfAsync(literal));
 
     /// <summary>
-    /// Past every integer type is a diagnostic. Becoming a `double` is the specific
-    /// behaviour being removed: it is silent, and it loses digits.
+    /// A decimal literal past every fixed integer type is a <c>BigInteger</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// **This reverses part of an earlier decision, deliberately.** The rule was "past every
+    /// integer type is a diagnostic", and the reasoning recorded here was that the behaviour
+    /// being removed — *becoming a `double`* — "is silent, and it loses digits". Both halves
+    /// of that objection were about `double`. A `BigInteger` loses nothing: it is exact at any
+    /// width, and `bigint` is already a blessed alias.
+    /// </para>
+    /// <para>
+    /// What forced it is that `Int128`, `UInt128` and `bigint` are all nameable and none of
+    /// them could be written down. `var y: Int128 = 170141183460469231731687303715884105727`
+    /// failed in the lexer before the annotation was read, and the help line advised computing
+    /// the value "at runtime where a wider numeric type applies" — the language declining to
+    /// express a value it has a type for. `TOAST-0138`.
+    /// </para>
+    /// <para>
+    /// The silence objection survives in weaker form: a typo'd extra digit now yields a
+    /// `BigInteger` rather than a diagnostic. That is the trade, and it is recorded rather
+    /// than glossed.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_decimal_literal_past_every_integer_type_is_a_big_integer()
+        => Assert.Equal("BigInteger", await TypeOfAsync("99999999999999999999999"));
+
+    /// <summary>
+    /// A literal that states its own width still overflows: it said which width it meant.
     /// </summary>
     [Theory]
-    [InlineData("99999999999999999999999")]
     [InlineData("0xFFFFFFFFFFFFFFFFF")]
     [InlineData("99999999999999999999L")]
     public async Task A_literal_past_every_integer_type_is_refused(string literal)

@@ -128,6 +128,7 @@
 | [`TUI-0003`](items/TUI-0003.md) | P2 | complete | 6/6 | The two browsers hand-render what should be widgets, and are the proof the widget layer works |
 | [`TOSH-0002`](items/TOSH-0002.md) | P2 | complete | 4/4 | Tosh.DevCompanion floats its Microsoft.Data.Sqlite reference, so its dependency set is whatever restore last chose |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
+| [`TOAST-0138`](items/TOAST-0138.md) | P3 | complete | 6/6 | A narrowing numeric annotation warns about a conversion the runtime then performs |
 | [`TOAST-0043`](items/TOAST-0043.md) | P2 | complete | 4/4 | A compiled class method with an expression body returned null |
 | [`TOAST-0121`](items/TOAST-0121.md) | P2 | complete | 6/6 | A range whose left operand is a variable is read as member access |
 | [`TOAST-0054`](items/TOAST-0054.md) | P1 | complete | 8/8 | A `match` over a closed union is not checked for exhaustiveness |

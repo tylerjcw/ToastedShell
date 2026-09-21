@@ -165,6 +165,8 @@ public static class TypeConversion
 
                 converted = value switch
                 {
+                    Int128 wide => (BigInteger)wide,
+                    UInt128 wide => (BigInteger)wide,
                     BigInteger integer => integer,
                     byte number => new BigInteger(number),
                     sbyte number => new BigInteger(number),
@@ -211,6 +213,17 @@ public static class TypeConversion
                     var type when type == typeof(decimal) => (decimal)sourceBigInteger,
                     var type when type == typeof(double) => (double)sourceBigInteger,
                     var type when type == typeof(float) => (float)sourceBigInteger,
+
+                    // `TOAST-0138`. A decimal literal wider than 64 bits now lexes as a
+                    // `BigInteger`, so this is the conversion that makes `Int128` and
+                    // `UInt128` usable at all: without it
+                    // `var y: Int128 = 170141183460469231731687303715884105727` lexed fine and
+                    // then failed to convert, which is the same wall one step further on.
+                    var type when type == typeof(Int128) => checked((Int128)sourceBigInteger),
+                    var type when type == typeof(UInt128) => checked((UInt128)sourceBigInteger),
+                    var type when type == typeof(Half) => (Half)(double)sourceBigInteger,
+                    var type when type == typeof(IntPtr) => checked((IntPtr)(long)sourceBigInteger),
+                    var type when type == typeof(UIntPtr) => checked((UIntPtr)(ulong)sourceBigInteger),
                     _ => null,
                 };
 
