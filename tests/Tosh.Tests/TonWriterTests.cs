@@ -35,6 +35,9 @@ public sealed class TonWriterTests
             prop N = 2
             prop Doubled => ($this.N * 2)
         }
+        class TonPoint(x) { prop X = $x }
+        struct TonSpanOf(lo, hi)
+        struct TonRangeOf(lo) { prop Lo = $lo }
 
         """;
 
@@ -390,4 +393,71 @@ public sealed class TonWriterTests
 
     private static string Quote(string value) =>
         "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
+    // ── `TOAST-0137`: the shapes the round trip never covered ─────────────────
+    //
+    // `A_written_document_reads_back_through_from_ton` uses `TonVillager`, which takes no
+    // constructor arguments — the one class shape the literal form can rebuild. That is how
+    // "every declared shape round-trips" came to be ticked while a class with a primary
+    // constructor, and every struct carrying state, wrote documents this reader refuses.
+
+    /// <summary>
+    /// A class that cannot be constructed without arguments is written anonymously.
+    /// </summary>
+    /// <remarks>
+    /// The literal form constructs and then assigns, so the reader needs a zero-argument way
+    /// in. A class's properties are not its constructor parameters, so unlike a record there
+    /// is no call form to fall back to — the type name is what gets given up, and the data
+    /// still round-trips.
+    /// </remarks>
+    [Fact]
+    public async Task A_class_needing_constructor_arguments_is_written_anonymously()
+        => Assert.Equal("{| X = 3 |}", await RunAsync("to ton (new TonPoint(3))"));
+
+    [Fact]
+    public async Task A_class_needing_constructor_arguments_reads_back()
+        => Assert.Equal("3", await RunAsync(
+            "var doc = (to ton (new TonPoint(3)))\necho ((from ton $doc).X)"));
+
+    /// <summary>And a class the reader can rebuild still keeps its name.</summary>
+    [Fact]
+    public async Task A_class_the_reader_can_rebuild_keeps_its_name()
+        => Assert.Equal(
+            "new TonVillager {| Name = \"Steve\", Job = TonProfession::Librarian |}",
+            await RunAsync(
+                "to ton (new TonVillager {| Name = \"Steve\", Job = TonProfession::Librarian |})"));
+
+    /// <summary>
+    /// A struct is written as a constructor call, as a record is.
+    /// </summary>
+    /// <remarks>
+    /// A struct is immutable — neither a field nor a property can be assigned once it exists —
+    /// so the literal form could never fill one. Its fields *are* its constructor parameters,
+    /// which is the record case exactly, so it takes the same named-argument spelling and
+    /// keeps its type name rather than giving it up.
+    /// </remarks>
+    [Fact]
+    public async Task A_struct_is_written_as_a_constructor_call()
+        => Assert.Equal("new TonSpanOf(lo = 1, hi = 2)", await RunAsync("to ton (new TonSpanOf(1, 2))"));
+
+    [Fact]
+    public async Task A_struct_reads_back_as_itself()
+        => Assert.Equal("2", await RunAsync(
+            "var doc = (to ton (new TonSpanOf(1, 2)))\necho ((from ton $doc).hi)"));
+
+    /// <summary>
+    /// A property derived from a field is not written beside it.
+    /// </summary>
+    /// <remarks>
+    /// `struct S(lo) { prop Lo = $lo }` has one value. Writing `lo` and `Lo` both asserted it
+    /// twice and offered the reader no way to accept either.
+    /// </remarks>
+    [Fact]
+    public async Task A_structs_derived_property_is_not_written_beside_its_field()
+        => Assert.Equal("new TonRangeOf(lo = 5)", await RunAsync("to ton (new TonRangeOf(5))"));
+
+    [Fact]
+    public async Task A_struct_with_a_derived_property_reads_back()
+        => Assert.Equal("5", await RunAsync(
+            "var doc = (to ton (new TonRangeOf(5)))\necho ((from ton $doc).Lo)"));
 }

@@ -809,7 +809,7 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// arguments; otherwise some constructor — primary or declared — must be satisfiable with
     /// none, which means every parameter is optional or a rest parameter.
     /// </remarks>
-    internal bool IsConstructibleWithoutArguments
+    public bool IsConstructibleWithoutArguments
     {
         get
         {

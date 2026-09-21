@@ -97,7 +97,17 @@ internal static class TonWriter
                 // registry holds; what gets written is the descriptor's, which carries the
                 // type arguments a generic class needs — `Box<Int32>`. Dropping them wrote a
                 // `Box<string>` and a `Box<int>` as the same document.
-                return Nameable(instance.Definition.Name, types)
+                //
+                // `TOAST-0137`. Resolving is not enough. The literal form *constructs* and then
+                // assigns, so the reader needs a zero-argument way in — and a class with a
+                // primary constructor has none. Naming one wrote `new P {| X = 3 |}` that its
+                // own reader refused with "No constructor matched class 'P' with 0
+                // argument(s)": the writer breaking the rule this file opens by stating. Its
+                // properties are not its constructor parameters, so unlike a record there is
+                // no call form to fall back to; an anonymous record is what is left, and it
+                // still carries the data and still reads back.
+                return Nameable(instance.Definition.Name, types) &&
+                       instance.Definition.IsConstructibleWithoutArguments
                     ? WriteLiteral(
                         $"new {ShellSpelling(instance.ShellTypeDescriptor.ShellTypeName)}",
                         StateOnly(instance),
@@ -106,10 +116,17 @@ internal static class TonWriter
                     : WriteAnonymous(StateOnly(instance), depth, types);
 
             case ToshStructInstance structure:
+                // `TOAST-0137`. A struct is immutable — neither a field nor a property can be
+                // assigned once it exists — so the literal form could never fill one, and
+                // every struct carrying state failed to read back. Its fields *are* its
+                // constructor parameters, which is exactly the record case above, so it takes
+                // the same named-argument spelling. Properties are derived from those fields
+                // and are not written: `struct S(x) { prop X = $x }` wrote `x` and `X` both,
+                // asserting one value twice and offering the reader no way to accept either.
                 return Nameable(structure.Definition.Name, types)
-                    ? WriteLiteral(
+                    ? WriteCall(
                         $"new {ShellSpelling(structure.ShellTypeDescriptor.ShellTypeName)}",
-                        structure.GetMembers(),
+                        FieldsOnly(structure),
                         depth,
                         types)
                     : WriteAnonymous(structure.GetMembers(), depth, types);
@@ -248,6 +265,35 @@ internal static class TonWriter
 
     private static bool Nameable(string name, IShellNamedTypeView? types) =>
         types is null || types.TryGetNamedType(name, out _);
+
+    /// <summary>
+    /// A struct instance's fields — the parameters its constructor takes.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0137`. A struct's properties are derived from its fields and cannot be assigned,
+    /// so they are not state to write: `struct S(x) { prop X = $x }` has one value, and
+    /// writing `x` and `X` both says so twice. The field order of the declaration is kept,
+    /// because the reader binds by name and a human reads it in the order it was declared.
+    /// </remarks>
+    private static IReadOnlyList<KeyValuePair<string, object?>> FieldsOnly(ToshStructInstance structure)
+    {
+        var members = structure.GetMembers();
+        var written = new List<KeyValuePair<string, object?>>(structure.Definition.Fields.Count);
+
+        foreach (var field in structure.Definition.Fields)
+        {
+            foreach (var member in members)
+            {
+                if (string.Equals(member.Key, field.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    written.Add(new KeyValuePair<string, object?>(field.Name, member.Value));
+                    break;
+                }
+            }
+        }
+
+        return written;
+    }
 
     /// <summary>
     /// A class instance's *state*, without its computed properties.
