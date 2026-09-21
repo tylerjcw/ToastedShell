@@ -162,15 +162,13 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["matrix4x4"] = typeof(System.Numerics.Matrix4x4),
         ["plane"] = typeof(System.Numerics.Plane),
 
-        // `TOAST-0061`. General numeric shapes with no alias of their own. `nint`/`nuint` name
-        // the same CLR types as `ptr`/`uptr` and are kept separate on purpose: one says
-        // "pointer-sized integer", the other says "pointer", and an annotation should be able
-        // to say which it meant.
+        // `TOAST-0061`. General numeric shapes with no alias of their own. `nint` and `nuint`
+        // are *not* here: they already existed above, beside `intptr`, and adding them again
+        // was a duplicate this table's indexer initialiser accepts in silence. The item said
+        // they were missing; it was not re-read against the table before being believed.
         ["half"] = typeof(Half),
         ["int128"] = typeof(Int128),
         ["uint128"] = typeof(UInt128),
-        ["nint"] = typeof(IntPtr),
-        ["nuint"] = typeof(UIntPtr),
     };
     private static readonly IReadOnlyDictionary<string, int> GenericAliasArities = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
     {

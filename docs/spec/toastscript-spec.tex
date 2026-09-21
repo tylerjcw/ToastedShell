@@ -1053,8 +1053,11 @@ date now | type-of        # System.DateTimeOffset
 \section{Built-in Type Aliases}
 \label{sec:type-aliases}
 
-TōSh provides over 40 short aliases for common CLR types. Use these in type
-annotations, casts, and \code{new} expressions.
+TōSh provides over 120 short aliases for common CLR types. Use these in type
+annotations, casts, and \code{new} expressions. The table below is the commonly
+used subset; the full set lives in \code{DotNetTypeResolver.Aliases}, and every
+physical quantity additionally answers to its long name
+(\code{lengthquantity} beside \code{length}, and so on).
 
 {\small
 \begin{longtable}{L{3.4cm}L{7.2cm}L{3.6cm}}
@@ -1103,11 +1106,11 @@ annotations, casts, and \code{new} expressions.
 \code{hashtable} & \code{System.Collections.Hashtable} & Non-generic hash table \\
 \code{set} & \code{HashSet<object>} & Unique value set \\
 \code{record} & \code{System.Dynamic.ExpandoObject} & Anonymous dynamic record (aliases \code{table}, \code{dynamicrecord}) \\
-\code{tuple} & \code{System.Tuple} types & Immutable positional tuple \\
+\code{tuple} & \code{Tosh.Runtime.ToshTuple} & Immutable positional tuple \\
 \code{file} & \code{System.IO.FileInfo} & File reference \\
 \code{dir} / \code{directory} & \code{System.IO.DirectoryInfo} & Directory reference \\
-\code{ptr} & \code{System.IntPtr} & Native pointer \\
-\code{ptr} & \code{System.IntPtr} & Native pointer (alias) \\
+\code{ptr} / \code{nint} / \code{intptr} & \code{System.IntPtr} & Native pointer, and the pointer-sized integer \\
+\code{uptr} / \code{nuint} / \code{uintptr} & \code{System.UIntPtr} & The unsigned pair \\
 \code{ip} / \code{ipaddress} & \code{System.Net.IPAddress} & IP address \\
 \code{version} & \code{System.Version} & Semantic version \\
 \code{Vector} / \code{vec} & \code{ToSh.Vector} & Numeric vector shell type \\

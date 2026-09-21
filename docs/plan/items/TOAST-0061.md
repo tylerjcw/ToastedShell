@@ -82,6 +82,12 @@ explicitly rather than leaving to a lookup that can find something else.
 "pointer-sized integer", the other says "pointer", and an annotation should be able to say
 which it meant.
 
+**Correction, 2026-09-20.** `nint` and `nuint` were not missing — they already sat beside
+`intptr` in the same table, and adding them again created a duplicate key that a collection
+initialiser overwrites in silence. The criterion was believed rather than measured, which is
+the mistake this item's own opening paragraph warns about. Removed in
+[`TOAST-0140`](TOAST-0140.md), which is the audit that found it.
+
 **Rendering.** A vector or quaternion prints as a value named by its type — `Vector3(1, 2, 3)`
 — where it used to print a transposed four-row table to say three numbers. The type leads the
 form because `(1, 2, 3)` alone does not say whether a fourth component was dropped or was never
