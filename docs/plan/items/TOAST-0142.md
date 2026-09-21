@@ -61,6 +61,38 @@ machine where the same programme also accumulated 1.5 GB of type-index cache
 ([`TOAST-0094`](TOAST-0094.md)). And it removes a dependency on an SDK mode whose own warning
 says it is on the way out.
 
+## Feasibility, measured 2026-09-21
+
+**What bundling does *not* break.** Only the app's own framework assemblies are affected. Run
+against the bundled build and the extracted one, the results are identical:
+
+| | bundled | extracted |
+|---|---|---|
+| `load-assembly` of an external DLL by path | 1521 types | 1521 types |
+| `bind native "libc.so.6"` and a P/Invoke call | works | works |
+| `native-alloc` | works | works |
+
+So loading other assemblies while using the shell, and every native binding the graphics work
+rests on, are untouched by this. The only casualty is discovery of the *app's own* framework
+set, because `TRUSTED_PLATFORM_ASSEMBLIES` is where that came from.
+
+**The index is small.** Scanning the 183 assemblies of a published bundle with
+`MetadataLoadContext` — all 183 read, none failed:
+
+| | |
+|---|---|
+| exported types | 5,266 |
+| distinct namespaces | 172 |
+| namespaces spanning more than one assembly | 46 |
+| approximate namespace index | **11 KB** |
+
+A namespace-to-assemblies map is therefore tiny, and it answers the case that disproved the
+heuristic: `System.Net.NetworkInformation` maps to `System.Net.NetworkInformation`,
+`System.Net.Ping` **and** `System.Net.Primitives`, so `Ping` is found by loading the three and
+asking each. A full type-to-assembly map is also affordable at 5,266 entries if the extra
+precision turns out to be worth it — `SHA256` resolves to `System.Security.Cryptography`,
+`Color` to `System.Drawing.Primitives`, `Vector3` to `System.Private.CoreLib`.
+
 ## What would close this
 
 - [ ] A build-time index maps type full names to the assembly that holds them
