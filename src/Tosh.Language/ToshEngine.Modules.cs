@@ -725,6 +725,34 @@ public sealed partial class ToshEngine
             return true;
         }
 
+        // `TOAST-0141`. A sibling, reached through the module this code belongs to.
+        //
+        // `module Build { module Publish { … } module Packaging { … } }` in one file resolves
+        // `Packaging` from inside `Publish` because both are declared into the one scope.
+        // Split across files as `partial module Build.Publish` and `partial module
+        // Build.Packaging`, each `require` gets a scope of its own, and the loop above finds
+        // only what that scope holds — so a module required *later* was invisible and the
+        // call failed at runtime with "Unable to resolve .NET access path". Splitting a module
+        // tree into a file per module changed what a name meant.
+        //
+        // The enclosing module's *export table* is shared across its partial declarations —
+        // `TOAST-0122` reuses one `ModuleExportTable` so every view observes the merged state
+        // — so the sibling is already there at call time, just not in the scope's own
+        // dictionary. Looking at the exports is enough; no new bookkeeping is needed.
+        //
+        // Last, deliberately: everything above still wins, so this can only answer names that
+        // failed before and cannot shadow a local, an import, or a nearer module.
+        foreach (var scope in _scopes)
+        {
+            if (scope.Exports is { } exports &&
+                exports.Modules.TryGetValue(name, out var sibling) &&
+                sibling is ToshModuleObject siblingModule)
+            {
+                module = siblingModule;
+                return true;
+            }
+        }
+
         module = null!;
         return false;
     }

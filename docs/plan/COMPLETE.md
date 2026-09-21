@@ -145,6 +145,7 @@
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | complete | 8/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TOAST-0132`](items/TOAST-0132.md) | P2 | complete | 3/3 | A trait's default body runs in the adopting class's scope, so a library trait cannot name its own types |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
+| [`TOAST-0141`](items/TOAST-0141.md) | P2 | complete | 4/5 | Splitting a module tree across files changes what a sibling name means |
 | [`TOAST-0065`](items/TOAST-0065.md) | P2 | complete | 5/5 | An emitted class inherited object.ToString, so it converted to its CLR name and a match value arm missed |
 | [`TUI-0006`](items/TUI-0006.md) | P2 | complete | 7/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | complete | — | Reverse/static operator hooks |
