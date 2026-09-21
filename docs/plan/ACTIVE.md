@@ -9,6 +9,7 @@
 | [`TOAST-0061`](items/TOAST-0061.md) | P3 | partial | 4/7 | The value types graphics and physics code is written in have no Tōast spelling |
 | [`TOAST-0056`](items/TOAST-0056.md) | P2 | partial | 4/7 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
+| [`TOAST-0142`](items/TOAST-0142.md) | P2 | open | 0/6 | Type discovery needs the single-file bundle extracted, which costs 1.3 GB and a legacy SDK mode |
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | partial | 4/6 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |
 | [`TOAST-0125`](items/TOAST-0125.md) | P1 | partial | 10/12 | Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced |
