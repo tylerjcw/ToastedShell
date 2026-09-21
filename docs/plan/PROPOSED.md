@@ -37,7 +37,6 @@
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
-| [`TS-P3-03`](items/TS-P3-03.md) | P3 | proposed | — | Reverse/static operator hooks |
 | [`TOAST-0063`](items/TOAST-0063.md) | P3 | proposed | 0/5 | A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |

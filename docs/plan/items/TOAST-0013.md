@@ -65,3 +65,35 @@ all.
 
 If it is done by hand first, do it behind the differential harness `TOAST-0009` wants,
 not against the suite alone.
+
+## Re-measured — 2026-09-20
+
+Swept with the rest of the proposed items. The headline moved in both directions, so the
+figures above are the 2026-08 reading and not the current one.
+
+| Member | Then | Now |
+|---|---:|---:|
+| `EvaluateArgumentSlowAsync` | 1,030 | **115** |
+| `EvaluateClassDefinitionAsync` | 546 | **618** |
+| `TryConvertAnnotatedValue` | 169 | 346 |
+| `EvaluateParseResultAsync` | 283 | 275 |
+| members over 100 lines (`ToshEngine*.cs`) | 32 | **37** |
+
+**The one this item leaned on is gone.** `EvaluateArgumentSlowAsync` was split in
+`01a9a3ee` — "each argument shape gets its own state machine" — which is
+[`TOAST-0009`](TOAST-0009.md) doing the work this item said belonged to the evaluator
+rewrite. That is the item's own thesis confirmed: the length and the per-entry allocation
+were one fact, and fixing the allocation fixed the length.
+
+**Everything else drifted the wrong way.** The count rose from 32 to 37, the largest member is
+now a different one, and `TryConvertAnnotatedValue` doubled. So this is not close to done; it
+has one fewer outlier and more of the ordinary problem.
+
+`src/Tosh.Language/ToshEngine.Arguments.cs` still opens by describing
+`EvaluateArgumentSlowAsync` as "**1,030 lines on its own** — the largest member in the engine".
+Corrected in the same change as this note.
+
+Method lengths here were measured by brace-matching with string literals and line comments
+stripped, over `src/Tosh.Language/ToshEngine*.cs`. A first attempt capped the search at 400
+lines and reported a cluster of methods at exactly 401, which is the cap rather than a length —
+worth knowing before trusting a re-measurement.

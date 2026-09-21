@@ -14,12 +14,16 @@ namespace Tosh.Language;
 ///
 /// Moved out of ToshEngine.cs by `TOAST-0005`. Every member moved **verbatim**.
 ///
-/// This file contains `EvaluateArgumentSlowAsync`, which is **1,030 lines on its own**
-/// — the largest member in the engine, and the one `TOAST-0009` identifies as the
+/// This file contains `EvaluateArgumentSlowAsync`, which was **1,030 lines on its own**
+/// — the largest member in the engine, and the one `TOAST-0009` identified as the
 /// allocation problem: a single `async` method covering thirty-nine node shapes, whose
-/// state-machine box therefore carries every branch's locals, about 2,545 bytes per
-/// entry whatever the expression was. Moving it here changes none of that. It is
-/// measured in `TOAST-0013` and belongs to the evaluator rewrite.
+/// state-machine box therefore carried every branch's locals, about 2,545 bytes per
+/// entry whatever the expression was.
+///
+/// That has since happened. `01a9a3ee` gave each argument shape its own state machine and
+/// the method is 115 lines, dispatching rather than deciding. The engine still has
+/// thirty-seven members over a hundred lines and `TOAST-0013` still tracks them; this is no
+/// longer one of them.
 ///
 /// `TryEvaluateSimpleArgument` beside it is the synchronous pre-dispatch that keeps
 /// literals, variables and simple arithmetic out of that method. Reading the two

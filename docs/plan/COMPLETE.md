@@ -144,6 +144,7 @@
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TOAST-0065`](items/TOAST-0065.md) | P2 | complete | 5/5 | An emitted class inherited object.ToString, so it converted to its CLR name and a match value arm missed |
 | [`TUI-0006`](items/TUI-0006.md) | P2 | complete | 7/7 | Input has no routing or focus scopes, so every screen re-invents key dispatch and gets it wrong |
+| [`TS-P3-03`](items/TS-P3-03.md) | P3 | complete | — | Reverse/static operator hooks |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | complete | 1/1 | Class and member doc comments never reach `help` |
 | [`TOAST-0070`](items/TOAST-0070.md) | P3 | complete | 4/4 | Whether a rune is called is decided by a textual scan, so a name in a string disables compilation |

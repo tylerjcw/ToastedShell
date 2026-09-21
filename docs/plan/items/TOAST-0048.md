@@ -95,3 +95,29 @@ that one makes a class of input impossible.
 Raised by the user asking whether the type system is complete. The honest answer is that it
 is fuller than expected and has three shapes nothing can produce — which is a different kind
 of incompleteness from a missing feature, and easier to fix.
+
+## Re-measured — 2026-09-20
+
+Swept with the rest of the proposed items. The audit above is dated 2026-08-28 and most of
+the *Orphans* section has since been overtaken; the *Gaps* section still holds.
+
+| Claim | Then | Now |
+|---|---|---|
+| `FunctionType` — "nothing constructs one, and `TypeNameResolver` never mentions it" | orphaned | **constructed**, in `TypeNameResolver.cs:105` and `Lowerer.cs:1763` |
+| `func(int) -> int` "cannot parse" | parse error | **parses and resolves** |
+| `var t: (int, string)` | `tosh.parser.expected_type_name` | **works** — `var t: (int, string) = (1, "a")` |
+| `func f() -> (int, string)` | `tosh.parser.expected_type_name` | **works**, and returns a 2-tuple |
+| `var f: func` resolving to `System.Func\`1` — "concrete and wrong" | silently accepted | **rejected** |
+| `stream<int>` resolves to `dynamic` | dynamic | now an unknown-annotation error |
+| `int\|string`, literal types | no representation | unchanged |
+| Bottom type | none | unchanged — [`TOAST-0047`](TOAST-0047.md), which still reproduces verbatim in compile mode |
+
+So the tuple half of this item is done, the function-type half is representable *and*
+writable, and the `func`-resolves-to-a-CLR-type hazard is closed. What is left is the *Gaps*
+list: anonymous unions and intersections, literal types, and the bottom type.
+
+The distinction that matters when re-measuring this: an annotation that reports
+`tosh.runtime.annotation_conversion_failed` has **parsed and resolved** — the value simply did
+not convert. Only `tosh.parser.*` means the grammar cannot spell it. A first pass here assigned
+`null` to each annotation and read the conversion failures as parse failures, which would have
+recorded every one of the rows above as unchanged.
