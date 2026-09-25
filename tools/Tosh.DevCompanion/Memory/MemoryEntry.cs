@@ -22,8 +22,8 @@ public sealed record MemoryEntry(
     public DateTimeOffset AccessedAtUtc => DateTimeOffset.FromUnixTimeMilliseconds(AccessedAt);
     public string[] TagList => Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    // Stable short form: first 8 hex chars of the UUID. UUIDv7 puts the
-    // timestamp in the leading bytes, so prefixes stay collision-resistant
-    // across normal usage; the resolver falls back to a uniqueness check.
-    public string ShortId => Id.Length >= 8 ? Id[..8] : Id;
+    // Stable short form: the last 8 hex chars of the UUID, which are random. The first 8 of
+    // a UUIDv7 are the top of its millisecond timestamp, shared by every memory created in the
+    // same ~65 seconds, so a prefix short id was ambiguous for memories stored together.
+    public string ShortId => Id.Length >= 8 ? Id[^8..] : Id;
 }

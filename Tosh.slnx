@@ -16,6 +16,7 @@
     <Project Path="src/Tosh.Crumb/Tosh.Crumb.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Tosh.DevCompanion.Tests/Tosh.DevCompanion.Tests.csproj" />
     <Project Path="tests/Tosh.LspFixture/Tosh.LspFixture.csproj" />
     <Project Path="tests/Tosh.Tests/Tosh.Tests.csproj" />
   </Folder>

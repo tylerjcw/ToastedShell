@@ -28,13 +28,17 @@ public sealed class McpMemoryServer(IMemoryStore store)
 
     public async Task RunAsync(CancellationToken ct = default)
     {
-        using var stdin = Console.OpenStandardInput();
+        // Messages are newline-delimited UTF-8 JSON, so they are decoded as UTF-8. Reading
+        // byte by byte and casting each byte to a char stored "Tōsh" as "TÅ\u008dsh": every
+        // memory with a non-ASCII character in it was corrupted on the way in.
+        using var stdin = new StreamReader(
+            Console.OpenStandardInput(),
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         using var stdout = Console.OpenStandardOutput();
-        var buffer = new byte[1024 * 64];
 
         while (!ct.IsCancellationRequested)
         {
-            var line = await ReadLineAsync(stdin, buffer, ct);
+            var line = await stdin.ReadLineAsync(ct);
             if (line is null) break;
             if (string.IsNullOrWhiteSpace(line)) continue;
 
@@ -94,6 +98,9 @@ public sealed class McpMemoryServer(IMemoryStore store)
             : "Pinned project facts:\n" +
               string.Join('\n', pinned.Select(p => $"- [{p.ShortId}] {p.Summary}"));
 
+        if (store.SharedMemoryProblem is { } problem)
+            instructions += $"\n\nShared memories are not all being synced: {problem}";
+
         return new
         {
             protocolVersion = "2024-11-05",
@@ -108,7 +115,7 @@ public sealed class McpMemoryServer(IMemoryStore store)
         var name = @params.GetProperty("name").GetString() ?? string.Empty;
         var args = @params.TryGetProperty("arguments", out var a) ? a : default;
 
-        return name switch
+        var result = name switch
         {
             "memory_store" => await MemoryStoreAsync(args, ct),
             "memory_store_batch" => await MemoryStoreBatchAsync(args, ct),
@@ -122,6 +129,22 @@ public sealed class McpMemoryServer(IMemoryStore store)
             "memory_open" => await MemoryOpenAsync(args, ct),
             _ => ErrorContent($"Unknown tool '{name}'.")
         };
+
+        // A write that could not reach the shared directory still succeeded locally. Saying so
+        // on the result is the only way an agent learns that a memory it shared has not been.
+        return WritingTools.Contains(name) && store.SharedMemoryProblem is { } problem
+            ? WithWarning(result, $"Shared memories are not all being synced: {problem}")
+            : result;
+    }
+
+    private static readonly HashSet<string> WritingTools =
+        ["memory_store", "memory_store_batch", "memory_update", "memory_forget", "memory_relate"];
+
+    private static JsonObject WithWarning(object result, string warning)
+    {
+        var node = JsonSerializer.SerializeToNode(result, EnvelopeOptions)!.AsObject();
+        node["content"]!.AsArray().Add(new JsonObject { ["type"] = "text", ["text"] = $"Warning: {warning}" });
+        return node;
     }
 
     // ── Tool handlers ─────────────────────────────────────────────────────────
@@ -480,20 +503,6 @@ public sealed class McpMemoryServer(IMemoryStore store)
         finally { _writeLock.Release(); }
     }
 
-    private static async Task<string?> ReadLineAsync(Stream stream, byte[] buf, CancellationToken ct)
-    {
-        var sb = new System.Text.StringBuilder();
-        var single = new byte[1];
-        while (true)
-        {
-            var read = await stream.ReadAsync(single, ct);
-            if (read == 0) return sb.Length > 0 ? sb.ToString() : null;
-            var ch = (char)single[0];
-            if (ch == '\n') return sb.ToString();
-            sb.Append(ch);
-        }
-    }
-
     private static object OkContent(object data) =>
         new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(data, PayloadOptions) } } };
 
@@ -535,7 +544,7 @@ public sealed class McpMemoryServer(IMemoryStore store)
                     summary    = new { type = "string",  description = "≤120 char line surfaced under token pressure." },
                     category   = new { type = "string",  @enum = new[] { "fact","preference","pattern","decision","history","note" } },
                     tags       = new { type = "array",   items = new { type = "string" } },
-                    visibility = new { type = "string",  @enum = new[] { "private","shared" }, description = "shared also writes .tosh/memories.toml." },
+                    visibility = new { type = "string",  @enum = new[] { "private","shared" }, description = "shared also writes .tosh/memories/<id>.toml, which git tracks." },
                     scope      = new { type = "string",  @enum = new[] { "project","global" } },
                     source     = new { type = "string",  @enum = new[] { "ai","user" } },
                     session_id = new { type = "string" },

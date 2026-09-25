@@ -18,8 +18,10 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` shipped.
     `created` is `YYYY-MM-DD` in non-verbose mode.
 - [x] **3. Trim `memory_store` response to `{id, short_id}`.**
 - [x] **4. Short IDs.**
-  - `short_id` = first 8 hex chars; resolver accepts full id, short_id, or
-    unambiguous prefix (≥4 chars).
+  - `short_id` = last 8 hex chars; resolver accepts full id, short_id, or
+    an unambiguous fragment (≥4 chars) from either end. (It was the first 8,
+    which in a UUIDv7 are the creation time: every memory stored within ~65 s
+    of another got the same short id.)
 
 ## Tier 2 — Fewer round-trips  *(shipped v1.1)*
 

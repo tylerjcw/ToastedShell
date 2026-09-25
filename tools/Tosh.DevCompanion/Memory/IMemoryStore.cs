@@ -15,6 +15,12 @@ public interface IMemoryStore : IDisposable
     Task<IReadOnlyList<TagCount>> GetTagsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<MemoryEntry>> GetPinnedAsync(string scope, int limit, CancellationToken ct = default);
     Task<MemoryGraph> GetGraphAsync(GraphRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Why shared memories are not all reaching the project's shared directory — most often a
+    /// merge that left conflict markers in a file — or <see langword="null"/> while they are.
+    /// </summary>
+    string? SharedMemoryProblem { get; }
 }
 
 // ── Requests ──────────────────────────────────────────────────────────────────

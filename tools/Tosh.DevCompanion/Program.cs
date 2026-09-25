@@ -6,16 +6,20 @@ using Tosh.DevCompanion.Memory;
 //  --mcp (or no args)  Start the MCP server (stdin/stdout JSON-RPC).
 //  recall <query>      Search memories and print JSON to stdout.
 //  list                List memories and print JSON to stdout.
-//  store <text>        Store a new user memory.
+//  store <text>        Store a new memory (source "user" unless --source says otherwise).
 //  forget <id>         Soft-delete a memory by id.
 //
 // DB path resolution order:
 //   1. TOSH_MEMORY_DB env var
 //   2. .tosh/memory.db  (project-local, relative to CWD)
 //   3. ~/.tosh/memory.db (global fallback)
+//
+// Shared memories are mirrored to .tosh/memories/, a file each, when the database is the
+// project's own (TOSH_MEMORY_SHARED_DIR overrides the directory; set it empty to turn
+// mirroring off).
 
 var dbPath = ResolveDbPath();
-using var store = await SqliteMemoryStore.OpenAsync(dbPath);
+using var store = await SqliteMemoryStore.OpenAsync(dbPath, ResolveSharedDirectory(dbPath));
 
 if (args is ["--mcp"] or [])
 {
@@ -66,16 +70,17 @@ static async Task<int> RunCliAsync(string[] args, IMemoryStore store)
             }
         case "store":
             {
-                var content = GetFlag(rest, "--content") ?? string.Join(' ', rest.Where(a => !a.StartsWith("--")));
+                var content = GetFlag(rest, "--content") ?? string.Join(' ', GetPositional(rest));
                 var summary = GetFlag(rest, "--summary") ?? content[..Math.Min(content.Length, 100)];
                 var category = GetFlag(rest, "--category") ?? "note";
                 var tags = (GetFlag(rest, "--tags") ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries);
                 var visibility = GetFlag(rest, "--visibility") ?? "private";
                 var scope = GetFlag(rest, "--scope") ?? "project";
+                var source = GetFlag(rest, "--source") ?? "user";
 
                 var entry = await store.StoreAsync(new StoreRequest(
                     Content: content, Summary: summary, Category: category,
-                    Source: "user", Tags: tags, Visibility: visibility, Scope: scope));
+                    Source: source, Tags: tags, Visibility: visibility, Scope: scope));
                 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(entry.Entry, json));
                 return 0;
             }
@@ -97,7 +102,7 @@ static async Task<int> RunCliAsync(string[] args, IMemoryStore store)
 static string ResolveDbPath()
 {
     var env = Environment.GetEnvironmentVariable("TOSH_MEMORY_DB");
-    if (!string.IsNullOrWhiteSpace(env)) return env;
+    if (!string.IsNullOrWhiteSpace(env)) return Path.GetFullPath(env);
 
     var local = Path.Combine(Directory.GetCurrentDirectory(), ".tosh", "memory.db");
     if (File.Exists(local)) return local;
@@ -105,6 +110,21 @@ static string ResolveDbPath()
     return Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".tosh", "memory.db");
+}
+
+// The directory shared memories are mirrored to, or null to leave them in the database only.
+static string? ResolveSharedDirectory(string dbPath)
+{
+    var env = Environment.GetEnvironmentVariable("TOSH_MEMORY_SHARED_DIR");
+    if (env is not null) return env.Length == 0 ? null : Path.GetFullPath(env);
+
+    // Only a project's own database is mirrored into that project. The global database holds
+    // every project's memories, and exporting it would copy one repository's shared decisions
+    // into another's.
+    var project = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), ".tosh"));
+    return string.Equals(Path.GetDirectoryName(dbPath), project, StringComparison.Ordinal)
+        ? Path.Combine(project, "memories")
+        : null;
 }
 
 static string? GetFlag(string[] args, string flag)
