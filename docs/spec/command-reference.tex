@@ -2,6 +2,151 @@
 % Do not edit by hand. Regenerate with: dotnet run --project src/Tosh.Cli -- --export-command-metadata --latex
 
 
+\section{CAS}
+
+\subsection{\texttt{diff}}
+\label{ref:diff}
+\icmd{diff}
+
+\textit{Library: \code{Tosh.Stdlib.Cas}}
+
+\begin{cmdbox}{diff}
+Computes the exact symbolic derivative of an expression.
+
+\begin{signature}
+diff [expr] [var]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+expr & Expression to differentiate. \\
+var & Variable to differentiate with respect to (defaults to 'x'). \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+--var & Variable name to differentiate with respect to. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts a symbolic expression or string to differentiate.
+
+\textbf{Output:} The derivative as a simplified symbolic expression.
+
+\begin{lstlisting}
+diff "x^3 + 2*x"  # Differentiate polynomial
+sym "sin(x)" | diff  # Differentiate piped symbolic expression
+diff "x^2 * y" y  # Partial derivative with respect to y
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{expand}}
+\label{ref:expand}
+\icmd{expand}
+
+\textit{Library: \code{Tosh.Stdlib.Cas}}
+
+\begin{cmdbox}{expand}
+Expands polynomial products and powers into a sum of terms.
+
+\begin{signature}
+expand [expr]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+expr & Expression to expand. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts a symbolic expression or string to expand.
+
+\textbf{Output:} The expanded symbolic expression.
+
+\begin{lstlisting}
+expand "(x + 1)^2"  # Expand square of binomial
+expand "(x + 1) * (x + 2)"  # Distribute polynomial multiplication
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{simplify}}
+\label{ref:simplify}
+\icmd{simplify}
+
+\textit{Library: \code{Tosh.Stdlib.Cas}}
+
+\begin{cmdbox}{simplify}
+Simplifies a symbolic expression algebraically.
+
+\begin{signature}
+simplify [expr]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+expr & Expression to simplify. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts a symbolic expression or string to simplify.
+
+\textbf{Output:} The simplified symbolic expression.
+
+\begin{lstlisting}
+simplify "2*x + 3*x"  # Combine like terms
+sym "sin(0) + x" | simplify  # Simplify piped expression
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{sym}}
+\label{ref:sym}
+\icmd{sym}
+
+\textit{Library: \code{Tosh.Stdlib.Cas}}
+
+\begin{cmdbox}{sym}
+Creates or parses a symbolic expression.
+
+\begin{signature}
+sym [expr]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+expr & Mathematical expression string to parse into a symbolic expression. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts an expression string or symbolic expression from the pipeline.
+
+\textbf{Output:} The parsed symbolic expression.
+
+\begin{lstlisting}
+sym "x^2 + 2*x + 1"  # Parse a polynomial
+sym "sin(x)^2 + cos(x)^2"  # Parse a trigonometric expression
+\end{lstlisting}
+
+\end{cmdbox}
+
+
 \section{CLR}
 
 \subsection{\texttt{call}}
@@ -1546,23 +1691,24 @@ Parse and match use .NET regular expressions, including named groups and inline 
 \textit{Library: \code{Tosh.Stdlib.Data}}
 
 \begin{cmdbox}{to}
-Serializes objects into structured text.
+Serializes objects into structured text or converts physical quantities to another unit.
 
 \begin{signature}
-to <format> [options]
+to <format-or-unit> [options]
 \end{signature}
 
-\textbf{Output:} Serialized text in the specified format.
+\textbf{Output:} Serialized text in the specified format, or converted physical quantity.
 
 \begin{lstlisting}
 ls | to json
 ls | to csv
 ls | to toml
-ls | to json --compact
+10km | to miles
+100degC | to degF
 \end{lstlisting}
 
 \begin{notebox}
-The `from` and `to` commands convert between text formats (json, csv, tsv, xml, toml) and CLR objects. Parsed values stay as CLR objects until you explicitly flatten them.
+The `to` command converts between text formats (json, csv, toml) and serializes CLR objects, or converts physical quantities to target units (e.g. `10km | to miles`).
 \end{notebox}
 
 \end{cmdbox}
@@ -4024,6 +4170,40 @@ unfold [0, 1] func(s) => [($s[0]), [($s[1]), ($s[0] + $s[1])]]  # Fibonacci sequ
 
 \section{Math}
 
+\subsection{\texttt{abs}}
+\label{ref:abs}
+\icmd{abs}
+
+\textit{Library: \code{Tosh.Stdlib.Maths}}
+
+\begin{cmdbox}{abs}
+Computes the absolute value of a number, quantity, or complex magnitude.
+
+\begin{signature}
+abs [value]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+value & The value to compute the absolute value of. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts numbers, quantities, or complex values to compute absolute values of.
+
+\textbf{Output:} The absolute value.
+
+\begin{lstlisting}
+abs -42  # Absolute value of an integer
+abs -3.14  # Absolute value of a floating-point number
+echo -15 | abs  # Absolute value from pipeline
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{round}}
 \label{ref:round}
 \icmd{round}
@@ -4055,6 +4235,39 @@ decimals & Number of decimal places to round to. Defaults to 0. (optional) \\
 round 3.14159 2  # Round a literal to 2 decimal places
 echo 3.14159 | round 2  # Round a piped value to 2 decimal places
 echo 3.7 | round  # Round a piped value to nearest integer
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{sqrt}}
+\label{ref:sqrt}
+\icmd{sqrt}
+
+\textit{Library: \code{Tosh.Stdlib.Maths}}
+
+\begin{cmdbox}{sqrt}
+Computes the square root of a number, quantity, or complex value.
+
+\begin{signature}
+sqrt [value]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+value & The value to compute the square root of. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts numbers, quantities, or complex values to compute square roots of.
+
+\textbf{Output:} The square root value.
+
+\begin{lstlisting}
+sqrt 16  # Square root of a number
+echo 2 | sqrt  # Square root from pipeline
 \end{lstlisting}
 
 \end{cmdbox}

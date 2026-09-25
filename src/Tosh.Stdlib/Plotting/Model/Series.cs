@@ -19,6 +19,15 @@ public sealed class LineSeries : PlotSeries
     public float MarkerSize { get; set; } = 4.0f;
     public string StrokeDash { get; set; } = string.Empty;
 
+    public void SetPoints(IEnumerable<PointF> points) =>
+        Points = points.Select(p => ((double)p.X, (double)p.Y)).ToList();
+
+    public void SetPoints(IEnumerable<Point> points) =>
+        Points = points.Select(p => ((double)p.X, (double)p.Y)).ToList();
+
+    public IEnumerable<PointF> AsPointF() =>
+        Points.Select(p => new PointF((float)p.X, (float)p.Y));
+
     public override (double MinX, double MaxX, double MinY, double MaxY) GetBounds()
     {
         if (Points.Count == 0) return (0, 1, 0, 1);
@@ -47,6 +56,15 @@ public sealed class ScatterSeries : PlotSeries
     public float MarkerSize { get; set; } = 5.0f;
     public string MarkerShape { get; set; } = "circle";
     public Color? BorderColor { get; set; }
+
+    public void SetPoints(IEnumerable<PointF> points) =>
+        Points = points.Select(p => ((double)p.X, (double)p.Y)).ToList();
+
+    public void SetPoints(IEnumerable<Point> points) =>
+        Points = points.Select(p => ((double)p.X, (double)p.Y)).ToList();
+
+    public IEnumerable<PointF> AsPointF() =>
+        Points.Select(p => new PointF((float)p.X, (float)p.Y));
 
     public override (double MinX, double MaxX, double MinY, double MaxY) GetBounds()
     {

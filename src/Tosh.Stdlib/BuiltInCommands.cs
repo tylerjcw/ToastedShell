@@ -129,6 +129,12 @@ public static class BuiltInCommands
         commands.Register(new Tosh.Stdlib.Plotting.BarCommand());
         commands.Register(new Tosh.Stdlib.Plotting.FigureCommand());
         commands.Register(new Tosh.Stdlib.Plotting.SavePlotCommand());
+
+        // ── CAS (Computer Algebra System) ──
+        commands.Register(new Tosh.Stdlib.Cas.SymCommand());
+        commands.Register(new Tosh.Stdlib.Cas.DiffCommand());
+        commands.Register(new Tosh.Stdlib.Cas.SimplifyCommand());
+        commands.Register(new Tosh.Stdlib.Cas.ExpandCommand());
         commands.Register(new ChangeDirectoryCommand());
         commands.Register(new ListDirectoryCommand());
         commands.Register(new DfCommand());

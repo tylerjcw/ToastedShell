@@ -54,6 +54,8 @@ public enum StdlibCategory
     Shell,
     /// <summary>Plotting and data visualization: <c>plot</c>, <c>scatter</c>, <c>bar</c>, <c>figure</c>, <c>save-plot</c>.</summary>
     Plotting,
+    /// <summary>Computer algebra and symbolic mathematics: <c>diff</c>, <c>simplify</c>, <c>expand</c>, <c>sym</c>.</summary>
+    Cas,
 }
 
 /// <summary>

@@ -553,6 +553,7 @@
     </context>
 
     <context id="builtins" style-ref="builtin">
+      <keyword>abs</keyword>
       <keyword>all</keyword>
       <keyword>alloc</keyword>
       <keyword>any</keyword>
@@ -610,6 +611,7 @@
       <keyword>describe-type</keyword>
       <keyword>describe</keyword>
       <keyword>df</keyword>
+      <keyword>diff</keyword>
       <keyword>dirname</keyword>
       <keyword>dirs</keyword>
       <keyword>disk-usage</keyword>
@@ -625,6 +627,7 @@
       <keyword>exec</keyword>
       <keyword>exists</keyword>
       <keyword>exit</keyword>
+      <keyword>expand</keyword>
       <keyword>export</keyword>
       <keyword>fg</keyword>
       <keyword>figure</keyword>
@@ -773,6 +776,7 @@
       <keyword>set-prop</keyword>
       <keyword>settle</keyword>
       <keyword>signal</keyword>
+      <keyword>simplify</keyword>
       <keyword>size-of</keyword>
       <keyword>skip-until</keyword>
       <keyword>skip-while</keyword>
@@ -783,11 +787,13 @@
       <keyword>source</keyword>
       <keyword>spawn</keyword>
       <keyword>split</keyword>
+      <keyword>sqrt</keyword>
       <keyword>stat</keyword>
       <keyword>stddev</keyword>
       <keyword>stdev</keyword>
       <keyword>step-by</keyword>
       <keyword>styled</keyword>
+      <keyword>sym</keyword>
       <keyword>sum</keyword>
       <keyword>summarize</keyword>
       <keyword>summary</keyword>

@@ -72,6 +72,27 @@ public sealed class PlottingTests
     }
 
     [Fact]
+    public void Native_CLR_PointF_and_Size_support_works()
+    {
+        var fig = new Figure(new Size(900, 600), title: "Native CLR Types");
+        Assert.Equal(900, fig.Size.Width);
+        Assert.Equal(600, fig.Size.Height);
+
+        PointF[] pts = [new PointF(0, 0), new PointF(1, 2), new PointF(2, 4)];
+        var line = fig.Plot(pts, label: "PointF Line", color: Color.Crimson);
+        Assert.Equal(3, line.Points.Count);
+        Assert.Equal(Color.Crimson, line.Color);
+
+        Point[] scatterPts = [new Point(5, 5), new Point(6, 7)];
+        var scatter = fig.Scatter(scatterPts, label: "Int Point Scatter");
+        Assert.Equal(2, scatter.Points.Count);
+
+        var svg = fig.ToSvg();
+        Assert.Contains("PointF Line", svg);
+        Assert.Contains("Native CLR Types", svg);
+    }
+
+    [Fact]
     public async Task Plot_command_executes_in_engine()
     {
         var runtime = ToshRuntime.CreateDefault();

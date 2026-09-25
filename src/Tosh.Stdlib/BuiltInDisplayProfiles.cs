@@ -232,6 +232,7 @@ public static class BuiltInDisplayProfiles
         // WebProxy
         registry.Register(CreateWebProxyProfile());
         registry.Register(CreateFigureProfile());
+        registry.Register(CreateSymExprProfile());
     }
 
     private static DisplayProfile CreateDateTimeProfile(DisplayPreferences preferences)
@@ -6534,5 +6535,14 @@ public static class BuiltInDisplayProfiles
             .AddValueCase(
                 DisplaySurface.Any,
                 context => ((Tosh.Stdlib.Plotting.Figure)context.Value).ToTerminalString());
+    }
+
+    private static DisplayProfile CreateSymExprProfile()
+    {
+        return DisplayProfile
+            .For<Tosh.Stdlib.Cas.SymExpr>()
+            .AddValueCase(
+                DisplaySurface.Any,
+                context => ((Tosh.Stdlib.Cas.SymExpr)context.Value).ToString());
     }
 }

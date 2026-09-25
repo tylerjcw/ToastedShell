@@ -728,4 +728,19 @@ public sealed class UnitSystemStabilizationTests
         Assert.Throws<InvalidOperationException>(() => UnitRegistry.Instance.RegisterUnit(replacement));
         Assert.Equal(1.0, UnitRegistry.Instance.TryResolve("m")!.ToBaseFactor, 12);
     }
+
+    [Fact]
+    public async Task To_command_converts_physical_quantities()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime.Language);
+
+        var results = await engine.ExecuteToListAsync("var q = 10`km\n$q | to m");
+        Assert.Single(results);
+        Assert.IsAssignableFrom<Quantity>(results[0]);
+        var q = (Quantity)results[0]!;
+        Assert.Equal(10000, q.Magnitude);
+        Assert.Equal("m", q.UnitSymbol);
+    }
 }
+

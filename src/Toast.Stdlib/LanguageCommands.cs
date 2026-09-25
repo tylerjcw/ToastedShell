@@ -236,6 +236,8 @@ public static class LanguageCommands
 
         // ── Maths (numeric helpers) ──
         commands.Register(new RoundCommand());
+        commands.Register(new AbsCommand());
+        commands.Register(new SqrtCommand());
 
         // ── Clr (reflection, interop, native memory) ──
         // Structured-introspection canonical surface.

@@ -10,6 +10,19 @@ public sealed class Figure
     public string Title { get; set; } = string.Empty;
     public int Width { get; set; } = 800;
     public int Height { get; set; } = 500;
+
+    public Size Size
+    {
+        get => new(Width, Height);
+        set { Width = value.Width; Height = value.Height; }
+    }
+
+    public SizeF SizeF
+    {
+        get => new(Width, Height);
+        set { Width = (int)MathF.Round(value.Width); Height = (int)MathF.Round(value.Height); }
+    }
+
     public PlotTheme Theme { get; set; } = PlotTheme.Light;
     public PlotMargins Margins { get; set; } = PlotMargins.Default;
 
@@ -27,8 +40,17 @@ public sealed class Figure
         AllAxes.Add(PrimaryAxes);
     }
 
+    public Figure(Size size, string? title = null, PlotTheme? theme = null)
+        : this(size.Width, size.Height, title, theme) { }
+
+    public Figure(SizeF size, string? title = null, PlotTheme? theme = null)
+        : this((int)MathF.Round(size.Width), (int)MathF.Round(size.Height), title, theme) { }
+
     public static Figure Create(int width = 800, int height = 500, string? title = null, PlotTheme? theme = null) =>
         new(width, height, title, theme);
+
+    public static Figure Create(Size size, string? title = null, PlotTheme? theme = null) =>
+        new(size, title, theme);
 
     public Axes AddAxes(string? title = null)
     {
@@ -58,8 +80,20 @@ public sealed class Figure
     public LineSeries Plot(IEnumerable<double> x, IEnumerable<double> y, string? label = null, Color? color = null) =>
         PrimaryAxes.Plot(x, y, label, color);
 
+    public LineSeries Plot(IEnumerable<PointF> points, string? label = null, Color? color = null) =>
+        PrimaryAxes.Plot(points, label, color);
+
+    public LineSeries Plot(IEnumerable<Point> points, string? label = null, Color? color = null) =>
+        PrimaryAxes.Plot(points, label, color);
+
     public ScatterSeries Scatter(IEnumerable<double> x, IEnumerable<double> y, string? label = null, Color? color = null, float size = 5f) =>
         PrimaryAxes.Scatter(x, y, label, color, size);
+
+    public ScatterSeries Scatter(IEnumerable<PointF> points, string? label = null, Color? color = null, float size = 5f) =>
+        PrimaryAxes.Scatter(points, label, color, size);
+
+    public ScatterSeries Scatter(IEnumerable<Point> points, string? label = null, Color? color = null, float size = 5f) =>
+        PrimaryAxes.Scatter(points, label, color, size);
 
     public BarSeries Bar(IEnumerable<string> categories, IEnumerable<double> values, string? label = null, Color? color = null) =>
         PrimaryAxes.Bar(categories, values, label, color);

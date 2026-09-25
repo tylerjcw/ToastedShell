@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Tosh.Runtime.Formats;
 
 public sealed class DataFormatRegistry
@@ -13,6 +15,11 @@ public sealed class DataFormatRegistry
         {
             _formats[alias] = format;
         }
+    }
+
+    public bool TryResolve(string name, [NotNullWhen(true)] out IDataFormat? format)
+    {
+        return _formats.TryGetValue(name, out format);
     }
 
     public IDataFormat Resolve(string name)
