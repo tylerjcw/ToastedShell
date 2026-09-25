@@ -4,7 +4,6 @@ created = 2026-09-25T22:50:33.751Z
 category = "preference"
 scope = "project"
 source = "user"
-pinned = true
 session_id = "2026-09-25-core-review"
 tags = ["architecture", "rewrite", "planning"]
 summary = "A complete rewrite of TōSh/Tōast (any or all parts) is acceptable; weigh it as a real option, don't rule it out"

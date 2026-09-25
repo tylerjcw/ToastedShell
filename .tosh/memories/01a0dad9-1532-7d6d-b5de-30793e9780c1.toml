@@ -1,0 +1,16 @@
+[[memory]]
+id = "01a0dad9-1532-7d6d-b5de-30793e9780c1"
+created = 2026-09-25T23:14:14.962Z
+category = "fact"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-core-review"
+tags = ["architecture", "rust", "design", "final-design"]
+summary = "Final Rust Tōast: HIR/MIR + bytecode VM; gradual types; ownership + gc tier; Result/?; echo=yield vs write; exit status=Result"
+content = "Key decisions of the final Rust Tōast, from design docs the user shared on 2026-09-25 (architecture overview; Proposal 001 core design decisions, accepted 2026-09-19; Proposal 002 advanced features, draft). They live in the separate Rust repository, not here. Pipeline: lossless syntax tree -> symbols/semantic model -> typed HIR -> target-neutral MIR -> backends (.NET, native via Cranelift, Wasm) plus a bytecode VM for the interpreter, REPL and shell sessions; one set of semantics for batch, REPL and shell. Types: gradual (static by default, explicit `dynamic`), inference inside function bodies, generics with trait constraints, non-nullable by default (`T?` / Option<T>), sized numerics with `int`=i64, `float`=f64, `byte`=u8, units of measure in types (`float<m/s>`). Memory: ownership and borrowing (`$T` immutable borrow, `&T` mutable borrow, bare `T` owned in type position), Rc/Arc, tiers safe / gc / trusted / unsafe; the gc tier wraps bindings in ARC, bypasses the borrow checker, is the REPL default and allows `%name%` double-dereferencing. Failure: Result<T, E> + `?`, panics for bugs, no exceptions; async/await with task groups and cooperative cancellation. Syntax carried from the PoC: `$name` reads, func/var/const, `=>`, `->`, `$\"...\"`, `{| |}` records, `{% %}` dicts, `{: :}` sets, `_` pipeline item, `<|` comprehensions, union, trait/uses, interface/fulfills, shy/proud/guarded/hollow/hermit, hyphenated identifiers; changed: `@name` function references (was `&name`), explicit conversions instead of implicit ones. Shell: bare words at statement position are commands; pipes, redirections and globs are language operators; exit status is a Result usable with `?`; `echo` yields an object into the pipeline while `write`/`writeline` write raw text; top-level code runs unless a `subcommand` or `func main` is present; subcommands declare `arg`/`flag`. Security: IO capability tokens (`$sys.cap`, `--allow-fs=... --allow-net=...`). Data: Tōn object notation. Stdlib: Tōast.Env, Tōast.Math.Symbolic (CAS)."
+
+[[relation]]
+from = "01a0dad9-1532-7d6d-b5de-30793e9780c1"
+to = "01a0dad9-151a-7e7e-ac10-5adff7b0709d"
+relationship = "supports"
+created = 2026-09-25T23:14:18.531Z

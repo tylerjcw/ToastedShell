@@ -1,0 +1,17 @@
+[[memory]]
+id = "01a0dad9-151a-7e7e-ac10-5adff7b0709d"
+created = 2026-09-25T23:14:14.938Z
+category = "decision"
+scope = "project"
+source = "user"
+pinned = true
+session_id = "2026-09-25-core-review"
+tags = ["architecture", "rewrite", "planning", "rust", "poc"]
+summary = "This .NET repo is a proof of concept; final Tōast is a separate Rust rewrite (own runtime). Improve the PoC, don't rewrite it"
+content = "User decision (2026-09-25): the .NET TōSh/Tōast in this repository is a proof of concept for the final version. The final Tōast will be a separate greenfield rewrite in Rust: the core project holds the language only, it does not target .NET but has its own full runtime, it takes inspiration from Rust with a three-tier ownership model plus an optional gc mode where ownership need not be used. A rewrite of this .NET codebase is therefore not worth doing; improve this version instead. Work here should make the PoC safe and pleasant for daily use and produce evidence and assets (semantics experiments, conformance cases, diagnostics, command inventory) that inform the Rust design, rather than re-architect the .NET engine (the Phase B bound-tree evaluator, slot frames, a VM) that the Rust VM will replace."
+
+[[relation]]
+from = "01a0dad9-151a-7e7e-ac10-5adff7b0709d"
+to = "01a0dac3-6597-70c4-ab1d-84c62bd31732"
+relationship = "supersedes"
+created = 2026-09-25T23:14:18.513Z
