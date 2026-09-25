@@ -21,8 +21,8 @@ diff [expr] [var]
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-expr & Expression to differentiate. \\
-var & Variable to differentiate with respect to (defaults to 'x'). \\
+expr & Expression to differentiate. (optional) \\
+var & Variable to differentiate with respect to (defaults to 'x'). (optional) \\
 \bottomrule
 \end{tabular}
 
@@ -109,6 +109,49 @@ expr & Expression to simplify. (optional) \\
 \begin{lstlisting}
 simplify "2*x + 3*x"  # Combine like terms
 sym "sin(0) + x" | simplify  # Simplify piped expression
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{solve}}
+\label{ref:solve}
+\icmd{solve}
+
+\textit{Library: \code{Tosh.Stdlib.Cas}}
+
+\begin{cmdbox}{solve}
+Solves a linear or quadratic algebraic equation for a variable.
+
+\begin{signature}
+solve [equation] [var]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+equation & Equation to solve (e.g. '2*x + 4 = 6' or 'x\^{}2 - 4 = 0'). (optional) \\
+var & Variable to solve for (defaults to 'x'). (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+--var & Variable name to solve for. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts an equation string from the pipeline.
+
+\textbf{Output:} The solutions for the target variable.
+
+\begin{lstlisting}
+solve "2*x + 4 = 6"  # Solve linear equation
+solve "x^2 - 5*x + 6 = 0"  # Solve quadratic equation
+solve "x^2 = 9"  # Solve square equation
 \end{lstlisting}
 
 \end{cmdbox}

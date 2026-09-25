@@ -3,8 +3,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Cas;
 
 [CommandCategory("CAS")]
-[CommandArgument("expr", "Expression to differentiate.")]
-[CommandArgument("var", "Variable to differentiate with respect to (defaults to 'x').")]
+[CommandArgument("expr", "Expression to differentiate.", Required = false)]
+[CommandArgument("var", "Variable to differentiate with respect to (defaults to 'x').", Required = false)]
 [CommandOption("--var", "Variable name to differentiate with respect to.")]
 [CommandExample("diff \"x^3 + 2*x\"", Title = "Differentiate polynomial")]
 [CommandExample("sym \"sin(x)\" | diff", Title = "Differentiate piped symbolic expression")]

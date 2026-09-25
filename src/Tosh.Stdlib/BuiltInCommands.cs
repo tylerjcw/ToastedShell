@@ -135,6 +135,7 @@ public static class BuiltInCommands
         commands.Register(new Tosh.Stdlib.Cas.DiffCommand());
         commands.Register(new Tosh.Stdlib.Cas.SimplifyCommand());
         commands.Register(new Tosh.Stdlib.Cas.ExpandCommand());
+        commands.Register(new Tosh.Stdlib.Cas.SolveCommand());
         commands.Register(new ChangeDirectoryCommand());
         commands.Register(new ListDirectoryCommand());
         commands.Register(new DfCommand());

@@ -139,5 +139,36 @@ public sealed class CasTests
         Assert.Contains("x^2", expStr);
         Assert.Contains("5*x", expStr);
         Assert.Contains("6", expStr);
+        // solve command: linear
+        var solveLin = await engine.ExecuteToListAsync("solve \"2*x + 4 = 6\"");
+        Assert.Single(solveLin);
+        Assert.Equal("1", solveLin[0]?.ToString());
+
+        // solve command: quadratic
+        var solveQuad = await engine.ExecuteToListAsync("solve \"x^2 - 4 = 0\"");
+        Assert.Equal(2, solveQuad.Count);
+        Assert.Contains(solveQuad, s => s?.ToString() == "2");
+        Assert.Contains(solveQuad, s => s?.ToString() == "-2");
+    }
+
+    [Fact]
+    public void Solver_solves_linear_and_quadratic_equations()
+    {
+        // 2*x + 4 = 6 => x = 1
+        var sol1 = Solver.Solve("2*x + 4 = 6", "x");
+        Assert.Single(sol1);
+        Assert.Equal("1", sol1[0].ToString());
+
+        // x^2 - 5*x + 6 = 0 => x = 3, 2
+        var sol2 = Solver.Solve("x^2 - 5*x + 6 = 0", "x");
+        Assert.Equal(2, sol2.Count);
+        Assert.Contains(sol2, s => s.ToString() == "3");
+        Assert.Contains(sol2, s => s.ToString() == "2");
+
+        // 3*y + 9 = 0 => y = -3
+        var sol3 = Solver.Solve("3*y + 9 = 0", "y");
+        Assert.Single(sol3);
+        Assert.Equal("-3", sol3[0].ToString());
     }
 }
+
