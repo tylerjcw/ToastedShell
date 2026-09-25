@@ -13,10 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The SDK has to match the framework the build targets, and that is chosen by
+      # .tosh-publish-state and Directory.Build.props, not here. A hard-coded version
+      # here drifted: CI installed 10.0.x while every project targeted net11.0.
+      - name: Resolve target .NET major
+        id: dotnet
+        run: echo "major=$(scripts/dotnet-major.sh)" >> "$GITHUB_OUTPUT"
+
+      # `A.B.x` installs the newest build on the channel, previews and release
+      # candidates included, so this keeps working before and after a release goes GA.
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "${{ steps.dotnet.outputs.major }}.0.x"
 
       - name: Restore
         run: dotnet restore Tosh.slnx
