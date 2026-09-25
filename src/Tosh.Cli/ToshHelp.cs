@@ -65,13 +65,6 @@ internal static class ToshHelp
         new("--diagnostics=<mode>", "Diagnostic output mode: text, plain or json.", "text"),
         new("--", "Stop flag parsing, so the next argument is a name and not an option."),
 
-        new("--compile <file...>", "Compile scripts to an assembly. The output path comes from the first input unless -o is given."),
-        new("-o, --output <path>", "Write the compiled assembly here."),
-        new("--no-apphost", "Emit only the assembly, without a native launcher."),
-        new("--publish-single-file", "Emit a self-contained single-file executable."),
-        new("--emit-refasm", "Emit a reference assembly beside the output."),
-        new("--compile-allow-dynamic", "Permit dynamic fallbacks the compiler would otherwise refuse."),
-
         new("--export-command-metadata", "Write the command metadata and exit."),
         new("--json | --latex | --vscode", "Format for that export.", "json"),
         new("--surface", "Export the language surface registry."),
