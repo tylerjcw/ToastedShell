@@ -6231,6 +6231,146 @@ echo 1 2 3 | zip [10, 20, 30] func(a, b) => ($a + $b)  # Zip with a combiner
 \end{cmdbox}
 
 
+\section{Plotting}
+
+\subsection{\texttt{bar}}
+\label{ref:bar}
+\icmd{bar}
+
+\textit{Library: \code{Tosh.Stdlib.Plotting}}
+
+\begin{cmdbox}{bar}
+Generates a categorical bar chart.
+
+\begin{signature}
+bar [categories] [values] [--title <text>] [--color <color>]
+\end{signature}
+
+\textbf{Output:} A Figure containing a categorical bar series.
+
+\begin{lstlisting}
+bar ['A', 'B', 'C'] [10, 25, 18]  # Create a categorical bar chart
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{figure}}
+\label{ref:figure}
+\icmd{figure}
+
+\textit{Library: \code{Tosh.Stdlib.Plotting}}
+
+\begin{cmdbox}{figure}
+Creates or configures a new Figure instance.
+
+\begin{signature}
+figure [--title <text>] [--width <px>] [--height <px>] [--dark]
+\end{signature}
+
+\textbf{Output:} A newly configured Figure instance.
+
+\begin{lstlisting}
+figure --width 1000 --height 600  # Create a custom figure
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{plot}}
+\label{ref:plot}
+\icmd{plot}
+
+\textit{Library: \code{Tosh.Stdlib.Plotting}}
+
+\begin{cmdbox}{plot}
+Generates a line plot from coordinates, lists, or piped data.
+
+\begin{signature}
+plot [x] [y] [--title <text>] [--label <text>] [--color <color>] [--save \\
+\quad <file.svg>]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+y-or-x & Data values for Y axis, or X values when Y is also supplied. (optional) \\
+y & Data values for Y axis when X values are given as first argument. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts stream or list of numbers, pairs, or records to plot.
+
+\textbf{Output:} A Figure instance that renders as a visual chart in the terminal or exports to SVG.
+
+\begin{lstlisting}
+plot [1, 4, 9, 16, 25]  # Plot an array of numbers
+1..10 | map ($val ** 2) | plot  # Plot pipeline numbers
+plot [0, 1, 2, 3] [0, 1, 4, 9]  # Plot X and Y coordinates
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{save-plot}}
+\label{ref:save-plot}
+\icmd{save-plot}
+
+\textit{Library: \code{Tosh.Stdlib.Plotting}}
+
+\begin{cmdbox}{save-plot}
+Saves a Figure to an SVG or HTML file.
+
+\begin{signature}
+save-plot <file.svg|file.html> [figure]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+file & Destination path (.svg or .html). \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Confirmation message of the saved plot file path.
+
+\begin{lstlisting}
+plot [1, 4, 9] | save-plot output.svg  # Save a plot to SVG
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{scatter}}
+\label{ref:scatter}
+\icmd{scatter}
+
+\textit{Library: \code{Tosh.Stdlib.Plotting}}
+
+\begin{cmdbox}{scatter}
+Generates a scatter plot from coordinates, lists, or piped data.
+
+\begin{signature}
+scatter [x] [y] [--title <text>] [--size <n>] [--color <color>]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+x & Data values for X axis. (optional) \\
+y & Data values for Y axis. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} A Figure with a scatter series.
+
+\begin{lstlisting}
+scatter [1, 2, 3] [4, 5, 6]  # Create a scatter plot
+\end{lstlisting}
+
+\end{cmdbox}
+
+
 \section{Process}
 
 \subsection{\texttt{bg}}

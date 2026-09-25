@@ -558,8 +558,8 @@
       <keyword>any</keyword>
       <keyword>append-file</keyword>
       <keyword>apropos</keyword>
-      <keyword>as</keyword>
       <keyword>as-file</keyword>
+      <keyword>as</keyword>
       <keyword>assert</keyword>
       <keyword>async</keyword>
       <keyword>attempt</keyword>
@@ -567,21 +567,22 @@
       <keyword>avg</keyword>
       <keyword>await</keyword>
       <keyword>back</keyword>
+      <keyword>bar</keyword>
       <keyword>basename</keyword>
       <keyword>benchmark</keyword>
       <keyword>bg</keyword>
-      <keyword>call</keyword>
       <keyword>call-method</keyword>
+      <keyword>call</keyword>
       <keyword>cartesian-product</keyword>
       <keyword>cast</keyword>
       <keyword>cat</keyword>
       <keyword>cd</keyword>
       <keyword>chain</keyword>
-      <keyword>channel</keyword>
       <keyword>channel-close</keyword>
       <keyword>channel-recv</keyword>
       <keyword>channel-select</keyword>
       <keyword>channel-send</keyword>
+      <keyword>channel</keyword>
       <keyword>chmod</keyword>
       <keyword>chown</keyword>
       <keyword>chunk</keyword>
@@ -606,8 +607,8 @@
       <keyword>debug</keyword>
       <keyword>dedup</keyword>
       <keyword>del-prop</keyword>
-      <keyword>describe</keyword>
       <keyword>describe-type</keyword>
+      <keyword>describe</keyword>
       <keyword>df</keyword>
       <keyword>dirname</keyword>
       <keyword>dirs</keyword>
@@ -626,9 +627,10 @@
       <keyword>exit</keyword>
       <keyword>export</keyword>
       <keyword>fg</keyword>
+      <keyword>figure</keyword>
       <keyword>filter</keyword>
-      <keyword>find</keyword>
       <keyword>find-index</keyword>
+      <keyword>find</keyword>
       <keyword>findmnt</keyword>
       <keyword>first</keyword>
       <keyword>flat-map</keyword>
@@ -642,10 +644,10 @@
       <keyword>frequencies</keyword>
       <keyword>from</keyword>
       <keyword>funcs</keyword>
-      <keyword>get</keyword>
       <keyword>get-methods</keyword>
       <keyword>get-prop</keyword>
       <keyword>get-props</keyword>
+      <keyword>get</keyword>
       <keyword>glob</keyword>
       <keyword>grep</keyword>
       <keyword>group-by</keyword>
@@ -656,8 +658,8 @@
       <keyword>hash</keyword>
       <keyword>head</keyword>
       <keyword>help</keyword>
-      <keyword>history</keyword>
       <keyword>history-search</keyword>
+      <keyword>history</keyword>
       <keyword>hostname</keyword>
       <keyword>hostnamectl</keyword>
       <keyword>http</keyword>
@@ -674,8 +676,8 @@
       <keyword>is-link</keyword>
       <keyword>iterate</keyword>
       <keyword>jobs</keyword>
-      <keyword>join</keyword>
       <keyword>join-lines</keyword>
+      <keyword>join</keyword>
       <keyword>journalctl</keyword>
       <keyword>kill</keyword>
       <keyword>last</keyword>
@@ -698,8 +700,8 @@
       <keyword>members</keyword>
       <keyword>methods</keyword>
       <keyword>min</keyword>
-      <keyword>mkdir</keyword>
       <keyword>mkdir-temp</keyword>
+      <keyword>mkdir</keyword>
       <keyword>mounts</keyword>
       <keyword>mv</keyword>
       <keyword>native-alloc</keyword>
@@ -722,8 +724,8 @@
       <keyword>permutations</keyword>
       <keyword>pick</keyword>
       <keyword>ping</keyword>
+      <keyword>plot</keyword>
       <keyword>position</keyword>
-      <keyword>prompt</keyword>
       <keyword>prompt-dir</keyword>
       <keyword>prompt-duration</keyword>
       <keyword>prompt-exit</keyword>
@@ -734,6 +736,7 @@
       <keyword>prompt-text</keyword>
       <keyword>prompt-time</keyword>
       <keyword>prompt-userhost</keyword>
+      <keyword>prompt</keyword>
       <keyword>props</keyword>
       <keyword>ps</keyword>
       <keyword>pwd</keyword>
@@ -744,8 +747,8 @@
       <keyword>read-bytes</keyword>
       <keyword>read-file</keyword>
       <keyword>read-from</keyword>
-      <keyword>read-line</keyword>
       <keyword>read-line-from</keyword>
+      <keyword>read-line</keyword>
       <keyword>read-lines</keyword>
       <keyword>read-to-end</keyword>
       <keyword>readlink</keyword>
@@ -760,7 +763,9 @@
       <keyword>rm</keyword>
       <keyword>round</keyword>
       <keyword>row</keyword>
+      <keyword>save-plot</keyword>
       <keyword>scan</keyword>
+      <keyword>scatter</keyword>
       <keyword>scope</keyword>
       <keyword>seek</keyword>
       <keyword>select</keyword>
@@ -769,12 +774,12 @@
       <keyword>settle</keyword>
       <keyword>signal</keyword>
       <keyword>size-of</keyword>
-      <keyword>skip</keyword>
       <keyword>skip-until</keyword>
       <keyword>skip-while</keyword>
+      <keyword>skip</keyword>
       <keyword>sleep</keyword>
-      <keyword>sort</keyword>
       <keyword>sort-by</keyword>
+      <keyword>sort</keyword>
       <keyword>source</keyword>
       <keyword>spawn</keyword>
       <keyword>split</keyword>
@@ -826,12 +831,12 @@
       <keyword>whoami</keyword>
       <keyword>window</keyword>
       <keyword>with-retry</keyword>
-      <keyword>write</keyword>
       <keyword>write-buffer</keyword>
       <keyword>write-bytes</keyword>
       <keyword>write-file</keyword>
       <keyword>write-line-to</keyword>
       <keyword>write-to</keyword>
+      <keyword>write</keyword>
       <keyword>writeline</keyword>
       <keyword>xargs</keyword>
       <keyword>zip</keyword>

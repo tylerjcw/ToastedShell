@@ -122,6 +122,13 @@ public static class BuiltInCommands
 
         // ── Filesystem (paths, files, directories, IO handles) ──
         commands.Register(new PrintWorkingDirectoryCommand());
+
+        // ── Plotting ──
+        commands.Register(new Tosh.Stdlib.Plotting.PlotCommand());
+        commands.Register(new Tosh.Stdlib.Plotting.ScatterCommand());
+        commands.Register(new Tosh.Stdlib.Plotting.BarCommand());
+        commands.Register(new Tosh.Stdlib.Plotting.FigureCommand());
+        commands.Register(new Tosh.Stdlib.Plotting.SavePlotCommand());
         commands.Register(new ChangeDirectoryCommand());
         commands.Register(new ListDirectoryCommand());
         commands.Register(new DfCommand());

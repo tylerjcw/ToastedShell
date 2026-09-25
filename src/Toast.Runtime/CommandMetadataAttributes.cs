@@ -52,6 +52,8 @@ public enum StdlibCategory
     Scripting,
     /// <summary>Shell-host facilities (REPL state, history, prompt). See <see cref="ShellOnlyAttribute"/>.</summary>
     Shell,
+    /// <summary>Plotting and data visualization: <c>plot</c>, <c>scatter</c>, <c>bar</c>, <c>figure</c>, <c>save-plot</c>.</summary>
+    Plotting,
 }
 
 /// <summary>

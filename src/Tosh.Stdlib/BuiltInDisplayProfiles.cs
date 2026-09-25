@@ -231,6 +231,7 @@ public static class BuiltInDisplayProfiles
 
         // WebProxy
         registry.Register(CreateWebProxyProfile());
+        registry.Register(CreateFigureProfile());
     }
 
     private static DisplayProfile CreateDateTimeProfile(DisplayPreferences preferences)
@@ -6525,5 +6526,13 @@ public static class BuiltInDisplayProfiles
                     var proxy = (WebProxy)context.Value;
                     return proxy.Address?.ToString() ?? "<no address>";
                 });
+    }
+    private static DisplayProfile CreateFigureProfile()
+    {
+        return DisplayProfile
+            .For<Tosh.Stdlib.Plotting.Figure>()
+            .AddValueCase(
+                DisplaySurface.Any,
+                context => ((Tosh.Stdlib.Plotting.Figure)context.Value).ToTerminalString());
     }
 }
