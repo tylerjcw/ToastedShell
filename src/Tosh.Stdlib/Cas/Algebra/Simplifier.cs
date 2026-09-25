@@ -205,6 +205,7 @@ public static class Simplifier
     {
         return expr switch
         {
+            SymEquation eq => new SymEquation(Simplify(eq.Left), Simplify(eq.Right)),
             SymAdd add => Sum(add.Terms.Select(Simplify)),
             SymMul mul => Product(mul.Factors.Select(Simplify)),
             SymPow pow => Power(Simplify(pow.Base), Simplify(pow.Exponent)),

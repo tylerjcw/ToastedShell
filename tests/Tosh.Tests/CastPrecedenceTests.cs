@@ -31,7 +31,7 @@ public class CastPrecedenceTests
     [InlineData("7 as int * 2", "14")]
     [InlineData("7 as int + 2", "9")]
     [InlineData("7 as int - 2", "5")]
-    [InlineData("7 as int / 2", "3")]
+    [InlineData("7 as int / 2", "3.5")]
     [InlineData("7 as int // 2", "3")]
     public async Task A_cast_binds_tighter_than_the_arithmetic_after_it(string expression, string expected)
         => Assert.Equal(expected, await RunAsync(expression));

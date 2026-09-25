@@ -6,6 +6,7 @@ public static class Expander
     {
         return expr switch
         {
+            SymEquation eq => new SymEquation(Expand(eq.Left), Expand(eq.Right)),
             SymAdd add => Simplifier.Sum(add.Terms.Select(Expand)),
             SymMul mul => ExpandProduct(mul.Factors.Select(Expand).ToList()),
             SymPow pow => ExpandPower(pow),

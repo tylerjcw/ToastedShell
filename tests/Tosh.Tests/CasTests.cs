@@ -242,5 +242,73 @@ public sealed class CasTests
         Assert.Single(resPlot);
         Assert.IsAssignableFrom<Tosh.Stdlib.Plotting.Figure>(resPlot[0]);
     }
+
+    [Fact]
+    public void SymNumber_properties_and_approximation()
+    {
+        var num = new SymNumber(new BigRational(-93, 2));
+        Assert.Equal(-1, num.Sign);
+        Assert.Equal(-93, num.Numerator);
+        Assert.Equal(2, num.Denominator);
+        Assert.Equal(-46.5, num.Approximate);
+
+        var intNum = new SymNumber(new BigRational(42));
+        Assert.Equal(1, intNum.Sign);
+        Assert.Equal(42, intNum.Numerator);
+        Assert.Equal(1, intNum.Denominator);
+        Assert.Equal(42.0, intNum.Approximate);
+    }
+
+    [Fact]
+    public async Task Equation_algebra_and_eval_pipeline()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime.Language);
+
+        // TI-Nspire CX II style equation algebra
+        var resEqSub = await engine.ExecuteToListAsync("var x = sym x; var y = 2 * $x + 4 == 8; echo ($y - 4)");
+        Assert.Single(resEqSub);
+        Assert.Equal("2*x = 4", resEqSub[0]?.ToString());
+
+        var resEqDiv = await engine.ExecuteToListAsync("var x = sym x; var y = 2 * $x + 4 == 8; echo (($y - 4) / 2)");
+        Assert.Single(resEqDiv);
+        Assert.Equal("x = 2", resEqDiv[0]?.ToString());
+
+        // Piping solved expression to eval: solve (2 * $x + 4 == 97) | eval => 46.5
+        var resSolveEval = await engine.ExecuteToListAsync("var x = sym x; solve (2 * $x + 4 == 97) | eval");
+        Assert.Single(resSolveEval);
+        Assert.Equal(46.5, resSolveEval[0]);
+        Assert.IsType<double>(resSolveEval[0]);
+
+        // Integer solution returns int
+        var resSolveEvalInt = await engine.ExecuteToListAsync("var x = sym x; solve (2 * $x + 4 == 8) | eval");
+        Assert.Single(resSolveEvalInt);
+        Assert.Equal(2, resSolveEvalInt[0]);
+        Assert.IsType<int>(resSolveEvalInt[0]);
+
+        // Piping isolated equation x = 93/2 to eval extracts RHS
+        var resEqEval = await engine.ExecuteToListAsync("var x = sym x; var y = 2 * $x + 4 == 97; ($y - 4) / 2 | eval");
+        Assert.Single(resEqEval);
+        Assert.Equal(46.5, resEqEval[0]);
+
+        // CAS trig approximation via eval
+        var resSinEval = await engine.ExecuteToListAsync("sym \"sin(pi/2)\" | eval");
+        Assert.Single(resSinEval);
+        Assert.Equal(1, resSinEval[0]);
+
+        // String pipeline eval
+        var resStringEval = await engine.ExecuteToListAsync("\"1 + 2\" | eval");
+        Assert.Single(resStringEval);
+        Assert.Equal(3, resStringEval[0]);
+
+        // True division vs floor division
+        var resDiv = await engine.ExecuteToListAsync("echo (5 / 2)");
+        Assert.Single(resDiv);
+        Assert.Equal("2.5", resDiv[0]?.ToString());
+
+        var resFloorDiv = await engine.ExecuteToListAsync("echo (5 // 2)");
+        Assert.Single(resFloorDiv);
+        Assert.Equal("2", resFloorDiv[0]?.ToString());
+    }
 }
 

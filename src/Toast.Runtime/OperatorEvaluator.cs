@@ -1917,22 +1917,37 @@ public static class OperatorEvaluator
             return UnitRegistry.Instance.CreateTyped(reciprocalMagnitude, reciprocalDimension, reciprocalSymbol);
         }
 
-        // One rule per numeric family, and the floating one is IEEE (TS-P1-16).
-        // Integral and decimal division by zero throws, matching C#; floating division
-        // yields ±Infinity, or NaN for 0.0/0.0, also matching C# and IEEE 754.
-        //
-        // The floating lambda used to throw, which put the interpreter at odds with the
-        // *constant folder*: `10.0 / 0.0` written as literals folded to Infinity while
-        // `$a / $b` holding the same doubles threw. The item was filed as "depends on the
-        // zero operand's type", but the real split was folded versus evaluated — two
-        // implementations of one operation, disagreeing.
-        return EvaluateNumeric(
-            left,
-            right,
-            "op_Division",
-            (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs,
-            (lhs, rhs) => lhs / rhs,
-            (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs);
+        // Decimal preserves exact decimal precision.
+        if (IsDecimal(left) || IsDecimal(right))
+        {
+            var r = ToDecimal(right);
+            if (r == 0m) throw new InvalidOperationException("Division by zero.");
+            return ToDecimal(left) / r;
+        }
+
+        // True division: integral and floating types produce double (like Python 3).
+        // Integer floor division uses '//'.
+        // Integral division by zero throws, matching C# and Python; floating division
+        // yields ±Infinity or NaN (IEEE 754).
+        if (IsNumeric(left) && IsNumeric(right))
+        {
+            if (IsFloating(left) || IsFloating(right))
+            {
+                return ToDouble(left) / ToDouble(right);
+            }
+
+            var r = ToDouble(right);
+            if (r == 0.0) throw new InvalidOperationException("Division by zero.");
+            return ToDouble(left) / r;
+        }
+
+        if (TryInvokeClrBinaryOperator(left, "op_Division", right, out var clrResult))
+        {
+            return clrResult!;
+        }
+
+        throw new InvalidOperationException(
+            $"Operator operands '{DescribeOperandType(left)}' and '{DescribeOperandType(right)}' are not compatible.");
     }
 
     private static object? Modulo(object? left, object? right)

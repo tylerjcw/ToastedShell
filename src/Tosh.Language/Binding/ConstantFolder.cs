@@ -116,7 +116,12 @@ public static class ConstantFolder
         // Integer division by zero is a runtime concern; defer.
         if ((b is int bi && bi == 0) || (b is long bl && bl == 0) || (b is decimal bm && bm == 0m))
             return Sentinel.NoFold;
-        try { return ToDecimalIfNeeded(a, b, (x, y) => x / y, (x, y) => x / y, (x, y) => x / y, (x, y) => x / y); }
+        try
+        {
+            if (a is decimal || b is decimal)
+                return Dec(a!) / Dec(b!);
+            return Convert.ToDouble(a!) / Convert.ToDouble(b!);
+        }
         catch (DivideByZeroException) { return Sentinel.NoFold; }
         catch (OverflowException) { return Sentinel.NoFold; }
     }

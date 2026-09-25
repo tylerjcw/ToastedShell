@@ -13,6 +13,11 @@ public sealed class SymNumber : SymExpr
     public static new readonly SymNumber Zero = new(BigRational.Zero);
     public static new readonly SymNumber One = new(BigRational.One);
 
+    public int Sign => Value.Sign;
+    public System.Numerics.BigInteger Numerator => Value.Numerator;
+    public System.Numerics.BigInteger Denominator => Value.Denominator;
+    public override double Approximate => Value.ToDouble();
+
     public SymNumber(BigRational value) => Value = value;
 
     public override SymExpr Differentiate(string variable) => Zero;

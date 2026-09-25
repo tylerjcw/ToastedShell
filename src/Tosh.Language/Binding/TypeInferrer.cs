@@ -27,6 +27,11 @@ public static class TypeInferrer
 {
     public static BoundType InferBinary(BoundType left, string op, BoundType right)
     {
+        if (left.IsDynamic || right.IsDynamic)
+        {
+            return BoundType.Dynamic;
+        }
+
         switch (op)
         {
             case "==":
@@ -44,9 +49,15 @@ public static class TypeInferrer
             case "+":
             case "-":
             case "*":
-            case "/":
             case "%":
             case "**":
+                return PromoteNumeric(left, right);
+
+            case "/":
+                if (left.ClrType == typeof(decimal) || right.ClrType == typeof(decimal))
+                    return BoundType.FromClr(typeof(decimal));
+                if (IsNumeric(left) && IsNumeric(right))
+                    return BoundType.FromClr(typeof(double));
                 return PromoteNumeric(left, right);
 
             default:

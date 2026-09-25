@@ -18,6 +18,7 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
     public abstract SymExpr Differentiate(string variable);
     public abstract SymExpr Substitute(string variable, SymExpr replacement);
     public abstract double Evaluate(IReadOnlyDictionary<string, double>? context = null);
+    public virtual double Approximate => Evaluate();
     public virtual IEnumerable<string> GetVariables() => Enumerable.Empty<string>();
 
     public virtual bool TryEvaluateMathFunction(
@@ -80,7 +81,7 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
     public static implicit operator SymExpr(BigInteger value) => Number(value);
     public static implicit operator SymExpr(string variable) => Variable(variable);
 
-    public bool TryEvaluateBinaryOperator(
+    public virtual bool TryEvaluateBinaryOperator(
         string operatorName,
         object? other,
         bool reversed,
@@ -90,6 +91,19 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
         if (!TryCoerce(other, out var otherExpr))
         {
             return false;
+        }
+
+        if (operatorName is not ("==" or "="))
+        {
+            if (this is SymEquation eqThis)
+            {
+                return eqThis.TryEvaluateBinaryOperator(operatorName, otherExpr, reversed, out value);
+            }
+
+            if (otherExpr is SymEquation eqOther)
+            {
+                return eqOther.TryEvaluateBinaryOperator(operatorName, this, !reversed, out value);
+            }
         }
 
         var lhs = reversed ? otherExpr : this;
@@ -120,7 +134,7 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
         }
     }
 
-    private static bool TryCoerce(object? obj, out SymExpr expr)
+    protected internal static bool TryCoerce(object? obj, out SymExpr expr)
     {
         if (obj is SymExpr se) { expr = se; return true; }
         if (obj is int i) { expr = Number(i); return true; }

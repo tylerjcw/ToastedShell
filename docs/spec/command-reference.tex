@@ -7770,25 +7770,28 @@ Resolves the editor from \$EDITOR, \$VISUAL, then falls back to `tome`, then `vi
 \textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{eval}
-Parses and evaluates a string as Tosh source in the current session.
+Parses and evaluates strings as Tosh source or evaluates CAS symbolic expressions/equations to numerical values.
 
 \begin{signature}
-eval <source> [source...]
+eval [source...]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-source & Tosh source text to parse and evaluate in the current session. \\
+source & Tosh source text or CAS expression to parse and evaluate in the current session. (optional) \\
 \bottomrule
 \end{tabular}
 
-\textbf{Output:} Streams whatever values the evaluated source emits.
+\textbf{Pipeline input:} scalar
+ --- Accepts strings of Tosh source, symbolic expressions, equations, or numbers.
+
+\textbf{Output:} Streams whatever values the evaluated source or symbolic expression emits.
 
 \begin{lstlisting}
 eval "1 + 2"  # Evaluate a literal expression
-eval $"System.Drawing.Color.{$_}"  # Build and evaluate code at runtime
+var x = sym x; solve (2 * $x + 4 == 97) | eval  # Numerically evaluate symbolic solutions
 read-lines colors.txt | each { eval $"System.Drawing.Color.{$_}" }  # Resolve named members per line
 \end{lstlisting}
 
