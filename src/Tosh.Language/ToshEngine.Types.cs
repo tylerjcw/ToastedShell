@@ -231,6 +231,18 @@ public sealed partial class ToshEngine
         definition.IsHermit = @class.IsHermit;
         definition.IsStrict = @class.IsStrict;
         definition.IsPartial = @class.IsPartial;
+        definition.IsFluid = @class.IsFluid;
+
+        if (definition.IsStrict && definition.IsFluid)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.conflicting_modifiers",
+                Title: $"Class '{@class.Name}' cannot be both 'strict' and 'fluid'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: @class.Span,
+                Label: "cannot combine 'strict' and 'fluid'"));
+        }
 
         // Validate hermit (static) classes: constructors not allowed (members are auto-shared)
         if (definition.IsHermit)

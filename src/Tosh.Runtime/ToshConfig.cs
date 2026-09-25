@@ -21,6 +21,7 @@ public sealed class ToshConfig : IResettableShellConfig
         History = new ToshHistoryConfig(ToshConfigDefaults.GetDefaultStateDirectory());
         Startup = new ToshStartupConfig(startupRootDirectory);
         Tty = new ToshTtyConfig();
+        Terminal = new ToshTerminalConfig();
         Diagnostics = new ToshDiagnosticsConfig(options);
         Renderers = new ToshRenderersConfig();
         Schemas = new ToshSchemasConfig();
@@ -43,6 +44,16 @@ public sealed class ToshConfig : IResettableShellConfig
 
     public ToshTtyConfig Tty { get; }
 
+    /// <summary>What the reader has said about their terminal; unset settings are detected.</summary>
+    public ToshTerminalConfig Terminal { get; }
+
+    /// <summary>The terminal as it actually is: what was said, over what was detected.</summary>
+    /// <remarks>
+    /// The one answer everything else reads, so a screen and <c>$tosh.Terminal</c> cannot
+    /// disagree about what the terminal can do.
+    /// </remarks>
+    public TerminalProfile ResolvedTerminal => Terminal.Over(TerminalProfile.Detected);
+
     public ToshDiagnosticsConfig Diagnostics { get; }
 
     public ToshRenderersConfig Renderers { get; }
@@ -61,6 +72,7 @@ public sealed class ToshConfig : IResettableShellConfig
         History.Reset();
         Startup.Reset();
         Tty.Reset();
+        Terminal.Reset();
         Diagnostics.Reset();
         Renderers.Reset();
         Schemas.Reset();

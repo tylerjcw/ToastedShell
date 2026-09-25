@@ -475,6 +475,26 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
+    /// Parses a fragment of <paramref name="enclosingSourceText"/> that begins at
+    /// <paramref name="spanOffset"/>, so its diagnostics point into the enclosing source.
+    /// </summary>
+    private ParseResult ParseFragment(
+        string source,
+        string sourceName,
+        int spanOffset,
+        string enclosingSourceText)
+    {
+        var result = ToshParser.ParseFragment(
+            source,
+            sourceName,
+            CreateParseContext(),
+            spanOffset,
+            enclosingSourceText);
+        RegisterLineHushDirectives(sourceName, result.LineHushDirectives);
+        return result;
+    }
+
+    /// <summary>
     /// Hands the parser what this engine already knows (TS-P2-23), so
     /// identity decisions consult a table rather than inferring from
     /// capitalization. Modules come from the live scope chain, which is
@@ -883,14 +903,22 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </remarks>
     private ParseResult PrepareInterpolationHole(
         InterpolatedStringExpressionPart hole,
-        string sourceName)
+        string sourceName,
+        string sourceText)
     {
         if (hole.PreparedProgram is { } prepared && ReferenceEquals(hole.PreparedBy, this))
         {
             return prepared;
         }
 
-        var parseResult = Parse(hole.Expression, sourceName);
+        // Parsed as a fragment of the enclosing source rather than as a source of its own,
+        // so a failure inside the hole reports the line the hole is written on. The hole's
+        // text is re-lexed either way; only the coordinates differ.
+        var parseResult = ParseFragment(
+            hole.Expression,
+            sourceName,
+            hole.ExpressionSpan.Start,
+            sourceText);
 
         if (parseResult.Diagnostics.Count > 0)
         {
@@ -2391,6 +2419,18 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         definition.IsSealed = record.IsSealed;
         definition.IsStrict = record.IsStrict;
         definition.IsPartial = record.IsPartial;
+        definition.IsFluid = record.IsFluid;
+
+        if (definition.IsStrict && definition.IsFluid)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.conflicting_modifiers",
+                Title: $"Record '{record.Name}' cannot be both 'strict' and 'fluid'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: record.Span,
+                Label: "cannot combine 'strict' and 'fluid'"));
+        }
 
         DeclareType(record.Name, definition, record.Modifier, sourceName, sourceText, record.Span);
         yield break;

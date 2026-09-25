@@ -800,7 +800,8 @@ public sealed record BoundClassDefinition(
     bool IsPartial,
     DeclarationModifier Modifier,
     TextSpan Span,
-    IReadOnlyList<string>? TypeParameters = null)
+    IReadOnlyList<string>? TypeParameters = null,
+    bool IsFluid = false)
     : BoundStatement(Span);
 
 /// <summary>One method signature on an interface.</summary>
@@ -866,7 +867,8 @@ public sealed record BoundRecordDefinition(
     bool IsStrict,
     bool IsPartial,
     DeclarationModifier Modifier,
-    TextSpan Span)
+    TextSpan Span,
+    bool IsFluid = false)
     : BoundStatement(Span);
 
 public sealed record BoundStructDefinition(

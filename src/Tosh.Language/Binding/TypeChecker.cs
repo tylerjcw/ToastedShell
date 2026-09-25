@@ -2056,6 +2056,7 @@ public static class TypeChecker
         var targetType = access.Target.Type;
         if (targetType.IsDynamic) return;
         if (targetType.ClrType is { } tc && typeof(IShellRecordObject).IsAssignableFrom(tc)) return;
+        if (targetType is UserRecordType or UserClassType) return;
 
         // A dictionary is indexed by its key type, not by position. Without this
         // the check assumed an integer index and warned on every `$d["k"]`,

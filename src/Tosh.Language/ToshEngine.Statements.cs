@@ -2085,6 +2085,11 @@ public sealed partial class ToshEngine
                 continue;
             }
 
+            if (statement is PropertyDeclarationStatementSyntax)
+            {
+                continue;
+            }
+
             // Debug hook / script trace: fire before each statement executes.
             if (DebugHook is not null || LanguageRuntime.Options.ScriptTrace)
             {

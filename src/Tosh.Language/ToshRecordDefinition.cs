@@ -3,7 +3,7 @@ using Tosh.Language.Parsing;
 
 namespace Tosh.Language;
 
-public sealed class ToshRecordDefinition : IShellNamedType
+public sealed class ToshRecordDefinition : IShellNamedType, IShellConvertibleType
 {
     /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
     public DocComment? Documentation { get; internal set; }
@@ -50,6 +50,8 @@ public sealed class ToshRecordDefinition : IShellNamedType
     public bool IsStrict { get; internal set; }
 
     public bool IsPartial { get; internal set; }
+
+    public bool IsFluid { get; internal set; }
 
     public string SourceName { get; }
 
@@ -379,6 +381,131 @@ public sealed class ToshRecordDefinition : IShellNamedType
             }
         }
         Fields = merged;
+    }
+
+    public bool TryConvertInstance(object value, out object? converted, out string reason)
+    {
+        converted = null;
+        reason = string.Empty;
+
+        if (value is null)
+        {
+            reason = $"null cannot be converted to '{Name}'";
+            return false;
+        }
+
+        Dictionary<string, object?> sourceEntries = new(StringComparer.OrdinalIgnoreCase);
+
+        if (value is IDictionary<string, object?> dict)
+        {
+            foreach (var kvp in dict)
+            {
+                sourceEntries[kvp.Key] = kvp.Value;
+            }
+        }
+        else if (value is System.Collections.IDictionary legacyDict)
+        {
+            foreach (System.Collections.DictionaryEntry entry in legacyDict)
+            {
+                if (entry.Key is not null)
+                {
+                    sourceEntries[entry.Key.ToString()!] = entry.Value;
+                }
+            }
+        }
+        else if (value is IShellRecordObject shellRecord)
+        {
+            foreach (var member in shellRecord.GetMembers(includeHidden: true))
+            {
+                sourceEntries[member.Key] = member.Value;
+            }
+        }
+        else
+        {
+            reason = $"value of type '{value.GetType().Name}' is not a record or dictionary";
+            return false;
+        }
+
+        var instance = new ToshRecordInstance(this);
+        var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        // Check declared fields
+        foreach (var field in Fields)
+        {
+            if (sourceEntries.TryGetValue(field.Name, out var providedValue))
+            {
+                var convertedVal = ConvertFieldValue(field, providedValue, typeArgumentBindings: null);
+                instance.SetStoredValue(field.Name, convertedVal);
+                values[field.Name] = convertedVal;
+            }
+            else if (field.DefaultValue is not null)
+            {
+                var defaultValue = _engine.EvaluateClassPipelineValueSync(null, SourceName, SourceText, field.DefaultValue, values, CapturedScopes);
+                var convertedVal = ConvertFieldValue(field, defaultValue, typeArgumentBindings: null);
+                instance.SetStoredValue(field.Name, convertedVal);
+                values[field.Name] = convertedVal;
+            }
+            else if (field.IsOptional)
+            {
+                instance.SetStoredValue(field.Name, null);
+                values[field.Name] = null;
+            }
+            else
+            {
+                reason = $"missing required field '{field.Name}' for record '{Name}'";
+                return false;
+            }
+        }
+
+        // Dynamic fields
+        foreach (var (key, val) in sourceEntries)
+        {
+            if (_fieldsByName.ContainsKey(key))
+            {
+                continue;
+            }
+
+            if (!IsFluid)
+            {
+                reason = $"record '{Name}' is not fluid and does not declare field '{key}'";
+                return false;
+            }
+
+            instance.SetStoredValue(key, val);
+        }
+
+        converted = instance;
+        return true;
+    }
+
+    internal async ValueTask<object?> EvaluateDynamicInitializerAsync(
+        PipelineSyntax initializer,
+        CancellationToken cancellationToken,
+        string? sourceName = null,
+        string? sourceText = null)
+    {
+        return await _engine.EvaluateClassPipelineValueAsync(
+            null,
+            sourceName ?? SourceName,
+            sourceText ?? SourceText,
+            initializer,
+            new Dictionary<string, object?>(StringComparer.Ordinal),
+            CapturedScopes,
+            cancellationToken);
+    }
+
+    internal object? EvaluateDynamicInitializer(
+        PipelineSyntax initializer,
+        string? sourceName = null,
+        string? sourceText = null)
+    {
+        return _engine.EvaluateClassPipelineValueSync(
+            null,
+            sourceName ?? SourceName,
+            sourceText ?? SourceText,
+            initializer,
+            new Dictionary<string, object?>(StringComparer.Ordinal),
+            CapturedScopes);
     }
 }
 

@@ -23,6 +23,15 @@ internal sealed class ToshRuntimeNamespace
 
     public ToshConfig Config => _runtime.Config;
 
+    /// <summary>The terminal TōSh is talking to, and what it can be asked to do.</summary>
+    /// <remarks>
+    /// Detected once, when the shell starts, because the environment that names a terminal
+    /// does not change under a running process. Anything the reader set in
+    /// <c>$tosh.Config.Terminal</c> is laid over it, so a setting wins and an unset one is
+    /// worked out.
+    /// </remarks>
+    public TerminalProfile Terminal => Config.ResolvedTerminal;
+
     public bool IsLoginShell => _runtime.IsLoginShell;
 
     public ToshLastNamespace Last { get; }
@@ -43,6 +52,9 @@ internal sealed class ToshRuntimeNamespace
         {
             case nameof(Config):
                 value = Config;
+                return true;
+            case nameof(Terminal):
+                value = Terminal;
                 return true;
             case nameof(IsLoginShell):
                 value = IsLoginShell;
@@ -74,6 +86,7 @@ internal sealed class ToshRuntimeNamespace
         =>
         [
             new(nameof(Config), Config),
+            new(nameof(Terminal), Terminal),
             new(nameof(IsLoginShell), IsLoginShell),
             new(nameof(Last), Last),
             new(nameof(Script), Script),
@@ -254,6 +267,13 @@ internal sealed class ToshSessionNamespace(ToshRuntime runtime) : IShellRecordOb
 
     public int JobCount => runtime.GetJobs().Count;
 
+    /// <summary>The background jobs this session started.</summary>
+    /// <remarks>
+    /// The same list <c>jobs</c> reports, as a value. `JobCount` was here without any way to
+    /// see what it counted.
+    /// </remarks>
+    public object[] Jobs => [.. runtime.GetJobs()];
+
     public int OpenHandleCount => ManagedFileHandle.GetOpenHandles().Count;
 
     public ManagedFileHandle[] OpenHandles => ManagedFileHandle.GetOpenHandles().ToArray();
@@ -266,6 +286,9 @@ internal sealed class ToshSessionNamespace(ToshRuntime runtime) : IShellRecordOb
     {
         switch (name)
         {
+            case nameof(Jobs):
+                value = Jobs;
+                return true;
             case nameof(CurrentDirectory):
                 value = CurrentDirectory;
                 return true;
@@ -308,6 +331,8 @@ internal sealed class ToshSessionNamespace(ToshRuntime runtime) : IShellRecordOb
             new(nameof(JobCount), JobCount),
             new(nameof(OpenHandleCount), OpenHandleCount),
             new(nameof(StartupProfile), StartupProfile),
+            new(nameof(OpenHandles), OpenHandles),
+            new(nameof(Jobs), Jobs),
         ];
 }
 
@@ -330,6 +355,33 @@ internal sealed class ToshHostNamespace : IShellRecordObject
     public string ExecutablePath => Environment.ProcessPath ?? string.Empty;
 
     public bool IsInteractive => !Console.IsInputRedirected;
+
+    /// <summary>Whether standard input comes from somewhere other than the terminal.</summary>
+    public bool StdinRedirected => Console.IsInputRedirected;
+
+    /// <summary>Whether standard output goes somewhere other than the terminal.</summary>
+    /// <remarks>
+    /// The question a script asks before drawing: a pipeline and a redirect both want plain
+    /// text, and a full-screen interface has nowhere to draw in either.
+    /// </remarks>
+    public bool StdoutRedirected => Console.IsOutputRedirected;
+
+    /// <summary>Whether standard error goes somewhere other than the terminal.</summary>
+    public bool StderrRedirected => Console.IsErrorRedirected;
+
+    /// <summary>The effective user id — what the process is allowed to do, not who started it.</summary>
+    public long UserId => UnixSystemServices.GetCurrentIdentity().Euid;
+
+    /// <summary>The account name TōSh is running as.</summary>
+    public string UserName => UnixSystemServices.GetCurrentIdentity().UserName;
+
+    /// <summary>Whether TōSh is running with administrative rights.</summary>
+    /// <remarks>
+    /// What a script checks before reaching for <c>sudo</c>, rather than shelling out to
+    /// <c>id -u</c> to find out. On Windows the identity carries the same value for both ids,
+    /// so this is the Unix question and answers false there.
+    /// </remarks>
+    public bool IsElevated => !OperatingSystem.IsWindows() && UserId == 0;
 
     public string BuildSha256
     {
@@ -363,6 +415,24 @@ internal sealed class ToshHostNamespace : IShellRecordObject
     {
         switch (name)
         {
+            case nameof(StdinRedirected):
+                value = StdinRedirected;
+                return true;
+            case nameof(StdoutRedirected):
+                value = StdoutRedirected;
+                return true;
+            case nameof(StderrRedirected):
+                value = StderrRedirected;
+                return true;
+            case nameof(UserId):
+                value = UserId;
+                return true;
+            case nameof(UserName):
+                value = UserName;
+                return true;
+            case nameof(IsElevated):
+                value = IsElevated;
+                return true;
             case nameof(Version):
                 value = Version;
                 return true;
@@ -406,5 +476,11 @@ internal sealed class ToshHostNamespace : IShellRecordObject
             new(nameof(ExecutablePath), ExecutablePath),
             new(nameof(IsInteractive), IsInteractive),
             new(nameof(BuildSha256), BuildSha256),
+            new(nameof(StdinRedirected), StdinRedirected),
+            new(nameof(StdoutRedirected), StdoutRedirected),
+            new(nameof(StderrRedirected), StderrRedirected),
+            new(nameof(UserId), UserId),
+            new(nameof(UserName), UserName),
+            new(nameof(IsElevated), IsElevated),
         ];
 }

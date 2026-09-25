@@ -259,6 +259,11 @@ public static class Binder
             case PipelineStatementSyntax pipeline:
                 VisitPipeline(pipeline.Pipeline, context);
                 break;
+            case PropertyDeclarationStatementSyntax propDecl:
+                if (propDecl.Property.Initializer is not null) VisitPipeline(propDecl.Property.Initializer, context);
+                if (propDecl.Property.GetterBody is not null) VisitBlock(propDecl.Property.GetterBody, context);
+                if (propDecl.Property.SetterBody is not null) VisitBlock(propDecl.Property.SetterBody, context);
+                break;
             case VariableDeclarationStatementSyntax v when v.Value is not null:
                 VisitPipeline(v.Value, context);
                 break;

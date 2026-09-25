@@ -523,12 +523,69 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
             clone._lazyInitialized.Add(name);
         }
 
+        if (_dynamicProperties is not null)
+        {
+            clone._dynamicProperties = new Dictionary<string, DynamicPropertyDescriptor>(_dynamicProperties, StringComparer.OrdinalIgnoreCase);
+        }
+
         return clone;
     }
+
+    private Dictionary<string, DynamicPropertyDescriptor>? _dynamicProperties;
+
+    public bool HasDynamicProperties => _dynamicProperties is not null && _dynamicProperties.Count > 0;
+
+    public bool TryGetDynamicProperty(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out DynamicPropertyDescriptor? property)
+    {
+        if (_dynamicProperties is not null)
+        {
+            return _dynamicProperties.TryGetValue(name, out property);
+        }
+
+        property = null;
+        return false;
+    }
+
+    public void AddDynamicProperty(DynamicPropertyDescriptor property)
+    {
+        _dynamicProperties ??= new Dictionary<string, DynamicPropertyDescriptor>(StringComparer.OrdinalIgnoreCase);
+        _dynamicProperties[property.Name] = property;
+        if (!property.IsComputed)
+        {
+            _values[property.Name] = property.Value;
+        }
+        else
+        {
+            _values.Remove(property.Name);
+        }
+    }
+
+    public bool RemoveDynamicProperty(string name)
+    {
+        var removed = false;
+        if (_dynamicProperties is not null)
+        {
+            removed = _dynamicProperties.Remove(name);
+        }
+
+        if (_values.Remove(name))
+        {
+            removed = true;
+        }
+
+        return removed;
+    }
+
+    public IReadOnlyCollection<DynamicPropertyDescriptor> GetDynamicProperties() =>
+        _dynamicProperties?.Values ?? (IReadOnlyCollection<DynamicPropertyDescriptor>)Array.Empty<DynamicPropertyDescriptor>();
 
     internal bool TryGetStoredValue(string name, out object? value) => _values.TryGetValue(name, out value);
 
     internal void SetStoredValue(string name, object? value) => _values[name] = value;
+
+    internal bool RemoveStoredValue(string name) => _values.Remove(name);
+
+    internal IReadOnlyDictionary<string, object?> GetStoredValues() => _values;
 
     internal bool IsLazyInitializationActiveInCurrentContext(string name) =>
         _activeLazyInitializers.Value?.Contains(name) == true;

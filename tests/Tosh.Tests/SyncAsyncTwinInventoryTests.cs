@@ -175,12 +175,17 @@ public sealed class SyncAsyncTwinInventoryTests
         // dangerous entries harder to see.
         //
         // Still listed, because adding another wrapper is a deliberate act.
+        "ToshClassDefinition.ConvertDynamicPropertyValue",
+        "ToshClassDefinition.EvaluateDynamicInitializer",
+        "ToshClassDefinition.EvaluateDynamicPropertyGetter",
         "ToshClassDefinition.EvaluatePropertyGetter",
+        "ToshClassDefinition.ExecuteDynamicPropertySetter",
         "ToshClassDefinition.ExecuteMethodBlock",
         "ToshClassDefinition.ExecutePropertySetter",
         "ToshClassDefinition.GetInitialPropertyValue",
         "ToshClassDefinition.GetOrInitializeLazyProperty",
         "ToshEngine.ExecuteClassBlock",
+        "ToshRecordDefinition.EvaluateDynamicInitializer",
 
         // Verified 2026-08-01 rather than assumed:
         //   ReflectionInvoker.CreateInstance          — the async form is

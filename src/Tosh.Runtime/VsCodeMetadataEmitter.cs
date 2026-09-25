@@ -187,6 +187,9 @@ public static class VsCodeMetadataEmitter
 
     // ── Static special-variable definitions ───────────────────────────
 
+    /// <summary>The names described for the editor, for the test that keeps them current.</summary>
+    internal static IReadOnlyCollection<string> SpecialVariableNames => SpecialVariables.Keys;
+
     private static readonly SortedDictionary<string, string> SpecialVariables = new(StringComparer.Ordinal)
     {
         ["$tosh"] = "The live ToSh runtime namespace root for config, script state, shell/session state, and host metadata.",
@@ -214,6 +217,71 @@ public static class VsCodeMetadataEmitter
         ["$tosh.Host.Framework"] = "Target framework moniker (e.g. `net10.0`).",
         ["$tosh.Host.ProcessId"] = "PID of the current shell process.",
         ["$tosh.Config"] = "Live configuration object.",
+        ["$tosh.Config.Terminal"] = "What the reader has said about their terminal. Unset settings are detected.",
+        ["$tosh.Config.ResolvedTerminal"] = "The terminal as it actually is: what was configured, over what was detected. `$tosh.Terminal` surfaces the same answer.",
+        ["$tosh.Config.Theme"] = "Colours and prompt styling.",
+        ["$tosh.Config.Display"] = "How values are rendered: tables, widths and display profiles.",
+        ["$tosh.Config.Repl"] = "Interactive line editor behaviour.",
+        ["$tosh.Config.Prompt"] = "Prompt contents and layout.",
+        ["$tosh.Config.Shell"] = "Shell behaviour, including directory aliases (`$tosh.Config.Shell.Dirs`).",
+        ["$tosh.Config.History"] = "History file location, size and de-duplication.",
+        ["$tosh.Config.Startup"] = "Startup file paths: config, profile, autoload and library directories.",
+        ["$tosh.Config.Tty"] = "Terminal drawing: box style, indicators and glyphs.",
+        ["$tosh.Config.Diagnostics"] = "Diagnostic output mode and hushed codes.",
+        ["$tosh.Config.Renderers"] = "Per-type renderers.",
+        ["$tosh.Config.Schemas"] = "Registered data schemas.",
+        ["$tosh.Config.External"] = "How external commands are invoked and consumed.",
+
+        // ── the namespaces themselves, so `$tosh.` offers them ──
+        ["$tosh.Host"] = "Facts about the process and the machine it runs on.",
+        ["$tosh.Last"] = "The most recent statement: its result, exit code and timing.",
+        ["$tosh.Script"] = "The running script file and its arguments.",
+        ["$tosh.Session"] = "This shell session: directory, history, jobs and handles.",
+        ["$tosh.Terminal"] = "The terminal TōSh is talking to, and what it can be asked to do.",
+        ["$tosh.Function"] = "The function currently executing, and what it was passed.",
+
+        // ── host ──
+        ["$tosh.Host.OSDescription"] = "Operating system description string.",
+        ["$tosh.Host.ExecutablePath"] = "Absolute path of the running `tosh` executable.",
+        ["$tosh.Host.BuildSha256"] = "SHA-256 of the running executable, for identifying a build.",
+        ["$tosh.Host.IsInteractive"] = "`true` when standard input is a terminal rather than a pipe.",
+        ["$tosh.Host.StdinRedirected"] = "`true` when standard input comes from somewhere other than the terminal.",
+        ["$tosh.Host.StdoutRedirected"] = "`true` when standard output goes somewhere other than the terminal. What to check before drawing.",
+        ["$tosh.Host.StderrRedirected"] = "`true` when standard error goes somewhere other than the terminal.",
+        ["$tosh.Host.UserId"] = "Effective user id — what the process may do, not who started it.",
+        ["$tosh.Host.UserName"] = "Account name TōSh is running as.",
+        ["$tosh.Host.IsElevated"] = "`true` when running with administrative rights. Check before reaching for `sudo`.",
+
+        // ── last command ──
+        ["$tosh.Last.StartedAt"] = "When the last command began (`DateTimeOffset`).",
+        ["$tosh.Last.HasError"] = "`true` when the last command failed.",
+        ["$tosh.Last.Error"] = "The error the last command raised, or null.",
+        ["$tosh.Last.Diagnostic"] = "The diagnostic the last command reported, or null.",
+
+        // ── session ──
+        ["$tosh.Session.HistoryCount"] = "Number of entries in the history file.",
+        ["$tosh.Session.HistoryFilePath"] = "Absolute path of the history file.",
+        ["$tosh.Session.Jobs"] = "The background jobs this session started (`list`).",
+        ["$tosh.Session.OpenHandles"] = "The open file and stream handles (`list`).",
+        ["$tosh.Session.StartupProfile"] = "Phase-by-phase startup timing, when `--profile-startup` was asked for.",
+
+        // ── terminal ──
+        ["$tosh.Terminal.Name"] = "Short name of the terminal, such as `ghostty`, `kitty` or `linux-console`.",
+        ["$tosh.Terminal.Program"] = "Raw `TERM_PROGRAM` value.",
+        ["$tosh.Terminal.Term"] = "Raw `TERM` value.",
+        ["$tosh.Terminal.Surface"] = "Where the terminal is displayed: `Window`, `Console`, `Multiplexer` or `Basic`.",
+        ["$tosh.Terminal.Console"] = "`true` on a kernel console — a bare TTY or framebuffer, with no graphical environment.",
+        ["$tosh.Terminal.Multiplexed"] = "`true` when tmux or screen sits between TōSh and the terminal.",
+        ["$tosh.Terminal.Remote"] = "`true` when the terminal is reached over SSH.",
+        ["$tosh.Terminal.Width"] = "Terminal width in columns, measured on each access.",
+        ["$tosh.Terminal.Height"] = "Terminal height in rows, measured on each access.",
+        ["$tosh.Terminal.Colors"] = "How many colours the terminal has: 2, 8, 16, 256 or 16777216.",
+        ["$tosh.Terminal.TrueColor"] = "`true` when the terminal accepts 24-bit colour.",
+        ["$tosh.Terminal.Unicode"] = "`true` when the terminal can draw beyond its console font.",
+        ["$tosh.Terminal.KittyKeyboard"] = "`true` when the terminal is asked for unambiguous key reports.",
+        ["$tosh.Terminal.BracketedPaste"] = "`true` when the terminal is asked to bracket pastes.",
+        ["$tosh.Terminal.FocusReporting"] = "`true` when the terminal is asked for focus reports.",
+        ["$tosh.Terminal.Graphics"] = "Picture protocol: `kitty`, `sixel`, `half-blocks` or `none`.",
     };
 }
 

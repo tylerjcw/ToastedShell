@@ -94,10 +94,11 @@ public class NativeModuleIsolationTests
     {
         if (SkipOffLinux) return;
 
+        // This checks independent binding tables, not access to private-by-default ABI members.
         var results = await RunAsync(
             """
-            hermit class One { bind native "libc.so.6" { func abs(v: int) -> int } }
-            hermit class Two { bind native "libc.so.6" { func labs(v: long) -> long } }
+            hermit class One { proud bind native "libc.so.6" { func abs(v: int) -> int } }
+            hermit class Two { proud bind native "libc.so.6" { func labs(v: long) -> long } }
             One.abs(-4)
             Two.labs(-6)
             """);

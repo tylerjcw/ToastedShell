@@ -2575,7 +2575,7 @@ public sealed partial class ToshEngine
                                     // rather than inherited — `echo $"{git rev-parse …}"` used
                                     // to print the branch to the terminal and interpolate the
                                     // empty string (TS-P1-32).
-                                    var hole = PrepareInterpolationHole(expression, sourceName);
+                                    var hole = PrepareInterpolationHole(expression, sourceName, sourceText);
 
                                     // `TOAST-0023`. **A hole is one value unless it
                                     // contains a pipeline.** `$"{$xs}"` where `$xs`

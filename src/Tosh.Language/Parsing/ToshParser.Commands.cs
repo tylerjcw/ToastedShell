@@ -20,9 +20,9 @@ public static partial class ToshParser
     private sealed partial class InternalParser
     {
 
-        private ClassMemberSyntax ParseClassMember(string className)
+        private ClassMemberSyntax ParseClassMember(string className, IReadOnlyList<SyntaxToken>? docTokens = null)
         {
-            var docTokens = ConsumeDocCommentTokens();
+            docTokens ??= ConsumeDocCommentTokens();
             var memberStart = Current.Span.Start;
             var isShy = false;
             var isStatic = false;

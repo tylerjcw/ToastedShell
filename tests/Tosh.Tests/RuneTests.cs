@@ -429,4 +429,52 @@ public sealed class RuneTests
 
         Assert.Equal("2", results[^1]?.ToString());
     }
+
+    /// <summary>`benchmark` reports its timing instead of failing.</summary>
+    /// <remarks>
+    /// Both built-in runes that report progress wrote it with `| to stderr`, and `to`
+    /// only names serialisation formats — so `benchmark` threw
+    /// `Unknown format 'stderr'` on *every* call, and `with-retry` on every retry,
+    /// which is the one path it exists for. Neither had a test, because the bodies
+    /// live in a C# string literal that nothing parses until a caller runs it.
+    /// </remarks>
+    [Fact]
+    public async Task Benchmark_rune_reports_a_duration_and_returns_the_body_value()
+    {
+        var engine = ShellEngine.CreateFullShell();
+        var results = await engine.ExecuteToListAsync("""
+            benchmark "adding" { 1 + 1 }
+            """);
+
+        Assert.Equal("2", results[^1]?.ToString());
+    }
+
+    /// <summary>`with-retry` runs the body again after a failure and yields its value.</summary>
+    [Fact]
+    public async Task With_retry_rune_retries_until_the_body_succeeds()
+    {
+        var engine = ShellEngine.CreateFullShell();
+        var results = await engine.ExecuteToListAsync("""
+            var n = 0
+            with-retry 3 {
+                $n = $n + 1
+                if ($n < 3) { throw "not yet" }
+                $"succeeded on attempt {$n}"
+            }
+            """);
+
+        Assert.Equal("succeeded on attempt 3", results[^1]?.ToString());
+    }
+
+    /// <summary>`with-retry` rethrows once the attempts are spent.</summary>
+    [Fact]
+    public async Task With_retry_rune_rethrows_after_the_last_attempt()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => engine.ExecuteToListAsync("""
+                with-retry 2 { throw "always fails" }
+                """));
+    }
 }

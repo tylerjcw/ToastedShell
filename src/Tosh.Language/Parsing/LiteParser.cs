@@ -357,8 +357,38 @@ public static class LiteParser
             return !previousIsDocComment;
         }
 
+        if (IsMemberAccessContinuation(tokens, tokenIndex))
+        {
+            return false;
+        }
+
         return !previousIsDocComment &&
                ToshParser.IsExpressionStartToken(token.Kind);
+    }
+
+    private static bool IsMemberAccessContinuation(
+        IReadOnlyList<SyntaxToken> tokens,
+        int tokenIndex)
+    {
+        var token = tokens[tokenIndex];
+        if (token.Kind == SyntaxTokenKind.Bareword &&
+            token.Text.Length > 1 &&
+            token.Text[0] == '.' &&
+            (char.IsLetter(token.Text[1]) || token.Text[1] == '_'))
+        {
+            return true;
+        }
+
+        if (token.Kind == SyntaxTokenKind.QuestionDot &&
+            tokenIndex + 1 < tokens.Count &&
+            tokens[tokenIndex + 1].Kind == SyntaxTokenKind.Bareword &&
+            tokens[tokenIndex + 1].Text.Length > 0 &&
+            (char.IsLetter(tokens[tokenIndex + 1].Text[0]) || tokens[tokenIndex + 1].Text[0] == '_'))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static bool IsPipeForward(

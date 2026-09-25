@@ -99,6 +99,35 @@ public sealed class CompilerImportedTypeTests : IDisposable
         }
         """;
 
+    [Theory]
+    [InlineData("shy bind native \"libc.so.6\" { func abs(number: int) -> int }")]
+    [InlineData("shy raw func abs(number: int) -> int from \"libc.so.6\"")]
+    public void Imported_native_wrappers_do_not_expose_private_bindings(string binding)
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var nativePath = Write("native.tosh", $$"""
+            export module NativePrivacy {
+                export hermit class Magnitudes {
+                    {{binding}}
+                    proud shared func Read(n: int) -> int { return Magnitudes.abs($n) }
+                }
+            }
+            """);
+        var unit = Lower($$"""
+            require "{{nativePath.Replace("\\", "/")}}"
+            var magnitude: int = NativePrivacy.Magnitudes.Read(-7)
+            assert ($magnitude == 7)
+            var blocked: bool = false
+            try { var leaked: int = NativePrivacy.Magnitudes.abs(-9) } catch { $blocked = true }
+            assert $blocked "Private native call must be refused"
+            var again: int = NativePrivacy.Magnitudes.Read(-11)
+            assert ($again == 11)
+            writeline "native privacy preserved"
+            """);
+
+        Assert.Equal("native privacy preserved", Run(unit));
+    }
+
     [Fact]
     public void Ordinary_lowering_does_not_discover_types_in_required_files()
     {

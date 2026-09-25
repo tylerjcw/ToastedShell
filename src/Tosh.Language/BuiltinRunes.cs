@@ -28,7 +28,7 @@ internal static class BuiltinRunes
             $body
             var __bench_end = (date now)
             var __bench_duration = ($__bench_end - $__bench_start)
-            echo $"[benchmark] {$label}: {$__bench_duration}" | to stderr
+            System.Console.Error.WriteLine($"[benchmark] {$label}: {$__bench_duration}") | ignore
         }
 
         # with-retry: retry a block up to N times on failure
@@ -44,7 +44,7 @@ internal static class BuiltinRunes
                     if ($__retry_remaining <= 0) {
                         throw $err
                     }
-                    echo $"[retry] attempt failed, {$__retry_remaining} remaining: {$err}" | to stderr
+                    System.Console.Error.WriteLine($"[retry] attempt failed, {$__retry_remaining} remaining: {$err}") | ignore
                 }
             }
         }

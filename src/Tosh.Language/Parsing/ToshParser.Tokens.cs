@@ -66,7 +66,7 @@ public static partial class ToshParser
         private static bool IsDeclarationModifierWord(string text) => text is
             "export" or "shy" or "global" or "local" or "shared" or "static"
             or "sealed" or "hollow" or "hermit" or "strict" or "partial"
-            or "abstract" or "private" or "public" or "proud";
+            or "abstract" or "private" or "public" or "proud" or "fluid";
 
         private SyntaxToken ExpectRequireTarget()
         {
@@ -1168,7 +1168,7 @@ public static partial class ToshParser
 
         private bool TryConsumePostfixToken(int previousExpressionEnd, out SyntaxToken token, out string postfixText, out bool nullSafe)
         {
-            if (!HasLineBreakBetween(previousExpressionEnd, Current.Span.Start) && IsPostfixToken(Current))
+            if (IsPostfixToken(Current))
             {
                 token = NextToken();
                 postfixText = token.Text[1..];
@@ -1176,9 +1176,10 @@ public static partial class ToshParser
                 return true;
             }
 
-            if (!HasLineBreakBetween(previousExpressionEnd, Current.Span.Start) &&
-                Current.Kind == SyntaxTokenKind.QuestionDot &&
-                Peek(1).Kind == SyntaxTokenKind.Bareword)
+            if (Current.Kind == SyntaxTokenKind.QuestionDot &&
+                Peek(1).Kind == SyntaxTokenKind.Bareword &&
+                Peek(1).Text.Length > 0 &&
+                (char.IsLetter(Peek(1).Text[0]) || Peek(1).Text[0] == '_'))
             {
                 token = NextToken(); // consume ?.
                 var memberToken = NextToken(); // consume member name
@@ -1355,10 +1356,7 @@ public static partial class ToshParser
             return token.Kind == SyntaxTokenKind.Bareword &&
                    token.Text.Length > 1 &&
                    token.Text[0] == '.' &&
-                   // Reject `..` (range) and `...` (spread/splat) — they are
-                   // never member access, even when whitespace-adjacent to a
-                   // preceding variable reference.
-                   token.Text[1] != '.';
+                   (char.IsLetter(token.Text[1]) || token.Text[1] == '_');
         }
 
         private SyntaxToken Peek(int offset)

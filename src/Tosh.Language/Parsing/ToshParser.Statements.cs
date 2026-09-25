@@ -200,6 +200,11 @@ public static partial class ToshParser
                 return ParseClassDefinitionStatement(docTokens);
             }
 
+            if (LooksLikePropertyDeclaration())
+            {
+                return ParsePropertyDeclarationStatement(docTokens);
+            }
+
             if (LooksLikeInterfaceDefinition())
             {
                 return ParseInterfaceDefinitionStatement(docTokens);
@@ -1990,12 +1995,13 @@ public static partial class ToshParser
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
 
-            // Parse class-level modifiers: sealed, hollow, hermit, strict, partial
+            // Parse class-level modifiers: sealed, hollow, hermit, strict, partial, fluid
             var isSealed = false;
             var isAbstract = false;
             var isHermit = false;
             var isStrict = false;
             var isPartial = false;
+            var isFluid = false;
             while (Current.Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(Current.Text, "sealed", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
@@ -2003,7 +2009,8 @@ public static partial class ToshParser
                     string.Equals(Current.Text, "hermit", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "static", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "strict", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "partial", StringComparison.Ordinal)))
+                    string.Equals(Current.Text, "partial", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "fluid", StringComparison.Ordinal)))
             {
                 isSealed |= string.Equals(Current.Text, "sealed", StringComparison.Ordinal);
                 isAbstract |= string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
@@ -2012,7 +2019,17 @@ public static partial class ToshParser
                             string.Equals(Current.Text, "static", StringComparison.Ordinal);
                 isStrict |= string.Equals(Current.Text, "strict", StringComparison.Ordinal);
                 isPartial |= string.Equals(Current.Text, "partial", StringComparison.Ordinal);
+                isFluid |= string.Equals(Current.Text, "fluid", StringComparison.Ordinal);
                 NextToken();
+            }
+
+            if (isStrict && isFluid)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.conflicting_modifiers",
+                    Title: "Conflicting modifiers: 'strict' and 'fluid' cannot be used together.",
+                    Span: Current.Span,
+                    Label: "cannot combine 'strict' and 'fluid'"));
             }
 
             var classToken = NextToken();
@@ -2136,7 +2153,8 @@ public static partial class ToshParser
                 IsStrict: isStrict,
                 IsPartial: isPartial,
                 BaseTypeArguments: baseTypeArgs,
-                TypeParameterConstraints: typeParameterConstraints);
+                TypeParameterConstraints: typeParameterConstraints,
+                IsFluid: isFluid);
         }
 
         private StatementSyntax ParseInterfaceDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -2700,16 +2718,28 @@ public static partial class ToshParser
             var isSealed = false;
             var isStrict = false;
             var isPartial = false;
+            var isFluid = false;
 
             while (Current.Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(Current.Text, "sealed", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "strict", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "partial", StringComparison.Ordinal)))
+                    string.Equals(Current.Text, "partial", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "fluid", StringComparison.Ordinal)))
             {
                 isSealed |= string.Equals(Current.Text, "sealed", StringComparison.Ordinal);
                 isStrict |= string.Equals(Current.Text, "strict", StringComparison.Ordinal);
                 isPartial |= string.Equals(Current.Text, "partial", StringComparison.Ordinal);
+                isFluid |= string.Equals(Current.Text, "fluid", StringComparison.Ordinal);
                 NextToken();
+            }
+
+            if (isStrict && isFluid)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.conflicting_modifiers",
+                    Title: "Conflicting modifiers: 'strict' and 'fluid' cannot be used together.",
+                    Span: Current.Span,
+                    Label: "cannot combine 'strict' and 'fluid'"));
             }
 
             NextToken(); // record
@@ -2743,7 +2773,8 @@ public static partial class ToshParser
                 return new RecordDefinitionStatementSyntax(nameToken.Text, Array.Empty<RecordFieldDefinitionSyntax>(), modifier, isSealed, isStrict, isPartial, TextSpan.FromBounds(declarationStart, nameToken.Span.End),
                     DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
                     TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
-                    TypeParameterConstraints: typeParameterConstraints);
+                    TypeParameterConstraints: typeParameterConstraints,
+                    IsFluid: isFluid);
             }
 
             var fields = ParseRecordDefinitionFields(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -2775,7 +2806,8 @@ public static partial class ToshParser
                 TextSpan.FromBounds(declarationStart, end),
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
                 TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
-                TypeParameterConstraints: typeParameterConstraints);
+                TypeParameterConstraints: typeParameterConstraints,
+                IsFluid: isFluid);
         }
 
         private StatementSyntax ParseStructDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -3233,6 +3265,19 @@ public static partial class ToshParser
                 modifier,
                 TextSpan.FromBounds(declarationStart, closeBraceEnd),
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+        }
+
+        private StatementSyntax ParsePropertyDeclarationStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
+        {
+            var member = ParseClassMember("<dynamic>", docTokens);
+            if (member is ClassPropertyMemberSyntax prop)
+            {
+                return new PropertyDeclarationStatementSyntax(prop, member.Span);
+            }
+
+            return new PropertyDeclarationStatementSyntax(
+                new ClassPropertyMemberSyntax(string.Empty, null, null, null, null, false, false, false, false, false, false, false, false, false, member.Span),
+                member.Span);
         }
 
         private BlockSyntax ParseArrowStatementBlock(string owner)

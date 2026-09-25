@@ -51,8 +51,18 @@ internal static class UserTypeMembers
             cls.BaseClassName is not null ||
             cls.UsedTraits is { Count: > 0 } ||
             cls.ImplementedInterfaces is { Count: > 0 } ||
-            cls.IsPartial,
-        UserStructType { Definition: StructDefinitionStatementSyntax str } => str.IsPartial,
+            cls.IsPartial ||
+            cls.IsFluid,
+        UserClassType { Definition: BoundClassDefinition cls } =>
+            cls.BaseClassName is not null ||
+            cls.UsedTraits is { Count: > 0 } ||
+            cls.ImplementedInterfaces is { Count: > 0 } ||
+            cls.IsPartial ||
+            cls.IsFluid,
+        UserRecordType { Definition: RecordDefinitionStatementSyntax rec } => rec.IsPartial || rec.IsFluid,
+        UserRecordType { Definition: BoundRecordDefinition rec } => rec.IsPartial || rec.IsFluid,
+        UserStructType { Definition: StructDefinitionStatementSyntax str } => str.IsPartial || str.IsFluid,
+        UserStructType { Definition: BoundStructDefinition str } => str.IsPartial || str.IsFluid,
         _ => true,
     };
 

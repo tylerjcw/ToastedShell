@@ -137,12 +137,48 @@ public static partial class ToshParser
         string source,
         string sourceName = "<input>",
         ParseContext? context = null)
+        => ParseFragment(source, sourceName, context, spanOffset: 0, enclosingSourceText: null);
+
+    /// <summary>
+    /// Parses a fragment cut out of a larger source, reporting against that larger source.
+    /// </summary>
+    /// <param name="spanOffset">
+    /// Where <paramref name="source"/> begins inside <paramref name="enclosingSourceText"/>.
+    /// Every token is shifted by it, so the spans the parser derives are absolute and a
+    /// diagnostic lands on the line the reader actually wrote.
+    /// </param>
+    /// <param name="enclosingSourceText">
+    /// The text diagnostics are rendered against. Null parses the fragment as its own source.
+    /// </param>
+    /// <remarks>
+    /// An interpolation hole is the reason this exists. Its expression is parsed on its own —
+    /// lazily, so a hole in a branch never taken still never reports — but it was then
+    /// *evaluated* against the enclosing file's text while carrying spans measured from the
+    /// hole. The two disagreed, and every error inside a <c>$"…{ }"</c> was reported at
+    /// line 1 of the enclosing file whatever line it was on.
+    /// </remarks>
+    public static ParseResult ParseFragment(
+        string source,
+        string sourceName,
+        ParseContext? context,
+        int spanOffset,
+        string? enclosingSourceText)
     {
         try
         {
-            var sourceText = source ?? string.Empty;
-            var lexer = new ToshLexer(sourceText);
+            var fragmentText = source ?? string.Empty;
+            var sourceText = enclosingSourceText ?? fragmentText;
+            var lexer = new ToshLexer(fragmentText);
             var tokens = lexer.Lex();
+            if (spanOffset != 0)
+            {
+                var shifted = new List<SyntaxToken>(tokens.Count);
+                foreach (var token in tokens)
+                {
+                    shifted.Add(token with { Position = token.Position + spanOffset });
+                }
+                tokens = shifted;
+            }
             var parser = new InternalParser(
                 sourceName,
                 sourceText,
@@ -154,13 +190,78 @@ public static partial class ToshParser
         }
         catch (ToshLexer.LexerDiagnosticException exception)
         {
+            var diagnostic = exception.Diagnostic;
+            if (spanOffset != 0)
+            {
+                diagnostic = diagnostic with
+                {
+                    Span = new TextSpan(diagnostic.Span.Start + spanOffset, diagnostic.Span.Length),
+                };
+            }
+
             return new ParseResult(
                 sourceName,
-                source ?? string.Empty,
+                enclosingSourceText ?? source ?? string.Empty,
                 new PipelineStatementSyntax(
                     new PipelineSyntax(Array.Empty<PipelineStageSyntax>()),
-                    new TextSpan(0, 0)),
-                [exception.Diagnostic]);
+                    new TextSpan(spanOffset, 0)),
+                [diagnostic]);
+        }
+    }
+
+    /// <summary>
+    /// Parses a block of class members (such as `{ prop Foo = 1; ... }`) for dynamic property definition.
+    /// </summary>
+    public static (IReadOnlyList<ClassMemberSyntax> Members, IReadOnlyList<SyntaxDiagnostic> Diagnostics) ParseClassMembersBlock(
+        string source,
+        string sourceName = "<dynamic>",
+        int spanOffset = 0,
+        string? enclosingSourceText = null)
+    {
+        try
+        {
+            var fragmentText = source ?? string.Empty;
+            if (!fragmentText.TrimStart().StartsWith('{'))
+            {
+                fragmentText = "{\n" + fragmentText + "\n}";
+            }
+
+            var sourceText = enclosingSourceText ?? fragmentText;
+            var lexer = new ToshLexer(fragmentText);
+            var tokens = lexer.Lex();
+            if (spanOffset != 0)
+            {
+                var shifted = new List<SyntaxToken>(tokens.Count);
+                foreach (var token in tokens)
+                {
+                    shifted.Add(token with { Position = token.Position + spanOffset });
+                }
+                tokens = shifted;
+            }
+
+            var parser = new InternalParser(
+                sourceName,
+                sourceText,
+                tokens,
+                lexer.LineHushDirectives,
+                lexer.LineComments,
+                ParseContext.Empty);
+
+            var members = parser.ParseClassBody("<dynamic>");
+            return (members, parser.Diagnostics);
+        }
+        catch (ToshLexer.LexerDiagnosticException exception)
+        {
+            var diagnostic = exception.Diagnostic;
+            if (spanOffset != 0)
+            {
+                diagnostic = diagnostic with
+                {
+                    Span = new TextSpan(diagnostic.Span.Start + spanOffset, diagnostic.Span.Length),
+                };
+            }
+
+            return (Array.Empty<ClassMemberSyntax>(), [diagnostic]);
         }
     }
 
@@ -179,6 +280,7 @@ public static partial class ToshParser
         private readonly IReadOnlyList<LineHushDirective> _lineHushDirectives;
         private readonly IReadOnlyList<LineComment> _lineComments;
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
+        internal IReadOnlyList<SyntaxDiagnostic> Diagnostics => _diagnostics;
         private readonly HashSet<string> _userFunctionNames;
         private readonly IReadOnlyDictionary<int, LiteBoundary> _liteBoundariesByTokenIndex;
         private readonly HashSet<int> _liteTopLevelStatementStartTokenIndices;
@@ -1385,7 +1487,7 @@ public static partial class ToshParser
             return fields;
         }
 
-        private IReadOnlyList<ClassMemberSyntax> ParseClassBody(string className)
+        internal IReadOnlyList<ClassMemberSyntax> ParseClassBody(string className)
         {
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {

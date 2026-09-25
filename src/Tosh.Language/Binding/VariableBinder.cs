@@ -140,6 +140,13 @@ public static class VariableBinder
                 VisitPipeline(p.Pipeline, ctx);
                 break;
 
+            case PropertyDeclarationStatementSyntax propDecl:
+                if (propDecl.Property.Initializer is not null) VisitPipeline(propDecl.Property.Initializer, ctx);
+                if (propDecl.Property.GetterBody is not null) VisitBlock(propDecl.Property.GetterBody, ctx);
+                if (propDecl.Property.SetterBody is not null) VisitBlock(propDecl.Property.SetterBody, ctx);
+                Declare(ctx, propDecl.Property.Name);
+                break;
+
             case VariableDeclarationStatementSyntax v:
                 if (v.Value is not null) VisitPipeline(v.Value, ctx);
                 Declare(ctx, v.Name);

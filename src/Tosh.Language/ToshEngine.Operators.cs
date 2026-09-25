@@ -405,13 +405,19 @@ public sealed partial class ToshEngine
     }
 
     /// <summary>
-    /// Resolves an <c>as</c> target by the same CLR-first, declaration-second rule as the
-    /// <c>cast</c> command. Keeping the scoped lookup here lets local, nested, imported, and
-    /// module-qualified declarations participate without putting engine state in the portable
-    /// operator runtime.
+    /// Resolves an <c>as</c> target, prioritizing user-declared named types over ambient CLR types
+    /// so that local classes, records, and enums shadow ambient platform types (such as <c>CpuInfo</c>).
+    /// Keeping the scoped lookup here lets local, nested, imported, and module-qualified
+    /// declarations participate without putting engine state in the portable operator runtime.
     /// </summary>
     private object? ResolveAsTarget(string typeName)
     {
+        if (TryGetNamedType(typeName, out var directType) &&
+            directType is IShellTypeDescriptor directDescriptor)
+        {
+            return directDescriptor;
+        }
+
         if (ResolveTypeName(typeName) is { } clrType)
         {
             return clrType;

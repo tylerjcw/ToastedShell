@@ -280,6 +280,9 @@ public static class Lowerer
                 ?? TryLowerRuneExpansion(pipeline, ctx)
                 ?? new BoundPipelineStatement(LowerPipeline(pipeline.Pipeline, ctx), pipeline.Span),
 
+        PropertyDeclarationStatementSyntax propDecl =>
+            new BoundDynamicStatement(propDecl, propDecl.Span),
+
         VariableDeclarationStatementSyntax decl =>
             LowerVariableDeclaration(decl, ctx),
 
@@ -2572,7 +2575,8 @@ public static class Lowerer
             IsPartial: classDef.IsPartial,
             Modifier: classDef.Modifier,
             Span: classDef.Span,
-            TypeParameters: classDef.TypeParameters);
+            TypeParameters: classDef.TypeParameters,
+            IsFluid: classDef.IsFluid);
     }
 
     private static BoundInterfaceDefinition LowerInterfaceDefinition(
@@ -2681,7 +2685,8 @@ public static class Lowerer
             IsStrict: recordDef.IsStrict,
             IsPartial: recordDef.IsPartial,
             Modifier: recordDef.Modifier,
-            Span: recordDef.Span);
+            Span: recordDef.Span,
+            IsFluid: recordDef.IsFluid);
 
     private static BoundStructDefinition LowerStructDefinition(
         StructDefinitionStatementSyntax structDef,

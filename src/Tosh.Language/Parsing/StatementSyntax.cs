@@ -263,7 +263,8 @@ public sealed record ClassDefinitionStatementSyntax(
     bool IsStrict = false,
     bool IsPartial = false,
     IReadOnlyList<string>? BaseTypeArguments = null,
-    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null,
+    bool IsFluid = false) : StatementSyntax(Span);
 
 /// <summary>
 /// Constraints on a generic type parameter, e.g. <c>where T: Numeric, Add</c>.
@@ -358,7 +359,8 @@ public sealed record RecordDefinitionStatementSyntax(
     TextSpan Span = default,
     DocComment? DocComment = null,
     IReadOnlyList<string>? TypeParameters = null,
-    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null,
+    bool IsFluid = false) : StatementSyntax(Span);
 
 public sealed record StructDefinitionStatementSyntax(
     string Name,
@@ -517,3 +519,5 @@ public sealed record SwitchStatementSyntax(
     IReadOnlyList<SwitchCaseSyntax> Cases,
     BlockSyntax? DefaultBlock,
     TextSpan Span) : StatementSyntax(Span);
+
+public sealed record PropertyDeclarationStatementSyntax(ClassPropertyMemberSyntax Property, TextSpan Span) : StatementSyntax(Span);

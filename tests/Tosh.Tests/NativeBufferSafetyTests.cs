@@ -232,6 +232,7 @@ public class NativeBufferSafetyTests
     [Fact]
     public async Task Referencing_a_native_member_without_parentheses_explains_itself()
     {
+        // Use a public binding: a private one must report privacy before offering call syntax.
         if (!OperatingSystem.IsLinux())
         {
             return;
@@ -241,7 +242,7 @@ public class NativeBufferSafetyTests
             () => NewEngine().ExecuteToListAsync(
                 """
                 hermit class C {
-                    shy bind native "libc.so.6" { func abs(int) -> int }
+                    proud bind native "libc.so.6" { func abs(int) -> int }
                 }
                 C.abs
                 """));

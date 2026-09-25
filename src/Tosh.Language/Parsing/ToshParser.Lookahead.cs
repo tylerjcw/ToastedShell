@@ -312,17 +312,31 @@ public static partial class ToshParser
                    IsValidIdentifier(Peek(offset + 1).Text);
         }
 
+        private bool LooksLikePropertyDeclaration()
+        {
+            var offset = 0;
+            while (Peek(offset).Kind == SyntaxTokenKind.Bareword &&
+                   LanguageSurface.TryResolveMemberModifier(Peek(offset).Text, out _))
+            {
+                offset++;
+            }
+
+            return Peek(offset).Kind == SyntaxTokenKind.Bareword &&
+                   string.Equals(Peek(offset).Text, "prop", StringComparison.Ordinal);
+        }
+
         private bool LooksLikeClassDefinition()
         {
             var offset = GetDeclarationModifierOffset();
 
-            // Skip optional class-level modifiers: sealed, hollow, hermit, strict, partial
+            // Skip optional class-level modifiers: sealed, hollow, hermit, strict, partial, fluid
             while (Peek(offset).Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(Peek(offset).Text, "sealed", StringComparison.Ordinal) ||
                     string.Equals(Peek(offset).Text, "hollow", StringComparison.Ordinal) ||
                     string.Equals(Peek(offset).Text, "hermit", StringComparison.Ordinal) ||
                     string.Equals(Peek(offset).Text, "strict", StringComparison.Ordinal) ||
-                    string.Equals(Peek(offset).Text, "partial", StringComparison.Ordinal)))
+                    string.Equals(Peek(offset).Text, "partial", StringComparison.Ordinal) ||
+                    string.Equals(Peek(offset).Text, "fluid", StringComparison.Ordinal)))
             {
                 offset++;
             }
@@ -420,11 +434,12 @@ public static partial class ToshParser
         {
             var offset = GetDeclarationModifierOffset();
 
-            // Skip optional record-level modifiers: sealed, strict, partial
+            // Skip optional record-level modifiers: sealed, strict, partial, fluid
             while (Peek(offset).Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(Peek(offset).Text, "sealed", StringComparison.Ordinal) ||
                     string.Equals(Peek(offset).Text, "strict", StringComparison.Ordinal) ||
-                    string.Equals(Peek(offset).Text, "partial", StringComparison.Ordinal)))
+                    string.Equals(Peek(offset).Text, "partial", StringComparison.Ordinal) ||
+                    string.Equals(Peek(offset).Text, "fluid", StringComparison.Ordinal)))
             {
                 offset++;
             }

@@ -34,8 +34,19 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
 
     public bool TrySetMember(string name, object? value)
     {
+        if (Definition.IsStrict)
+        {
+            throw new InvalidOperationException($"Cannot modify field '{name}' on strict record '{Definition.Name}'.");
+        }
+
         if (!Definition.TryGetField(name, out var field))
         {
+            if (Definition.IsFluid)
+            {
+                _values[name] = value;
+                return true;
+            }
+
             return false;
         }
 
@@ -45,9 +56,31 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
 
     public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
     {
-        return Definition.Fields
-            .Select(field => new KeyValuePair<string, object?>(field.Name, _values.TryGetValue(field.Name, out var value) ? value : null))
-            .ToArray();
+        if (!Definition.IsFluid)
+        {
+            return Definition.Fields
+                .Select(field => new KeyValuePair<string, object?>(field.Name, _values.TryGetValue(field.Name, out var value) ? value : null))
+                .ToArray();
+        }
+
+        var result = new List<KeyValuePair<string, object?>>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in Definition.Fields)
+        {
+            seen.Add(field.Name);
+            result.Add(new KeyValuePair<string, object?>(field.Name, _values.TryGetValue(field.Name, out var value) ? value : null));
+        }
+
+        foreach (var (key, value) in _values)
+        {
+            if (seen.Add(key))
+            {
+                result.Add(new KeyValuePair<string, object?>(key, value));
+            }
+        }
+
+        return result;
     }
 
     public object Clone()
@@ -69,6 +102,20 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
             return false;
         }
 
+        if (Definition.IsFluid)
+        {
+            if (_values.Count != other._values.Count) return false;
+            foreach (var (name, value) in _values)
+            {
+                if (!other._values.TryGetValue(name, out var otherValue) ||
+                    !OperatorEvaluator.AreEqual(value, otherValue))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         return Definition.Fields.All(field =>
             OperatorEvaluator.AreEqual(
                 _values.TryGetValue(field.Name, out var left) ? left : null,
@@ -82,14 +129,29 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
         var hash = new HashCode();
         hash.Add(Definition);
 
-        foreach (var field in Definition.Fields)
+        if (Definition.IsFluid)
         {
-            hash.Add(field.Name, StringComparer.OrdinalIgnoreCase);
-            hash.Add(_values.TryGetValue(field.Name, out var value) ? value : null);
+            foreach (var (name, value) in _values.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                hash.Add(name, StringComparer.OrdinalIgnoreCase);
+                hash.Add(value);
+            }
+        }
+        else
+        {
+            foreach (var field in Definition.Fields)
+            {
+                hash.Add(field.Name, StringComparer.OrdinalIgnoreCase);
+                hash.Add(_values.TryGetValue(field.Name, out var value) ? value : null);
+            }
         }
 
         return hash.ToHashCode();
     }
 
     internal void SetStoredValue(string name, object? value) => _values[name] = value;
+
+    internal bool RemoveStoredValue(string name) => _values.Remove(name);
+
+    internal IReadOnlyDictionary<string, object?> GetStoredValues() => _values;
 }

@@ -138,6 +138,8 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public bool IsPartial { get; internal set; }
 
+    public bool IsFluid { get; internal set; }
+
     /// <summary>
     /// Merges members from another partial class definition into this one.
     /// Properties, methods, and constructors from the other definition are added.
@@ -300,6 +302,20 @@ public sealed class ToshClassDefinition : IShellNamedType
             _properties.Add(property);
             _propertiesByName[property.Name] = property;
         }
+    }
+
+    public bool TryGetDeclaredProperty(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ToshClassPropertyDefinition? property)
+    {
+        for (var current = this; current is not null; current = current.BaseClass)
+        {
+            if (current._propertiesByName.TryGetValue(name, out property))
+            {
+                return true;
+            }
+        }
+
+        property = null;
+        return false;
     }
 
     public string ShellTypeName => Name;
@@ -860,10 +876,15 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         // Native bindings are checked before declared methods so a `bind` block
         // member is callable as `SystemInfo.sysinfo()`. They are always static,
-        // and `shy` does not hide them from the class's own members — it hides
-        // them from outside, which the resolver enforces.
+        // so enforce the same declaring-class privacy as ordinary static methods
+        // here, before dispatch; qualified/type-valued callers share this path.
         if (_nativeMembers.TryGetValue(methodName, out var nativeMember))
         {
+            if (nativeMember.IsShy && !CanSeeShyStatic())
+            {
+                throw ShyStaticMemberIsHidden("Native method", methodName);
+            }
+
             var nativeValues = await _engine.InvokeNativeMemberAsync(
                 nativeMember.Command, arguments, cancellationToken);
 
@@ -1004,6 +1025,11 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         if (_nativeMembers.TryGetValue(memberName, out var entry))
         {
+            if (entry.IsShy && !CanSeeShyStatic())
+            {
+                throw ShyStaticMemberIsHidden("Native method", memberName);
+            }
+
             command = entry.Command;
             return true;
         }
@@ -1073,6 +1099,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         // bare "not found", which reads as if the binding had failed.
         if (_nativeMembers.TryGetValue(memberName, out var native))
         {
+            if (native.IsShy && !CanSeeShyStatic())
+            {
+                throw ShyStaticMemberIsHidden("Native method", memberName);
+            }
+
             throw new InvalidOperationException(
                 $"'{memberName}' is a native binding on class '{Name}'. Call it with parentheses: {native.Command.Usage}");
         }
@@ -1367,7 +1398,35 @@ public sealed class ToshClassDefinition : IShellNamedType
             return BaseClass.TryGetInstanceMember(instance, name, includeHidden, accessor, out value);
         }
 
-        return TryGetClrBaseMember(instance, name, out value);
+        if (TryGetClrBaseMember(instance, name, out value))
+        {
+            return true;
+        }
+
+        if (IsFluid)
+        {
+            if (instance.TryGetDynamicProperty(name, out var dynamicProp))
+            {
+                if (!includeHidden && dynamicProp.IsShy)
+                {
+                    value = null;
+                    return false;
+                }
+
+                if (dynamicProp.IsComputed)
+                {
+                    value = EvaluateDynamicPropertyGetter(instance, dynamicProp);
+                    return true;
+                }
+
+                return instance.TryGetStoredValue(name, out value);
+            }
+
+            return instance.TryGetStoredValue(name, out value);
+        }
+
+        value = null;
+        return false;
     }
 
     internal async ValueTask<(bool Found, object? Value)> TryGetInstanceMemberAsync(
@@ -1403,9 +1462,38 @@ public sealed class ToshClassDefinition : IShellNamedType
                 cancellationToken);
         }
 
-        return TryGetClrBaseMember(instance, name, out var clrValue, cancellationToken)
-            ? (true, clrValue)
-            : (false, null);
+        if (TryGetClrBaseMember(instance, name, out var clrValue, cancellationToken))
+        {
+            return (true, clrValue);
+        }
+
+        if (IsFluid)
+        {
+            if (instance.TryGetDynamicProperty(name, out var dynamicProp))
+            {
+                if (!includeHidden && dynamicProp.IsShy)
+                {
+                    return (false, null);
+                }
+
+                if (dynamicProp.IsComputed)
+                {
+                    var val = await EvaluateDynamicPropertyGetterAsync(instance, dynamicProp, cancellationToken);
+                    return (true, val);
+                }
+
+                if (instance.TryGetStoredValue(name, out var fluidValue))
+                {
+                    return (true, fluidValue);
+                }
+            }
+            else if (instance.TryGetStoredValue(name, out var fluidValue))
+            {
+                return (true, fluidValue);
+            }
+        }
+
+        return (false, null);
     }
 
     private object? GetOrInitializeLazyProperty(
@@ -1760,7 +1848,45 @@ public sealed class ToshClassDefinition : IShellNamedType
             return BaseClass.TrySetInstanceMember(instance, name, value, includeHidden, accessor);
         }
 
-        return TrySetClrBaseMember(instance, name, value);
+        if (TrySetClrBaseMember(instance, name, value))
+        {
+            return true;
+        }
+
+        if (IsFluid)
+        {
+            if (instance.TryGetDynamicProperty(name, out var dynamicProp))
+            {
+                if (dynamicProp.IsFixed)
+                {
+                    throw new InvalidOperationException($"Cannot modify readonly dynamic property '{name}' on '{Name}'.");
+                }
+
+                if (dynamicProp.IsComputed)
+                {
+                    if (dynamicProp.Setter is null)
+                    {
+                        throw new InvalidOperationException($"Dynamic property '{name}' on '{Name}' has no setter.");
+                    }
+
+                    ExecuteDynamicPropertySetter(instance, dynamicProp, value);
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(dynamicProp.TypeName))
+                {
+                    value = ConvertDynamicPropertyValue(instance, dynamicProp.TypeName, value);
+                }
+
+                instance.SetStoredValue(name, value);
+                return true;
+            }
+
+            instance.SetStoredValue(name, value);
+            return true;
+        }
+
+        return false;
     }
 
     internal async ValueTask<bool> TrySetInstanceMemberAsync(
@@ -1797,7 +1923,45 @@ public sealed class ToshClassDefinition : IShellNamedType
                 cancellationToken);
         }
 
-        return TrySetClrBaseMember(instance, name, value, cancellationToken);
+        if (TrySetClrBaseMember(instance, name, value, cancellationToken))
+        {
+            return true;
+        }
+
+        if (IsFluid)
+        {
+            if (instance.TryGetDynamicProperty(name, out var dynamicProp))
+            {
+                if (dynamicProp.IsFixed)
+                {
+                    throw new InvalidOperationException($"Cannot modify readonly dynamic property '{name}' on '{Name}'.");
+                }
+
+                if (dynamicProp.IsComputed)
+                {
+                    if (dynamicProp.Setter is null)
+                    {
+                        throw new InvalidOperationException($"Dynamic property '{name}' on '{Name}' has no setter.");
+                    }
+
+                    await ExecuteDynamicPropertySetterAsync(instance, dynamicProp, value, cancellationToken);
+                    return true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(dynamicProp.TypeName))
+                {
+                    value = await ConvertDynamicPropertyValueAsync(instance, dynamicProp.TypeName, value, cancellationToken);
+                }
+
+                instance.SetStoredValue(name, value);
+                return true;
+            }
+
+            instance.SetStoredValue(name, value);
+            return true;
+        }
+
+        return false;
     }
 
     internal IReadOnlyList<KeyValuePair<string, object?>> GetInstanceMembers(
@@ -1839,6 +2003,44 @@ public sealed class ToshClassDefinition : IShellNamedType
 
             TryGetInstanceMember(instance, property.Name, includeHidden, accessor, out var value);
             members.Add(new KeyValuePair<string, object?>(property.Name, value));
+        }
+
+        if (IsFluid)
+        {
+            if (instance.HasDynamicProperties)
+            {
+                foreach (var dynamicProp in instance.GetDynamicProperties())
+                {
+                    if (!includeHidden && dynamicProp.IsShy) continue;
+                    if (members.Any(m => string.Equals(m.Key, dynamicProp.Name, StringComparison.OrdinalIgnoreCase))) continue;
+
+                    if (dynamicProp.IsComputed)
+                    {
+                        try
+                        {
+                            var val = EvaluateDynamicPropertyGetter(instance, dynamicProp);
+                            members.Add(new KeyValuePair<string, object?>(dynamicProp.Name, val));
+                        }
+                        catch
+                        {
+                            members.Add(new KeyValuePair<string, object?>(dynamicProp.Name, null));
+                        }
+                    }
+                    else
+                    {
+                        instance.TryGetStoredValue(dynamicProp.Name, out var val);
+                        members.Add(new KeyValuePair<string, object?>(dynamicProp.Name, val));
+                    }
+                }
+            }
+
+            foreach (var (key, value) in instance.GetStoredValues())
+            {
+                if (!members.Any(m => string.Equals(m.Key, key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    members.Add(new KeyValuePair<string, object?>(key, value));
+                }
+            }
         }
 
         return members;
@@ -1910,6 +2112,44 @@ public sealed class ToshClassDefinition : IShellNamedType
             members.Add(new KeyValuePair<string, object?>(
                 property.Name,
                 lookup.Found ? lookup.Value : null));
+        }
+
+        if (IsFluid)
+        {
+            if (instance.HasDynamicProperties)
+            {
+                foreach (var dynamicProp in instance.GetDynamicProperties())
+                {
+                    if (!includeHidden && dynamicProp.IsShy) continue;
+                    if (members.Any(m => string.Equals(m.Key, dynamicProp.Name, StringComparison.OrdinalIgnoreCase))) continue;
+
+                    if (dynamicProp.IsComputed)
+                    {
+                        try
+                        {
+                            var val = await EvaluateDynamicPropertyGetterAsync(instance, dynamicProp, cancellationToken);
+                            members.Add(new KeyValuePair<string, object?>(dynamicProp.Name, val));
+                        }
+                        catch
+                        {
+                            members.Add(new KeyValuePair<string, object?>(dynamicProp.Name, null));
+                        }
+                    }
+                    else
+                    {
+                        instance.TryGetStoredValue(dynamicProp.Name, out var val);
+                        members.Add(new KeyValuePair<string, object?>(dynamicProp.Name, val));
+                    }
+                }
+            }
+
+            foreach (var (key, value) in instance.GetStoredValues())
+            {
+                if (!members.Any(m => string.Equals(m.Key, key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    members.Add(new KeyValuePair<string, object?>(key, value));
+                }
+            }
         }
 
         return members;
@@ -2865,6 +3105,291 @@ public sealed class ToshClassDefinition : IShellNamedType
             SourceText,
             $"{Name}.{property.Name}",
             cancellationToken);
+    }
+
+    internal object? EvaluateDynamicPropertyGetter(ToshClassInstance instance, DynamicPropertyDescriptor dynamicProp)
+    {
+        if (dynamicProp.Getter is BlockSyntax block)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+            var values = _engine.ExecuteClassBlockSync(
+                this,
+                dynamicProp.SourceName ?? SourceName,
+                dynamicProp.SourceText ?? SourceText,
+                block,
+                locals,
+                CapturedScopes,
+                $"{Name}.{dynamicProp.Name}.get");
+            return FlattenCallResult(values);
+        }
+
+        if (dynamicProp.Getter is ShellBlock shellBlock && shellBlock.Syntax is BlockSyntax syntaxBlock)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+            var values = _engine.ExecuteClassBlockSync(
+                this,
+                shellBlock.SourceName,
+                shellBlock.SourceText,
+                syntaxBlock,
+                locals,
+                CapturedScopes,
+                $"{Name}.{dynamicProp.Name}.get");
+            return FlattenCallResult(values);
+        }
+
+        return EvaluateDynamicPropertyGetterAsync(instance, dynamicProp, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+    }
+
+    internal async ValueTask<object?> EvaluateDynamicPropertyGetterAsync(
+        ToshClassInstance instance,
+        DynamicPropertyDescriptor dynamicProp,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (dynamicProp.Getter is BlockSyntax block)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+            var values = await _engine.ExecuteClassBlockAsync(
+                this,
+                dynamicProp.SourceName ?? SourceName,
+                dynamicProp.SourceText ?? SourceText,
+                block,
+                locals,
+                CapturedScopes,
+                $"{Name}.{dynamicProp.Name}.get",
+                cancellationToken);
+            return FlattenCallResult(values);
+        }
+
+        if (dynamicProp.Getter is ShellBlock shellBlock)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+            if (shellBlock.Syntax is BlockSyntax syntaxBlock)
+            {
+                var values = await _engine.ExecuteClassBlockAsync(
+                    this,
+                    shellBlock.SourceName,
+                    shellBlock.SourceText,
+                    syntaxBlock,
+                    locals,
+                    CapturedScopes,
+                    $"{Name}.{dynamicProp.Name}.get",
+                    cancellationToken);
+                return FlattenCallResult(values);
+            }
+
+            var executor = _engine.LanguageRuntime.BlockExecutor;
+            if (executor is null)
+            {
+                throw new InvalidOperationException("Block execution is not available in this runtime.");
+            }
+
+            var results = new List<object?>();
+            await foreach (var val in executor.ExecuteAsync(shellBlock, locals, cancellationToken).WithCancellation(cancellationToken))
+            {
+                results.Add(val);
+            }
+            return FlattenCallResult(results);
+        }
+
+        if (dynamicProp.Getter is IShellCallable callable)
+        {
+            var context = new CommandContext(
+                LanguageRuntime: _engine.LanguageRuntime,
+                Input: System.Linq.AsyncEnumerable.Empty<object?>(),
+                Arguments: Array.Empty<object?>(),
+                CancellationToken: cancellationToken);
+            var results = await AsyncEnumerableExtensions.ToListAsync(callable.InvokeAsync(context), cancellationToken);
+            return FlattenCallResult(results);
+        }
+
+        return dynamicProp.Value;
+    }
+
+    internal void ExecuteDynamicPropertySetter(
+        ToshClassInstance instance,
+        DynamicPropertyDescriptor dynamicProp,
+        object? value)
+    {
+        if (dynamicProp.Setter is BlockSyntax block)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["value"] = value,
+                ["_"] = value,
+            });
+            _engine.ExecuteClassBlockSync(
+                this,
+                dynamicProp.SourceName ?? SourceName,
+                dynamicProp.SourceText ?? SourceText,
+                block,
+                locals,
+                CapturedScopes,
+                $"{Name}.{dynamicProp.Name}.set");
+            return;
+        }
+
+        if (dynamicProp.Setter is ShellBlock shellBlock && shellBlock.Syntax is BlockSyntax syntaxBlock)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["value"] = value,
+                ["_"] = value,
+            });
+            _engine.ExecuteClassBlockSync(
+                this,
+                shellBlock.SourceName,
+                shellBlock.SourceText,
+                syntaxBlock,
+                locals,
+                CapturedScopes,
+                $"{Name}.{dynamicProp.Name}.set");
+            return;
+        }
+
+        ExecuteDynamicPropertySetterAsync(instance, dynamicProp, value, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+    }
+
+    internal async ValueTask ExecuteDynamicPropertySetterAsync(
+        ToshClassInstance instance,
+        DynamicPropertyDescriptor dynamicProp,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (dynamicProp.Setter is BlockSyntax block)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["value"] = value,
+                ["_"] = value,
+            });
+            await _engine.ExecuteClassBlockAsync(
+                this,
+                dynamicProp.SourceName ?? SourceName,
+                dynamicProp.SourceText ?? SourceText,
+                block,
+                locals,
+                CapturedScopes,
+                $"{Name}.{dynamicProp.Name}.set",
+                cancellationToken);
+            return;
+        }
+
+        if (dynamicProp.Setter is ShellBlock shellBlock)
+        {
+            var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["value"] = value,
+                ["_"] = value,
+            });
+            if (shellBlock.Syntax is BlockSyntax syntaxBlock)
+            {
+                await _engine.ExecuteClassBlockAsync(
+                    this,
+                    shellBlock.SourceName,
+                    shellBlock.SourceText,
+                    syntaxBlock,
+                    locals,
+                    CapturedScopes,
+                    $"{Name}.{dynamicProp.Name}.set",
+                    cancellationToken);
+                return;
+            }
+
+            var executor = _engine.LanguageRuntime.BlockExecutor;
+            if (executor is null)
+            {
+                throw new InvalidOperationException("Block execution is not available in this runtime.");
+            }
+
+            await foreach (var _ in executor.ExecuteAsync(shellBlock, locals, cancellationToken).WithCancellation(cancellationToken))
+            {
+            }
+            return;
+        }
+
+        if (dynamicProp.Setter is IShellCallable callable)
+        {
+            var context = new CommandContext(
+                LanguageRuntime: _engine.LanguageRuntime,
+                Input: System.Linq.AsyncEnumerable.Empty<object?>(),
+                Arguments: [value],
+                CancellationToken: cancellationToken);
+            await foreach (var _ in callable.InvokeAsync(context).WithCancellation(cancellationToken))
+            {
+            }
+        }
+    }
+
+    internal async ValueTask<object?> EvaluateDynamicInitializerAsync(
+        ToshClassInstance instance,
+        PipelineSyntax initializer,
+        CancellationToken cancellationToken,
+        string? sourceName = null,
+        string? sourceText = null)
+    {
+        var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+        return await _engine.EvaluateClassPipelineValueAsync(
+            this,
+            sourceName ?? SourceName,
+            sourceText ?? SourceText,
+            initializer,
+            locals,
+            CapturedScopes,
+            cancellationToken);
+    }
+
+    internal object? EvaluateDynamicInitializer(
+        ToshClassInstance instance,
+        PipelineSyntax initializer,
+        string? sourceName = null,
+        string? sourceText = null)
+    {
+        var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+        return _engine.EvaluateClassPipelineValueSync(
+            this,
+            sourceName ?? SourceName,
+            sourceText ?? SourceText,
+            initializer,
+            locals,
+            CapturedScopes);
+    }
+
+    internal async ValueTask<object?> ConvertDynamicPropertyValueAsync(
+        ToshClassInstance instance,
+        string typeName,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
+        return await _engine.ConvertAnnotatedValueAsync(
+            typeName,
+            null,
+            value,
+            new TextSpan(0, 0),
+            SourceName,
+            SourceText,
+            $"{Name}.<dynamic>",
+            cancellationToken);
+    }
+
+    internal object? ConvertDynamicPropertyValue(
+        ToshClassInstance instance,
+        string typeName,
+        object? value)
+    {
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
+        return _engine.ConvertAnnotatedValue(
+            typeName,
+            null,
+            value,
+            new TextSpan(0, 0),
+            SourceName,
+            SourceText,
+            $"{Name}.<dynamic>");
     }
 
     private IReadOnlyList<object?> ExecuteMethodBlock(ToshClassMethodDefinition method, IReadOnlyDictionary<string, object?> boundLocals, ToshClassInstance? instance)
