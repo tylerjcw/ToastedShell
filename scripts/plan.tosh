@@ -99,7 +99,10 @@ func read_item(path) {
 ## objects, and a plain list of paths is all this needs.
 func load() {
     var items = []
-    var paths = find $ITEMS_DIR -name "*.md" | get FullName | each _.Trim()
+    ## Sorted, so the boards `index` writes are the same on every machine. `find` returns
+    ## files in the filesystem's own order, and regenerating on another checkout reshuffled
+    ## every row of every board.
+    var paths = find $ITEMS_DIR -name "*.md" | get FullName | sort | each _.Trim()
     for path in $paths {
         if ($path == "") { continue }
         var it = read_item($path)

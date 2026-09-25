@@ -4,17 +4,16 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
-| [`TOAST-0061`](items/TOAST-0061.md) | P3 | partial | 4/7 | The value types graphics and physics code is written in have no Tōast spelling |
-| [`TOAST-0056`](items/TOAST-0056.md) | P2 | partial | 4/6 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
-| [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
-| [`TOAST-0142`](items/TOAST-0142.md) | P2 | open | 0/6 | Type discovery needs the single-file bundle extracted, which costs 1.3 GB and a legacy SDK mode |
-| [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
-| [`TOAST-0125`](items/TOAST-0125.md) | P1 | partial | 10/12 | Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 7/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
+| [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
-| [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0055`](items/TOAST-0055.md) | P2 | partial | 10/10 | An unrecognised generic constraint is silently satisfied, and the vocabulary is four names |
+| [`TOAST-0056`](items/TOAST-0056.md) | P2 | partial | 4/6 | Unary and indexer operators cannot be overloaded, so a math value type has no natural syntax |
+| [`TOAST-0061`](items/TOAST-0061.md) | P3 | partial | 4/7 | The value types graphics and physics code is written in have no Tōast spelling |
+| [`TOAST-0125`](items/TOAST-0125.md) | P1 | partial | 10/12 | Generics audit: a null type-argument binding disables the checks it feeds, and only one constraint kind is enforced |
 | [`TOAST-0136`](items/TOAST-0136.md) | P2 | open | 0/5 | A required module's functions are callable unqualified in an expression, but nowhere else |
-| [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
 | [`TOAST-0140`](items/TOAST-0140.md) | P2 | open | 4/6 | The type-alias table is documented in one place and defined in two, and the two have drifted |
+| [`TOAST-0142`](items/TOAST-0142.md) | P2 | open | 0/6 | Type discovery needs the single-file bundle extracted, which costs 1.3 GB and a legacy SDK mode |
+| [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
+| [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
+| [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |

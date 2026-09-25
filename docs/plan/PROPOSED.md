@@ -4,30 +4,30 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
-| [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
-| [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
-| [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
-| [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
-| [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/6 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
-| [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
 | [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 1/6 | Replace the switch-based evaluator with a bound-tree evaluator |
+| [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
-| [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
-| [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
-| [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
-| [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/7 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
+| [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
+| [`TOAST-0041`](items/TOAST-0041.md) | P3 | proposed | 0/6 | Generate class, module and pipeline diagrams from the bound tree |
 | [`TOAST-0047`](items/TOAST-0047.md) | P3 | proposed | 0/5 | A bottom type, so an expression that never returns stops poisoning inference |
+| [`TOAST-0048`](items/TOAST-0048.md) | P3 | proposed | 0/6 | The type model has three shapes nothing can produce, and four the grammar cannot spell |
+| [`TOAST-0057`](items/TOAST-0057.md) | P2 | proposed | 0/6 | `span<T>` is not a language type, so slicing a string or a buffer always allocates |
+| [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/6 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
+| [`TOAST-0059`](items/TOAST-0059.md) | P3 | proposed | 0/8 | Native memory is reached through untyped `ptr`, and nothing marks where safety ends |
 | [`TOAST-0060`](items/TOAST-0060.md) | P3 | proposed | 0/8 | Writing a compiler in Tōast means writing arenas, derivation and interning by hand |
+| [`TOAST-0062`](items/TOAST-0062.md) | P3 | proposed | 0/7 | A hot loop cannot state that it does not allocate, and value types are copied where a reference would do |
+| [`TOAST-0080`](items/TOAST-0080.md) | P2 | proposed | 0/10 | Resource safety is a runtime convention, so an owned handle can be copied and used after release |
+| [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |
+| [`TOAST-0082`](items/TOAST-0082.md) | P3 | proposed | 0/10 | There is no compile-time value form, and overloading `const` would break its useful runtime meaning |
+| [`TOAST-0084`](items/TOAST-0084.md) | P2 | proposed | 2/10 | A successful null, type or variant test does not narrow later uses of the value |
+| [`TOAST-0085`](items/TOAST-0085.md) | P2 | proposed | 0/10 | Type aliases and refinements remain interchangeable with their base, so domain values can be mixed accidentally |
 | [`TOAST-0086`](items/TOAST-0086.md) | P2 | proposed | 0/11 | `async` detaches work with no parent cancellation or sendability boundary |
 | [`TOAST-0087`](items/TOAST-0087.md) | P2 | proposed | 1/15 | Side-effect metadata is descriptive only, so code cannot prove purity or enforce a capability boundary |
-| [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 1/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
-| [`TOAST-0013`](items/TOAST-0013.md) | P2 | proposed | 0/5 | Thirty-two engine methods run past 100 lines, and the largest two are 1,030 and 546 |
-| [`TOAST-0058`](items/TOAST-0058.md) | P2 | proposed | 0/6 | There is no memory model and no atomic type, so no lock-free structure can be written correctly |
-| [`TOAST-0080`](items/TOAST-0080.md) | P2 | proposed | 0/10 | Resource safety is a runtime convention, so an owned handle can be copied and used after release |
-| [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
-| [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
 | [`TOAST-0098`](items/TOAST-0098.md) | P3 | proposed | — | `http serve` binds to loopback and leads with a URL that cannot work, so a LAN transfer fails twice before it works |
-| [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
 | [`TOAST-0099`](items/TOAST-0099.md) | P2 | proposed | 0/6 | A declared type cannot say where it lives, so nothing can write its qualified name back |
-| [`TOAST-0081`](items/TOAST-0081.md) | P2 | proposed | 0/11 | `const` freezes a name but not its object graph, so immutable data is still mutable through an alias |
+| [`TOAST-0100`](items/TOAST-0100.md) | P3 | proposed | 0/6 | There is no document model, so editing a file means regenerating it and losing its comments |
+| [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 1/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
+| [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
+| [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |
+| [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
+| [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
