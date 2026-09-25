@@ -1,0 +1,11 @@
+[[memory]]
+id = "01a0dac3-6597-70c4-ab1d-84c62bd31732"
+created = 2026-09-25T22:50:33.751Z
+category = "preference"
+scope = "project"
+source = "user"
+pinned = true
+session_id = "2026-09-25-core-review"
+tags = ["architecture", "rewrite", "planning"]
+summary = "A complete rewrite of TōSh/Tōast (any or all parts) is acceptable; weigh it as a real option, don't rule it out"
+content = "User preference (2026-09-25): when reviewing TōSh/Tōast for improvements, nothing is off the table — \"even if an improvement would require a top-to-bottom rewrite (of any and/or all parts)\" and, when an earlier recommendation ruled a full rewrite out, \"Remember: A complete rewrite is acceptable\". Present rewrite-level options on their merits, including a clean-slate redesign, rather than constraining recommendations to incremental migration of the existing code."
