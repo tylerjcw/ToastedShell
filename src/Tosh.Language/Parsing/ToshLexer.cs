@@ -534,11 +534,32 @@ public sealed class ToshLexer
             _position++;
         }
 
-        while (!IsAtEnd
-               && !char.IsWhiteSpace(Current)
-               && Current is not ('|' or '(' or ')' or '{' or '}' or '[' or ']'
-                   or ';' or ',' or '>' or '<' or '&' or '!' or '`'))
+        var unitParenDepth = 0;
+        while (!IsAtEnd && !char.IsWhiteSpace(Current))
         {
+            if (Current == '(')
+            {
+                unitParenDepth++;
+                _position++;
+                continue;
+            }
+            if (Current == ')')
+            {
+                if (unitParenDepth > 0)
+                {
+                    unitParenDepth--;
+                    _position++;
+                    continue;
+                }
+                break;
+            }
+
+            if (Current is ('|' or '{' or '}' or '[' or ']'
+                    or ';' or ',' or '>' or '<' or '&' or '!' or '`'))
+            {
+                break;
+            }
+
             _position++;
         }
 
@@ -1571,6 +1592,8 @@ public sealed class ToshLexer
     private SyntaxToken ReadBarewordOrLiteral(bool unarySignAllowed = false)
     {
         var start = _position;
+        var inUnitLiteral = false;
+        var unitParenDepth = 0;
 
         while (!IsAtEnd)
         {
@@ -1666,6 +1689,17 @@ public sealed class ToshLexer
                 break;
             }
 
+            if (!inUnitLiteral
+                && Current is '`' or '\u00b0'
+                && _position > start
+                && _source[start] != '$'
+                && LooksLikeUnitMagnitude(_source.AsSpan(start, _position - start)))
+            {
+                inUnitLiteral = true;
+                _position++;
+                continue;
+            }
+
             // Named arguments (TS-P2-15): inside a parenthesised or
             // bracketed expression, `f(a="z")` must bind like `f(a = "z")`.
             // Restricted to a bare identifier followed by a single '=', so
@@ -1714,6 +1748,32 @@ public sealed class ToshLexer
             if (Current == '#' && Peek() == '#')
             {
                 break;
+            }
+
+            if (inUnitLiteral)
+            {
+                if (Current == '(')
+                {
+                    unitParenDepth++;
+                    _position++;
+                    continue;
+                }
+
+                if (Current == ')')
+                {
+                    if (unitParenDepth > 0)
+                    {
+                        unitParenDepth--;
+                        _position++;
+                        continue;
+                    }
+                    break;
+                }
+
+                if (Current == '`')
+                {
+                    break;
+                }
             }
 
             // Keep lone '?' inside barewords so nullable type/identifier forms like
@@ -2149,9 +2209,21 @@ public sealed class ToshLexer
         return false;
     }
 
-    private static bool LooksLikeUnitMagnitude(string text)
+    private static bool LooksLikeUnitMagnitude(string text) => LooksLikeUnitMagnitude(text.AsSpan());
+
+    private static bool LooksLikeUnitMagnitude(ReadOnlySpan<char> text)
     {
-        if (text.Length == 0 || !text.Any(char.IsAsciiDigit)) return false;
+        if (text.Length == 0) return false;
+        var hasDigit = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsAsciiDigit(text[i]))
+            {
+                hasDigit = true;
+                break;
+            }
+        }
+        if (!hasDigit) return false;
         return char.IsAsciiDigit(text[0]) || text[0] is '+' or '-' or '.' or '_';
     }
 

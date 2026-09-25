@@ -1261,6 +1261,11 @@ public static class OperatorEvaluator
             return rightResult;
         }
 
+        // QuantityArray arithmetic
+        if (left is QuantityArray lqa && right is QuantityArray rqa) return lqa + rqa;
+        if (left is QuantityArray lqas && right is Quantity rightQuantity) return lqas + rightQuantity;
+        if (left is Quantity leftQuantity && right is QuantityArray rqas) return rqas + leftQuantity;
+
         // Vector arithmetic
         if (left is ToshVector lv && right is ToshVector rv) return lv + rv;
         if (left is ToshVector lvs && IsNumeric(right)) return lvs + new ToshVector(Enumerable.Repeat(ToDouble(right), lvs.Length).ToArray());
@@ -1383,6 +1388,11 @@ public static class OperatorEvaluator
         {
             return rightSubResult;
         }
+
+        // QuantityArray arithmetic
+        if (left is QuantityArray lqa && right is QuantityArray rqa) return lqa - rqa;
+        if (left is QuantityArray lqas && right is Quantity rightQuantitySub) return lqas - rightQuantitySub;
+        if (left is Quantity leftQuantitySub && right is QuantityArray rqas) return (-rqas) + leftQuantitySub;
 
         // Vector arithmetic
         if (left is ToshVector lv && right is ToshVector rv) return lv - rv;
@@ -1589,6 +1599,13 @@ public static class OperatorEvaluator
             return leftComplex * rightComplex;
         }
 
+        // QuantityArray arithmetic
+        if (left is QuantityArray lqa && right is QuantityArray rqa) return lqa * rqa;
+        if (left is QuantityArray lqaq && right is Quantity rightQuantityMul) return lqaq * rightQuantityMul;
+        if (left is Quantity leftQuantityMul && right is QuantityArray rqaq) return rqaq * leftQuantityMul;
+        if (left is QuantityArray lqas && IsNumeric(right)) return lqas * ToDouble(right);
+        if (IsNumeric(left) && right is QuantityArray rqas) return rqas * ToDouble(left);
+
         // Vector * Vector (element-wise) or Vector * scalar
         if (left is ToshVector lv && right is ToshVector rv) return lv * rv;
         if (left is ToshVector lvs && IsNumeric(right)) return lvs * ToDouble(right);
@@ -1657,6 +1674,11 @@ public static class OperatorEvaluator
 
             return leftComplex / rightComplex;
         }
+
+        // QuantityArray arithmetic
+        if (left is QuantityArray lqa && right is QuantityArray rqa) return lqa / rqa;
+        if (left is QuantityArray lqaq && right is Quantity rightQuantityDiv) return lqaq / rightQuantityDiv;
+        if (left is QuantityArray lqas && IsNumeric(right)) return lqas / ToDouble(right);
 
         // Vector / Vector (element-wise) or Vector / scalar
         if (left is ToshVector lv && right is ToshVector rv) return lv / rv;
@@ -1777,6 +1799,36 @@ public static class OperatorEvaluator
         if (left is null || right is null)
         {
             throw new InvalidOperationException("The '**' operator requires non-null operands.");
+        }
+
+        if (right is Quantity)
+        {
+            throw new InvalidOperationException("An exponent cannot have physical dimensions.");
+        }
+
+        if (left is Quantity lq)
+        {
+            if (right is int i)
+            {
+                var qRes = lq.Power(i);
+                return qRes.Dimension.IsDimensionless ? qRes.BaseValue : qRes;
+            }
+            if (right is RationalExponent re)
+            {
+                var qRes = lq.Power(re);
+                return qRes.Dimension.IsDimensionless ? qRes.BaseValue : qRes;
+            }
+            if (IsNumeric(right))
+            {
+                var dbl = ToDouble(right);
+                var exp = Math.Abs(dbl - Math.Round(dbl)) < 1e-12
+                    ? new RationalExponent((int)Math.Round(dbl), 1)
+                    : Math.Abs(dbl * 2 - Math.Round(dbl * 2)) < 1e-12
+                        ? new RationalExponent((int)Math.Round(dbl * 2), 2)
+                        : (RationalExponent)(int)Math.Round(dbl);
+                var qRes = lq.Power(exp);
+                return qRes.Dimension.IsDimensionless ? qRes.BaseValue : qRes;
+            }
         }
 
         if ((left is Complex || right is Complex) &&

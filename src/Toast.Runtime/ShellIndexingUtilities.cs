@@ -94,6 +94,17 @@ public static class ShellIndexingUtilities
             return true;
         }
 
+        if (target is Tosh.Runtime.Units.QuantityArray qa)
+        {
+            if (numericIndex >= qa.Count)
+            {
+                throw new InvalidOperationException($"Index {numericIndex} is out of range for QuantityArray length {qa.Count}.");
+            }
+
+            value = qa[numericIndex];
+            return true;
+        }
+
         if (TryGetEnumerableValue(target, numericIndex, out var enumeratedValue))
         {
             value = enumeratedValue;
@@ -198,6 +209,22 @@ public static class ShellIndexingUtilities
 
         var indices = range.Enumerate().ToList();
         var result = new List<object?>(indices.Count);
+
+        // QuantityArray slice: return a QuantityArray instead of a list of boxed quantities.
+        if (target is Tosh.Runtime.Units.QuantityArray qArray)
+        {
+            var slicedMagnitudes = new double[indices.Count];
+            for (int i = 0; i < indices.Count; i++)
+            {
+                var idx = indices[i];
+                if (idx < 0 || idx >= qArray.Count)
+                {
+                    throw new InvalidOperationException($"Index {idx} is out of range for QuantityArray length {qArray.Count}.");
+                }
+                slicedMagnitudes[i] = qArray.GetMagnitudeAt(idx);
+            }
+            return new Tosh.Runtime.Units.QuantityArray(slicedMagnitudes, qArray.Dimension, qArray.UnitSymbol, qArray.SemanticKind);
+        }
 
         // String slice: return a string instead of a list of chars.
         if (target is string text)

@@ -47,6 +47,9 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     /// <summary>The unit symbol as the user typed it (e.g. "mph", "m/s", "kg").</summary>
     public string UnitSymbol { get; }
 
+    /// <summary>The conversion transformation to/from base units.</summary>
+    public UnitConversion Conversion => _conversion;
+
     /// <summary>
     /// Creates a Quantity from lexer-parsed components. The magnitude is the user's
     /// original value; routing through UnitRegistry to produce named types.
@@ -107,6 +110,9 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
 
     /// <summary>The category name for display (e.g. "Length", "Speed"). Override in named types.</summary>
     public virtual string CategoryName => UnitRegistry.Instance.GetCategoryForDimension(Dimension) ?? "Quantity";
+
+    /// <summary>Specific semantic physical kind (e.g. "Energy" vs "Torque") when dimension alone is ambiguous.</summary>
+    public virtual string? SemanticKind => UnitRegistry.Instance.TryResolve(UnitSymbol)?.SemanticKind;
 
     public string ShellTypeName => CategoryName;
 
@@ -250,6 +256,34 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     {
         EnsureNotAbsoluteTemperature(quantity, "negate");
         return quantity.WithMagnitude(-quantity.Magnitude);
+    }
+
+    /// <summary>Raises this quantity to an integer power.</summary>
+    public Quantity Power(int power) => Power((RationalExponent)power);
+
+    /// <summary>Raises this quantity to a rational power.</summary>
+    public Quantity Power(RationalExponent power)
+    {
+        EnsureNotAbsoluteTemperature(this, "**");
+        if (power.IsZero)
+        {
+            return UnitRegistry.Instance.CreateTyped(1.0, UnitExpression.Dimensionless, "");
+        }
+
+        var newDim = Dimension.Power(power);
+        var newBaseVal = Math.Pow(BaseValue, power.ToDouble());
+        var newSymbol = UnitRegistry.Instance.GetCanonicalUnitSymbol(newDim);
+        return UnitRegistry.Instance.CreateTypedFromBase(newBaseVal, newDim, newSymbol);
+    }
+
+    /// <summary>Computes the square root of this quantity.</summary>
+    public Quantity Sqrt()
+    {
+        if (BaseValue < 0)
+        {
+            throw new InvalidOperationException($"Cannot compute square root of negative quantity '{this}'.");
+        }
+        return Power(new RationalExponent(1, 2));
     }
 
     #endregion
@@ -469,6 +503,13 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
         {
             throw new InvalidOperationException(
                 $"Cannot {op} {left.CategoryName} ({left.Dimension}) and {right.CategoryName} ({right.Dimension}).");
+        }
+
+        if (left.SemanticKind != null && right.SemanticKind != null &&
+            !string.Equals(left.SemanticKind, right.SemanticKind, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Cannot {op} incompatible semantic kinds: '{left}' ({left.SemanticKind}) and '{right}' ({right.SemanticKind}) share dimensions but represent distinct physical quantities.");
         }
     }
 

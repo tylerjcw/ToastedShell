@@ -135,7 +135,30 @@ public static class UnitExpressionParser
 
         if (index >= tokens.Count) return false;
 
-        if (tokens[index].Kind == UnitTokenKind.Symbol)
+        if (tokens[index] is { Kind: UnitTokenKind.Symbol, Text: "sqrt" })
+        {
+            index++; // consume sqrt
+            if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.OpenParen)
+                return false;
+            index++; // consume (
+            if (!TryParseExpression(tokens, ref index, out var innerFactor, out var innerDim))
+                return false;
+            if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.CloseParen)
+                return false;
+            index++; // consume )
+            factor = Math.Sqrt(innerFactor);
+            dimension = innerDim.Root(2);
+        }
+        else if (tokens[index].Kind == UnitTokenKind.OpenParen)
+        {
+            index++; // consume (
+            if (!TryParseExpression(tokens, ref index, out factor, out dimension))
+                return false;
+            if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.CloseParen)
+                return false;
+            index++; // consume )
+        }
+        else if (tokens[index].Kind == UnitTokenKind.Symbol)
         {
             var symbol = tokens[index].Text;
             index++;
@@ -157,18 +180,51 @@ public static class UnitExpressionParser
             return false;
         }
 
-        // Check for exponent: ^N
+        // Check for exponent: ^N or ^(num/denom) or ^(num)
         if (index < tokens.Count && tokens[index].Kind == UnitTokenKind.Caret)
         {
             index++; // consume ^
-            if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.Number)
-                return false;
+            RationalExponent exponent;
+            if (index < tokens.Count && tokens[index].Kind == UnitTokenKind.OpenParen)
+            {
+                index++; // consume (
+                if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.Number)
+                    return false;
+                if (!int.TryParse(tokens[index].Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var num))
+                    return false;
+                index++;
+                if (index < tokens.Count && tokens[index].Kind == UnitTokenKind.Divide)
+                {
+                    index++; // consume /
+                    if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.Number)
+                        return false;
+                    if (!int.TryParse(tokens[index].Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var denom) || denom <= 0)
+                        return false;
+                    index++;
+                    exponent = new RationalExponent(num, denom);
+                }
+                else
+                {
+                    exponent = new RationalExponent(num, 1);
+                }
 
-            if (!int.TryParse(tokens[index].Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var exponent))
+                if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.CloseParen)
+                    return false;
+                index++; // consume )
+            }
+            else if (index < tokens.Count && tokens[index].Kind == UnitTokenKind.Number)
+            {
+                if (!int.TryParse(tokens[index].Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intExp))
+                    return false;
+                index++;
+                exponent = new RationalExponent(intExp, 1);
+            }
+            else
+            {
                 return false;
+            }
 
-            index++;
-            factor = Math.Pow(factor, exponent);
+            factor = Math.Pow(factor, exponent.ToDouble());
             dimension = dimension.Power(exponent);
         }
 
@@ -177,7 +233,7 @@ public static class UnitExpressionParser
 
     #region Tokenizer
 
-    private enum UnitTokenKind { Symbol, Number, Multiply, Divide, Caret }
+    private enum UnitTokenKind { Symbol, Number, Multiply, Divide, Caret, OpenParen, CloseParen }
 
     private readonly record struct UnitToken(UnitTokenKind Kind, string Text);
 
@@ -204,6 +260,14 @@ public static class UnitExpressionParser
                     tokens.Add(new UnitToken(UnitTokenKind.Caret, "^"));
                     i++;
                     continue;
+                case '(':
+                    tokens.Add(new UnitToken(UnitTokenKind.OpenParen, "("));
+                    i++;
+                    continue;
+                case ')':
+                    tokens.Add(new UnitToken(UnitTokenKind.CloseParen, ")"));
+                    i++;
+                    continue;
             }
 
             // Negative exponent: consume '-' followed by digits
@@ -225,11 +289,11 @@ public static class UnitExpressionParser
                 continue;
             }
 
-            // Letters, °, μ — unit symbols
-            if (char.IsLetter(ch) || ch == '°' || ch == 'μ')
+            // Letters, °, μ/µ, Δ, Ω/Ω, _ — unit symbols
+            if (char.IsLetter(ch) || ch is '°' or 'μ' or 'µ' or 'Δ' or 'Ω' or 'Ω' or '_')
             {
                 var start = i;
-                while (i < text.Length && (char.IsLetter(text[i]) || text[i] == '°' || text[i] == 'μ'))
+                while (i < text.Length && (char.IsLetter(text[i]) || text[i] is '°' or 'μ' or 'µ' or 'Δ' or 'Ω' or 'Ω' or '_'))
                 {
                     i++;
                 }

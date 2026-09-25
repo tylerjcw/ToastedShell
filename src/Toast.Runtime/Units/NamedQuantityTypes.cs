@@ -128,6 +128,7 @@ public class EnergyQuantity(double magnitude, string unitSymbol)
     : Quantity(magnitude, UnitExpression.Of((UnitDimension.Mass, 1), (UnitDimension.Length, 2), (UnitDimension.Time, -2)), unitSymbol)
 {
     public override string CategoryName => "Energy";
+    public override string? SemanticKind => "Energy";
 }
 
 public class PowerQuantity(double magnitude, string unitSymbol)
@@ -194,6 +195,7 @@ public class TorqueQuantity(double magnitude, string unitSymbol)
     : Quantity(magnitude, UnitExpression.Of((UnitDimension.Mass, 1), (UnitDimension.Length, 2), (UnitDimension.Time, -2)), unitSymbol)
 {
     public override string CategoryName => "Torque";
+    public override string? SemanticKind => "Torque";
 }
 
 public class FlowRateQuantity(double magnitude, string unitSymbol)

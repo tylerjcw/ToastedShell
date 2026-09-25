@@ -26,7 +26,8 @@ public sealed class UnitDefinition
         double toBaseOffset = 0.0,
         bool isUserDefined = false,
         bool allowSiPrefixes = false,
-        UnitRole role = UnitRole.Linear)
+        UnitRole role = UnitRole.Linear,
+        string? semanticKind = null)
     {
         if (string.IsNullOrWhiteSpace(symbol))
         {
@@ -90,6 +91,7 @@ public sealed class UnitDefinition
         IsUserDefined = isUserDefined;
         AllowSiPrefixes = allowSiPrefixes;
         Role = role;
+        SemanticKind = semanticKind ?? (category is "Energy" or "Torque" ? category : null);
     }
 
     /// <summary>Short symbol used in literals and display (e.g. "m", "kg", "mph").</summary>
@@ -123,6 +125,9 @@ public sealed class UnitDefinition
 
     /// <summary>How this unit participates in arithmetic.</summary>
     public UnitRole Role { get; }
+
+    /// <summary>Specific semantic kind (e.g. "Energy" vs "Torque") when dimension alone is ambiguous.</summary>
+    public string? SemanticKind { get; }
 
     /// <summary>Whether this unit requires offset conversion (temperature).</summary>
     public bool HasOffset => ToBaseOffset != 0.0;

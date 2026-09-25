@@ -54,21 +54,9 @@ public sealed class SqrtCommand : ShellCommand
         _ => Math.Sqrt(Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture))
     };
 
-    private static Quantity SqrtQuantity(Quantity q)
+    private static object SqrtQuantity(Quantity q)
     {
-        var newExps = new Dictionary<UnitDimension, int>();
-        foreach (var (dim, exp) in q.Dimension.Exponents)
-        {
-            if (exp % 2 != 0)
-            {
-                throw new InvalidOperationException(
-                    $"Cannot take square root of quantity '{q}' because dimension '{q.Dimension}' has odd exponent {exp}.");
-            }
-            newExps[dim] = exp / 2;
-        }
-
-        var newDim = new UnitExpression(newExps);
-        var symbol = UnitRegistry.Instance.GetCanonicalUnitSymbol(newDim);
-        return UnitRegistry.Instance.CreateTypedFromBase(Math.Sqrt(q.BaseValue), newDim, symbol);
+        var res = q.Sqrt();
+        return res.Dimension.IsDimensionless ? res.BaseValue : res;
     }
 }

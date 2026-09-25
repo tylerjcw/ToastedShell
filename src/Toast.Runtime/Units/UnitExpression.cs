@@ -4,59 +4,105 @@ using System.Text;
 namespace Tosh.Runtime.Units;
 
 /// <summary>
-/// Represents a dimensional expression as a map of base dimensions to integer exponents.
-/// For example, velocity (m/s) is { Length: 1, Time: -1 }.
+/// Represents a dimensional expression as a map of base dimensions to rational exponents.
+/// For example, velocity (m/s) is { Length: 1, Time: -1 }, and noise spectral density
+/// (V/sqrt(Hz)) is { Mass: 1, Length: 2, Time: -5/2, Current: -1 }.
 /// Dimensionless quantities have an empty map.
 /// </summary>
 public sealed class UnitExpression : IEquatable<UnitExpression>
 {
-    public static readonly UnitExpression Dimensionless = new(new Dictionary<UnitDimension, int>());
+    public static readonly UnitExpression Dimensionless = new(new Dictionary<UnitDimension, RationalExponent>());
 
-    private readonly ReadOnlyDictionary<UnitDimension, int> _exponents;
+    private readonly ReadOnlyDictionary<UnitDimension, RationalExponent> _rationalExponents;
+    private ReadOnlyDictionary<UnitDimension, int>? _intExponentsCache;
 
-    public UnitExpression(Dictionary<UnitDimension, int> exponents)
+    public UnitExpression(Dictionary<UnitDimension, RationalExponent> exponents)
     {
         ArgumentNullException.ThrowIfNull(exponents);
-        var normalized = new Dictionary<UnitDimension, int>();
+        var normalized = new Dictionary<UnitDimension, RationalExponent>();
 
         foreach (var (dim, exp) in exponents)
         {
-            if (exp != 0)
+            if (!exp.IsZero)
             {
                 normalized[dim] = exp;
             }
         }
 
-        // Do not expose a Dictionary behind IReadOnlyDictionary: callers could
-        // cast it back, mutate a value after it became a registry key, and corrupt
-        // every dimension-indexed map (including the shared Dimensionless value).
-        _exponents = new ReadOnlyDictionary<UnitDimension, int>(normalized);
+        // Do not expose a mutable Dictionary: callers could mutate it after it became a key.
+        _rationalExponents = new ReadOnlyDictionary<UnitDimension, RationalExponent>(normalized);
+    }
+
+    public UnitExpression(Dictionary<UnitDimension, int> exponents)
+        : this(ToRationalDict(exponents))
+    {
+    }
+
+    private static Dictionary<UnitDimension, RationalExponent> ToRationalDict(Dictionary<UnitDimension, int> exponents)
+    {
+        ArgumentNullException.ThrowIfNull(exponents);
+        var dict = new Dictionary<UnitDimension, RationalExponent>();
+        foreach (var (dim, exp) in exponents)
+        {
+            if (exp != 0)
+            {
+                dict[dim] = exp;
+            }
+        }
+        return dict;
+    }
+
+    public static UnitExpression Of(UnitDimension dimension, RationalExponent exponent)
+    {
+        return new UnitExpression(new Dictionary<UnitDimension, RationalExponent> { [dimension] = exponent });
     }
 
     public static UnitExpression Of(UnitDimension dimension, int exponent = 1)
     {
-        return new UnitExpression(new Dictionary<UnitDimension, int> { [dimension] = exponent });
+        return Of(dimension, (RationalExponent)exponent);
+    }
+
+    public static UnitExpression Of(params (UnitDimension dim, RationalExponent exp)[] pairs)
+    {
+        var dict = new Dictionary<UnitDimension, RationalExponent>();
+        foreach (var (dim, exp) in pairs)
+        {
+            if (!exp.IsZero) dict[dim] = exp;
+        }
+        return new UnitExpression(dict);
     }
 
     public static UnitExpression Of(params (UnitDimension dim, int exp)[] pairs)
     {
-        var dict = new Dictionary<UnitDimension, int>();
-
+        var dict = new Dictionary<UnitDimension, RationalExponent>();
         foreach (var (dim, exp) in pairs)
         {
-            dict[dim] = exp;
+            if (exp != 0) dict[dim] = exp;
         }
-
         return new UnitExpression(dict);
     }
 
-    public IReadOnlyDictionary<UnitDimension, int> Exponents => _exponents;
+    public IReadOnlyDictionary<UnitDimension, RationalExponent> RationalExponents => _rationalExponents;
 
-    public bool IsDimensionless => _exponents.Count == 0;
+    public IReadOnlyDictionary<UnitDimension, int> Exponents
+    {
+        get
+        {
+            return _intExponentsCache ??= new ReadOnlyDictionary<UnitDimension, int>(
+                _rationalExponents.ToDictionary(kvp => kvp.Key, kvp => (int)kvp.Value));
+        }
+    }
+
+    public bool IsDimensionless => _rationalExponents.Count == 0;
 
     public int GetExponent(UnitDimension dimension)
     {
-        return _exponents.TryGetValue(dimension, out var exp) ? exp : 0;
+        return _rationalExponents.TryGetValue(dimension, out var exp) ? (int)exp : 0;
+    }
+
+    public RationalExponent GetRationalExponent(UnitDimension dimension)
+    {
+        return _rationalExponents.TryGetValue(dimension, out var exp) ? exp : RationalExponent.Zero;
     }
 
     /// <summary>
@@ -64,12 +110,20 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     /// </summary>
     public UnitExpression Multiply(UnitExpression other)
     {
-        var result = new Dictionary<UnitDimension, int>(_exponents);
+        var result = new Dictionary<UnitDimension, RationalExponent>(_rationalExponents);
 
-        foreach (var (dim, exp) in other._exponents)
+        foreach (var (dim, exp) in other._rationalExponents)
         {
             result.TryGetValue(dim, out var current);
-            result[dim] = checked(current + exp);
+            var sum = current + exp;
+            if (sum.IsZero)
+            {
+                result.Remove(dim);
+            }
+            else
+            {
+                result[dim] = sum;
+            }
         }
 
         return new UnitExpression(result);
@@ -80,12 +134,20 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     /// </summary>
     public UnitExpression Divide(UnitExpression other)
     {
-        var result = new Dictionary<UnitDimension, int>(_exponents);
+        var result = new Dictionary<UnitDimension, RationalExponent>(_rationalExponents);
 
-        foreach (var (dim, exp) in other._exponents)
+        foreach (var (dim, exp) in other._rationalExponents)
         {
             result.TryGetValue(dim, out var current);
-            result[dim] = checked(current - exp);
+            var diff = current - exp;
+            if (diff.IsZero)
+            {
+                result.Remove(dim);
+            }
+            else
+            {
+                result[dim] = diff;
+            }
         }
 
         return new UnitExpression(result);
@@ -94,42 +156,51 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     /// <summary>
     /// Raises every exponent to a power (e.g. squaring m → m²).
     /// </summary>
-    public UnitExpression Power(int power)
-    {
-        var result = new Dictionary<UnitDimension, int>();
+    public UnitExpression Power(int power) => Power((RationalExponent)power);
 
-        foreach (var (dim, exp) in _exponents)
+    /// <summary>
+    /// Raises every exponent to a rational power (e.g. m^(1/2)).
+    /// </summary>
+    public UnitExpression Power(RationalExponent power)
+    {
+        if (power.IsZero) return Dimensionless;
+
+        var result = new Dictionary<UnitDimension, RationalExponent>();
+        foreach (var (dim, exp) in _rationalExponents)
         {
-            result[dim] = checked(exp * power);
+            var product = exp * power;
+            if (!product.IsZero)
+            {
+                result[dim] = product;
+            }
         }
 
         return new UnitExpression(result);
     }
 
     /// <summary>
+    /// Takes a root of the dimension (e.g. root 2 of m^2 is m; root 2 of Hz is s^(-1/2)).
+    /// </summary>
+    public UnitExpression Root(int root)
+    {
+        if (root == 0) throw new DivideByZeroException("Root degree cannot be zero.");
+        return Power(new RationalExponent(1, root));
+    }
+
+    /// <summary>
     /// Returns the reciprocal (all exponents negated).
     /// </summary>
-    public UnitExpression Reciprocal()
-    {
-        var result = new Dictionary<UnitDimension, int>();
-
-        foreach (var (dim, exp) in _exponents)
-        {
-            result[dim] = checked(-exp);
-        }
-
-        return new UnitExpression(result);
-    }
+    public UnitExpression Reciprocal() => Power(-1);
 
     public bool Equals(UnitExpression? other)
     {
         if (other is null) return false;
         if (ReferenceEquals(this, other)) return true;
-        if (_exponents.Count != other._exponents.Count) return false;
+        if (_rationalExponents.Count != other._rationalExponents.Count) return false;
 
-        foreach (var (dim, exp) in _exponents)
+        foreach (var (dim, exp) in _rationalExponents)
         {
-            if (!other._exponents.TryGetValue(dim, out var otherExp) || exp != otherExp)
+            if (!other._rationalExponents.TryGetValue(dim, out var otherExp) || exp != otherExp)
             {
                 return false;
             }
@@ -144,7 +215,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     {
         var hash = new HashCode();
 
-        foreach (var (dim, exp) in _exponents.OrderBy(static e => e.Key))
+        foreach (var (dim, exp) in _rationalExponents.OrderBy(static e => e.Key))
         {
             hash.Add(dim);
             hash.Add(exp);
@@ -175,7 +246,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     };
 
     /// <summary>
-    /// Formats as SI base dimensions, e.g. "kg·m/s²".
+    /// Formats as SI base dimensions, e.g. "kg·m/s²" or "V·s^(1/2)".
     /// </summary>
     public string ToSymbolString()
     {
@@ -196,20 +267,20 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     {
         if (IsDimensionless) return "";
 
-        var numerator = new List<(string sym, int exp)>();
-        var denominator = new List<(string sym, int exp)>();
+        var numerator = new List<(string sym, RationalExponent exp)>();
+        var denominator = new List<(string sym, RationalExponent exp)>();
 
-        foreach (var (dim, exp) in _exponents.OrderBy(static e => e.Key))
+        foreach (var (dim, exp) in _rationalExponents.OrderBy(static e => e.Key))
         {
             var sym = DimensionSymbols.TryGetValue(dim, out var s) ? s : dim.ToString();
 
-            if (exp > 0)
+            if (exp.Numerator > 0)
             {
                 numerator.Add((sym, exp));
             }
-            else if (exp < 0)
+            else if (exp.Numerator < 0)
             {
-                denominator.Add((sym, checked(-exp)));
+                denominator.Add((sym, -exp));
             }
         }
 
@@ -220,7 +291,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
             if (i > 0) sb.Append('·');
             sb.Append(numerator[i].sym);
 
-            if (numerator[i].exp > 1)
+            if (numerator[i].exp != RationalExponent.One)
             {
                 AppendExponent(sb, numerator[i].exp, useSuperscripts);
             }
@@ -239,7 +310,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
                 foreach (var (sym, exp) in denominator)
                 {
                     sb.Append('/').Append(sym);
-                    if (exp > 1) AppendExponent(sb, exp, useSuperscripts: false);
+                    if (exp != RationalExponent.One) AppendExponent(sb, exp, useSuperscripts: false);
                 }
 
                 return sb.ToString();
@@ -252,7 +323,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
             {
                 if (i > 0) sb.Append('·');
                 sb.Append(denominator[i].sym);
-                if (denominator[i].exp > 1) AppendExponent(sb, denominator[i].exp, useSuperscripts: true);
+                if (denominator[i].exp != RationalExponent.One) AppendExponent(sb, denominator[i].exp, useSuperscripts: true);
             }
             if (needParens) sb.Append(')');
         }
@@ -262,15 +333,22 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
 
     public override string ToString() => ToSymbolString();
 
-    private static void AppendExponent(StringBuilder builder, int exponent, bool useSuperscripts)
+    private static void AppendExponent(StringBuilder builder, RationalExponent exponent, bool useSuperscripts)
     {
-        if (useSuperscripts)
+        if (exponent.IsInteger)
         {
-            builder.Append(FormatSuperscript(exponent));
+            if (useSuperscripts)
+            {
+                builder.Append(FormatSuperscript(exponent.Numerator));
+            }
+            else
+            {
+                builder.Append('^').Append(exponent.Numerator);
+            }
         }
         else
         {
-            builder.Append('^').Append(exponent);
+            builder.Append($"^({exponent.Numerator}/{exponent.Denominator})");
         }
     }
 
