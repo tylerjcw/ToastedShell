@@ -714,4 +714,509 @@ public sealed partial class ToshEngine
         value = null;
         return false;
     }
+
+    /// <summary>
+    /// Pulls one item without letting an exception cross an async-iterator catch boundary.
+    /// Callers can therefore yield <see cref="CapturedEnumeratorMove.Value"/> immediately and
+    /// rethrow a captured control-flow signal only after that value has left the iterator.
+    /// </summary>
+    private static async ValueTask<CapturedEnumeratorMove> MoveNextCapturingFailureAsync(
+        IAsyncEnumerator<object?> enumerator)
+    {
+        try
+        {
+            if (!await enumerator.MoveNextAsync())
+                return default;
+
+            return new CapturedEnumeratorMove(
+                HasValue: true,
+                enumerator.Current,
+                Failure: null);
+        }
+        catch (Exception failure)
+        {
+            return new CapturedEnumeratorMove(
+                HasValue: false,
+                Value: null,
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure));
+        }
+    }
+
+    private static async IAsyncEnumerable<object?> SingleItemAsync(object? item)
+    {
+        await Task.CompletedTask;
+        yield return item;
+    }
+
+    private async ValueTask<bool> IsInAsync(
+        object? value,
+        object? candidates,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (candidates is null)
+        {
+            return false;
+        }
+
+        if (candidates is IDictionary dictionary)
+        {
+            foreach (DictionaryEntry entry in dictionary)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await AreEqualAsync(value, entry.Key, cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (candidates is IShellEnumerableObject { HasShellItems: true } shellEnumerable)
+        {
+            await foreach (var candidate in shellEnumerable
+                               .EnumerateShellItemsAsync(cancellationToken)
+                               .WithCancellation(cancellationToken))
+            {
+                if (await AreEqualAsync(value, candidate, cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (candidates is IEnumerable enumerable && candidates is not string)
+        {
+            foreach (var candidate in enumerable)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await AreEqualAsync(value, candidate, cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (candidates is string text)
+        {
+            return text.Contains(
+                await ToOperatorStringAsync(value, cancellationToken),
+                StringComparison.Ordinal);
+        }
+
+        return await AreEqualAsync(value, candidates, cancellationToken);
+    }
+
+    private async ValueTask<bool> ContainsAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        if (actual is null)
+        {
+            return false;
+        }
+
+        if (actual is string text)
+        {
+            // `TOAST-0018`. A string does not contain nothing. `null` rendered as the
+            // empty string, and every string contains that, so `"abc" contains null` was
+            // true. Collection membership is unaffected: `[1, null] contains null` asks a
+            // different question and still answers true.
+            if (expected is null)
+            {
+                return false;
+            }
+
+            return text.Contains(
+                await ToOperatorStringAsync(expected, cancellationToken),
+                StringComparison.Ordinal);
+        }
+
+        if (actual is IDictionary ||
+            actual is IShellEnumerableObject { HasShellItems: true } ||
+            actual is IEnumerable)
+        {
+            return await IsInAsync(expected, actual, cancellationToken);
+        }
+
+        return false;
+    }
+
+    private async ValueTask<bool> StartsWithAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        if (actual is null)
+        {
+            return false;
+        }
+
+        return (await ToOperatorStringAsync(actual, cancellationToken)).StartsWith(
+            await ToOperatorStringAsync(expected, cancellationToken),
+            StringComparison.Ordinal);
+    }
+
+    private async ValueTask<bool> EndsWithAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        if (actual is null)
+        {
+            return false;
+        }
+
+        return (await ToOperatorStringAsync(actual, cancellationToken)).EndsWith(
+            await ToOperatorStringAsync(expected, cancellationToken),
+            StringComparison.Ordinal);
+    }
+
+    private static async IAsyncEnumerable<object?> ReadLinesAsync(
+        string path,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(path, Encoding.UTF8);
+        string? line;
+
+        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return line;
+        }
+    }
+
+    private static int GetStagesConsumed(Tosh.Language.Binding.PipelineFusion fusion) => fusion switch
+    {
+        SortFirstFusion sortFirst => sortFirst.StagesConsumed,
+        _ => 0,
+    };
+
+    /// <summary>
+    /// Specialised executor for <c>... | sort [-r] | first N</c>. Uses a
+    /// bounded <see cref="PriorityQueue{TElement, TPriority}"/> of size N
+    /// to retain only the items we need, then emits them in sort order.
+    /// Memory: O(N) instead of O(M); time: O(M log N).
+    /// </summary>
+    private static async IAsyncEnumerable<object?> ExecuteSortFirstFusionAsync(
+        IAsyncEnumerable<object?> source,
+        SortFirstFusion fusion,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (fusion.Count == 0)
+        {
+            yield break;
+        }
+
+        // Comparator mirrors SortCommand's default (no -n, no -h, no key).
+        // Forward direction: ascending; reverse: descending.
+        // `TOAST-0018`. The shared comparer, not a local copy of it. The copy this
+        // replaced compared only values of an identical type and otherwise ordered by
+        // type *name*, so `[1, "a", 2.5] | sort` answered `1, 2.5, "a"` while
+        // `| sort | first 3` answered `2.5, 1, "a"` — a fused pipeline disagreeing with
+        // the unfused one it is supposed to be indistinguishable from.
+        IComparer<object?> ascending = ShellSortComparer.Ordinal;
+        IComparer<object?> descending = new ReverseComparer(ascending);
+        var comparer = fusion.Reverse ? descending : ascending;
+
+        // Heap orders by the OPPOSITE direction so its top is the
+        // candidate to evict. For ascending top-N (N smallest), we keep
+        // a max-heap; for reverse (N largest), a min-heap.
+        var evictionComparer = fusion.Reverse ? ascending : descending;
+        var heap = new PriorityQueue<object?, object?>(fusion.Count, evictionComparer);
+
+        // `TOAST-0025`. The stages this fusion replaced each expanded their input, and
+        // the fusion did not — so a pipeline head yielding a lone collection reached the
+        // heap as **one item**, and `[3,1,2] | sort | first` answered `3, 1, 2`: the
+        // whole array, unsorted, with no error. `TS-P2-74` is why the head yields one
+        // value ("it is each stage that decides whether a collection means itself or its
+        // elements"), and this stands in for two stages that had both decided.
+        //
+        // The same helper `FirstCommand` calls, rather than a bare expansion: it honours
+        // `PreExpandedSequence` (`TS-P2-113`), so a replayed variable is not expanded a
+        // second time, and it expands only a *lone* collection, so a stream of several
+        // collections keeps them as items. Both cases are pinned in the corpus.
+        var expanded = ShellIterationUtilities.ReplaySingleInputCollectionAsync(source, cancellationToken);
+
+        await foreach (var item in expanded.WithCancellation(cancellationToken))
+        {
+            if (heap.Count < fusion.Count)
+            {
+                heap.Enqueue(item, item);
+                continue;
+            }
+
+            // EnqueueDequeue replaces the top if the new item is "better"
+            // (smaller for ascending top-N, larger for reverse).
+            heap.EnqueueDequeue(item, item);
+        }
+
+        // Drain to a buffer, then sort in the requested direction.
+        var buffer = new List<object?>(heap.Count);
+        while (heap.Count > 0)
+        {
+            buffer.Add(heap.Dequeue());
+        }
+
+        buffer.Sort(comparer);
+
+        foreach (var item in buffer)
+        {
+            yield return item;
+        }
+    }
+
+    /// <summary>
+    /// Runs a pipeline stage that is an expression.
+    /// </summary>
+    /// <remarks>
+    /// Not an iterator itself, so the variable-replay branch can return a
+    /// <see cref="PreExpandedSequence"/> — a stream that has already had its
+    /// collection enumerated into it, and must not be expanded again downstream
+    /// (`TS-P2-113`). The rest of the work stays in the iterator below.
+    /// </remarks>
+    private IAsyncEnumerable<object?> ExecuteExpressionStageAsync(
+        string sourceName,
+        string sourceText,
+        ExpressionPipelineStageSyntax expressionStage,
+        CancellationToken cancellationToken)
+    {
+        if (expressionStage.Expression is VariableReferenceArgumentSyntax variableReference &&
+            TryGetVariableBinding(variableReference.Name, out var binding) &&
+            binding.ReplayAsPipeline &&
+            binding.Value is IEnumerable enumerable &&
+            binding.Value is not string)
+        {
+            return new PreExpandedSequence(ReplayBindingAsync(enumerable, cancellationToken));
+        }
+
+        // `TOAST-0028`. An expression head is where a collection *literal* — or a variable
+        // holding one, or a range — reaches a pipeline, and those are sequences: spreading
+        // them is what `[1, 2, 3] | where { … }` has always meant. Marking says so at the
+        // producer, which is the point of the change; downstream no longer has to guess it
+        // from how many items happen to arrive.
+        var core = ExecuteExpressionStageCoreAsync(sourceName, sourceText, expressionStage, cancellationToken);
+
+        return HeadIsACall(expressionStage.Expression) ? core : new SpreadableSequence(core);
+    }
+
+    /// <summary>
+    /// Whether a pipeline head <em>calls</em> something — `TOAST-0039`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0028` marked every expression head as a sequence, which made the rule
+    /// syntactic in a way authors could not see. A function returning a collection answered
+    /// 1 because a bare name parses as a command; a method returning the identical
+    /// collection answered 3 because `$c.m()` parses as an expression. Nothing about the
+    /// author's intent differed.
+    /// </para>
+    /// <para>
+    /// The rule is now one sentence: a collection <em>written</em> as an expression is a
+    /// sequence, and a collection <em>returned by a call</em> is a value. A property read
+    /// stays a sequence, because `$obj.Items` <em>is</em> the collection in the same way a
+    /// variable is — it is the calling that produces one.
+    /// </para>
+    /// </remarks>
+    private static bool HeadIsACall(ArgumentSyntax expression) => expression switch
+    {
+        MethodCallArgumentSyntax => true,
+        StaticMethodCallArgumentSyntax => true,
+        CallableInvocationArgumentSyntax => true,
+        // `new` is deliberately **not** a call here. It constructs a value the way a
+        // literal writes one, and treating it as a call would make `new array(1, 2, 3)`
+        // answer 1 while the identical `[1, 2, 3]` answers 3 — the same defect this item
+        // exists to remove, reintroduced one spelling over.
+        _ => false,
+    };
+
+    private static async IAsyncEnumerable<object?> ReplayBindingAsync(
+        IEnumerable source,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+
+        foreach (var item in source)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return item;
+        }
+    }
+
+    private async IAsyncEnumerable<object?> ExecuteExpressionStageCoreAsync(
+        string sourceName,
+        string sourceText,
+        ExpressionPipelineStageSyntax expressionStage,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+
+        // `TS-P2-73`. A ternary arm could not invoke a multi-value command, because the
+        // parentheses it *requires* are the same parentheses that impose single-value
+        // collapse: unparenthesised arms are a parse error, and a parenthesised arm is a
+        // subexpression, which `EvaluateArgumentAsync` reduces to one value or rejects.
+        // So `func svc(a, s) => ($a == journal) ? (sudo journalctl -u $s) : (...)` failed
+        // with "this subexpression produced 20 values" while the identical `if`/`else`
+        // block streamed all twenty.
+        //
+        // Parentheses mean two things here — grouping and collapse — and an arm needs
+        // only the first. The rule from `TS-P1-20` is unchanged and still applies
+        // wherever a single value is genuinely required; this is a *pipeline stage*, so
+        // the surrounding context streams, exactly as `for x in (pipeline)` already does
+        // under rule 3 of that same list. An argument list is untouched: `echo ($a ? $b :
+        // $c)` still reaches `EvaluateArgumentAsync` and still collapses.
+        var effective = expressionStage.Expression;
+
+        while (effective is ConditionalArgumentSyntax conditional)
+        {
+            var condition = await EvaluateArgumentAsync(sourceName, sourceText, conditional.Condition, cancellationToken);
+            effective = OperatorEvaluator.ToBoolean(condition) ? conditional.WhenTrue : conditional.WhenFalse;
+        }
+
+        if (!ReferenceEquals(effective, expressionStage.Expression) &&
+            effective is SubexpressionArgumentSyntax chosenSubexpression)
+        {
+            await foreach (var item in EvaluatePipelineAsync(
+                sourceName, sourceText, chosenSubexpression.Pipeline, cancellationToken))
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        // `TOAST-0032`. `...$xs` sends the collection's elements, one item each, and says
+        // so at the point it is written. Everything else here decides shape by inspecting
+        // the value; this is the one form where the author has already said what they
+        // meant, so nothing is inferred.
+        if (effective is SpreadElementArgumentSyntax spread)
+        {
+            var spreadValue = await EvaluateArgumentAsync(sourceName, sourceText, spread.Value, cancellationToken);
+
+            foreach (var item in ShellIterationUtilities.ExpandIterationItems(spreadValue))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        object? value;
+
+        try
+        {
+            value = await EvaluateArgumentPreservingEmptyAsync(sourceName, sourceText, effective, cancellationToken);
+        }
+        catch (ToshDiagnosticException)
+        {
+            throw;
+        }
+        catch (Tosh.Runtime.ShellControlFlowException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsToshThrown(exception))
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw CreateExpressionDiagnostic(sourceName, sourceText, expressionStage.Expression, exception);
+        }
+
+        // `TS-P2-74`: this gate stays. Spreading every list-valued expression head was
+        // tried and is wrong — `[] | to json` must serialize the empty array rather than
+        // send nothing downstream, and eight tests said so, across `to json`, format
+        // round-trips and comprehensions. A pipeline head yields one value; it is each
+        // stage that decides whether a collection means itself or its elements.
+        if (ShouldReplayRuntimeNamespaceCollectionAccess(expressionStage.Expression) &&
+            ShouldReplayAsPipeline(value) &&
+            value is IEnumerable replayable &&
+            value is not string)
+        {
+            foreach (var item in replayable)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        // `TOAST-0123`. A call whose body produced no values contributes no items. It used
+        // to contribute one null, so `$win.Events.Drain() | where Kind == …` failed on
+        // every idle frame — at the `where`, naming the caller rather than the method that
+        // yielded nothing. A value position still reads null; only a pipeline, which asked
+        // for items, is told there were none.
+        if (ReferenceEquals(value, ToshEmptyCallResult.Instance))
+        {
+            yield break;
+        }
+
+        // Expand ranges into their individual values.
+        if (value is ToshRange range)
+        {
+            foreach (var item in range.Enumerate())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        yield return value;
+    }
+
+    private async IAsyncEnumerable<object?> ExecutePipeForwardStageAsync(
+        string sourceName,
+        string sourceText,
+        PipeForwardStageSyntax pipeForward,
+        IAsyncEnumerable<object?> input,
+        PipelineExitStatusTracker? pipelineExitStatusTracker,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Collect all items from the previous stage.
+        var items = new List<object?>();
+        await foreach (var item in input.WithCancellation(cancellationToken))
+        {
+            items.Add(item);
+        }
+
+        // Collapse: single item → unwrap, multiple → list, zero → null.
+        object? collectedValue = items.Count switch
+        {
+            0 => null,
+            1 => items[0],
+            _ => items,
+        };
+
+        // Execute the command with the collected value prepended as first argument.
+        var prependedArgs = new List<object?> { collectedValue };
+        await foreach (var result in ExecuteCommandSyntaxAsync(
+            sourceName,
+            sourceText,
+            pipeForward.Command,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            additionalArguments: null,
+            isPipelined: false,
+            pipelineExitStatusTracker,
+            cancellationToken,
+            prependedArguments: prependedArgs))
+        {
+            yield return result;
+        }
+    }
+
 }
