@@ -144,14 +144,14 @@ var & Variable to solve for (defaults to 'x'). (optional) \\
 \end{tabular}
 
 \textbf{Pipeline input:} scalar
- --- Accepts an equation string from the pipeline.
+ --- Accepts an equation string, SymEquation, or SymExpr from the pipeline.
 
 \textbf{Output:} The solutions for the target variable.
 
 \begin{lstlisting}
-solve "2*x + 4 = 6"  # Solve linear equation
+solve "2*x + 4 = 6"  # Solve linear equation string
+var x = sym x; solve (2*$x + 4 == 6)  # Solve live algebraic expression
 solve "x^2 - 5*x + 6 = 0"  # Solve quadratic equation
-solve "x^2 = 9"  # Solve square equation
 \end{lstlisting}
 
 \end{cmdbox}
@@ -6541,26 +6541,38 @@ figure --width 1000 --height 600  # Create a custom figure
 Generates a line plot from coordinates, lists, or piped data.
 
 \begin{signature}
-plot [x] [y] [--title <text>] [--label <text>] [--color <color>] [--save \\
-\quad <file.svg>]
+plot [x] [y] [--title <text>] [--label <text>] [--color <color>] [--min \\
+\quad <num>] [--max <num>] [--samples <n>] [--save <file.svg>]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-y-or-x & Data values for Y axis, or X values when Y is also supplied. (optional) \\
+y-or-x & Data values for Y axis, or X values when Y is also supplied, or a symbolic expression. (optional) \\
 y & Data values for Y axis when X values are given as first argument. (optional) \\
 \bottomrule
 \end{tabular}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+--min & Minimum X coordinate when plotting a symbolic expression (default: -10). \\
+--max & Maximum X coordinate when plotting a symbolic expression (default: 10). \\
+--samples & Number of sample points when evaluating a function (default: 50). \\
+\bottomrule
+\end{tabular}
+
 \textbf{Pipeline input:} scalar
- --- Accepts stream or list of numbers, pairs, or records to plot.
+ --- Accepts stream or list of numbers, pairs, or symbolic expression to plot.
 
 \textbf{Output:} A Figure instance that renders as a visual chart in the terminal or exports to SVG.
 
 \begin{lstlisting}
 plot [1, 4, 9, 16, 25]  # Plot an array of numbers
+var x = sym x; plot ($x^2)  # Plot symbolic algebraic expression
+var x = sym x; plot (Math.sin($x)) --min -3.14 --max 3.14  # Plot trigonometric curve
 1..10 | map ($val ** 2) | plot  # Plot pipeline numbers
 plot [0, 1, 2, 3] [0, 1, 4, 9]  # Plot X and Y coordinates
 \end{lstlisting}

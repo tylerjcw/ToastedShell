@@ -6,11 +6,11 @@ namespace Tosh.Stdlib.Cas;
 [CommandArgument("equation", "Equation to solve (e.g. '2*x + 4 = 6' or 'x^2 - 4 = 0').", Required = false)]
 [CommandArgument("var", "Variable to solve for (defaults to 'x').", Required = false)]
 [CommandOption("--var", "Variable name to solve for.")]
-[CommandExample("solve \"2*x + 4 = 6\"", Title = "Solve linear equation")]
+[CommandExample("solve \"2*x + 4 = 6\"", Title = "Solve linear equation string")]
+[CommandExample("var x = sym x; solve (2*$x + 4 == 6)", Title = "Solve live algebraic expression")]
 [CommandExample("solve \"x^2 - 5*x + 6 = 0\"", Title = "Solve quadratic equation")]
-[CommandExample("solve \"x^2 = 9\"", Title = "Solve square equation")]
 [CommandOutput("The solutions for the target variable.", ClrType = typeof(IAsyncEnumerable<SymExpr>))]
-[PipelineInput(AcceptsScalar = true, Description = "Accepts an equation string from the pipeline.")]
+[PipelineInput(AcceptsScalar = true, Description = "Accepts an equation string, SymEquation, or SymExpr from the pipeline.")]
 public sealed class SolveCommand : ShellCommand
 {
     public SolveCommand()
@@ -25,23 +25,25 @@ public sealed class SolveCommand : ShellCommand
             break;
         }
 
-        string? eqStr = null;
+        object? targetObj = inputVal;
         string variable = "x";
+        bool explicitVar = false;
 
-        if (inputVal is not null)
+        if (targetObj is not null)
         {
-            eqStr = inputVal.ToString();
-            if (context.Arguments.Count > 0)
+            if (context.Arguments.Count > 0 && !(context.Arguments[0]?.ToString()?.StartsWith("--") ?? false))
             {
                 variable = context.Arguments[0]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
         else if (context.Arguments.Count > 0)
         {
-            eqStr = context.Arguments[0]?.ToString();
-            if (context.Arguments.Count > 1)
+            targetObj = context.Arguments[0];
+            if (context.Arguments.Count > 1 && !(context.Arguments[1]?.ToString()?.StartsWith("--") ?? false))
             {
                 variable = context.Arguments[1]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
 
@@ -50,15 +52,38 @@ public sealed class SolveCommand : ShellCommand
             if (context.Arguments[i]?.ToString() == "--var" && i + 1 < context.Arguments.Count)
             {
                 variable = context.Arguments[++i]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
 
-        if (string.IsNullOrWhiteSpace(eqStr))
+        if (targetObj is null)
         {
             throw new ArgumentException("No equation provided to 'solve'.");
         }
 
-        var solutions = Solver.Solve(eqStr, variable);
+        if (!explicitVar && targetObj is SymExpr targetExpr)
+        {
+            var detected = targetExpr.GetVariables().FirstOrDefault();
+            if (!string.IsNullOrEmpty(detected))
+            {
+                variable = detected;
+            }
+        }
+
+        IReadOnlyList<SymExpr> solutions;
+        if (targetObj is SymEquation eq)
+        {
+            solutions = Solver.Solve(eq.ToStandardForm(), variable);
+        }
+        else if (targetObj is SymExpr expr)
+        {
+            solutions = Solver.Solve(expr, variable);
+        }
+        else
+        {
+            solutions = Solver.Solve(targetObj.ToString()!, variable);
+        }
+
         foreach (var sol in solutions)
         {
             yield return sol;

@@ -123,6 +123,30 @@ public sealed partial class ToshEngine
                 }
             }
 
+            if (left is IShellReversibleBinaryOperatorObject leftRev &&
+                leftRev.TryEvaluateBinaryOperator(@operator, right, reversed: false, out var leftRevRes))
+            {
+                return leftRevRes;
+            }
+
+            if (right is IShellReversibleBinaryOperatorObject rightRev &&
+                rightRev.TryEvaluateBinaryOperator(@operator, left, reversed: true, out var rightRevRes))
+            {
+                return rightRevRes;
+            }
+
+            if (left is IShellBinaryOperatorObject leftBin &&
+                leftBin.TryEvaluateBinaryOperator(@operator, right, out var leftBinRes))
+            {
+                return leftBinRes;
+            }
+
+            if (right is IShellBinaryOperatorObject rightBin &&
+                rightBin.TryEvaluateBinaryOperator(@operator, left, out var rightBinRes))
+            {
+                return rightBinRes;
+            }
+
             return await EvaluateFallbackBinaryOperatorAsync(
                 sourceName,
                 sourceText,

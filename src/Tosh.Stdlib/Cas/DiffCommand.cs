@@ -27,29 +27,41 @@ public sealed class DiffCommand : ShellCommand
 
         SymExpr? expr = null;
         string variable = "x";
+        bool explicitVar = false;
 
         if (inputVal is SymExpr sym)
         {
             expr = sym;
-            if (context.Arguments.Count > 0)
+            if (context.Arguments.Count > 0 && !(context.Arguments[0]?.ToString()?.StartsWith("--") ?? false))
             {
                 variable = context.Arguments[0]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
         else if (inputVal is not null)
         {
             expr = SymParser.Parse(inputVal.ToString()!);
-            if (context.Arguments.Count > 0)
+            if (context.Arguments.Count > 0 && !(context.Arguments[0]?.ToString()?.StartsWith("--") ?? false))
             {
                 variable = context.Arguments[0]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
         else if (context.Arguments.Count > 0)
         {
-            expr = SymParser.Parse(context.Arguments[0]?.ToString()!);
-            if (context.Arguments.Count > 1)
+            if (context.Arguments[0] is SymExpr se)
+            {
+                expr = se;
+            }
+            else
+            {
+                expr = SymParser.Parse(context.Arguments[0]?.ToString()!);
+            }
+
+            if (context.Arguments.Count > 1 && !(context.Arguments[1]?.ToString()?.StartsWith("--") ?? false))
             {
                 variable = context.Arguments[1]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
 
@@ -58,12 +70,22 @@ public sealed class DiffCommand : ShellCommand
             if (context.Arguments[i]?.ToString() == "--var" && i + 1 < context.Arguments.Count)
             {
                 variable = context.Arguments[++i]?.ToString() ?? "x";
+                explicitVar = true;
             }
         }
 
         if (expr is null)
         {
             throw new ArgumentException("No expression provided to 'diff'.");
+        }
+
+        if (!explicitVar)
+        {
+            var detected = expr.GetVariables().FirstOrDefault();
+            if (!string.IsNullOrEmpty(detected))
+            {
+                variable = detected;
+            }
         }
 
         var derivative = expr.Differentiate(variable);

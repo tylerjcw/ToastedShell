@@ -32,8 +32,28 @@ public sealed class SymCommand : ShellCommand
             }
             exprStr = inputVal.ToString();
         }
-        else if (context.Arguments.Count > 0)
+        else if (context.Arguments.Count > 1)
         {
+            foreach (var arg in context.Arguments)
+            {
+                if (arg is not null)
+                {
+                    var s = arg.ToString()?.Trim();
+                    if (!string.IsNullOrEmpty(s))
+                    {
+                        yield return SymExpr.Variable(s);
+                    }
+                }
+            }
+            yield break;
+        }
+        else if (context.Arguments.Count == 1)
+        {
+            if (context.Arguments[0] is SymExpr sym)
+            {
+                yield return sym;
+                yield break;
+            }
             exprStr = context.Arguments[0]?.ToString();
         }
 

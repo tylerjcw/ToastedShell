@@ -19,6 +19,15 @@ public sealed class MathShellType : IShellStaticType
 
     public InvocationResult InvokeStaticMethod(string methodName, IReadOnlyList<object?> arguments)
     {
+        if (arguments.Count > 0 && arguments[0] is IShellMathFunctionObject mathObj)
+        {
+            var additionalArgs = arguments.Count > 1 ? arguments.Skip(1).ToArray() : Array.Empty<object?>();
+            if (mathObj.TryEvaluateMathFunction(methodName, additionalArgs, out var symbolicResult))
+            {
+                return new InvocationResult(symbolicResult, false);
+            }
+        }
+
         var result = methodName.ToLowerInvariant() switch
         {
             // Trigonometric

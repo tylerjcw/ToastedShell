@@ -170,5 +170,77 @@ public sealed class CasTests
         Assert.Single(sol3);
         Assert.Equal("-3", sol3[0].ToString());
     }
+
+    [Fact]
+    public async Task Cas_live_variables_and_math_expressions()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime.Language);
+
+        // Variable creation and live binary operators (+, -, *, /, ^, ==)
+        var res1 = await engine.ExecuteToListAsync("var x = sym x; echo (2 * $x + 4)");
+        Assert.Single(res1);
+        Assert.Equal("2*x + 4", res1[0]?.ToString());
+
+        // Reverse non-commutative operators: 10 - $x canonicalizes as polynomial sum
+        var resRevSub = await engine.ExecuteToListAsync("var x = sym x; echo (10 - $x)");
+        Assert.Single(resRevSub);
+        Assert.Equal("-1*x + 10", resRevSub[0]?.ToString());
+
+        // Reverse non-commutative operators: 20 / $x canonicalizes as 20*x^-1
+        var resRevDiv = await engine.ExecuteToListAsync("var x = sym x; echo (20 / $x)");
+        Assert.Single(resRevDiv);
+        Assert.Equal("20*x^-1", resRevDiv[0]?.ToString());
+
+        // Unary negation: -$x canonicalizes as -1*x
+        var resNeg = await engine.ExecuteToListAsync("var x = sym x; echo (-$x)");
+        Assert.Single(resNeg);
+        Assert.Equal("-1*x", resNeg[0]?.ToString());
+
+        // Live solve with == operator
+        var resSolve1 = await engine.ExecuteToListAsync("var x = sym x; solve (2 * $x + 4 == 6)");
+        Assert.Single(resSolve1);
+        Assert.Equal("1", resSolve1[0]?.ToString());
+
+        // Live solve with auto-detected variable name 'y'
+        var resSolveY = await engine.ExecuteToListAsync("var y = sym y; solve ($y ** 2 - 16 == 0)");
+        Assert.Equal(2, resSolveY.Count);
+        Assert.Contains(resSolveY, s => s?.ToString() == "4");
+        Assert.Contains(resSolveY, s => s?.ToString() == "-4");
+
+        // Live diff
+        var resDiff = await engine.ExecuteToListAsync("var x = sym x; diff ($x ** 3 + 2 * $x)");
+        Assert.Single(resDiff);
+        Assert.Equal("2 + 3*x^2", resDiff[0]?.ToString());
+
+        // Live expand
+        var resExpand = await engine.ExecuteToListAsync("var x = sym x; expand (($x + 1) * ($x + 2))");
+        Assert.Single(resExpand);
+        var expStr = resExpand[0]?.ToString();
+        Assert.NotNull(expStr);
+        Assert.Contains("x^2", expStr);
+        Assert.Contains("3*x", expStr);
+        Assert.Contains("2", expStr);
+
+        // Live simplify
+        var resSimp = await engine.ExecuteToListAsync("var x = sym x; simplify (5 * $x - 2 * $x + 7)");
+        Assert.Single(resSimp);
+        Assert.Equal("3*x + 7", resSimp[0]?.ToString());
+
+        // Standard Math functions: Math.sin($x)
+        var resMathSin = await engine.ExecuteToListAsync("var x = sym x; diff (Math.sin($x))");
+        Assert.Single(resMathSin);
+        Assert.Equal("cos(x)", resMathSin[0]?.ToString());
+
+        // Standard Math functions: Math.sqrt($x)
+        var resMathSqrt = await engine.ExecuteToListAsync("var x = sym x; diff (Math.sqrt($x))");
+        Assert.Single(resMathSqrt);
+        Assert.Equal("(2*sqrt(x))^-1", resMathSqrt[0]?.ToString());
+
+        // Plotting a live symbolic expression
+        var resPlot = await engine.ExecuteToListAsync("var x = sym x; plot ($x ** 2) --min -5 --max 5 --samples 11");
+        Assert.Single(resPlot);
+        Assert.IsAssignableFrom<Tosh.Stdlib.Plotting.Figure>(resPlot[0]);
+    }
 }
 

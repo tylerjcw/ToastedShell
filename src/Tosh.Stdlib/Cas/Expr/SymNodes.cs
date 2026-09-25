@@ -49,6 +49,8 @@ public sealed class SymVariable : SymExpr
         throw new InvalidOperationException($"Variable '{Name}' is not defined in evaluation context.");
     }
 
+    public override IEnumerable<string> GetVariables() => [Name];
+
     public override bool Equals(SymExpr? other) => other is SymVariable v && string.Equals(Name, v.Name, StringComparison.Ordinal);
     public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Name);
 }
@@ -88,6 +90,9 @@ public sealed class SymAdd : SymExpr
 
     public override double Evaluate(IReadOnlyDictionary<string, double>? context = null) =>
         Terms.Sum(t => t.Evaluate(context));
+
+    public override IEnumerable<string> GetVariables() =>
+        Terms.SelectMany(t => t.GetVariables()).Distinct();
 
     public override bool Equals(SymExpr? other) =>
         other is SymAdd add && Terms.Count == add.Terms.Count && Terms.SequenceEqual(add.Terms);
@@ -132,6 +137,9 @@ public sealed class SymMul : SymExpr
         foreach (var f in Factors) result *= f.Evaluate(context);
         return result;
     }
+
+    public override IEnumerable<string> GetVariables() =>
+        Factors.SelectMany(f => f.GetVariables()).Distinct();
 
     public override bool Equals(SymExpr? other) =>
         other is SymMul mul && Factors.Count == mul.Factors.Count && Factors.SequenceEqual(mul.Factors);
@@ -178,6 +186,9 @@ public sealed class SymPow : SymExpr
 
     public override double Evaluate(IReadOnlyDictionary<string, double>? context = null) =>
         Math.Pow(Base.Evaluate(context), Exponent.Evaluate(context));
+
+    public override IEnumerable<string> GetVariables() =>
+        Base.GetVariables().Concat(Exponent.GetVariables()).Distinct();
 
     public override bool Equals(SymExpr? other) =>
         other is SymPow pow && Base.Equals(pow.Base) && Exponent.Equals(pow.Exponent);
@@ -246,6 +257,9 @@ public sealed class SymFunction : SymExpr
             _ => throw new InvalidOperationException($"Function '{Name}' evaluation is not supported.")
         };
     }
+
+    public override IEnumerable<string> GetVariables() =>
+        Arguments.SelectMany(a => a.GetVariables()).Distinct();
 
     public override bool Equals(SymExpr? other) =>
         other is SymFunction fn && string.Equals(Name, fn.Name, StringComparison.Ordinal) &&

@@ -55,12 +55,12 @@ public static class OperatorEvaluator
         object? right,
         Func<string, string?>? resolveDeclaredTypeName)
     {
-        if (TryInvokeShellBinaryOperator(left, @operator, right, out var leftResult))
+        if (TryInvokeShellBinaryOperator(left, @operator, right, reversed: false, out var leftResult))
         {
             return leftResult;
         }
 
-        if (TryInvokeShellBinaryOperator(right, @operator, left, out var rightResult))
+        if (TryInvokeShellBinaryOperator(right, @operator, left, reversed: true, out var rightResult))
         {
             return rightResult;
         }
@@ -158,9 +158,19 @@ public static class OperatorEvaluator
         object? instance,
         string @operator,
         object? other,
+        bool reversed,
         out object? result)
     {
         result = null;
+        if (instance is IShellReversibleBinaryOperatorObject reversible)
+        {
+            return reversible.TryEvaluateBinaryOperator(
+                @operator,
+                other,
+                reversed,
+                out result);
+        }
+
         if (instance is IShellBinaryOperatorObject shellOperator)
         {
             return shellOperator.TryEvaluateBinaryOperator(
@@ -1473,6 +1483,16 @@ public static class OperatorEvaluator
                     : ToastMessages.NullOperand("+"));
         }
 
+        if (TryInvokeShellBinaryOperator(left, "+", right, reversed: false, out var leftResult))
+        {
+            return leftResult;
+        }
+
+        if (TryInvokeShellBinaryOperator(right, "+", left, reversed: true, out var rightResult))
+        {
+            return rightResult;
+        }
+
         // Vector arithmetic
         if (left is ToshVector lv && right is ToshVector rv) return lv + rv;
         if (left is ToshVector lvs && IsNumeric(right)) return lvs + new ToshVector(Enumerable.Repeat(ToDouble(right), lvs.Length).ToArray());
@@ -1584,6 +1604,16 @@ public static class OperatorEvaluator
         if (left is null || right is null)
         {
             throw new InvalidOperationException("The '-' operator requires non-null operands.");
+        }
+
+        if (TryInvokeShellBinaryOperator(left, "-", right, reversed: false, out var leftSubResult))
+        {
+            return leftSubResult;
+        }
+
+        if (TryInvokeShellBinaryOperator(right, "-", left, reversed: true, out var rightSubResult))
+        {
+            return rightSubResult;
         }
 
         // Vector arithmetic

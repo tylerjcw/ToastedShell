@@ -33,7 +33,14 @@ public sealed class ExpandCommand : ShellCommand
         }
         else if (context.Arguments.Count > 0)
         {
-            expr = SymParser.Parse(context.Arguments[0]?.ToString()!);
+            if (context.Arguments[0] is SymExpr se)
+            {
+                expr = se;
+            }
+            else
+            {
+                expr = SymParser.Parse(context.Arguments[0]?.ToString()!);
+            }
         }
 
         if (expr is null)
