@@ -1,0 +1,11 @@
+[[memory]]
+id = "01a0dac0-6699-7896-bc1c-b9217b28753d"
+created = 2026-09-25T22:47:17.401Z
+category = "fact"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-core-review"
+tags = ["language", "scoping", "evaluator", "review-2026-09-25"]
+summary = "Function calls are dynamically scoped: a callee reads AND writes its caller's locals (spec says lexical)"
+content = "The engine keeps one Stack<LexicalScope> (_scopes, ToshEngine.cs:23) and variable lookup walks it, so a function sees the locals of whoever called it, and `$x = ...` in a callee overwrites the caller's `var x`. Verified 2026-09-25. Generators leak the same way: a consumer block sees a suspended generator's locals. The spec (toastscript-spec.tex, Scoping) says lexical scoping. Slot-indexed variables need this settled first."
+links = [{ path = "src/Tosh.Language/ToshEngine.cs" }, { path = "src/Tosh.Language/LexicalScope.cs" }, { path = "docs/spec/toastscript-spec.tex" }]

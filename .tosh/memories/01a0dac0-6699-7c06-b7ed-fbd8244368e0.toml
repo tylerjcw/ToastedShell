@@ -1,0 +1,11 @@
+[[memory]]
+id = "01a0dac0-6699-7c06-b7ed-fbd8244368e0"
+created = 2026-09-25T22:47:17.401Z
+category = "fact"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-core-review"
+tags = ["pipeline", "semantics", "review-2026-09-25"]
+summary = "Pipeline results collapse by count: 0 items -> null, 1 -> the bare item, n -> array"
+content = "`var r = [1,2] | where { $_ > 5 }` is null, `... > 1` is System.Int32, and `[7] | where { $_ > 0 }` turns an array<int> into an Int32. `var x = (pipeline)` with parentheses errors when the pipeline yields 2+ values (subexpression_requires_single_value). Stage-by-stage 'lone collection' expansion (PreExpandedSequence, TS-P2-74/113, TOAST-0025) is the same ambiguity."
+links = [{ path = "src/Tosh.Language/ToshEngine.Pipelines.cs" }]

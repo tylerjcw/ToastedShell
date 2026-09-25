@@ -1,0 +1,11 @@
+[[memory]]
+id = "01a0dac0-6699-7724-9020-72d62ce3dd84"
+created = 2026-09-25T22:47:17.401Z
+category = "fact"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-core-review"
+tags = ["concurrency", "pipeline", "semantics", "review-2026-09-25"]
+summary = "parallel/race/async run blocks on cloned scopes: writes to outer variables are silently discarded"
+content = "EngineBlockExecutor.Fork clones every visible LexicalScope (ToshEngine.cs Fork -> LexicalScope.Clone), so `var total = 0; 1..200 | parallel { $total = $total + 1 }` leaves total at 0 with no diagnostic. Objects referenced by variables are still shared and unsynchronized. Early termination also over-runs by one: `1..5 | each { ... } | first 1` runs the each body twice."
+links = [{ path = "src/Tosh.Language/LexicalScope.cs" }, { path = "src/Toast.Stdlib/Pipeline/ParallelCommand.cs" }]

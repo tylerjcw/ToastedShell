@@ -1,0 +1,12 @@
+[[memory]]
+id = "01a0dac0-6697-7f5c-b930-6368b52e1dfa"
+created = 2026-09-25T22:47:17.399Z
+category = "fact"
+scope = "project"
+source = "ai"
+pinned = true
+session_id = "2026-09-25-core-review"
+tags = ["commands", "safety", "bug", "review-2026-09-25"]
+summary = "Commands parse flags from argument VALUES: var x = \"-r\"; rm $x dir deletes dir recursively"
+content = "Builtins receive CommandContext.Arguments as object? and detect options by ToString() (e.g. HeadCommand.ParseArguments), so a value from a variable, subexpression or ls that starts with '-' is taken as a flag. Verified 2026-09-25: `var name = \"-r\"; rm $name victim` deleted the victim directory recursively and left the file named -r. `var f = \"-n\"; head $f` fails asking for a count. The parser knows which tokens were literal flags; that provenance is lost before commands run."
+links = [{ path = "src/Toast.Stdlib/Text/HeadCommand.cs" }, { path = "src/Toast.Runtime/CommandContext.cs" }]
