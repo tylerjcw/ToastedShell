@@ -16,7 +16,7 @@ public sealed class ObjectFormatterTests
         var flow = Quantity.FromLiteral(48 * 10.3, "L/s");
         var dimensionless = new Quantity(2, UnitExpression.Dimensionless, string.Empty);
 
-        Assert.Equal("483.06 MW", ToshValueFormatter.Format(power));
+        Assert.Equal("483.06 MW", ToastRenderer.Render(power));
         Assert.Equal("494.4 L/s", flow.ToString());
         Assert.Equal("483.1 MW", power.ToString("F1", CultureInfo.InvariantCulture));
         var roundTripMagnitude = flow.ToString("R", CultureInfo.InvariantCulture).Split(' ', 2)[0];
@@ -40,13 +40,11 @@ public sealed class ObjectFormatterTests
     [Fact]
     public void Default_value_formatter_uses_canonical_scalar_and_collection_text()
     {
-        Assert.Equal("null", ToshValueFormatter.Format(null));
-        Assert.Equal("true", ToshValueFormatter.Format(true));
-        Assert.Equal("[1, 2]", ToshValueFormatter.Format(new object?[] { 1, 2 }));
-        // `TOAST-0014` §6: an enum member renders as its *name*. It was type-qualified
-        // here and bare for a ToastScript enum; one rule now covers both, which is what
-        // makes a compiled enum and an interpreted one agree.
-        Assert.Equal("Green", ToshValueFormatter.Format(ToastColor.Green));
+        Assert.Equal("null", ToastRenderer.Render(null));
+        Assert.Equal("true", ToastRenderer.Render(true));
+        Assert.Equal("[1, 2]", ToastRenderer.Render(new object?[] { 1, 2 }));
+        // `TOAST-0014` §6: an enum member renders as its *name*, not type-qualified.
+        Assert.Equal("Green", ToastRenderer.Render(ToastColor.Green));
     }
 
     [Theory]
@@ -405,7 +403,6 @@ public sealed class ObjectFormatterTests
 
     private sealed record DemoObject(string Name, int Count);
 
-    [ToshType("enum", 0, 0)]
     private enum ToastColor
     {
         Green,

@@ -4,9 +4,7 @@ using Tosh.Runtime;
 namespace Tosh.Tests;
 
 /// <summary>
-/// Tests covering user-defined generic classes (`class Box&lt;T&gt;`) in the
-/// REPL/interpreter path. End-to-end compiled tests live alongside the
-/// interpreter cases — when behaviour diverges it is a regression.
+/// Tests covering user-defined generic classes (`class Box&lt;T&gt;`).
 /// </summary>
 public sealed class GenericClassTests
 {

@@ -5,8 +5,7 @@
 ## @remarks
 ##   Deliberately shaped like the real thing rather than written for speed. The
 ##   point is to find out which parts of ToastScript fight back when you write
-##   compiler-shaped code, what compiler tier the result reaches, and how fast
-##   it runs interpreted versus compiled.
+##   compiler-shaped code, and how fast it runs.
 ##
 ##   Grammar:
 ##     expr    := 'let' IDENT '=' expr 'in' expr | sum

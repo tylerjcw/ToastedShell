@@ -1,7 +1,7 @@
 namespace Tosh.Runtime;
 
-// `TOAST-0006`. Read by `TerminalGlyphs`, which `DiagnosticRenderer` reaches, which a
-// compiled program reaches — so these follow the same reasoning as the diagnostic theme:
+// `TOAST-0006`. Read by `TerminalGlyphs`, which `DiagnosticRenderer` reaches, which the
+// language reaches without a shell — so these follow the same reasoning as the diagnostic theme:
 // presentation data the language ends up naming because error reporting must work without
 // the shell. The root `ToshConfig` that composes them stays on the shell side.
 

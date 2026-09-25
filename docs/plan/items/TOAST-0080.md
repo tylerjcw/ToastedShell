@@ -60,9 +60,11 @@ This item supplies the owner those views borrow from.
 - [ ] Borrowed spans cannot outlive or move independently of their owner, linked to `TOAST-0057`
 - [ ] Dynamic and CLR interop paths have a runtime consumed-state backstop with stable diagnostics
 - [ ] Capturing or sending an owner follows `TOAST-0086`'s transfer rules rather than copying it
-- [ ] Interpreter, compiler, cancellation tests and the differential corpus agree
+- [ ] Interpreter and cancellation tests agree
 
 ## Dependencies
 
 `TOAST-0057` defines safe borrowed views; `TOAST-0059` defines typed raw pointers and the unsafe
 boundary. `TOAST-0086` decides when ownership may cross a concurrent task or channel boundary.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

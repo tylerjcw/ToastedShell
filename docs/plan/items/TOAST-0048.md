@@ -110,7 +110,7 @@ the *Orphans* section has since been overtaken; the *Gaps* section still holds.
 | `var f: func` resolving to `System.Func\`1` — "concrete and wrong" | silently accepted | **rejected** |
 | `stream<int>` resolves to `dynamic` | dynamic | now an unknown-annotation error |
 | `int\|string`, literal types | no representation | unchanged |
-| Bottom type | none | unchanged — [`TOAST-0047`](TOAST-0047.md), which still reproduces verbatim in compile mode |
+| Bottom type | none | unchanged — [`TOAST-0047`](TOAST-0047.md), which still reproduces verbatim |
 
 So the tuple half of this item is done, the function-type half is representable *and*
 writable, and the `func`-resolves-to-a-CLR-type hazard is closed. What is left is the *Gaps*

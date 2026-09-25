@@ -11,7 +11,7 @@ namespace Tosh.Tests;
 /// <remarks>
 /// <para>
 /// Phase B's third bullet asked that higher-order calls be made "reliable". Measured, four
-/// of its six features already compiled, and the two that did not shared one cause: there
+/// of its six features were already typed, and the two that were not shared one cause: there
 /// was no way to write the type of a function. `FunctionType` existed in the bound tree with
 /// a `DisplayName` and was **never constructed**, because the type-name grammar had no
 /// function node — the representation was finished and unreachable.
@@ -21,7 +21,6 @@ namespace Tosh.Tests;
 /// mirrors the declaration syntax and needs no name for a signature used once.
 /// </para>
 /// </remarks>
-[Collection(ConsoleSerialCollection.Name)]
 public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
 {
     private readonly ToshRuntime _runtime;
@@ -48,25 +47,14 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
         }
     }
 
-    /// <summary>
-    /// Compiles strictly, and reports what would have stopped `tosh --compile`.
-    /// </summary>
-    /// <remarks>
-    /// Two different refusals matter here and it is worth not confusing them, because the
-    /// first version of these tests did. <see cref="EmitResult.IsClean"/> answers "did the
-    /// emitter have to fall back to source replay", while `tosh.compile.implicit_dynamic`
-    /// comes from <see cref="TypeChecker.CheckCompileAnnotations"/> and answers "is anything
-    /// here untyped". An unannotated lambda emits perfectly cleanly and is still exactly
-    /// what this item is about, so the annotation check is the one to assert on.
-    /// </remarks>
-    private IReadOnlyList<ToshDiagnostic> CheckAnnotations(string source)
+    /// <summary>The bindings lowering left dynamic without being asked to.</summary>
+    private IReadOnlyList<string> Uninferred(string source)
     {
         var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<function-type-test>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse errors: {string.Join(", ", parse.Diagnostics)}");
 
-        var unit = Lowerer.Lower(parse, _runtime.Commands);
-        return TypeChecker.CheckCompileAnnotations(unit, allowDynamic: false);
+        return DynamicFallbacks.In(parse, _runtime.Commands);
     }
 
     private const string Dbl = "func dbl(x: int) -> int => $x * 2\n";
@@ -101,7 +89,7 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     /// What can be checked when the value arrives is checked: callability and arity.
     /// </summary>
     /// <remarks>
-    /// The parameter *types* are a promise the compiler checks. At run time there is nothing
+    /// The parameter *types* are a promise. At run time there is nothing
     /// to compare them against until the call happens, so rejecting on them here would be
     /// guessing rather than checking.
     /// </remarks>
@@ -135,25 +123,25 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
         => Assert.Equal("tosh.runtime.annotation_unknown_type", await DiagnosticCodeAsync(source));
 
     /// <summary>
-    /// The two shapes that could not compile before now compile with no dynamic fallback.
+    /// The two shapes that could not be typed before are now typed with no dynamic fallback.
     /// </summary>
     /// <remarks>
-    /// These are the item: a function-typed parameter reported `missing_type_annotation`
-    /// because there was no type to write, and a lambda in a variable reported
-    /// `implicit_dynamic` because nothing could describe it.
+    /// These are the item: a function-typed parameter stayed dynamic because there was no
+    /// type to write, and a lambda in a variable stayed dynamic because nothing could
+    /// describe it.
     /// </remarks>
     [Theory]
     [InlineData(Dbl + "func apply(g: func(int) -> int, v: int) -> int => $g($v)\necho (apply &dbl 21)")]
     [InlineData(Dbl + "var f: func(int) -> int = &dbl\necho $f(21)")]
     [InlineData("var f: func(int) -> int = func(x: int) -> int => $x + 1\necho $f(41)")]
     [InlineData("func adder(n: int) -> func(int) -> int {\n return func(x: int) -> int => $x + $n\n}\nvar a: func(int) -> int = (adder 10)\necho $a(32)")]
-    public void A_typed_higher_order_shape_compiles_without_a_dynamic_fallback(string source)
+    public void A_typed_higher_order_shape_has_no_dynamic_fallback(string source)
     {
-        var strictness = CheckAnnotations(source);
+        var fallbacks = Uninferred(source);
 
         Assert.True(
-            strictness.Count == 0,
-            "expected no dynamic fallback, got: " + string.Join(", ", strictness.Select(d => d.Code)));
+            fallbacks.Count == 0,
+            "expected no dynamic fallback, got: " + string.Join(", ", fallbacks));
     }
 
     /// <summary>
@@ -162,17 +150,17 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     /// <remarks>
     /// `func(x: int) -> int => $x + 1` already says what it takes and returns, so requiring
     /// the same signature again on the variable would be asking the author to repeat
-    /// themselves to tell the compiler what they had told it.
+    /// themselves.
     /// </remarks>
     [Fact]
     public void A_lambda_that_declares_its_types_is_inferred()
     {
-        var strictness = CheckAnnotations("var lam = func(x: int) -> int => $x + 1\necho $lam(41)");
+        var fallbacks = Uninferred("var lam = func(x: int) -> int => $x + 1\necho $lam(41)");
 
         Assert.True(
-            strictness.Count == 0,
+            fallbacks.Count == 0,
             "expected the lambda's own annotations to be enough, got: " +
-            string.Join(", ", strictness.Select(d => d.Code)));
+            string.Join(", ", fallbacks));
     }
 
     /// <summary>
@@ -180,41 +168,36 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     /// </summary>
     /// <remarks>
     /// The control for the test above. Inference that produced a signature here would be
-    /// inventing one — `dynamic` is the honest answer to "this was not stated", and the
-    /// diagnostic is how the compiler asks for it to be.
+    /// inventing one — `dynamic` is the honest answer to "this was not stated".
     /// </remarks>
     [Fact]
     public void An_unannotated_lambda_is_still_dynamic()
     {
-        var strictness = CheckAnnotations("var lam = func(x) => $x + 1\necho $lam(41)");
+        var fallbacks = Uninferred("var lam = func(x) => $x + 1\necho $lam(41)");
 
-        Assert.Contains(strictness, diagnostic => diagnostic.Code == "tosh.compile.implicit_dynamic");
+        Assert.Contains("variable 'lam'", fallbacks);
     }
 
     /// <summary>
-    /// Controls: the four higher-order features that already compiled still do.
+    /// Controls: the four higher-order features that were already typed still are.
     /// </summary>
     /// <remarks>
     /// Measured before this item started, to find out how much of Phase B's bullet was
     /// actually unreliable. The answer was: one missing type and four working features.
-    ///
-    /// `match` narrowing was a fifth, and running it rather than only compiling it is how
-    /// `TOAST-0065` was found — it compiles and yields null. It is a recorded divergence
-    /// rather than a control here, because it is not something this item keeps working.
     /// </remarks>
     [Theory]
     [InlineData("interface Drawable { func Draw() -> string }\nclass Box fulfills Drawable { func Draw() -> string => \"box\" }\necho (new Box()).Draw()")]
     [InlineData("union Result {\n    Ok(value)\n    Error(message)\n}\nvar s: Result = Result.Ok(42)\necho $s.Variant")]
     [InlineData("class Holder<T> { prop V: T\n    func Get() -> T => $this.V\n}\nvar b = new Holder<int>()\n$b.V = 7\necho $b.Get()")]
     [InlineData("class K { func M(x: int) -> int => $x + 1 }\nvar k = new K()\necho $k.M(41)")]
-    public void The_features_that_already_compiled_still_compile(string source)
+    public void The_features_that_were_already_typed_still_are(string source)
     {
-        var strictness = CheckAnnotations(source);
+        var fallbacks = Uninferred(source);
 
         Assert.True(
-            strictness.Count == 0,
-            "a feature that compiled before this item no longer does: " +
-            string.Join(", ", strictness.Select(d => d.Code)));
+            fallbacks.Count == 0,
+            "a feature that was typed before this item no longer is: " +
+            string.Join(", ", fallbacks));
     }
 
     // --- A return annotation describes the returned value (`TOSH-0010`) ---

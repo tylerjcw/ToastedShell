@@ -54,7 +54,7 @@ the protocols it wants, and binary operations must state their operand and resul
 - [ ] Generic inference and constraints bind the distinct type, not its underlying representation
 - [ ] CLR/native ABI transparency is opt-in and documented separately from language conversion
 - [ ] `typeof`, describe-type, help, LSP and emitted metadata expose both identity and representation
-- [ ] Interpreter, compiler and differential fixtures cover two same-representation types
+- [ ] Interpreter tests cover two same-representation types
 
 ## Relationship to existing types
 
@@ -62,3 +62,5 @@ Ordinary `type Name = Base` aliases keep their transparent spelling role. Refine
 validated-subset role. `distinct type` composes with a refinement when nominal identity is the
 point. `TOAST-0055` must reject an unknown constraint rather than letting a misspelled protocol
 silently weaken a distinct type.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

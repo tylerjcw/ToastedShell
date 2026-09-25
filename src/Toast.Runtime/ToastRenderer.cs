@@ -59,9 +59,9 @@ public static class ToastRenderer
     /// </summary>
     /// <remarks>
     /// A trait rather than a magic method name, because rendering is a capability a type
-    /// *declares*: the compiler can check it, and a native target can dispatch it without
-    /// reflection. The check goes through <see cref="IShellTypeCheckable"/>, so the value
-    /// answers for itself and this type needs neither the engine nor a registered hook.
+    /// *declares*, and the binder can check a declaration. The check goes through
+    /// <see cref="IShellTypeCheckable"/>, so the value answers for itself and this type needs
+    /// neither the engine nor a registered hook.
     /// </remarks>
     public const string DisplayTraitName = "Display";
 
@@ -106,25 +106,6 @@ public static class ToastRenderer
     /// explicit instruction, and silently ignoring one — which is what happens today —
     /// produces text nobody asked for from a program that reports success.
     /// </exception>
-    /// <summary>
-    /// Renders an interpolation hole: the format clause, then the alignment — `TOAST-0022`.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// One entry point for both backends, for the same reason <see cref="Render(object?, string?)"/>
-    /// is one: the compiled side reached the renderer but never passed the hole's clauses to
-    /// it, so `$"{42:X}"` was `2A` interpreted and `42` compiled. A second implementation is
-    /// how that happened; a shared one is what stops it happening again.
-    /// </para>
-    /// <para>
-    /// Alignment pads the rendered text and is applied after formatting, so a clause that
-    /// changes the text's length is padded at its final width. Zero means no padding, which
-    /// lets the compiled caller pass a plain <c>int</c> rather than a nullable.
-    /// </para>
-    /// </remarks>
-    public static string RenderHole(object? value, string? format, int alignment)
-        => Align(Render(value, format), alignment);
-
     /// <summary>Pads rendered text to an interpolation hole's alignment.</summary>
     /// <remarks>Positive pads on the left, negative on the right, zero not at all.</remarks>
     public static string Align(string text, int alignment) => alignment switch
@@ -412,18 +393,6 @@ public static class ToastRenderer
             case IShellInvocableObject invocable when TryWriteDeclaredRendering(builder, invocable, depth, visited):
                 return;
 
-            // `TOAST-0022`. A compiled class is a real emitted CLR type, not a
-            // `ToshClassInstance`, so it cannot answer `IShellInvocableObject` — and fell
-            // through to the CLR-object path, which prints the type name. `Display` was the
-            // first place that showed, but the gap is the object model, not the renderer.
-            case not null when TryWriteEmittedRendering(builder, value, depth, visited):
-                return;
-
-            // And with no declaration to render through, an emitted class still describes
-            // itself the way the interpreted one does — `Plain { N = 5 }`, not `Plain`.
-            case not null when TryWriteEmittedStructure(builder, value, depth, visited):
-                return;
-
             // Records before dictionaries. A `{| … |}` literal is an `ExpandoObject`, and
             // **a string-keyed dictionary is a record** — that is the existing convention,
             // encoded in `ShellRecordUtilities`, and a Tōast dictionary literal is
@@ -455,11 +424,7 @@ public static class ToastRenderer
                 return;
 
             default:
-                // `value` is declared non-nullable and is dereferenced above the switch,
-                // so it cannot be null here. The `not null` guards on two arms above are
-                // what narrow this one, by making the compiler treat their complement as
-                // possibly-null.
-                WriteClrObject(builder, value!, depth, visited);
+                WriteClrObject(builder, value, depth, visited);
                 return;
         }
     }
@@ -590,198 +555,6 @@ public static class ToastRenderer
     /// this writes verbatim.
     /// </para>
     /// </remarks>
-    /// <summary>
-    /// Renders a *compiled* class through its own declaration — <c>TOAST-0022</c>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Applies the same rule <see cref="ToshClassInstance"/> applies interpreted, and in the
-    /// same order: the <c>Display</c> trait's method first, then a declared <c>ToString</c>.
-    /// A trait is emitted as a CLR interface and the class implements it, so "uses Display"
-    /// is a real interface check rather than a guess from the presence of a method — a class
-    /// that happens to declare <c>render</c> without the trait is not a Display.
-    /// </para>
-    /// <para>
-    /// Only types the compiler emitted are considered. Without that guard this would change
-    /// how every CLR object renders, which is a far larger claim than the one being fixed.
-    /// </para>
-    /// </remarks>
-    private static bool TryWriteEmittedRendering(
-        StringBuilder builder,
-        object value,
-        int depth,
-        HashSet<object>? visited)
-    {
-        var type = value.GetType();
-        if (type.GetCustomAttribute<ToshTypeAttribute>() is null)
-        {
-            return false;
-        }
-
-        var method = FindEmittedRenderMethod(type);
-        if (method is null)
-        {
-            return false;
-        }
-
-        var rendered = method.Invoke(value, Array.Empty<object?>());
-
-        if (rendered is string text)
-        {
-            builder.Append(text);
-            return true;
-        }
-
-        if (rendered is null)
-        {
-            return false;
-        }
-
-        Write(builder, rendered, format: null, depth + 1, nested: false, visited);
-        return true;
-    }
-
-    /// <summary>
-    /// Renders a compiled class or record structurally — <c>TOAST-0022</c>.
-    /// </summary>
-    /// <remarks>
-    /// The interpreted instance is an <see cref="IShellRecordObject"/>, so the renderer walks
-    /// its members; an emitted type is a plain CLR type and walked nothing, printing its name.
-    /// The properties are read reflectively here rather than by teaching
-    /// <c>ShellRecordUtilities</c> about CLR objects, because that utility answers for member
-    /// access as well as rendering and this is a claim about rendering only.
-    /// </remarks>
-    private static bool TryWriteEmittedStructure(
-        StringBuilder builder,
-        object value,
-        int depth,
-        HashSet<object>? visited)
-    {
-        var type = value.GetType();
-        if (type.GetCustomAttribute<ToshTypeAttribute>() is not { } marker ||
-            marker.Kind is not ("class" or "record" or "struct"))
-        {
-            return false;
-        }
-
-        // A stored `prop` is emitted as a field and a computed one as a real CLR property, so
-        // both are walked.
-        //
-        // Two rules, and they pull in opposite directions. A `prop` that shadows a base
-        // class's is *two* CLR members and reflection returns both, so the most-derived one
-        // must win — otherwise `class Circle extends Shape` with `K` on each rendered
-        // `Circle { K = c, K = s }`. But the interpreted instance lists inherited members
-        // *first*, so `Derived { A = 1, B = 2 }` rather than `{ B = 2, A = 1 }`. So the
-        // hierarchy is walked twice: downwards to decide which member each name resolves to,
-        // then upwards to lay them out.
-        const BindingFlags declared =
-            BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
-
-        var levels = new List<Type>();
-        for (var level = type; level is not null && level != typeof(object); level = level.BaseType)
-        {
-            levels.Add(level);
-        }
-
-        var chosen = new Dictionary<string, MemberInfo>(StringComparer.Ordinal);
-        foreach (var level in levels)
-        {
-            foreach (var member in VisibleMembers(level, declared))
-            {
-                chosen.TryAdd(member.Name, member);
-            }
-        }
-
-        var fields = new List<KeyValuePair<string, object?>>(chosen.Count);
-        var emitted = new HashSet<string>(StringComparer.Ordinal);
-
-        for (var index = levels.Count - 1; index >= 0; index--)
-        {
-            foreach (var member in VisibleMembers(levels[index], declared))
-            {
-                if (!emitted.Add(member.Name))
-                {
-                    continue;
-                }
-
-                var resolved = chosen[member.Name];
-                fields.Add(new KeyValuePair<string, object?>(
-                    resolved.Name,
-                    resolved is FieldInfo field
-                        ? field.GetValue(value)
-                        : ((PropertyInfo)resolved).GetValue(value)));
-            }
-        }
-
-        // A struct describes itself the way a class does — `Pt { X = 1 }` — rather than the
-        // way a record does. Excluding it from this path left it on the CLR-object fallback,
-        // rendering `p.Pt`: the assembly's namespace, for a type the reader declared.
-        WriteFields(builder, fields, marker.Kind == "record", type.Name, depth, visited);
-        return true;
-    }
-
-    /// <summary>The renderable members one level of an emitted type declares.</summary>
-    /// <remarks>
-    /// Fields and properties both, because a stored `prop` becomes a field and a computed one
-    /// a property. Compiler-generated backing fields are skipped — they carry the same value
-    /// under a name nobody wrote.
-    /// </remarks>
-    private static IEnumerable<MemberInfo> VisibleMembers(Type level, BindingFlags flags)
-    {
-        foreach (var field in level.GetFields(flags))
-        {
-            if (!field.IsSpecialName && !field.Name.StartsWith('<'))
-            {
-                yield return field;
-            }
-        }
-
-        foreach (var property in level.GetProperties(flags))
-        {
-            if (property.GetIndexParameters().Length == 0 && property.CanRead)
-            {
-                yield return property;
-            }
-        }
-    }
-
-    /// <summary>The declaration an emitted type renders through, or null for neither.</summary>
-    private static MethodInfo? FindEmittedRenderMethod(Type type)
-    {
-        var usesDisplay = Array.Exists(
-            type.GetInterfaces(),
-            candidate => string.Equals(candidate.Name, DisplayTraitName, StringComparison.Ordinal));
-
-        if (usesDisplay)
-        {
-            var render = type.GetMethod(
-                DisplayMethodName,
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
-                binder: null,
-                Type.EmptyTypes,
-                modifiers: null);
-
-            if (render is not null)
-            {
-                return render;
-            }
-        }
-
-        // A declared `ToString` — one the author wrote. The compiler emits a default that
-        // answers the class's name (`TOAST-0065`), and that is the fallback structural
-        // rendering exists to beat rather than a rendering declaration to prefer over it, so
-        // it is told apart by the compiler-generated marker rather than by who declared it.
-        var toString = type.GetMethod(nameof(ToString), Type.EmptyTypes);
-        if (toString is null ||
-            toString.DeclaringType != type ||
-            toString.GetCustomAttribute<System.Runtime.CompilerServices.CompilerGeneratedAttribute>() is not null)
-        {
-            return null;
-        }
-
-        return toString;
-    }
-
     private static bool TryWriteDeclaredRendering(
         StringBuilder builder,
         IShellInvocableObject invocable,
@@ -845,13 +618,8 @@ public static class ToastRenderer
     }
 
     /// <summary>
-    /// Writes the <c>Name { … }</c> / <c>{| … |}</c> body once, for either backend.
+    /// Writes the <c>Name { … }</c> / <c>{| … |}</c> body.
     /// </summary>
-    /// <remarks>
-    /// Split out of <see cref="WriteRecordLike"/> so a compiled class can render in the same
-    /// shape without a second copy of it — `TOAST-0022`. A second copy is how the two
-    /// backends came to disagree about interpolation clauses, and this is the same file.
-    /// </remarks>
     private static void WriteFields(
         StringBuilder builder,
         IReadOnlyList<KeyValuePair<string, object?>> fields,

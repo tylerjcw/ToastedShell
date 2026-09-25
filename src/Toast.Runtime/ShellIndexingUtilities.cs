@@ -10,19 +10,11 @@ public static class ShellIndexingUtilities
     /// integer-indexed shape.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Extracted for <c>TS-P1-24</c>, the last of the parallel sync/async internals. The
-    /// asynchronous twin was a full copy of this method differing by one branch — an
-    /// <see cref="IShellRecordObject"/> lookup that must be awaited — so the convergence is the
-    /// shape <c>ReflectionObjectAccessor</c> uses: a shared core with each surface supplying only
-    /// its own record step.
-    /// </para>
-    /// <para>
-    /// A plain async prefix would not have worked. The record lookup sits *after* the integer
+    /// Split before/after the record stage because the record lookup — an
+    /// <see cref="IShellRecordObject"/> call that must be awaited — sits *after* the integer
     /// branches, and <see cref="TryGetIntegerIndex"/> accepts a numeric string, so hoisting the
     /// record access to the front would change what <c>$rec["3"]</c> means — element three rather
     /// than the field named "3". Splitting before/after preserves the order exactly.
-    /// </para>
     /// </remarks>
     /// <returns><see langword="true"/> when the value was resolved before the record stage.</returns>
     private static bool TryGetIndexedValueBeforeRecords(
@@ -144,28 +136,6 @@ public static class ShellIndexingUtilities
         throw new ShellIndexNotSupportedException(
             $"Type '{Describe(target)}' does not support index access with '{Describe(index)}'.",
             isAssignment: false);
-    }
-
-    public static object? GetIndexedValue(object? target, object? index, IndexLookupKind lookupKind = IndexLookupKind.Default)
-    {
-        if (target is null)
-        {
-            throw new InvalidOperationException("Cannot index into null.");
-        }
-
-        if (TryGetIndexedValueBeforeRecords(target, index, lookupKind, out var early))
-        {
-            return early;
-        }
-
-        if (lookupKind != IndexLookupKind.ByValue &&
-            index is string keyText &&
-            ShellRecordUtilities.TryGetValue(target, keyText, out var recordValue))
-        {
-            return recordValue;
-        }
-
-        return GetIndexedValueAfterRecords(target, index, lookupKind);
     }
 
     public static async ValueTask<object?> GetIndexedValueAsync(

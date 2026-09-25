@@ -632,10 +632,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// <summary>
     /// Run the lowering pass for its side effects on the parse tree
     /// (constant folding stamps <c>FoldedConstant</c> annotations on
-    /// operator nodes the evaluator then short-circuits on). The
-    /// resulting <see cref="Tosh.Language.Binding.BoundUnit"/> is
-    /// discarded for now; future commits will route evaluation through
-    /// it directly. Disabled by <c>TOSH_DISABLE_LOWERER=1</c>.
+    /// operator nodes the evaluator then short-circuits on) and feed the
+    /// resulting <see cref="Tosh.Language.Binding.BoundUnit"/> to the type
+    /// checker. Disabled by <c>TOSH_DISABLE_LOWERER=1</c>.
     /// </summary>
     private void ApplyLowering(ParseResult parseResult)
     {
@@ -662,7 +661,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             // disable env var (TOSH_DISABLE_LOWERER) suppresses both
             // — they're implemented as one pipeline. Diagnostics flow
             // through the same renderer the binder uses, at Warning
-            // severity for now (T3 will promote under --compile).
+            // severity.
             if (!string.Equals(
                     Environment.GetEnvironmentVariable("TOSH_DISABLE_TYPECHECK"),
                     "1",
@@ -868,11 +867,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
-    /// Evaluate a previously-lowered <see cref="BoundUnit"/>.
-    /// v1 delegates to the parse-tree evaluator using the unit's
-    /// <see cref="BoundUnit.ParseResult"/>;
-    /// future commits will fast-path individual carved-out bound
-    /// shapes without changing this public seam.
+    /// Evaluate a previously-lowered <see cref="BoundUnit"/> by running the
+    /// parse tree it was lowered from (<see cref="BoundUnit.ParseResult"/>).
     /// </summary>
     public IAsyncEnumerable<object?> EvaluateAsync(
         BoundUnit unit,
@@ -1428,11 +1424,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// Positive pads on the left, negative on the right, as .NET composite formatting
     /// has it — <c>$"{$n,8}"</c> right-aligns in eight columns, <c>$"{$n,-8}"</c>
     /// left-aligns. A value wider than the field is never truncated.
-    /// </remarks>
-    /// <summary>Applies an interpolation hole's alignment, through the shared renderer.</summary>
-    /// <remarks>
-    /// `TOAST-0022`. The padding rule lives in `ToastRenderer` so the compiled backend applies
-    /// the same one rather than a copy of it.
     /// </remarks>
     private static string ApplyInterpolationClauses(string text, int? alignment)
         => ToastRenderer.Align(text, alignment ?? 0);
@@ -2412,14 +2403,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// return an unrelated type that merely shares the name.
     /// </para>
     /// <para>
-    /// That is not hypothetical: it is <c>TS-P2-39</c>, the suite's longest-running flake. The
-    /// compiler's emitter tests compile ToastScript into dynamic assemblies named
-    /// <c>ToshTest_{Guid}</c>, one of which declares <c>class Circle</c>. Once such an assembly was
-    /// loaded, an interpreted test declaring its own <c>Circle</c> bound its type parameter to the
-    /// *emitted* type and then failed strict binding against its own instance —
-    /// "produced a value that could not be converted to 'ToshTest_….Circle'". It reproduced only
-    /// when the emitting test ran first, which is why it looked like load-dependent flakiness
-    /// through seven sightings and always passed in isolation.
+    /// That is not hypothetical: it is <c>TS-P2-39</c>, the suite's longest-running flake. Once
+    /// any loaded assembly declared a <c>Circle</c>, a script declaring its own <c>Circle</c>
+    /// bound its type parameter to the foreign type and then failed strict binding against its
+    /// own instance. It reproduced only when that assembly happened to be loaded first, which is
+    /// why it looked like load-dependent flakiness and always passed in isolation.
     /// </para>
     /// <para>
     /// Checking the shell's own types first is also the right precedence on its own terms: a name
@@ -2669,12 +2657,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
-    /// Public wrapper around the internal scoped type resolver. Used by the
-    /// compiled-code host (`ToshHost.NewObject`) to resolve verbatim
-    /// type-argument strings (e.g. <c>"int"</c>, <c>"list&lt;string&gt;"</c>)
-    /// against the engine's named-type registry and CLR fallback.
-    /// </summary>
-    /// <summary>
     /// Whether a qualified name in a type test resolves to anything — <c>TOAST-0105</c>.
     /// </summary>
     /// <remarks>
@@ -2693,16 +2675,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                TryGetRefinementType(name, out _);
     }
 
-    public Type? TryResolveTypeName(string name) => ResolveTypeName(name);
-
-    /// <summary>
-    /// Resolves a constructable shell type by its complete source spelling. The compiled-code
-    /// host uses this for collection factories such as <c>list&lt;float&gt;</c>, whose variadic
-    /// construction semantics cannot be reproduced by invoking the CLR <c>List&lt;T&gt;</c>
-    /// constructors directly.
-    /// </summary>
-    public bool TryResolveShellStaticTypeName(string name, out IShellStaticType definition) =>
-        TryResolveShellStaticType(name, out definition);
+    internal Type? TryResolveTypeName(string name) => ResolveTypeName(name);
 
     /// <summary>UTF-8 without a byte-order mark, for everything redirection writes.</summary>
     /// <remarks>

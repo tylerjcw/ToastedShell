@@ -174,22 +174,26 @@ dotnet run --project src/Tosh.Cli -- -c "echo hello"  # run a one-liner
 | Project | Purpose |
 |---------|---------|
 | `src/Tosh.Cli` | CLI entry point, REPL, startup loader |
-| `src/Tosh.Runtime` | Shared runtime types, attributes, value model |
-| `src/Tosh.Stdlib` | Built-in commands organized by category |
-| `src/Tosh.Language` | Lexer, parser, binder, evaluator (ToshEngine) |
-| `src/Tosh.Compiler` | `tosh --compile` IL emitter (PersistedAssemblyBuilder) |
-| `src/Tosh.Compiler.Runtime` | Host shim used by compiled assemblies (`ToshHost`) |
-| `src/Tosh.Sdk` / `src/Tosh.Sdk.Tasks` | MSBuild SDK + tasks for `.toshproj` |
-| `src/Tosh.Templates` | `dotnet new tosh-app` / `tosh-lib` templates |
+| `src/Toast.Runtime` | Tōast language runtime: value model, type system, operators, CLR interop, host contracts |
+| `src/Tosh.Runtime` | Shell services: display engine, help catalog, jobs, session configuration |
+| `src/Toast.Stdlib` | Language half of the standard library |
+| `src/Tosh.Stdlib` | Shell half of the standard library, organized by category |
+| `src/Tosh.Language` | Lexer, parser, binder, type checker, evaluator (ToshEngine) |
 | `src/Tosh.LanguageServices` | LSP/MCP language features |
 | `src/Tosh.Lsp` | Language Server Protocol server |
 | `src/Tosh.Mcp` | Model Context Protocol server |
 | `src/Tosh.Dap` | Debug Adapter Protocol server |
 | `src/Tosh.Tui` | Terminal UI widgets and runtime |
-| `src/Tosh.Core` | Legacy shim (display profile registry only); being phased out |
+| `src/Tosh.Tome` | Tōme terminal text editor |
+| `src/Tosh.Client` | Client helpers for programs that talk to TōSh (TSSP) |
+| `src/Tosh.Crumb` | Crumb, a TōSh-native pacman + AUR wrapper |
 | `tests/Tosh.Tests` | Unit and integration tests |
 | `tests/Tosh.LspFixture` | LSP test fixtures |
+| `tools/Tosh.ParityCheck` | Build-time advisory: command docs and operator parity |
 | `tools/Tosh.DevCompanion` | Dev-only MCP memory server for AI agents (see below) |
+
+TōSh has no compiler: scripts always run on the evaluator. A single-file
+distribution packs the TōSh runtime together with the script files.
 
 ## Dev Companion (Agent Memory Store)
 
@@ -476,7 +480,7 @@ trait body), so trait-provided arithmetic is not a way to satisfy `Add`.
 
 The same constraint names also work as right-hand operands for the
 `is` / `is-not` operators on values, so runtime checks reuse the same
-registry as compile-time generic-parameter validation:
+registry as generic-parameter validation:
 
 ```tosh
 var x = 42

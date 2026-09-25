@@ -25,8 +25,7 @@ namespace Tosh.Runtime;
 /// This keeps the property the 15-digit round broke. Round-tripping is injective: two doubles
 /// that differ have different shortest spellings, so they get different decimals and never
 /// compare equal. Rounding to 15 digits collapsed <c>0.3</c> and <c>0.30000000000000004</c>
-/// onto one value, which is the fold-versus-runtime disagreement
-/// <c>ConstantFolder.NumericEq</c> documents, and made <c>2.718281828459045</c> look like it
+/// onto one value — a fold-versus-runtime disagreement the constant folder once had — and made <c>2.718281828459045</c> look like it
 /// carried digits its double had not kept (<c>ToshLexer.CarriesMorePrecisionThanDouble</c>).
 /// </para>
 /// </remarks>

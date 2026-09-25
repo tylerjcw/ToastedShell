@@ -1297,9 +1297,8 @@ module Build {
         ##   90 MB per publish.
         ##
         ##   Only this repository's own products are listed. `~/.net` also holds the extraction
-        ##   directories of every ToastScript program the reader has compiled — `hello`,
-        ##   `mandelbrot` and friends — and those are theirs to keep or remove, not a build
-        ##   script's business.
+        ##   directories of other single-file apps, and those are theirs to keep or remove, not a
+        ##   build script's business.
         const ExtractedApps = [
             "Tosh.Cli", "Tosh.Lsp", "Tosh.Mcp", "Tosh.Tome", "Tosh.Crumb",
             "tosh", "tosh-lsp", "tosh-mcp", "tosh-dap", "tosh-devcompanion", "tome", "crumb",

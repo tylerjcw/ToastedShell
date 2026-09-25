@@ -24,10 +24,7 @@ namespace Tosh.Language.Binding;
 /// runtime. The checker is deliberately conservative: it never
 /// fabricates a diagnostic when one of the operands is unknown.
 ///
-/// Diagnostics emerge with <see cref="ToshDiagnosticSeverity.Warning"/>
-/// by default. The compile-mode driver (T3) will promote them to
-/// <see cref="ToshDiagnosticSeverity.Error"/> via
-/// <see cref="PromoteSeverity(ToshDiagnostic, ToshDiagnosticSeverity)"/>.
+/// Diagnostics emerge with <see cref="ToshDiagnosticSeverity.Warning"/>.
 /// </summary>
 public static class TypeChecker
 {
@@ -160,176 +157,6 @@ public static class TypeChecker
 
         return false;
     }
-
-    /// <summary>
-    /// Compile-mode-only annotation audit. Walks the unit looking
-    /// for <see cref="BoundFunctionDefinition"/> and
-    /// <see cref="BoundVariableDeclaration"/> shapes that lack a
-    /// type annotation, and emits one diagnostic per offence:
-    /// <list type="bullet">
-    ///   <item><c>tosh.compile.missing_type_annotation</c> — a
-    ///     function parameter or return type is missing entirely.
-    ///     Always an error in compile mode.</item>
-    ///   <item><c>tosh.compile.implicit_dynamic</c> — a <c>var</c>
-    ///     declaration was given no annotation and the inferrer
-    ///     could not pin down a concrete type, or its written annotation
-    ///     could not be resolved. Suppressible via
-    ///     <paramref name="allowDynamic"/>.</item>
-    /// </list>
-    /// All emitted diagnostics carry <see cref="ToshDiagnosticSeverity.Error"/>;
-    /// the caller is expected to treat them accordingly.
-    /// </summary>
-    public static IReadOnlyList<ToshDiagnostic> CheckCompileAnnotations(BoundUnit unit, bool allowDynamic)
-    {
-        ArgumentNullException.ThrowIfNull(unit);
-        var diagnostics = new List<ToshDiagnostic>();
-        WalkAnnotations(unit.Root, unit, diagnostics, allowDynamic);
-        return diagnostics;
-    }
-
-    private static void WalkAnnotations(
-        BoundNode node,
-        BoundUnit unit,
-        List<ToshDiagnostic> diagnostics,
-        bool allowDynamic)
-    {
-        switch (node)
-        {
-            case BoundScript s:
-                foreach (var st in s.Statements) WalkAnnotations(st, unit, diagnostics, allowDynamic);
-                break;
-            case BoundBlock b:
-                foreach (var st in b.Statements) WalkAnnotations(st, unit, diagnostics, allowDynamic);
-                break;
-            case BoundModuleDefinition module:
-                WalkAnnotations(module.Body, unit, diagnostics, allowDynamic);
-                break;
-            case BoundIfStatement i:
-                WalkAnnotations(i.ThenBlock, unit, diagnostics, allowDynamic);
-                if (i.ElseBlock is not null) WalkAnnotations(i.ElseBlock, unit, diagnostics, allowDynamic);
-                break;
-            case BoundForStatement f:
-                WalkAnnotations(f.Body, unit, diagnostics, allowDynamic);
-                break;
-            case BoundWhileStatement w:
-                WalkAnnotations(w.Body, unit, diagnostics, allowDynamic);
-                break;
-            case BoundFunctionDefinition fn:
-                CheckFunctionAnnotations(fn, unit, diagnostics);
-                WalkAnnotations(fn.Body, unit, diagnostics, allowDynamic);
-                break;
-            case BoundVariableDeclaration decl when !allowDynamic:
-                CheckVarAnnotation(decl, unit, diagnostics);
-                break;
-        }
-    }
-
-    private static void CheckFunctionAnnotations(
-        BoundFunctionDefinition fn,
-        BoundUnit unit,
-        List<ToshDiagnostic> diagnostics)
-    {
-        // Return type must be annotated in compile mode. Missing
-        // annotation -> ReturnTypeName is null. Explicit `dynamic` /
-        // `any` / `object` annotations are an opt-in and stay legal.
-        if (fn.ReturnTypeName is null)
-        {
-            diagnostics.Add(new ToshDiagnostic(
-                Code: "tosh.compile.missing_type_annotation",
-                Title: $"Function '{fn.Name}' is missing a return-type annotation.",
-                SourceName: (unit.ParseResult as ParseResult)?.SourceName,
-                SourceText: (unit.ParseResult as ParseResult)?.SourceText,
-                Span: fn.Span,
-                Help: "annotate the return type, e.g. `func " + fn.Name + "(...) -> int { ... }`. Use `dynamic` to opt out explicitly.",
-                Severity: ToshDiagnosticSeverity.Error,
-                Category: ToshDiagnosticCategory.Type,
-                Lifecycle: ToshDiagnosticLifecycle.Preview));
-        }
-
-        for (var i = 0; i < fn.Parameters.Count; i++)
-        {
-            var p = fn.Parameters[i];
-            if (p.Symbol.DeclaredType.IsDynamic && !ParameterIsExplicitlyDynamic(fn, i))
-            {
-                diagnostics.Add(new ToshDiagnostic(
-                    Code: "tosh.compile.missing_type_annotation",
-                    Title: $"Parameter '{p.Name}' of '{fn.Name}' is missing a type annotation.",
-                    SourceName: (unit.ParseResult as ParseResult)?.SourceName,
-                    SourceText: (unit.ParseResult as ParseResult)?.SourceText,
-                    Span: p.Span,
-                    Help: $"annotate the parameter, e.g. `{p.Name}: int`. Use `dynamic` to opt out explicitly.",
-                    Severity: ToshDiagnosticSeverity.Error,
-                    Category: ToshDiagnosticCategory.Type,
-                    Lifecycle: ToshDiagnosticLifecycle.Preview));
-            }
-        }
-    }
-
-    /// <summary>
-    /// True when the syntax-level parameter explicitly carries the
-    /// <c>dynamic</c> annotation (the resolver reduces both
-    /// <c>dynamic</c> and absent annotations to
-    /// <see cref="BoundType.Dynamic"/>, so we have to peek at the
-    /// captured <see cref="BoundParameter.TypeName"/> to tell them
-    /// apart).
-    /// </summary>
-    private static bool ParameterIsExplicitlyDynamic(BoundFunctionDefinition fn, int index)
-    {
-        var name = fn.Parameters[index].TypeName;
-        if (string.IsNullOrEmpty(name)) return false;
-        var trimmed = name.Trim();
-        return string.Equals(trimmed, "dynamic", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "any", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "object", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void CheckVarAnnotation(
-        BoundVariableDeclaration decl,
-        BoundUnit unit,
-        List<ToshDiagnostic> diagnostics)
-    {
-        // Explicit `: dynamic` is an intentional opt-out and must
-        // not be reported as implicit dynamic.
-        if (decl.AnnotatedDynamic) return;
-
-        // An unresolved annotation may have a concrete initializer. Lowering retains that
-        // inferred implementation type as a best effort, but it must not erase the failed
-        // source-level contract from the compile audit.
-        if (!decl.HasUnresolvedTypeAnnotation && !decl.Symbol.DeclaredType.IsDynamic) return;
-
-        // `TOAST-0076`. An annotation that failed to resolve is a different report from no
-        // annotation at all. Telling a reader who wrote `var v: M.Box` that the variable
-        // "has no type annotation", and advising them to add one, describes neither what
-        // happened nor anything they can do — the obvious reply is "but I did", and the real
-        // cause appears nowhere.
-        var annotated = decl.HasUnresolvedTypeAnnotation;
-        var annotationName = decl.Symbol.DeclaredTypeName;
-
-        diagnostics.Add(new ToshDiagnostic(
-            Code: "tosh.compile.implicit_dynamic",
-            Title: annotated
-                ? $"Variable '{decl.Symbol.Name}' is annotated "
-                    + (string.IsNullOrEmpty(annotationName) ? "with a type" : $"'{annotationName}'")
-                    + " but the annotation could not be resolved to a concrete type."
-                : $"Variable '{decl.Symbol.Name}' has no type annotation and the inferrer could not pin down a concrete type.",
-            SourceName: (unit.ParseResult as ParseResult)?.SourceName,
-            SourceText: (unit.ParseResult as ParseResult)?.SourceText,
-            Span: decl.Span,
-            Help: annotated
-                ? "check the type name is spelled correctly and is reachable from here, or pass "
-                    + "`--compile-allow-dynamic` to allow implicit dynamic."
-                : "annotate the variable (e.g. `var " + decl.Symbol.Name + ": int = ...`) or pass `--compile-allow-dynamic` to allow implicit dynamic.",
-            Severity: ToshDiagnosticSeverity.Error,
-            Category: ToshDiagnosticCategory.Type,
-            Lifecycle: ToshDiagnosticLifecycle.Preview));
-    }
-
-    /// <summary>
-    /// Convenience for callers (compile mode, strict CI runners) that
-    /// want all type-check warnings flipped to errors.
-    /// </summary>
-    public static ToshDiagnostic PromoteSeverity(ToshDiagnostic diagnostic, ToshDiagnosticSeverity severity) =>
-        diagnostic with { Severity = severity };
 
     // ── walker ────────────────────────────────────────────────
 
@@ -970,7 +797,7 @@ public static class TypeChecker
         }
 
         ctx.Diagnostics.Add(new ToshDiagnostic(
-            Code: "tosh.compile.void_function_produces_output",
+            Code: "tosh.type.void_function_produces_output",
             Title: $"Function '{name}' returns 'void' and cannot {what}.",
             SourceName: (ctx.Unit.ParseResult as ParseResult)?.SourceName,
             SourceText: (ctx.Unit.ParseResult as ParseResult)?.SourceText,
@@ -2424,7 +2251,7 @@ public static class TypeChecker
         // checker via the `RefinementType` shape. For assignability
         // we unwrap the wrapper and compare against the base; the
         // refinement clauses themselves are validated dynamically
-        // by the runtime/IL path on the actual value.
+        // by the runtime on the actual value.
         if (from is RefinementType frt) return IsAssignable(frt.Base, to, out reason);
         if (to is RefinementType trt) return IsAssignable(from, trt.Base, out reason);
 
@@ -2524,8 +2351,8 @@ public static class TypeChecker
             if (IsNumericWidening(fc, tc)) return true;
             // Quantity annotations intentionally parse shell/argv strings at
             // runtime. Treat that documented conversion as assignable so the
-            // preview checker does not warn on `in-feet "2mi"` even though both
-            // interpreted and compiled boundaries accept it.
+            // preview checker does not warn on `in-feet "2mi"` even though the
+            // runtime accepts it.
             if (fc == typeof(string) && typeof(Quantity).IsAssignableFrom(tc)) return true;
             // A nullable<T> slot accepts T.
             if (to is NullableType nt && nt.Inner.ClrType == fc) return true;

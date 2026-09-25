@@ -8,9 +8,8 @@ namespace Tosh.Language.Binding;
 /// <summary>
 /// Light static type inference for the lowered tree. The goal is not
 /// soundness — anything we can't prove stays <see cref="BoundType.Dynamic"/>,
-/// matching the dynamic-by-default policy. It exists so the IL backend
-/// can emit unboxed numeric paths through the most common shape:
-/// <c>1..N | where _ &gt; k | sort | first M</c>.
+/// matching the dynamic-by-default policy. It feeds the type checker,
+/// constant folding, and editor type information.
 ///
 /// Rules implemented:
 ///   • Literal types are taken verbatim from <see cref="BoundLiteral.Type"/>.

@@ -3,8 +3,7 @@ using System.Reflection;
 namespace Tosh.Runtime;
 
 /// <summary>
-/// Coarse, compile-time-relevant classification of a command for the future
-/// "compiled ToastScript" partition described in <c>docs/COMPILED_TOSH.md</c>.
+/// Coarse classification of a command by standard-library area.
 ///
 /// The buckets here parallel the future <c>Tosh.Stdlib.*</c> assembly split:
 /// each value names the standard-library category a command would live in
@@ -59,13 +58,12 @@ public enum StdlibCategory
 }
 
 /// <summary>
-/// Marks a command's standard-library bucket — i.e. the future <c>Tosh.Stdlib.*</c>
-/// assembly it would live in once the language and shell are split apart
-/// (<c>docs/COMPILED_TOSH.md</c>).
+/// Marks a command's standard-library bucket — i.e. the <c>Tosh.Stdlib.*</c>
+/// area it belongs to once the language and shell are split apart.
 ///
 /// This attribute is additive and orthogonal to <see cref="CommandCategoryAttribute"/>:
 /// <c>CommandCategory</c> remains the user-facing help-grouping label;
-/// <c>Stdlib</c> is the compile-time, binding-relevant classification.
+/// <c>Stdlib</c> is the structural classification.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class StdlibAttribute(StdlibCategory category) : Attribute
@@ -124,9 +122,6 @@ public static class StdlibCategoryResolver
 /// emits a warning with code <c>tosh.shell_only</c>. The warning is hushable
 /// via <c># hush tosh.shell_only</c>, scope-level hush, or
 /// <c>$tosh.Config.Diagnostics.Hushed</c>.
-///
-/// In a future compiled-ToastScript build, calling a <c>[ShellOnly]</c>
-/// command will be a compile-time error (see <c>docs/COMPILED_TOSH.md</c>).
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class ShellOnlyAttribute(string? reason = null) : Attribute
@@ -248,7 +243,7 @@ public sealed class CommandAliasAttribute(string canonicalName) : Attribute
 
 /// <summary>
 /// Streaming/throughput contract for a pipeline command. Surfaced in help
-/// topics and metadata exports so users and the compiler can reason about
+/// topics and metadata exports so users and tools can reason about
 /// which builtins materialise the whole input vs. flow row-by-row.
 /// </summary>
 public enum StreamingBehavior
@@ -276,9 +271,9 @@ public enum StreamingBehavior
 }
 
 /// <summary>
-/// Declares the command's streaming behaviour. Used by help, by the
-/// streaming display sink, and by the future compiler/binder to reject
-/// eager commands on lazy-only pipelines.
+/// Declares the command's streaming behaviour. Used by help and by the
+/// streaming display sink; the binder could use it to reject eager commands
+/// on lazy-only pipelines.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class CommandStreamingAttribute(StreamingBehavior behavior) : Attribute

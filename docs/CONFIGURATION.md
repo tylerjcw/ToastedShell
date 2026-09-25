@@ -195,7 +195,7 @@ $tosh.Config.History.IgnoreLeadingSpace = false
 execution frames in one asynchronous flow. The default and safe maximum
 are both `128`; a session may choose a stricter value from `1` through
 `128`. The limit covers functions, methods, lambdas, constructors, and
-nested `eval`/`source` execution in both interpreted and compiled code.
+nested `eval`/`source` execution.
 Exceeding it raises the structured
 `tosh.runtime.recursion_limit_exceeded` diagnostic without terminating
 the shell process.

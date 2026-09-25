@@ -132,10 +132,9 @@ public sealed class ToshDeferAggregateException : AggregateException
 }
 
 /// <summary>
-/// Collects failures for one defer-aware scope. This public, deliberately
-/// small API is also called by generated IL.
+/// Collects failures for one defer-aware scope.
 /// </summary>
-public sealed class ToshDeferFailureState
+internal sealed class ToshDeferFailureState
 {
     private readonly object _owner = new();
     private readonly List<Exception> _cleanupFailures = [];

@@ -130,7 +130,7 @@ and exhaustive matches contribute reachability facts.
 - [ ] Branch joins compute the safe common type and do not adopt a type from a path that may not run
 - [ ] Impossible tests and unreachable arms have stable diagnostics without rejecting dynamic `Any` code
 - [ ] LSP hover/completion shows the narrowed type at the use site
-- [ ] Interpreter and compiler consume the same checked facts; the differential corpus covers each join
+- [ ] The interpreter and the type checker consume the same checked facts, with a test for each join
 
 ## Dependencies
 
@@ -244,3 +244,5 @@ One thing worth stating, because it looks like a counterexample: a member lookup
 refinement reports against the *base* (`Member 'Nope' was not found on type 'Int32'`). That is
 correct. A refinement adds a predicate, not members, so identity is preserved while member
 resolution passes through — and there is a test for each half so the distinction is not lost.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

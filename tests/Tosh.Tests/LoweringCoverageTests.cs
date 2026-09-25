@@ -9,10 +9,9 @@ namespace Tosh.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Lowering and emitting are different questions. A construct the compiler cannot emit is
-/// an ordinary gap; a construct that makes the *lowerer* throw produces no IR for the whole
-/// file, and everything downstream — the emitter, and any tool that reads the tree — sees
-/// nothing at all.
+/// A construct the lowerer leaves dynamic is an ordinary gap; a construct that makes the
+/// *lowerer* throw produces no IR for the whole file, and everything downstream — the type
+/// checker, and any tool that reads the tree — sees nothing at all.
 /// </para>
 /// <para>
 /// Both cases here were found by measuring rather than by a bug report: a reflective walk
@@ -65,9 +64,7 @@ public sealed class LoweringCoverageTests
     /// </summary>
     /// <remarks>
     /// It threw `Unknown class member kind: ClassBindMemberSyntax`, so `Sdl.tosh`,
-    /// `Gl.tosh`, `Gtk.tosh` and `System.tosh` produced no IR at all. Emitting one is still
-    /// out of scope — bind blocks are not CLR-emittable and stay Tier 3 — which is exactly
-    /// the distinction that was being conflated.
+    /// `Gl.tosh`, `Gtk.tosh` and `System.tosh` produced no IR at all.
     /// </remarks>
     [Fact]
     public void A_bind_block_in_a_class_lowers()
@@ -92,13 +89,9 @@ public sealed class LoweringCoverageTests
     /// `...` in pipeline-stage position lowers, and is not a dynamic node.
     /// </summary>
     /// <remarks>
-    /// `TOAST-0032` added the stage form and taught only the interpreter. The lowerer made
-    /// it a `BoundDynamicExpression`, and the emitter then refused the entire unit —
-    /// "dynamic argument expressions are not yet emitted", no output written.
-    ///
-    /// That is worse than an ordinary gap, because `...` is the spelling `TOAST-0028` and
-    /// `TOAST-0039` tell people to migrate onto. Code written against the current
-    /// collection-shape rule could not be compiled.
+    /// `TOAST-0032` added the stage form and taught only the interpreter; the lowerer made
+    /// it a `BoundDynamicExpression`. `...` is the spelling `TOAST-0028` and `TOAST-0039`
+    /// tell people to migrate onto, so the checker should see it.
     /// </remarks>
     [Fact]
     public void A_pipeline_head_spread_lowers()

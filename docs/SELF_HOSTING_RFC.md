@@ -1,8 +1,12 @@
 # Self-Hosting Tōast — Architecture RFC
 
-**Status:** Exploratory design. Not scheduled. Assumes Tōast and TōSh are
-finished, stable, and supported by a comprehensive conformance corpus before
-bootstrap work begins.
+**Status:** Withdrawn except for Phase A. `TOAST-ARCH-01`
+([COMPILER_DECOMMISSIONING_PLAN.md](COMPILER_DECOMMISSIONING_PLAN.md)) decided that
+Tōast will not have a compiler, so the compilation targets, compiler architecture,
+bootstrap, and Phases B–G below will not be built. What remains in force is Phase A —
+the portable-semantics specification — and the value, type and runtime model it is
+written against, which plan items and tests still cite. Single-file distribution is the
+TōSh runtime packed together with the script files.
 
 ## Summary
 

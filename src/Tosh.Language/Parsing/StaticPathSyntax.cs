@@ -64,8 +64,8 @@ internal static class StaticPathSyntax
     }
 
     /// <summary>
-    /// Rewrites a path written with <c>::</c> into the canonical dotted spelling that resolution,
-    /// lowering and the compiler all already understand. Text without the operator is returned
+    /// Rewrites a path written with <c>::</c> into the canonical dotted spelling that resolution
+    /// and lowering already understand. Text without the operator is returned
     /// unchanged.
     /// </summary>
     internal static string Canonicalize(string text) =>

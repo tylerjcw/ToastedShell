@@ -9,10 +9,9 @@ namespace Tosh.Tests;
 /// <para>
 /// The document had no conformance statement, no normative/informative distinction, and no
 /// definition of "must" — a word it used a dozen times in ordinary prose. So a reader
-/// implementing a backend could not tell a requirement from an explanation from a
-/// description of a bug awaiting a fix, and `TOAST-0030`'s "the compiled backend does not
-/// implement five of these" read as "fails five paragraphs" rather than "fails five
-/// requirements".
+/// implementing the language could not tell a requirement from an explanation from a
+/// description of a bug awaiting a fix, and "does not implement five of these" read as
+/// "fails five paragraphs" rather than "fails five requirements".
 /// </para>
 /// <para>
 /// These are guards on the legend rather than on the prose. What they can check is that

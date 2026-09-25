@@ -61,7 +61,6 @@ untangling logic.
 | `DisplayEngine.cs` | 4,308 |
 | `ToshClassDefinition.cs` | 3,769 |
 | `ToshLanguageFeatures.cs` | 3,363 |
-| `ToshHost.cs` | 3,042 |
 
 The first two are two-thirds of the language project. Split into partial classes by
 concern — statements, expressions, declarations, classes, native interop, diagnostics
@@ -124,11 +123,11 @@ names. They are the checklist for the rename, not an obstacle to it.
 
 ## Phase B — The evaluator
 
-> **Exit achieved 2026-08-24.** The typed readiness program at
-> `bench/probes/compiler_shape.tosh` compiles and runs through `--profile pure` with output
-> identical to the interpreter. Artifact audits confirm that the generated assembly and
-> dependency manifest reference `Tosh.Runtime` but neither `Tosh.Language` nor
-> `Tosh.Compiler.Runtime`. `TOAST-0038` records the implementation and regression tests.
+> **Exit criterion withdrawn 2026-09-25.** Phase B's exit was defined as the typed readiness
+> program `bench/probes/compiler_shape.tosh` running through the compiler's `pure` profile.
+> The compiler is decommissioned (`TOAST-ARCH-01`,
+> [COMPILER_DECOMMISSIONING_PLAN.md](COMPILER_DECOMMISSIONING_PLAN.md)), so the evaluator work
+> below stands on its own.
 
 ### The evidence
 
@@ -159,9 +158,9 @@ method. Dispatch becomes a virtual call rather than a thirty-nine-case switch, e
 state machine is small, and shapes that cannot suspend are genuinely synchronous
 rather than special-cased.
 
-Two things make it more feasible than it sounds: the IR exists (`Tosh.Compiler.IR`),
-and `TS-P3-23`'s differential corpus already compares interpreted against compiled
-results — the harness this work wants.
+Two things make it more feasible than it sounds: the bound IR exists
+(`Tosh.Language.Binding`), and `EvaluatorDifferentialTests` already compares one
+evaluation path against another — the harness this work wants.
 
 ### What it must not break
 
@@ -173,7 +172,6 @@ Each of these has a scar on the board:
 - **Cancellation**, threaded through every call today.
 - **Native callback re-entrancy** — `NativeCallbackScope` exists because a callback
   cannot throw across the C frames it runs on.
-- **The compiled backend**, which shares the parse tree.
 
 ### Expected result
 
@@ -218,25 +216,11 @@ avoids the work being judged against a target it was never going to reach.
 
 ## Phase 0 — Decisions now settled
 
-- ~~**The compiled backend freezes out of the solution** (option C).~~ **Reversed
-  2026-08-17, and never executed** — `Tosh.Compiler`, `Tosh.Compiler.IR` and
-  `Tosh.Compiler.Runtime` are all still in `Tosh.slnx`, so this was a recorded decision
-  rather than a performed one.
-
-  The reversal is not a change of mind about compiler *work*; it is that the freeze and
-  the stated end goal pointed in opposite directions and nobody had reconciled them.
-  `SELF_HOSTING_RFC.md` puts the existing compiler on the critical path in its very
-  first requirement — *"the existing compiler has to be able to compile the
-  ToastScript-written compiler"* — and its IL bootstrap begins
-  `Existing C# compiler → Tōast compiler IL-0`. Freezing the compiler freezes the route
-  to self-hosting.
-
-  What survives is the sequencing, and the RFC agrees with it: the canonical bound tree
-  and lowered IR are frozen in **Phase C**, and a self-hosted compiler is written
-  against them in Phase D. The compiler is not rewritten now — it is kept building,
-  kept tested, and improved where Phase B requires.
-- **`.toshproj` packages and runs interpreted** when the emitter is gone. That is what
-  it does at runtime anyway; only the MSBuild `ToshCompile` step goes.
+- **The compiled backend is decommissioned** (`TOAST-ARCH-01`, 2026-09-25) — removed from
+  the solution and the tree rather than frozen. This supersedes the 2026-08-17 reversal of
+  the freeze, which kept the compiler building as the route to self-hosting; that route is
+  withdrawn with it. `.toshproj` and the MSBuild SDK went too: single-file distribution is
+  the runtime packed together with the script files.
 - **Diagnostic codes take one prefix, `toast.*`**, with `tosh.*` accepted by `hush`
   indefinitely. A two-prefix split was considered and rejected: `tosh.runtime.*` is
   **327 of 534 codes** and is the genuinely mixed bucket, holding
@@ -245,24 +229,13 @@ avoids the work being judged against a target it was never going to reach.
   unambiguously shell-only (`tui`, `edit`, `config`, `history`, `help`). Move those
   fourteen later if it ever matters.
 
-## Freezing the compiler costs ~10,000 lines of tests — triage them first
+## The compiler's tests — resolved
 
-Eight test files touch the compiler, **10,024 lines** in total, plus the
-`Tosh.ParityCheck` tool. They do not all belong to the emitter:
-
-| Freeze with the emitter | Keep in the build |
-|---|---|
-| `BoundUnitEmitterTests` (3,351) | `ConstantFoldingTests` — tests the *lowerer* |
-| `CompiledDeferSemanticsTests` | `MemberCheckSoundnessTests` — tests the *binder* |
-| `DifferentialExecutionTests` (compiled half) | `ChainedComparisonTests` — language semantics |
-
-Triage before freezing, or ~5,000 lines of tests for code that is staying will be
-switched off by accident.
-
-**The differential harness needs replacing, not mourning.** `TS-P3-23` compares
-interpreted against compiled; freezing removes its second side. The evaluator rewrite
-wants a *new* differential — old evaluator against new — which is a better fit anyway,
-since both sides are then present and expected to agree exactly.
+Decommissioning removed the emitter's tests and kept the ones that test the lowerer, the
+binder and the language (`ConstantFoldingTests`, `MemberCheckSoundnessTests`,
+`ChainedComparisonTests`). The evaluator rewrite's differential harness is
+`EvaluatorDifferentialTests` — one evaluation path against another, both present and
+expected to agree exactly.
 
 ## The specification is its own phase
 
@@ -377,10 +350,10 @@ say so in its first line.**
 | **Generated** | `diagnostic-codes.md`, the command reference | Leave alone; regenerated by `buildtosh spec` |
 | **Live** | `plan/` (the item boards), `TOAST_SEPARATION_PLAN.md`, `SPEC_STATUS.md` | Keep current through the work |
 | **Needs rewriting** | `ARCHITECTURE.md` | Known stale — still describes `Tosh.Core` as present four months after `9d5b852` deleted it. Rewrite around the new boundary |
-| **Freeze with the compiler** | `COMPILED_TOSH.md` (1,023) | Add a header saying it describes a frozen component |
+| ~~**Freeze with the compiler**~~ | Resolved 2026-09-25 | `COMPILED_TOSH.md`, `CLR_ABI_v1.md` and `FIRST_CLASS_DOTNET_STATUS.md` deleted with the compiler (`TOAST-ARCH-01`) |
 | ~~**Decide: merge or archive**~~ | Resolved 2026-08-16 | Both dissolved into `plan/`; live work filed as items, remainder archived, speculation moved to `IDEAS.md` |
 | **Settled RFCs** | `BRACE_DISAMBIGUATION_RFC`, `LINE_EDITOR_RFC`, `SELF_HOSTING_RFC` | Mark decided-and-implemented, or move to an `rfc/` directory |
-| **Verify then keep** | `CONFIGURATION`, `EDITOR_SUPPORT`, `TSSP`, `CLR_ABI_v1`, `RUNTIME_NAMESPACES` | Read once against the code; correct or date-stamp |
+| **Verify then keep** | `CONFIGURATION`, `EDITOR_SUPPORT`, `TSSP`, `RUNTIME_NAMESPACES` | Read once against the code; correct or date-stamp |
 | **Stale, low risk** | `BENCHMARKS` (April, 100 lines), `TUI_ARCHITECTURE`, `TOME` | Re-measure or mark as of-its-date |
 
 The lesson worth encoding: `ARCHITECTURE.md` was written carefully and still drifted

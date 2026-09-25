@@ -56,6 +56,7 @@ The CLR provides all of this; the work is surfacing, not building. Two decisions
 - [ ] The lifetime restriction is enforced with diagnostics rather than documented and unchecked —
       a span cannot be stored, captured, or returned past its backing store
 - [ ] A span reaching the dynamic tier is a diagnostic, not a silent box
-- [ ] Interpreted and compiled agree, in the differential corpus
 - [ ] `§Type System` carries the type and its restrictions; the relationship to `TOAST-0012`'s
       native parameter shapes is stated in one place
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

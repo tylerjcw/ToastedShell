@@ -59,4 +59,5 @@ with `TOAST-0059`, since they arrive with the pointer work.
       the boundary visible where it costs
 - [ ] A fixture loop runs a fixed number of iterations at zero bytes allocated, measured
       rather than asserted by inspection
-- [ ] Interpreted and compiled agree on what is rejected
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

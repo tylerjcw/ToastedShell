@@ -343,8 +343,9 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     /// <summary>
     /// Assembly count when <see cref="_resolutionCache"/> was last valid. A newly loaded
     /// assembly can turn a cached failure into a success, and can shadow a cached success
-    /// with a nearer match — <c>TS-P2-48</c> showed emitted assemblies really do appear
-    /// mid-run — so any change in the count drops the cache wholesale. Same guard the
+    /// with a nearer match — <c>TS-P2-48</c> showed assemblies really do appear mid-run
+    /// (<c>load-assembly</c>, <c>require</c> of a project) — so any change in the count drops
+    /// the cache wholesale. Same guard the
     /// negative cache already uses, rather than a second theory of invalidation.
     /// </summary>
     private int _resolutionCacheAssemblyCount = -1;
@@ -936,18 +937,8 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     /// to nothing at all in the CLR, while `Exception` is a CLR name the index answers.
     /// </para>
     /// <para>
-    /// This exists because the two backends had drifted about which names are real. The
-    /// compiled `new` consulted user-declared types and then <c>Type.GetType</c>, which
-    /// needs an assembly qualifier, so <c>new Error("x")</c> failed with "unknown type
-    /// 'Error'" while the interpreter built one. That single failure produced two of the
-    /// recorded divergences, because <c>try { throw new Error("x") } catch (e) { $e is
-    /// Error }</c> then caught the *resolution failure* and answered false about an
-    /// <see cref="InvalidOperationException"/>.
-    /// </para>
-    /// <para>
-    /// It lives here, in the portable runtime, rather than on the engine: a backend that
-    /// asked the interpreter what a name means would be depending on the interpreter,
-    /// which is what Phase B exists to remove.
+    /// It lives here, in the runtime, rather than on the engine, so the operator evaluator
+    /// answers `is Error` from the same table the language uses to construct one.
     /// </para>
     /// </remarks>
     public static bool TryResolveToastTypeName(string name, out Type? type)
@@ -1379,9 +1370,8 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
         // Attempt to resolve a dotted name as a nested CLR type:
         //   "Foo.Bar" → find type "Foo", then get its nested type "Bar".
-        // This handles compiled tosh module shells, where nested modules
-        // become nested CLR types ("Foo+Bar" in CLR notation) rather than
-        // types with a dotted full name.
+        // A nested type's full name is "Foo+Bar" in CLR notation, so the
+        // dotted form a script writes never matches it directly.
         {
             var dotIdx = name.LastIndexOf('.');
             if (dotIdx > 0)
@@ -1619,25 +1609,16 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <c>TS-P2-39</c>, the suite's longest-running flake, and the general form of it. Compiling
-    /// a script produces an assembly loaded from a byte array whose types carry the script's own
-    /// names. Matching those on the bare name let a compiled unit claim that name for the rest of
-    /// the process: once the emitter tests had loaded a unit declaring <c>enum Fuel</c>, an
-    /// unrelated interpreted script's bare <c>Fuel</c> resolved to it — so a name that should not
-    /// have resolved <i>at all</i> did, and tests asserting a failure stopped failing.
+    /// <c>TS-P2-39</c>. An assembly loaded from a byte array carries whatever names its author
+    /// chose, and matching those on the bare name let it claim that name for the rest of the
+    /// process: a bare <c>Fuel</c> in an unrelated script resolved to an in-memory assembly's
+    /// <c>enum Fuel</c> — so a name that should not have resolved <i>at all</i> did. It looked
+    /// non-deterministic because the rescan only covers assemblies past the index watermark.
     /// </para>
     /// <para>
-    /// It looked non-deterministic because the rescan only covers assemblies past the index
-    /// watermark, and where a compiled unit falls relative to that watermark depends on when the
-    /// platform index happened to be built. The earlier fix guarded a single caller
-    /// (<c>ResolveTypeArgument</c>, which checks the script's own types first); the name is
-    /// refused at the source here instead, so every caller is covered.
-    /// </para>
-    /// <para>
-    /// An assembly with no <see cref="Assembly.Location"/> was never loaded from disk, which is
-    /// exactly the compiled-unit case — <c>load-assembly</c> loads from a path and is unaffected.
-    /// Such an assembly stays reachable by its fully-qualified name; only the bare name is
-    /// refused.
+    /// An assembly with no <see cref="Assembly.Location"/> was never loaded from disk —
+    /// <c>load-assembly</c> loads from a path and is unaffected. Such an assembly stays
+    /// reachable by its fully-qualified name; only the bare name is refused.
     /// </para>
     /// </remarks>
     private static bool MayAnswerUnqualifiedName(Assembly assembly) =>

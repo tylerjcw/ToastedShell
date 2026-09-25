@@ -126,9 +126,9 @@ and are already written. And a ToastScript generator means a working `tosh` is n
 on the critical path of type resolution.
 
 Open question for whoever picks this up: a standalone tool under `tools/` matching
-`Tosh.DevCompanion`, or an MSBuild task in the existing `Tosh.Sdk.Tasks`. The task is the
-tidier home and introduces a build-ordering dependency; the tool is inert and has to be run by
-hand, like the generators already in the repository.
+`Tosh.DevCompanion`, or an MSBuild task. (`Tosh.Sdk.Tasks`, once the obvious home for one, was
+deleted with the compiler.) A task introduces a build-ordering dependency; the tool is inert and
+has to be run by hand, like the generators already in the repository.
 
 ## What would close this
 

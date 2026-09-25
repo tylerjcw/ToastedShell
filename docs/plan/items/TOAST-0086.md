@@ -57,10 +57,12 @@ fail before execution.
 - [ ] `channel-send` applies the same `Sendable` rule and has a runtime check for dynamic values
 - [ ] Affine resources cross only by `move`; borrowed `span<T>`/raw pointers cannot cross or survive `await`
 - [ ] A structural `Sendable` protocol works for user records, structs, unions and generic arguments
-- [ ] Interpreter, compiler and stress tests cover sibling failure, cancellation, leaks and data races
+- [ ] Interpreter and stress tests cover sibling failure, cancellation, leaks and data races
 
 ## Dependencies
 
 Deep frozen values come from `TOAST-0081`; affine transfer comes from `TOAST-0080`; span escape
 rules come from `TOAST-0057`. The cross-thread visibility guarantees for explicitly shared atomic
 state remain `TOAST-0058` rather than being invented by the scheduler.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

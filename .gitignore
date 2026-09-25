@@ -18,17 +18,14 @@ tmp/
 *.pkg.tar.zst
 *.pkg.tar.xz
 
-# Compiled output beside the examples. `examples/point.tosh` builds to `point`,
-# `point.dll`, `point.deps.json` and `point.runtimeconfig.json`, and a publish
-# drops the runtime assemblies in alongside them; 5.5 MB of stripped ELF plus
-# five DLLs reached history that way and were tracked for months.
+# Only sources belong beside the examples; 5.5 MB of build output once reached
+# history from here and was tracked for months.
 #
 # Written as a whitelist rather than a list of artefact extensions, because the
-# extension list is the thing that goes stale — the next output the compiler
-# learns to emit would be tracked by default under any other spelling. The
-# sources here are `.tosh` files; the demo projects live in subdirectories, which
-# are re-included wholesale since git cannot re-include a file whose parent
-# directory is excluded.
+# extension list is the thing that goes stale. The sources here are `.tosh`
+# files; the demo projects live in subdirectories, which are re-included
+# wholesale since git cannot re-include a file whose parent directory is
+# excluded.
 /examples/*
 !/examples/*/
 !/examples/*.tosh

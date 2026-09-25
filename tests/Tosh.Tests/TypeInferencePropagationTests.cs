@@ -18,35 +18,34 @@ namespace Tosh.Tests;
 /// var v = f()          // "could not pin down a concrete type"
 /// </code>
 /// <para>
-/// That is what made Phase B's exit look unreachable: the readiness probe's failures were
-/// four values that came from calls, and compiler-shaped code is mostly calls.
+/// The readiness probe's failures were four values that came from calls, and
+/// compiler-shaped code is mostly calls.
 /// </para>
 /// <para>
-/// These assert the absence of <c>tosh.compile.implicit_dynamic</c> rather than a specific
-/// inferred type, because the question is whether the compiler learned anything — the exact
-/// type is then pinned by the program running.
+/// These assert that nothing was left dynamic rather than a specific inferred
+/// type, because the question is whether inference learned anything — the exact type is
+/// then pinned by the program running.
 /// </para>
 /// </remarks>
 public sealed class TypeInferencePropagationTests
 {
-    private static IReadOnlyList<ToshDiagnostic> StrictDiagnostics(string source)
+    private static IReadOnlyList<string> Uninferred(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
         var engine = new ToshEngine(runtime.Language);
         var parse = engine.Parse(source, "<inference>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
 
-        var unit = Lowerer.Lower(parse, runtime.Commands);
-        return TypeChecker.CheckCompileAnnotations(unit, allowDynamic: false);
+        return DynamicFallbacks.In(parse, runtime.Commands);
     }
 
     private static void AssertInfers(string source)
     {
-        var diagnostics = StrictDiagnostics(source);
+        var uninferred = Uninferred(source);
         Assert.True(
-            diagnostics.Count == 0,
-            "expected the type to be inferred, but the compiler reported:\n  " +
-            string.Join("\n  ", diagnostics.Select(d => d.Title)));
+            uninferred.Count == 0,
+            "expected every type to be inferred, but these stayed dynamic: " +
+            string.Join(", ", uninferred));
     }
 
     /// <summary>A declared type propagates through whatever produced the value.</summary>
@@ -67,9 +66,9 @@ public sealed class TypeInferencePropagationTests
     [InlineData("var b = new StringBuilder()\nvar s = $b.ToString()\necho $\"{$s}\"")]
     [InlineData("var v = Math.Sqrt(2.0)\necho $\"{$v}\"")]
     // A record literal. The last row of the item's table, and the one that needed a type
-    // rather than a lookup: a record is an `ExpandoObject` on both backends — the
-    // interpreter builds one and the emitter emits one — so that is what it infers to,
-    // rather than a structural type invented for the occasion that nothing else would know.
+    // rather than a lookup: a record is an `ExpandoObject` at run time, so that is what it
+    // infers to, rather than a structural type invented for the occasion that nothing else
+    // would know.
     [InlineData("var r = {| a = 1 |}\necho $\"{$r.a}\"")]
     [InlineData("var r = {| a = 1, b = \"x\" |}\necho $\"{$r.b}\"")]
     [InlineData("var r = {| a = {| b = 2 |} |}\necho $\"{$r.a.b}\"")]
@@ -113,7 +112,7 @@ public sealed class TypeInferencePropagationTests
                 + "var v = h(1)\necho $\"{$v}\"")]
     [InlineData("var v = Math.Round(1.5, 0)\necho $\"{$v}\"")]
     public void Where_nothing_is_declared_nothing_is_invented(string source)
-        => Assert.NotEmpty(StrictDiagnostics(source));
+        => Assert.NotEmpty(Uninferred(source));
 
     /// <summary>
     /// Inferring a record's type does not make its members static.
@@ -122,7 +121,7 @@ public sealed class TypeInferencePropagationTests
     /// The risk this row carried, and the reason the type was measured before being chosen.
     /// A record's fields are not CLR properties, so giving the literal a *concrete* type
     /// could have turned `$r.a` into a static member lookup that fails — trading one
-    /// `implicit_dynamic` for a worse failure than the one being fixed. `ExpandoObject`
+    /// dynamic local for a worse failure than the one being fixed. `ExpandoObject`
     /// keeps member access dynamic, and this asserts it by reading the field back rather
     /// than by trusting that.
     /// </remarks>

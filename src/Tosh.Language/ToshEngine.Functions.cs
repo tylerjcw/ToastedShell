@@ -328,8 +328,7 @@ public sealed partial class ToshEngine
         // `TOAST-0069`. A rune that calls itself expands forever, and expansion is not one of
         // the paths the depth guard already covered — a recursive *function* reported
         // `tosh.runtime.recursion_limit_exceeded`, while a recursive rune overflowed the stack
-        // and took the process with it. The compiled backend declines past its own expansion
-        // depth and falls back; this is the interpreted half of the same limit.
+        // and took the process with it.
         using var expansionFrame = ToshExecutionDepthGuard.Enter(
             LanguageRuntime.Options.MaxRecursionDepth,
             $"rune {rune.Name}",

@@ -17,7 +17,7 @@ silently changing an implementation.
 
 | Area | Decision | Status |
 |---|---|---|
-| Truthiness | Keep the broad truthiness model documented by the specification. Implement it once in `Tosh.Runtime` and use it from conditions, logical operators, predicates, the compiler host, and tooling. | Accepted |
+| Truthiness | Keep the broad truthiness model documented by the specification. Implement it once in `Tosh.Runtime` and use it from conditions, logical operators, predicates, and tooling. | Accepted |
 | Function output | Functions are stream producers. `return` terminates the function and may emit a final value; it does not erase values already emitted. `yield` remains explicitly streaming. | Accepted |
 | Default parameters | Evaluate omitted defaults at call time in lexical scope, left-to-right, with earlier bound parameters visible. | Accepted |
 | Casts | `as` is a safe cast and returns `null` on failure. `cast` is the explicit throwing/converting operation. | Accepted |
@@ -27,6 +27,7 @@ silently changing an implementation.
 | Comparison | Ordering is strict and symmetric: booleans are unordered, a string orders only against a string, and conversion is attempted in both directions so `a < b` and `b > a` always agree. Equality keeps conversion-backed coercion but has no case-insensitive `ToString` fallback. | Accepted |
 | Chained comparison | `a < b < c` is real chaining, desugaring to `(a < b) and (b < c)` with each middle operand evaluated once and short-circuit preserved. | Accepted |
 | `$this` in defaults | A method parameter default may reference `$this`. A constructor default may not: it would observe an instance whose properties are not yet initialised, so it gets a targeted diagnostic instead. | Accepted |
+| Execution engine | One: the evaluator. There is no compiler, no IL emission and no compiled/interpreted parity to keep; single-file distribution packs the runtime together with the script files. See the September 25 log entry and `TOAST-ARCH-01`. | Accepted 2026-09-25 |
 | Breaking changes | TōSh has two users and no external consumers, so backward compatibility is not a constraint. Where a filed defect is caused by the grammar rather than the implementation, the grammar may change. Each such change lands with its specification, examples, and test updates in the same slice. | Accepted 2026-07-26 |
 | Float to decimal | A floating value asked for as a `decimal` becomes the decimal its *shortest round-trippable* spelling denotes, so `0.1 as decimal` is `0.1m`. The rule is the language's, implemented once in `Tosh.Runtime.ShellDecimal`, not the platform's cast. | Accepted 2026-09-18 |
 | Intrinsic literals | Temporal literals use only the documented exact ISO forms; canonical IPv4 requires four decimal octets. Storage suffixes are typed in expression context but remain strings as raw command arguments. `ToshRange` remains signed 32-bit integer-only. | Accepted |
@@ -470,9 +471,8 @@ is what both modes actually implement.
 
 ### September 12, 2026 — TUI framework shape
 
-The terminal UI becomes a framework usable from the shell, from Tōast scripts and
-eventually from compiled Tōast programs, rather than a set of built-in full-screen
-commands. The shape is settled as follows.
+The terminal UI becomes a framework usable from the shell and from Tōast scripts,
+rather than a set of built-in full-screen commands. The shape is settled as follows.
 
 - **Retained widget tree, not immediate mode.** Immediate mode is terser to write but
   calls user drawing code every frame, which here means an `IShellCallable` through an
@@ -522,8 +522,21 @@ is why modal subcommands yield a request object for a display sink to intercept 
 — and why assigning one to a variable silently stores the request instead of asking the
 question. With a host on the runtime the command runs the screen and returns the answer.
 
-`tui` is the shell's façade, not the framework's API. Compiled Tōast programs use
-`Tosh.Tui` directly.
+`tui` is the shell's façade, not the framework's API. Tōast programs that want the
+framework itself use `Tosh.Tui` directly.
 
 Filed as `TUI-0015`.
 
+### September 25, 2026 — There is no compiler
+
+`TOAST-ARCH-01` ([COMPILER_DECOMMISSIONING_PLAN.md](../COMPILER_DECOMMISSIONING_PLAN.md)).
+`Tosh.Compiler`, its IR and runtime bridge (`ToshHost`), `Tosh.Sdk`, `Tosh.Sdk.Tasks`,
+`Tosh.Templates` and `--compile` are removed. The evaluator is the only execution engine;
+a standalone application is the TōSh runtime packed together with the script files.
+
+- Where an earlier entry here specifies compiled execution — the construction, defer,
+  default-parameter, recursion-depth and subexpression protocols — the compiled half is
+  void and the interpreted half is the decision.
+- No rule, gate or definition of done asks for agreement with a compiled path any more.
+  Items that existed only for the compiler, the tier model or the native target are
+  withdrawn; `TS-P1-40` and `TOSH-0008` were resolved by the removal itself.

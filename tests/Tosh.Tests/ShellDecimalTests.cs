@@ -48,8 +48,7 @@ public sealed class ShellDecimalTests
     /// This is the property the 15-digit round broke, and the whole reason the rule is
     /// round-tripping rather than rounding. Collapsing <c>0.3</c> and
     /// <c>0.30000000000000004</c> onto one value made a comparison mean something different
-    /// depending on whether it happened to be constant-folded — see
-    /// <c>ConstantFolder.NumericEq</c>.
+    /// depending on whether it happened to be constant-folded.
     /// </remarks>
     [Fact]
     public void Doubles_that_differ_do_not_collapse_onto_one_decimal()

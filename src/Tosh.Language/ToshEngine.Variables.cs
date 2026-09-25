@@ -1157,7 +1157,7 @@ public sealed partial class ToshEngine
         // names across every loaded assembly and ignores case, so `var person = …` followed by
         // `person.Name = "x"` found an unrelated CLR `Person` and wrote a static instead of
         // naming the forgotten `$` — measured, not imagined: it is what the full suite hit once
-        // a compiler test had emitted a type by that name. A wrong hint costs a message; a
+        // another test had loaded a type by that name. A wrong hint costs a message; a
         // wrong static write mutates shared state, so the safe reading goes first.
         if (TryBuildVariableReferenceHint(path, out var suggestedReference, out var variableName))
         {

@@ -671,7 +671,7 @@ public sealed partial class ToshEngine
     /// The constructor has already run, so invariants hold and this only fills in what the
     /// constructor did not reach. That is the decided semantics rather than populate-only: a
     /// struct is immutable unless declared <c>fluid</c>, so "allocate and assign" is not
-    /// available for the default struct at all and the two tiers could not agree under it.
+    /// available for the default struct at all.
     /// </para>
     /// <para>
     /// Assignment goes through the same <c>ObjectAccessor</c> as <c>$value.Member = x</c>, so a
@@ -2583,8 +2583,7 @@ public sealed partial class ToshEngine
                                     // run as a pipeline and a collection yields its
                                     // elements — while `$"{[1, 2, 3]}"` and `$"{($xs)}"`
                                     // both rendered `[1, 2, 3]`. Three spellings of the
-                                    // same value, two answers, and the compiled backend
-                                    // rendered in all three.
+                                    // same value, two answers.
                                     //
                                     // The parenthesised form already took this path;
                                     // an expression hole now takes it too, so the

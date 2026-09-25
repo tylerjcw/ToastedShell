@@ -4,8 +4,8 @@ namespace Tosh.Language.Binding;
 
 /// <summary>
 /// Root of the bound IR. Every node carries the original <see cref="TextSpan"/>
-/// so diagnostics emitted during later passes (type checking, codegen) can
-/// point back at the user's source.
+/// so diagnostics reported by later passes (type checking) can point back at
+/// the user's source.
 /// </summary>
 public abstract record BoundNode(TextSpan Span);
 
@@ -109,8 +109,7 @@ public sealed record BoundForStatement(
 
 /// <summary>
 /// A <c>while cond { … }</c> or <c>until cond { … }</c> loop. Until
-/// loops invert the condition test; the IL emitter chooses the right
-/// branch opcode.
+/// loops invert the condition test.
 /// </summary>
 public sealed record BoundWhileStatement(
     BoundExpression Condition,
@@ -136,34 +135,7 @@ public sealed record BoundVariableDeclaration(
     bool IsConst,
     DeclarationModifier Modifier,
     TextSpan Span)
-    : BoundStatement(Span)
-{
-    /// <summary>
-    /// True when the source wrote an explicit <c>: dynamic</c>
-    /// annotation. Distinguishes intentional opt-out from the
-    /// implicit-dynamic case (no annotation, dynamic-typed RHS),
-    /// which the compile audit reports as a strict-mode violation.
-    /// </summary>
-    public bool AnnotatedDynamic { get; init; }
-
-    /// <summary>
-    /// True when the source declaration included any explicit type
-    /// annotation. The emitter uses this to distinguish a genuinely
-    /// typed local from an unannotated mutable binding whose runtime
-    /// value is allowed to change CLR type after reassignment.
-    /// </summary>
-    public bool HasExplicitTypeAnnotation { get; init; }
-
-    /// <summary>
-    /// True when the source carried a non-dynamic annotation that the
-    /// lowering resolver could not resolve. Kept separately from
-    /// <see cref="BoundSymbol.DeclaredType"/> because lowering may still infer
-    /// a useful implementation type from the initializer; compile-mode
-    /// diagnostics must nevertheless report that the written contract was
-    /// unknown rather than silently treating it as absent.
-    /// </summary>
-    public bool HasUnresolvedTypeAnnotation { get; init; }
-}
+    : BoundStatement(Span);
 
 // ─── Expressions ──────────────────────────────────────────────────────
 
@@ -249,8 +221,8 @@ public sealed record BoundRange(
 /// <summary>
 /// One element in an array literal. <see cref="IsSpread"/> indicates
 /// the parse-tree wrapped this with <c>...$xs</c> spread syntax — the
-/// emitter will splice the inner enumerable in place rather than
-/// adding it as a single element.
+/// inner enumerable is spliced in place rather than added as a single
+/// element.
 /// </summary>
 public sealed record BoundArrayLiteralItem(BoundExpression Value, bool IsSpread, TextSpan Span)
     : BoundNode(Span);
@@ -270,17 +242,12 @@ public sealed record BoundInterpolatedLiteral(string Text, TextSpan Span)
     : BoundInterpolatedPart(Span);
 
 /// <summary>
-/// An expression hole inside <c>$"…${expr}…"</c>. The original parser
-/// captures the source text and re-parses it on demand; we keep the
-/// raw source plus a lazily-lowered expression so the IL emitter can
-/// either stamp a string conversion or fall back to runtime
-/// re-parsing if the embedded expression isn't yet representable in
-/// the bound IR.
+/// An expression hole inside <c>$"…${expr}…"</c>. The parser captures the
+/// source text and the engine parses it on first evaluation; the bound node
+/// keeps the raw source plus a lazily-lowered expression.
 /// </summary>
 /// <param name="Format">
-/// The hole's format clause — the `X` in <c>$"{42:X}"</c> — or null. Carried here because
-/// the emitter reached the renderer without it, so a clause the interpreter honoured was
-/// silently dropped from compiled output (`TOAST-0022`).
+/// The hole's format clause — the `X` in <c>$"{42:X}"</c> — or null (`TOAST-0022`).
 /// </param>
 /// <param name="Alignment">
 /// The hole's alignment — the `6` in <c>$"{$n,6}"</c> — or null for none.
@@ -331,14 +298,8 @@ public sealed record BoundIfExpression(
 /// <c>each { ... }</c>, etc. The block has no formal parameters; the
 /// host command supplies values via <c>$_</c> at runtime.
 /// </summary>
-/// <param name="Captures">
-/// Local variables from enclosing scopes that are referenced inside
-/// the block. The IL emitter materializes these as fields on a
-/// generated closure type (or env-array, depending on strategy).
-/// </param>
 public sealed record BoundBlockExpression(
     BoundBlock Body,
-    IReadOnlyList<BoundSymbol> Captures,
     TextSpan Span,
     BoundType Type)
     : BoundExpression(Span, Type);
@@ -360,14 +321,11 @@ public sealed record BoundParameter(
 
 /// <summary>
 /// An anonymous function such as <c>func(x, y) => $x + $y</c>.
-/// Parameters are bound inside a fresh
-/// scope; <see cref="Captures"/> records non-parameter, non-local
-/// names that the body references.
+/// Parameters are bound inside a fresh scope.
 /// </summary>
 public sealed record BoundLambda(
     IReadOnlyList<BoundParameter> Parameters,
     BoundBlock Body,
-    IReadOnlyList<BoundSymbol> Captures,
     TextSpan Span,
     BoundType Type)
     : BoundExpression(Span, Type);
@@ -389,8 +347,7 @@ public sealed record BoundCallableInvocation(
 /// <summary>
 /// <c>return [pipeline]</c>. The optional value is lowered as a
 /// pipeline (the same shape as <c>VariableDeclaration</c>'s
-/// initializer) so the IL emitter can hand it off verbatim. A null
-/// value means a bare <c>return</c>.
+/// initializer). A null value means a bare <c>return</c>.
 /// </summary>
 public sealed record BoundReturnStatement(BoundPipeline? Value, TextSpan Span)
     : BoundStatement(Span);
@@ -404,9 +361,8 @@ public sealed record BoundThrowStatement(BoundPipeline? Value, TextSpan Span)
 
 /// <summary>
 /// <c>throw expr</c> in expression position (e.g. inside a ternary).
-/// Evaluating raises the exception; the IL emitter must flag this
-/// expression as never returning so basic-block dead-code analysis is
-/// correct.
+/// Evaluating raises the exception, so the expression never produces a
+/// value.
 /// </summary>
 public sealed record BoundThrowExpression(BoundExpression? Value, TextSpan Span, BoundType Type)
     : BoundExpression(Span, Type);
@@ -450,8 +406,7 @@ public sealed record BoundMatchArm(
 
 /// <summary>
 /// <c>match $x { 1 =&gt; … ; default =&gt; … }</c> in expression
-/// position. The IL emitter compiles this as a chained series of
-/// equality (or pattern-test) branches.
+/// position: a chained series of equality (or pattern-test) branches.
 /// </summary>
 public sealed record BoundMatchExpression(
     BoundExpression Value,
@@ -474,8 +429,7 @@ public sealed record BoundSwitchCase(
 
 /// <summary>
 /// <c>switch ($x) { case … { } default { } }</c>. Switch bodies are
-/// statements (no value); the IL emitter compiles to a chain or to
-/// the IL <c>switch</c> opcode where applicable.
+/// statements (no value).
 /// </summary>
 public sealed record BoundSwitchStatement(
     BoundExpression Value,
@@ -488,24 +442,15 @@ public sealed record BoundSwitchStatement(
 
 /// <summary>
 /// <c>new TypeName(args)</c>. The runtime resolves <c>TypeName</c> at
-/// evaluation time today; the IL emitter will eventually look up a
-/// constructor by signature using the captured argument types.
+/// evaluation time.
 /// </summary>
-/// <param name="HasObjectInitializer">
-/// Whether the source wrote a <c>{| … |}</c> after the constructor — <c>TOAST-0091</c>. The
-/// fields themselves are not lowered, because the compiled backend does not implement them; the
-/// flag exists so it can *refuse* the form rather than drop it. Without it the emitter produced
-/// an object carrying the constructor's state and none of the literal's, which is a wrong value
-/// with no error.
-/// </param>
 public sealed record BoundNewObject(
     string TypeName,
     IReadOnlyList<BoundArgument> Arguments,
     TextSpan Span,
     BoundType Type,
     string? BareTypeName = null,
-    IReadOnlyList<string>? TypeArguments = null,
-    bool HasObjectInitializer = false)
+    IReadOnlyList<string>? TypeArguments = null)
     : BoundExpression(Span, Type);
 
 /// <summary>
@@ -556,8 +501,8 @@ public sealed record BoundIndexAccess(
 /// <summary>
 /// Member or indexed assignment: <c>$obj.x = …</c>, <c>$arr[0] = …</c>,
 /// <c>$obj.x += …</c>. The target is a BoundExpression; the runtime
-/// (and eventual IL emitter) inspects its shape to dispatch
-/// property/field/indexer setters appropriately.
+/// inspects its shape to dispatch property/field/indexer setters
+/// appropriately.
 /// </summary>
 public sealed record BoundMemberAssignment(
     BoundExpression Target,
@@ -569,17 +514,14 @@ public sealed record BoundMemberAssignment(
 // ─── Phase C-3: declarations, deferred control flow, niche literals ───
 
 /// <summary>
-/// <c>defer { … }</c>. Conceptually lowers to a try/finally where
-/// the body runs at scope exit. We keep the dedicated node so the
-/// IL emitter can choose its own desugaring strategy (single-finally
-/// at function exit, per-scope, etc.).
+/// <c>defer { … }</c>. Conceptually a try/finally where the body runs
+/// at scope exit.
 /// </summary>
 public sealed record BoundDeferStatement(BoundBlock Body, TextSpan Span)
     : BoundStatement(Span);
 
 /// <summary>
-/// <c>yield [pipeline]</c>. The IL emitter compiles this as part of
-/// an iterator state machine. A null value is a bare <c>yield</c>
+/// <c>yield [pipeline]</c>. A null value is a bare <c>yield</c>
 /// (whose semantics in Tosh today are the same as <c>return null</c>
 /// in iterator context).
 /// </summary>
@@ -633,9 +575,9 @@ public sealed record BoundDestructuringDeclaration(
     : BoundStatement(Span);
 
 /// <summary>
-/// <c>alloc name = …</c>. v1 IL keeps this dynamic (native interop),
-/// but the carve-out lets later phases reason about the name binding
-/// without a syntax dependency.
+/// <c>alloc name = …</c>. Native interop stays dynamic, but the
+/// carve-out lets later passes reason about the name binding without a
+/// syntax dependency.
 /// </summary>
 public sealed record BoundAllocStatement(
     string Name,
@@ -650,9 +592,7 @@ public sealed record BoundAllocStatement(
 /// <see cref="BoundBlock"/>, parameters get
 /// <see cref="BoundSymbolKind.Parameter"/> bindings, and the
 /// <see cref="Symbol"/> produced for the function name is what
-/// later <c>$name</c> references resolve to. <see cref="Captures"/>
-/// is recorded in case a function is declared inside another scope
-/// (e.g. inside a class method body).
+/// later <c>$name</c> references resolve to.
 /// </summary>
 public sealed record BoundFunctionDefinition(
     string Name,
@@ -660,7 +600,6 @@ public sealed record BoundFunctionDefinition(
     IReadOnlyList<BoundParameter> Parameters,
     string? ReturnTypeName,
     BoundBlock Body,
-    IReadOnlyList<BoundSymbol> Captures,
     bool IsCommandWrapper,
     DeclarationModifier Modifier,
     TextSpan Span,
@@ -677,7 +616,6 @@ public sealed record BoundRuneDefinition(
     BoundSymbol Symbol,
     IReadOnlyList<BoundParameter> Parameters,
     BoundBlock Body,
-    IReadOnlyList<BoundSymbol> Captures,
     bool IsSealed,
     bool IsFixed,
     DeclarationModifier Modifier,
@@ -698,23 +636,13 @@ public abstract record BoundClassMember(TextSpan Span) : BoundNode(Span);
 /// <c>Unknown class member kind: ClassBindMemberSyntax</c> and produced no IR for the whole
 /// file, so every library that binds a native surface — SDL, OpenGL, GTK — was invisible to
 /// anything reading the tree.
-///
-/// Emitting one is still out of scope (`bind` blocks are not CLR-emittable and stay
-/// Tier 3). Lowering and emitting are different questions, and only the second was
-/// deliberately unanswered.
 /// </remarks>
 /// <summary>
 /// `...value` in pipeline-stage position — `TOAST-0040`.
 /// </summary>
 /// <remarks>
 /// `TOAST-0032` added `...` as a pipeline stage and taught the interpreter to run it. The
-/// lowerer was never taught, so a head spread became a dynamic expression and the emitter
-/// refused the whole unit — "dynamic argument expressions (SpreadElementArgumentSyntax)
-/// are not yet emitted", no output written.
-///
-/// That mattered more than an ordinary gap, because `...` is the migration spelling
-/// `TOAST-0028` and `TOAST-0039` tell people to write. Code migrated onto the new
-/// collection-shape rule could not be compiled at all.
+/// lowerer was never taught, so a head spread became a dynamic expression.
 ///
 /// A spread inside an array literal is a different node — `BoundArrayLiteralItem` carries
 /// an `IsSpread` flag — and argument position is `SplatArgumentSyntax`. Only the stage form
@@ -735,7 +663,7 @@ public sealed record BoundClassBindMember(
 /// <summary>
 /// One property/field of a class or struct: <c>prop X = init</c>.
 /// Initializer + optional getter/setter bodies are bound. Visibility
-/// flags are surfaced verbatim so the IL emitter can stamp them.
+/// flags are surfaced verbatim.
 /// </summary>
 public sealed record BoundClassPropertyMember(
     string Name,
@@ -1110,39 +1038,11 @@ public sealed record BoundComparisonPattern(
 
 /// <summary>
 /// A bound pipeline. Stages run left-to-right and are connected by an
-/// async-iterator handshake at runtime. Bound redirections carry
-/// fully lowered <see cref="BoundExpression"/> targets so the IL
-/// backend can emit them without source replay.
+/// async-iterator handshake at runtime.
 /// </summary>
 public sealed record BoundPipeline(
     IReadOnlyList<BoundPipelineStage> Stages,
     object Original,
-    TextSpan Span)
-    : BoundNode(Span)
-{
-    public IReadOnlyList<BoundRedirection> BoundRedirections { get; init; } = Array.Empty<BoundRedirection>();
-    public BoundInputRedirection? BoundInputRedirection { get; init; }
-}
-
-/// <summary>
-/// A redirection of a pipeline's stdout/stderr stream to a file
-/// path. <see cref="Target"/> is the lowered expression that
-/// evaluates (at runtime) to the file path string.
-/// </summary>
-public sealed record BoundRedirection(
-    RedirectionStream Stream,
-    RedirectionMode Mode,
-    BoundExpression Target,
-    TextSpan Span)
-    : BoundNode(Span);
-
-/// <summary>
-/// A redirection of a pipeline's stdin from a file path. <see
-/// cref="Source"/> is the lowered expression that evaluates to the
-/// file path string.
-/// </summary>
-public sealed record BoundInputRedirection(
-    BoundExpression Source,
     TextSpan Span)
     : BoundNode(Span);
 
@@ -1163,14 +1063,6 @@ public sealed record BoundCommandCall(
     TextSpan Span)
     : BoundPipelineStage(Span)
 {
-    /// <summary>
-    /// When the Lowerer resolves a call to a same-source overloaded function
-    /// by arity, this is the zero-based index into the declaration-order list
-    /// of overloads with that name.  <c>null</c> means unresolved (runtime
-    /// dispatch) or a non-overloaded function.
-    /// </summary>
-    public int? OverloadIndex { get; init; }
-
     /// <summary>
     /// The declared return type, when this call names a function defined in the same unit
     /// — `TOAST-0034`.
@@ -1243,28 +1135,14 @@ public enum BoundSymbolKind
     Destructured,
 }
 
-// ─── Compilation unit ────────────────────────────────────────────────
+// ─── Lowered unit ────────────────────────────────────────────────────
 
 /// <summary>
 /// The output of the lowering pass: a bound script plus the symbol
-/// table and the original parse result so the evaluator-on-IR can fall
-/// back to syntax for not-yet-modeled cases.
+/// table and the original parse result, which is what the engine
+/// evaluates and what diagnostics point back into.
 /// </summary>
 public sealed record BoundUnit(
     BoundScript Root,
     object ParseResult,
-    IReadOnlyList<BoundSymbol> Symbols)
-{
-    /// <summary>
-    /// Rune calls the lowerer could not expand — <c>TOAST-0069</c>.
-    /// </summary>
-    /// <remarks>
-    /// A rune call is expanded at lowering, so an expanded one leaves nothing behind and the
-    /// program needs no source replay for it. What the emitter has to know is whether any
-    /// call was *declined* — a `leaky` rune, a pipeline stage, a mismatched argument count —
-    /// because those are still expanded at run time and do need the source.
-    ///
-    /// Empty is the common case and means the program can compile without carrying itself.
-    /// </remarks>
-    public IReadOnlyCollection<string> UnexpandedRuneCalls { get; init; } = Array.Empty<string>();
-}
+    IReadOnlyList<BoundSymbol> Symbols);

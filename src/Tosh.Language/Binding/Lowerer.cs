@@ -8,10 +8,10 @@ namespace Tosh.Language.Binding;
 /// <summary>
 /// Converts a <see cref="ParseResult"/> into a <see cref="BoundUnit"/>.
 ///
-/// The lowering pass is the bridge between the parser and the
-/// (future) IL emitter. v1 carves out only the highest-leverage
-/// shapes — pipeline statements, command calls, literal arguments,
-/// variable references — and wraps everything else in
+/// The lowering pass produces the bound tree the type checker and
+/// constant folder read. It carves out the highest-leverage shapes —
+/// pipeline statements, command calls, literal arguments, variable
+/// references — and wraps everything else in
 /// <see cref="BoundDynamicExpression"/> / <see cref="BoundDynamicStatement"/>
 /// so the resulting tree is always complete. Each carved-out shape
 /// removes one wrapper.
@@ -35,32 +35,20 @@ public static class Lowerer
     /// Optional because this entry point has a great many callers, and one that supplies nothing
     /// should keep behaving exactly as it did.
     /// </param>
-    /// <param name="resolveRequiredTypes">
-    /// Opt in to parse-only discovery of statically required script exports. Compiler hosts
-    /// enable this; ordinary interpreter/editor lowering performs no dependency file I/O.
-    /// </param>
     public static BoundUnit Lower(
         ParseResult parseResult,
         ICommandTable commands,
-        StatementSyntax? ambientTypes = null,
-        bool resolveRequiredTypes = false)
+        StatementSyntax? ambientTypes = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
 
-        var requiredTypes = resolveRequiredTypes ? new RequiredTypeRegistry(parseResult, ambientTypes) : null;
-        var userTypes = requiredTypes?.Types ?? BuildUserTypeRegistry(parseResult.Statement, ambientTypes);
         var ctx = new LowerContext(
             commands,
-            userTypes,
-            BuildLocalFunctionOverloads(parseResult.Statement),
-            BuildLocalFunctionReturns(parseResult.Statement),
-            requiredTypes);
+            BuildUserTypeRegistry(parseResult.Statement, ambientTypes),
+            BuildLocalFunctionReturns(parseResult.Statement));
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
-        return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList())
-        {
-            UnexpandedRuneCalls = ctx.UnexpandedRuneCalls.ToArray(),
-        };
+        return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList());
     }
 
     /// <summary>
@@ -157,11 +145,8 @@ public static class Lowerer
                     // aliases (e.g. `type Id = int`) project to a
                     // `RefinementType` over the resolved base so
                     // (a) type-checking can transparently unwrap
-                    // them via IsAssignable, (b) the compiler IL
-                    // emitter routes through ToshHost.CheckType
-                    // (a no-op when the alias has no clauses), and
-                    // (c) the alias name still surfaces in
-                    // diagnostics via DisplayName. The runtime
+                    // them via IsAssignable, and (b) the alias name
+                    // still surfaces in diagnostics via DisplayName. The runtime
                     // registers plain aliases through
                     // DeclareRefinementType too, so the dual
                     // representation stays consistent.
@@ -188,34 +173,6 @@ public static class Lowerer
         if (registry.TryGetValue(baseTypeName, out var existing)) return existing;
         var probe = new TypeNameResolver(userTypes: null).Resolve(baseTypeName);
         return probe;
-    }
-
-    /// <summary>
-    /// Scans top-level <see cref="FunctionDefinitionStatementSyntax"/> nodes
-    /// and returns: name → ordered list of parameter counts (one entry per
-    /// overload, in declaration order).  Used by
-    /// <see cref="LowerCommand"/> to stamp
-    /// <see cref="BoundCommandCall.OverloadIndex"/> at call sites.
-    /// </summary>
-    private static IReadOnlyDictionary<string, List<int>> BuildLocalFunctionOverloads(StatementSyntax root)
-    {
-        var result = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-        IEnumerable<StatementSyntax> stmts = root is ScriptStatementSyntax script
-            ? (IEnumerable<StatementSyntax>)script.Statements
-            : new[] { root };
-        foreach (var stmt in stmts)
-        {
-            if (stmt is FunctionDefinitionStatementSyntax fn)
-            {
-                if (!result.TryGetValue(fn.Name, out var list))
-                {
-                    list = new List<int>();
-                    result[fn.Name] = list;
-                }
-                list.Add(fn.Parameters.Count);
-            }
-        }
-        return result;
     }
 
     /// <summary>
@@ -434,25 +391,19 @@ public static class Lowerer
         // Explicit `: T` annotation wins. Otherwise fall back to
         // value inference. Annotations the resolver can't make sense
         // of (unknown user types, malformed) collapse to dynamic and
-        // we still try inference — best-effort.
-        // An explicit `: dynamic` annotation is preserved verbatim
-        // and recorded on the bound node so downstream audits skip
-        // the implicit-dynamic diagnostic.
+        // we still try inference — best-effort. An explicit
+        // `: dynamic` annotation stays dynamic.
         BoundType declaredType;
-        var annotatedDynamic = false;
-        var unresolvedAnnotation = false;
         if (!string.IsNullOrEmpty(decl.TypeName))
         {
             if (string.Equals(decl.TypeName, "dynamic", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(decl.TypeName, "any", StringComparison.OrdinalIgnoreCase))
             {
                 declaredType = BoundType.Dynamic;
-                annotatedDynamic = true;
             }
             else
             {
                 var annotated = ctx.ResolveType(decl.TypeName);
-                unresolvedAnnotation = annotated.IsDynamic;
                 declaredType = annotated.IsDynamic && value is not null
                     ? TypeInferrer.InferPipelineValue(value)
                     : annotated;
@@ -475,12 +426,7 @@ public static class Lowerer
             Value: value,
             IsConst: decl.IsConst,
             Modifier: decl.Modifier,
-            Span: decl.Span)
-        {
-            AnnotatedDynamic = annotatedDynamic,
-            HasExplicitTypeAnnotation = !string.IsNullOrEmpty(decl.TypeName),
-            HasUnresolvedTypeAnnotation = unresolvedAnnotation,
-        };
+            Span: decl.Span);
     }
 
     private static BoundVariableAssignment LowerVariableAssignment(
@@ -488,14 +434,6 @@ public static class Lowerer
         LowerContext ctx)
     {
         var symbol = ctx.LookupSymbol(assignment.Name);
-        if (symbol is not null)
-        {
-            // An assignment target is a use of the binding even when the RHS
-            // does not reference it (notably `$x = 1` and `$x ??= 1`).
-            // Record it so closure lowering allocates the capture field.
-            ctx.RecordPotentialCapture(symbol);
-        }
-
         var loweredValue = LowerPipeline(assignment.Value, ctx);
 
         // Only an inferred binding follows its assignments. An annotated one
@@ -522,12 +460,7 @@ public static class Lowerer
         var symbols = new BoundSymbol?[assignment.LeftNames.Count];
         for (var index = 0; index < assignment.LeftNames.Count; index++)
         {
-            var symbol = ctx.LookupSymbol(assignment.LeftNames[index]);
-            symbols[index] = symbol;
-            if (symbol is not null)
-            {
-                ctx.RecordPotentialCapture(symbol);
-            }
+            symbols[index] = ctx.LookupSymbol(assignment.LeftNames[index]);
         }
 
         return new BoundTupleAssignment(
@@ -786,34 +719,7 @@ public static class Lowerer
 
         var bound = new BoundPipeline(stages, pipeline, span);
 
-        IReadOnlyList<BoundRedirection> redirs = Array.Empty<BoundRedirection>();
-        if (pipeline.Redirections is { Count: > 0 })
-        {
-            var list = new List<BoundRedirection>(pipeline.Redirections.Count);
-            foreach (var r in pipeline.Redirections)
-            {
-                list.Add(new BoundRedirection(
-                    r.Stream,
-                    r.Mode,
-                    LowerExpression(r.Target, ctx),
-                    r.Span));
-            }
-            redirs = list;
-        }
-
-        BoundInputRedirection? inputRedir = null;
-        if (pipeline.InputRedirection is { } inRedir)
-        {
-            inputRedir = new BoundInputRedirection(
-                LowerExpression(inRedir.Source, ctx),
-                inRedir.Span);
-        }
-
-        return bound with
-        {
-            BoundRedirections = redirs,
-            BoundInputRedirection = inputRedir,
-        };
+        return bound;
     }
 
     /// <summary>
@@ -933,61 +839,12 @@ public static class Lowerer
 
     private static BoundCommandCall LowerCommand(CommandSyntax command, LowerContext ctx)
     {
-        // `TOAST-0069`. Every rune call that expansion did not consume arrives here, whatever
-        // shape it was written in — a pipeline stage, a subexpression, a command substitution
-        // — because this is where a `CommandSyntax` becomes a call. Recording it is what tells
-        // the emitter the program still needs the interpreter.
-        //
-        // Doing it at the decline sites instead missed two shapes. `twice { … } | writeline`
-        // was rejected by a pipeline-shape test that ran *before* the call was identified as
-        // a rune, and `writeline (one 5)` never reached the expansion pass at all. Both
-        // compiled to a dangling dispatch that threw "must be expanded by the engine, not
-        // executed as a regular command" — a crash produced by deciding a program was fully
-        // compiled when it was not.
-        if (ctx.Runes.ContainsKey(command.Name))
-        {
-            ctx.UnexpandedRuneCalls.Add(command.Name);
-        }
-
         var resolved = ctx.Commands.TryGet(command.Name, out var registered) ? registered : null;
 
         var arguments = new List<BoundArgument>(command.Arguments.Count);
         foreach (var argument in command.Arguments)
         {
             arguments.Add(LowerArgument(argument, ctx));
-        }
-
-        // Resolve overload index for same-source overloaded functions.
-        // Count positional (non-named, non-splat) syntax arguments; if
-        // exactly one overload has that arity the call is unambiguous.
-        int? overloadIndex = null;
-        if (ctx.LocalFunctionOverloads.TryGetValue(command.Name, out var overloadCounts)
-            && overloadCounts.Count > 1)
-        {
-            var positional = 0;
-            var hasSpecial = false;
-            foreach (var a in command.Arguments)
-            {
-                if (a is SplatArgumentSyntax or NamedArgumentSyntax)
-                {
-                    hasSpecial = true;
-                    break;
-                }
-                positional++;
-            }
-            if (!hasSpecial)
-            {
-                var match = -1;
-                for (var i = 0; i < overloadCounts.Count; i++)
-                {
-                    if (overloadCounts[i] == positional)
-                    {
-                        if (match >= 0) { match = -1; break; } // ambiguous → runtime
-                        match = i;
-                    }
-                }
-                if (match >= 0) overloadIndex = match;
-            }
         }
 
         // `TOAST-0034`. A user function is called as a command, so without this its
@@ -1011,7 +868,6 @@ public static class Lowerer
             Arguments: arguments,
             Span: command.Span)
         {
-            OverloadIndex = overloadIndex,
             LocalReturnType = localReturn,
         };
     }
@@ -1138,7 +994,7 @@ public static class Lowerer
         if (UserTypeMembers.TryGetProperty(targetType, memberPath, out var property) &&
             !string.IsNullOrWhiteSpace(property.TypeName))
         {
-            var resolved = ctx.ResolveMemberType(targetType, property.TypeName);
+            var resolved = ctx.ResolveType(property.TypeName);
             if (resolved is not null && !resolved.IsDynamic) return resolved;
         }
 
@@ -1176,7 +1032,7 @@ public static class Lowerer
 
             if (!string.IsNullOrWhiteSpace(first))
             {
-                var resolved = ctx.ResolveMemberType(targetType, first);
+                var resolved = ctx.ResolveType(first);
                 if (resolved is not null && !resolved.IsDynamic) return resolved;
             }
         }
@@ -1304,8 +1160,7 @@ public static class Lowerer
                 Span: newObj.Span,
                 Type: ctx.ResolveType(newObj.TypeName),
                 BareTypeName: newObj.BareTypeName,
-                TypeArguments: newObj.TypeArguments,
-                HasObjectInitializer: newObj.Initializer is not null),
+                TypeArguments: newObj.TypeArguments),
 
         MethodCallArgumentSyntax method =>
             BuildMethodCall(method, ctx),
@@ -1404,23 +1259,13 @@ public static class Lowerer
         // Comprehensions and refinement clauses are deeply recursive
         // shapes whose semantics are hard to flatten into a single
         // bound node. Keep them dynamic — the lowering coverage on
-        // them can grow when (or if) the IL emitter needs structured
-        // access.
+        // them can grow when the checker needs structured access.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
 
     private static BoundVariableReference BuildVariableReference(VariableReferenceArgumentSyntax varRef, LowerContext ctx)
     {
         var symbol = ctx.LookupSymbol(varRef.Name);
-        // If the reference resolves to a symbol declared outside any
-        // currently-active lambda frame, mark the symbol as captured
-        // by every enclosing lambda whose entry-depth is deeper than
-        // the symbol's own scope depth. The lambda itself records the
-        // captures; this side effect is O(active-lambdas) per ref.
-        if (symbol is not null)
-        {
-            ctx.RecordPotentialCapture(symbol);
-        }
         // A narrowing from an enclosing `is` pattern wins over the declared
         // type: inside `_ is Leaf =>` the value is a Leaf regardless of how the
         // variable was declared.
@@ -1433,9 +1278,8 @@ public static class Lowerer
 
     /// <summary>
     /// Lowers `a &lt; b &lt; c` (TS-P1-22). The chain is preserved as its
-    /// own bound node so the emitter can hold each operand in a local
-    /// and evaluate it once; desugaring here into `and` would duplicate
-    /// the interior operands.
+    /// own bound node; desugaring here into `and` would duplicate the
+    /// interior operands.
     /// </summary>
     private static BoundExpression BuildChainedComparison(
         ChainedComparisonArgumentSyntax chain,
@@ -1518,8 +1362,7 @@ public static class Lowerer
         foreach (var raw in array.Items)
         {
             // ...$xs spreads splice into the array; everything else
-            // is a single element. Track the flag so the IL emitter
-            // can pick the right opcode shape later.
+            // is a single element.
             if (raw is SpreadElementArgumentSyntax spread)
             {
                 items.Add(new BoundArrayLiteralItem(
@@ -1555,12 +1398,10 @@ public static class Lowerer
                 case InterpolatedStringExpressionPart expr:
                     // Holes are stored by the parser as raw source
                     // text; we re-parse the snippet and lower the
-                    // resulting expression so consumers like the IL
-                    // emitter can avoid a runtime re-parse for the
+                    // resulting expression so the checker sees the
                     // common cases (variable references, arithmetic,
                     // string concat, etc.). If anything fails, we
-                    // leave Expression null and the runtime fallback
-                    // path takes over.
+                    // leave Expression null.
                     parts.Add(new BoundInterpolatedExpression(
                         SourceText: expr.Expression,
                         Expression: TryLowerInterpolationHole(
@@ -1630,8 +1471,7 @@ public static class Lowerer
         }
 
         // Otherwise (command stage, etc.) wrap the lowered pipeline in
-        // a subexpression; the IL emitter already unwraps single-stage
-        // subexpressions back into the inner expression.
+        // a subexpression.
         return new BoundSubexpression(
             Pipeline: LowerPipeline(pipeline, ctx),
             Span: pipelineStmt.Span,
@@ -1641,25 +1481,15 @@ public static class Lowerer
     /// <summary>
     /// Lowers a bare block argument: <c>where { $_ > 5 }</c>. The
     /// block itself has no formal parameters; <c>$_</c> is supplied by
-    /// the host command at runtime. Captures are recorded by the
-    /// lambda frame on <see cref="LowerContext"/>.
+    /// the host command at runtime.
     /// </summary>
     private static BoundBlockExpression BuildBlockExpression(BlockArgumentSyntax block, LowerContext ctx)
     {
-        var captures = ctx.EnterLambda();
-        try
-        {
-            var body = LowerBlock(block.Block, ctx);
-            return new BoundBlockExpression(
-                Body: body,
-                Captures: captures.ToImmutableList(),
-                Span: block.Span,
-                Type: BoundType.Dynamic);
-        }
-        finally
-        {
-            ctx.ExitLambda();
-        }
+        var body = LowerBlock(block.Block, ctx);
+        return new BoundBlockExpression(
+            Body: body,
+            Span: block.Span,
+            Type: BoundType.Dynamic);
     }
 
     /// <summary>
@@ -1670,40 +1500,31 @@ public static class Lowerer
     /// </summary>
     private static BoundLambda BuildLambda(AnonymousFunctionArgumentSyntax lambda, LowerContext ctx)
     {
-        var captures = ctx.EnterLambda();
+        ctx.PushScope();
         try
         {
-            ctx.PushScope();
-            try
-            {
-                var bound = DeclareParameters(lambda.Parameters, ctx);
+            var bound = DeclareParameters(lambda.Parameters, ctx);
 
-                // Lower body statements directly (we already have the
-                // outer scope pushed by EnterLambda → PushScope, so a
-                // second LowerBlock would push *another* scope and
-                // hide the parameters from immediate references).
-                var statements = new List<BoundStatement>(lambda.Body.Statements.Count);
-                foreach (var inner in lambda.Body.Statements)
-                {
-                    statements.Add(LowerStatement(inner, ctx));
-                }
-                var body = new BoundBlock(statements, lambda.Body.Span);
-
-                return new BoundLambda(
-                    Parameters: bound,
-                    Body: body,
-                    Captures: captures.ToImmutableList(),
-                    Span: lambda.Span,
-                    Type: InferLambdaType(lambda, bound, ctx));
-            }
-            finally
+            // Lower body statements directly (the parameter scope is
+            // already pushed, so a second LowerBlock would push
+            // *another* scope and hide the parameters from immediate
+            // references).
+            var statements = new List<BoundStatement>(lambda.Body.Statements.Count);
+            foreach (var inner in lambda.Body.Statements)
             {
-                ctx.PopScope();
+                statements.Add(LowerStatement(inner, ctx));
             }
+            var body = new BoundBlock(statements, lambda.Body.Span);
+
+            return new BoundLambda(
+                Parameters: bound,
+                Body: body,
+                Span: lambda.Span,
+                Type: InferLambdaType(lambda, bound, ctx));
         }
         finally
         {
-            ctx.ExitLambda();
+            ctx.PopScope();
         }
     }
 
@@ -1714,12 +1535,12 @@ public static class Lowerer
     /// <para>
     /// `func(x: int) -> int => $x + 1` already states its parameter and return types, so
     /// requiring the same signature again on the variable holding it would be asking the
-    /// author to repeat themselves to tell the compiler something it was told.
+    /// author to repeat themselves.
     /// </para>
     /// <para>
     /// Everything or nothing: a lambda with one unannotated parameter, or no declared
     /// return, stays <see cref="BoundType.Dynamic"/>. A half-known signature would be a
-    /// worse thing to emit against than an honest unknown, and `dynamic` is exactly the
+    /// worse thing to check against than an honest unknown, and `dynamic` is exactly the
     /// answer for "this was not stated".
     /// </para>
     /// <para>
@@ -1780,8 +1601,8 @@ public static class Lowerer
     /// <summary>
     /// Lowers a <c>match</c> expression. Each arm's body is lowered
     /// as a <see cref="BoundBlock"/>; pipeline arms (<c>=&gt; expr</c>)
-    /// are wrapped as a single-statement block so the IL emitter
-    /// sees one consistent shape.
+    /// are wrapped as a single-statement block so every arm has one
+    /// consistent shape.
     /// </summary>
     private static BoundMatchExpression BuildMatchExpression(MatchArgumentSyntax match, LowerContext ctx)
     {
@@ -2030,14 +1851,13 @@ public static class Lowerer
                     break;
             }
         }
-        // `TOAST-0034`. A record literal is an `ExpandoObject` on both backends — the
-        // interpreter builds one and `EmitRecordLiteral` emits one — so that is what it
-        // infers to, rather than a structural type invented here that nothing else knows.
+        // `TOAST-0034`. A record literal is an `ExpandoObject` at run time, so that is what
+        // it infers to, rather than a structural type invented here that nothing else knows.
         //
         // Member reads stay dynamic, which was measured rather than hoped for: annotating a
-        // variable with the concrete `ExpandoObject` and reading `$r.a` off it compiles and
-        // prints, on both backends. A concrete type that broke member access would have
-        // traded one `implicit_dynamic` for a worse failure.
+        // variable with the concrete `ExpandoObject` and reading `$r.a` off it still works.
+        // A concrete type that broke member access would have traded one dynamic local for a
+        // worse failure.
         return new BoundRecordLiteral(
             entries,
             record.Span,
@@ -2106,9 +1926,8 @@ public static class Lowerer
     /// Declares the parameter symbols and produces the BoundParameter
     /// list, lowering each default expression *inside* the callable's
     /// scope immediately before its parameter is declared (TS-P1-05).
-    /// A default therefore sees earlier parameters and — when the
-    /// caller has opened a lambda frame — records outer references as
-    /// captures; it can never see its own or a later parameter.
+    /// A default therefore sees earlier parameters and outer references;
+    /// it can never see its own or a later parameter.
     /// Caller is responsible for having opened a scope before calling
     /// this.
     /// </summary>
@@ -2151,40 +1970,31 @@ public static class Lowerer
         // references inside the body can resolve to this symbol.
         var funcSymbol = ctx.DeclareLocal(funcDef.Name, BoundSymbolKind.LocalVariable, BoundType.Dynamic);
 
-        var captures = ctx.EnterLambda();
+        ctx.PushScope();
         try
         {
-            ctx.PushScope();
-            try
+            var bound = DeclareParameters(funcDef.Parameters, ctx);
+            var statements = new List<BoundStatement>(funcDef.Body.Statements.Count);
+            foreach (var inner in funcDef.Body.Statements)
             {
-                var bound = DeclareParameters(funcDef.Parameters, ctx);
-                var statements = new List<BoundStatement>(funcDef.Body.Statements.Count);
-                foreach (var inner in funcDef.Body.Statements)
-                {
-                    statements.Add(LowerStatement(inner, ctx));
-                }
-                var body = new BoundBlock(statements, funcDef.Body.Span);
+                statements.Add(LowerStatement(inner, ctx));
+            }
+            var body = new BoundBlock(statements, funcDef.Body.Span);
 
-                return new BoundFunctionDefinition(
-                    Name: funcDef.Name,
-                    Symbol: funcSymbol,
-                    Parameters: bound,
-                    ReturnTypeName: funcDef.ReturnTypeName,
-                    Body: body,
-                    Captures: captures.ToImmutableList(),
-                    IsCommandWrapper: funcDef.IsCommandWrapper,
-                    Modifier: funcDef.Modifier,
-                    Span: funcDef.Span,
-                    ReturnType: ctx.ResolveType(funcDef.ReturnTypeName));
-            }
-            finally
-            {
-                ctx.PopScope();
-            }
+            return new BoundFunctionDefinition(
+                Name: funcDef.Name,
+                Symbol: funcSymbol,
+                Parameters: bound,
+                ReturnTypeName: funcDef.ReturnTypeName,
+                Body: body,
+                IsCommandWrapper: funcDef.IsCommandWrapper,
+                Modifier: funcDef.Modifier,
+                Span: funcDef.Span,
+                ReturnType: ctx.ResolveType(funcDef.ReturnTypeName));
         }
         finally
         {
-            ctx.ExitLambda();
+            ctx.PopScope();
         }
     }
 
@@ -2193,9 +2003,9 @@ public static class Lowerer
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A rune is a macro, and a macro belongs in the binder. Expanding the call here means
-    /// nothing rune-shaped survives to run time, so the program no longer falls back to
-    /// whole-script source replay — which is what a single rune call costs today.
+    /// A rune is a macro, and a macro belongs in the binder. Expanding the call here lets the
+    /// type checker see the code the call stands for; the interpreter still expands runes
+    /// itself at run time.
     /// </para>
     /// <para>
     /// Hygiene comes out of the scope stack rather than a renaming pass: pushing a scope
@@ -2205,9 +2015,8 @@ public static class Lowerer
     /// </para>
     /// <para>
     /// Deliberately narrow. Anything not handled — a `leaky` rune, a pipeline stage, a
-    /// mismatched argument count, a call above its declaration — declines and keeps the
-    /// existing runtime path, so this can only remove replay, never change what a program
-    /// means.
+    /// mismatched argument count, a call above its declaration — declines and is left to the
+    /// runtime expansion, so this never changes what a program means.
     /// </para>
     /// </remarks>
     /// <summary>
@@ -2257,9 +2066,7 @@ public static class Lowerer
 
         var pipeline = statement.Pipeline;
 
-        // Shapes this pass will not expand. Declining here is safe without recording it,
-        // because a call that is not expanded is lowered as an ordinary command and
-        // `LowerCommand` records every rune it sees — see the note there.
+        // Shapes this pass will not expand; the interpreter expands them at run time.
         if (pipeline.Stages.Count != 1 ||
             pipeline.IsBackground ||
             pipeline.InputRedirection is not null ||
@@ -2274,14 +2081,9 @@ public static class Lowerer
             return null;
         }
 
-        // From here the call *is* a rune call. Every path that declines below leaves it to
-        // be expanded at run time, which is what the emitter needs to know about.
-        void Decline() => ctx.UnexpandedRuneCalls.Add(call.Name);
-
         if (call.Arguments.Count != rune.Parameters.Count ||
             ctx.RuneExpansionDepth >= MaximumRuneExpansionDepth)
         {
-            Decline();
             return null;
         }
 
@@ -2343,8 +2145,8 @@ public static class Lowerer
     /// <para>
     /// This hangs off the ordinary statement dispatch rather than off a pass over the rune
     /// body's top level, because `rune r(n, body) { for i in (1..$n) { $body } }` mentions the
-    /// parameter *nested*. A top-level-only pass compiled that loop into three iterations that
-    /// each discarded a block and printed nothing — agreeing with no one, and quietly.
+    /// parameter *nested*. A top-level-only pass lowered that loop into three iterations that
+    /// each discarded a block — agreeing with no one, and quietly.
     /// </para>
     /// </remarks>
     private static BoundStatement? TryLowerRuneBodySplice(
@@ -2395,39 +2197,30 @@ public static class Lowerer
         // seen by the depth guard rather than silently recursing here.
         ctx.Runes[runeDef.Name] = runeDef;
 
-        var captures = ctx.EnterLambda();
+        ctx.PushScope();
         try
         {
-            ctx.PushScope();
-            try
+            var bound = DeclareParameters(runeDef.Parameters, ctx);
+            var statements = new List<BoundStatement>(runeDef.Body.Statements.Count);
+            foreach (var inner in runeDef.Body.Statements)
             {
-                var bound = DeclareParameters(runeDef.Parameters, ctx);
-                var statements = new List<BoundStatement>(runeDef.Body.Statements.Count);
-                foreach (var inner in runeDef.Body.Statements)
-                {
-                    statements.Add(LowerStatement(inner, ctx));
-                }
-                var body = new BoundBlock(statements, runeDef.Body.Span);
+                statements.Add(LowerStatement(inner, ctx));
+            }
+            var body = new BoundBlock(statements, runeDef.Body.Span);
 
-                return new BoundRuneDefinition(
-                    Name: runeDef.Name,
-                    Symbol: runeSymbol,
-                    Parameters: bound,
-                    Body: body,
-                    Captures: captures.ToImmutableList(),
-                    IsSealed: runeDef.IsSealed,
-                    IsFixed: runeDef.IsFixed,
-                    Modifier: runeDef.Modifier,
-                    Span: runeDef.Span);
-            }
-            finally
-            {
-                ctx.PopScope();
-            }
+            return new BoundRuneDefinition(
+                Name: runeDef.Name,
+                Symbol: runeSymbol,
+                Parameters: bound,
+                Body: body,
+                IsSealed: runeDef.IsSealed,
+                IsFixed: runeDef.IsFixed,
+                Modifier: runeDef.Modifier,
+                Span: runeDef.Span);
         }
         finally
         {
-            ctx.ExitLambda();
+            ctx.PopScope();
         }
     }
 
@@ -2513,16 +2306,8 @@ public static class Lowerer
         }
     }
 
-    private static BoundModuleDefinition LowerModuleDefinition(ModuleDefinitionStatementSyntax module, LowerContext ctx)
-    {
-        var previous = ctx.ModuleTypeResolver;
-        ctx.ModuleTypeResolver = ctx.RequiredTypes?.ResolverFor(module);
-        try
-        {
-            return new BoundModuleDefinition(module.Name, LowerBlock(module.Body, ctx), module.Modifier, module.Span, module.IsPartial);
-        }
-        finally { ctx.ModuleTypeResolver = previous; }
-    }
+    private static BoundModuleDefinition LowerModuleDefinition(ModuleDefinitionStatementSyntax module, LowerContext ctx) =>
+        new(module.Name, LowerBlock(module.Body, ctx), module.Modifier, module.Span, module.IsPartial);
 
     private static BoundClassDefinition LowerClassDefinition(
         ClassDefinitionStatementSyntax classDef,
@@ -2862,8 +2647,8 @@ public static class Lowerer
         // `_ is T` pushes one of these around the arm body, so a reference to
         // the matched variable inside that arm is bound with type `T` rather
         // than its declared type (`TS-P2-108`). Narrowing the *bound* type
-        // rather than patching the checker means inference, overload
-        // resolution and the compiled tier all see it too.
+        // rather than patching the checker means inference and overload
+        // resolution see it too.
         private readonly List<Dictionary<string, BoundType>> _narrowings = new();
 
         public void PushNarrowing(string name, BoundType type)
@@ -2894,26 +2679,12 @@ public static class Lowerer
             return null;
         }
 
-        // Each active lambda frame records the scope-depth at which
-        // it was entered plus an ordered set of captures discovered
-        // so far. Insertion order is preserved so the IL emitter sees
-        // a stable closure-field layout (HashSet on .NET preserves
-        // insertion-order semantics for enumeration in practice; we
-        // additionally keep a parallel List to make this guarantee
-        // explicit).
-        private readonly List<(int EntryDepth, HashSet<BoundSymbol> Seen, List<BoundSymbol> Order)> _lambdaFrames = new();
-
         public LowerContext(
             ICommandTable commands,
             IReadOnlyDictionary<string, BoundType>? userTypes = null,
-            IReadOnlyDictionary<string, List<int>>? localFunctionOverloads = null,
-            IReadOnlyDictionary<string, string?>? localFunctionReturns = null,
-            RequiredTypeRegistry? requiredTypes = null)
+            IReadOnlyDictionary<string, string?>? localFunctionReturns = null)
         {
             Commands = commands;
-            RequiredTypes = requiredTypes;
-            LocalFunctionOverloads = localFunctionOverloads
-                ?? new Dictionary<string, List<int>>(StringComparer.Ordinal);
             LocalFunctionReturns = localFunctionReturns
                 ?? new Dictionary<string, string?>(StringComparer.Ordinal);
             _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
@@ -2928,13 +2699,6 @@ public static class Lowerer
         }
 
         public ICommandTable Commands { get; }
-
-        /// <summary>
-        /// Maps each top-level function name to the ordered list of
-        /// parameter counts for its overloads (declaration order).
-        /// Single-definition names have a list of length&nbsp;1.
-        /// </summary>
-        public IReadOnlyDictionary<string, List<int>> LocalFunctionOverloads { get; }
 
         /// <summary>
         /// Each top-level function's declared return type name, or <see langword="null"/>
@@ -2953,16 +2717,7 @@ public static class Lowerer
         /// </summary>
         public TypeNameResolver TypeResolver { get; }
 
-        public RequiredTypeRegistry? RequiredTypes { get; }
-        public TypeNameResolver? ModuleTypeResolver { get; set; }
-
-        // A scoped resolver already includes visible parents and ambient types. Falling
-        // back to the root for an unknown name would undo a nearer module's shadowing.
-        public BoundType ResolveType(string? typeName) =>
-            (ModuleTypeResolver ?? TypeResolver).Resolve(typeName);
-
-        public BoundType ResolveMemberType(BoundType owner, string typeName) =>
-            RequiredTypes?.ResolveMember(owner, typeName, ModuleTypeResolver ?? TypeResolver) ?? ResolveType(typeName);
+        public BoundType ResolveType(string? typeName) => TypeResolver.Resolve(typeName);
 
         public List<BoundSymbol> Symbols { get; } = new();
 
@@ -2993,9 +2748,6 @@ public static class Lowerer
 
         /// <summary>Guards a rune that expands into itself.</summary>
         public int RuneExpansionDepth { get; set; }
-
-        /// <summary>Rune calls left for run-time expansion — <c>TOAST-0069</c>.</summary>
-        public HashSet<string> UnexpandedRuneCalls { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Whether lowering is currently inside a rune expansion — `TOAST-0071`.</summary>
         /// <remarks>
@@ -3136,48 +2888,5 @@ public static class Lowerer
             return null;
         }
 
-        /// <summary>
-        /// Begins a lambda frame. All variable references made before
-        /// the matching <see cref="ExitLambda"/> will, if they resolve
-        /// to a symbol declared at a shallower scope than the entry
-        /// depth, be recorded as captures by this frame (and any
-        /// enclosing frames whose entry-depth is also shallower).
-        /// Returns the ordered capture list so the caller can attach
-        /// it to the <see cref="BoundLambda"/> / <see cref="BoundBlockExpression"/>
-        /// once lowering of the body completes.
-        /// </summary>
-        public List<BoundSymbol> EnterLambda()
-        {
-            var order = new List<BoundSymbol>();
-            _lambdaFrames.Add((EntryDepth: _scopes.Count, Seen: new HashSet<BoundSymbol>(), Order: order));
-            return order;
-        }
-
-        public void ExitLambda()
-        {
-            if (_lambdaFrames.Count == 0) return;
-            _lambdaFrames.RemoveAt(_lambdaFrames.Count - 1);
-        }
-
-        /// <summary>
-        /// Called from <see cref="BuildVariableReference"/> for every
-        /// resolved symbol. If any active lambda frame's entry-depth
-        /// is deeper than the symbol's own scope-depth, the symbol is
-        /// captured by that frame.
-        /// </summary>
-        public void RecordPotentialCapture(BoundSymbol symbol)
-        {
-            for (var i = 0; i < _lambdaFrames.Count; i++)
-            {
-                var frame = _lambdaFrames[i];
-                if (symbol.ScopeDepth < frame.EntryDepth)
-                {
-                    if (frame.Seen.Add(symbol))
-                    {
-                        frame.Order.Add(symbol);
-                    }
-                }
-            }
-        }
     }
 }

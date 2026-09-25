@@ -56,15 +56,13 @@ seen from the two ends.
 - [x] An unrecognised constraint name is a diagnostic naming the constraint, not a silent pass
 - [x] Trait and interface names are usable as bounds
 - [x] Multiple bounds on one parameter — `where T: Comparable + Hashable`
-- [x] `where T: struct` and `where T: class` — *interpreted only; boxing in the emitted
-      generic is compiler work and out of scope while compiled ToastScript is an experiment*
+- [x] `where T: struct` and `where T: class`
 - [x] `where T: new()`
 - [x] Constraints on method type parameters, not only on the declaring type
 - [x] Each constraint is enforced at instantiation with a diagnostic naming the argument,
       the parameter, and the unsatisfied bound
 - [x] `is`/`is-not` against a constraint name stays consistent with the generic check —
       one registry, as today
-- [ ] Interpreted and compiled agree, in the differential corpus
 - [x] `§Type-Parameter Constraints` replaces the "accepted conservatively" sentence
 - [x] A built-in constraint is enforced when the type argument is a ToastScript class
       (**found while doing the above**)
@@ -171,10 +169,11 @@ was not at fault.
 
 ## What is still open
 
-The compiled-mode agreement in the differential corpus; that is compiler work.
 Two unrelated limitations found while probing, neither a regression — both reproduce on the
 installed binary:
 
 - `new Mod.Class<T>(…)` cannot construct a generic class through a module alias or a
   qualified module path.
 - `record R<T>(x: T)` cannot annotate a field with its own type parameter.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

@@ -9,8 +9,7 @@ namespace Tosh.Tests;
 /// A hole holding a collection **variable** spread it: `$"{$xs}"` gave `1 2 3`, while
 /// `$"{[1, 2, 3]}"` and `$"{($xs)}"` both rendered `[1, 2, 3]`. Three spellings of one
 /// value, two answers, decided by whether a variable happened to hold something
-/// enumerable — and the compiled backend rendered in all three, which is how the
-/// differential corpus found it.
+/// enumerable.
 ///
 /// **Decided 2026-08-17: a hole is one value unless it contains a pipeline.** An expression
 /// renders; a pipeline joins its results with a single space. The line is a `|` the reader

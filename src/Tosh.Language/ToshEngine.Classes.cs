@@ -796,21 +796,13 @@ public sealed partial class ToshEngine
         return true;
     }
 
-    private object? ResolveQualifiedAccessOrFallback(string path)
-    {
-        return ResolveQualifiedAccess(path);
-    }
-
     /// <summary>
     /// Resolves a dotted-path access like <c>Lib.greeting</c> or
     /// <c>App.Math.add</c> against modules, classes, enums, and CLR
     /// types in scope. Returns the path string itself if no match is
-    /// found (matching <see cref="ResolveQualifiedAccessOrFallback"/>'s
-    /// fallback). Exposed publicly so compiled tosh (the IL emitter's
-    /// host bridge) can resolve module-qualified names without
-    /// re-parsing.
+    /// found.
     /// </summary>
-    public object? ResolveQualifiedAccess(string path)
+    private object? ResolveQualifiedAccessOrFallback(string path)
     {
         if (TryResolveQualifiedAccess(path, out var value, out _))
         {

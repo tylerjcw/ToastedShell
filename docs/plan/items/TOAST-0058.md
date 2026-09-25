@@ -54,4 +54,5 @@ moment there is more than one host.
 - [ ] A ring buffer and a lock-free counter exist as conformance fixtures, run under
       contention
 - [ ] The model is stated per target profile where the profiles differ
-- [ ] Interpreted and compiled agree
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

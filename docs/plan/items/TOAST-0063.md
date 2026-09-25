@@ -1,11 +1,14 @@
 ---
 id: TOAST-0063
 title: "A compiled class is constructed through reflection, which costs the recursion ceiling an order of magnitude"
-status: proposed
+status: withdrawn
 area: toast
 priority: 3
 opened: 2026-08-22
+closed: 2026-09-25
 ---
+
+> **Withdrawn 2026-09-25** under `TOAST-ARCH-01`: Tōast has no compiler ([COMPILER_DECOMMISSIONING_PLAN.md](../../COMPILER_DECOMMISSIONING_PLAN.md)). Compiled classes no longer exist; declared classes are constructed by the engine.
 
 ## Problem
 

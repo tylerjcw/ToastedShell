@@ -48,7 +48,6 @@ operand's method is consulted when the two differ.
 - [x] The `Vec` example in `§Operator Overloading` is extended to negation and indexing, and
       it runs as a conformance fixture
 - [ ] Unary and indexer resolution consult CLR `op_*` methods, consistently with `TOAST-0051`
-- [ ] Interpreted and compiled agree, in the differential corpus
 - [x] The "Limitations" subsection is removed rather than reworded — *it was rewritten to
       three real limitations instead, which is the honest version of this*
 
@@ -83,4 +82,5 @@ the stale copy.
   `$a + $b` on the same kind of type succeeds.
 - **A mutating compound assignment.** Still desugars, so `$v += $w` allocates. This is the
   one remaining piece of the original complaint that is about value types rather than syntax.
-- Compiled-mode agreement, which is compiler work.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

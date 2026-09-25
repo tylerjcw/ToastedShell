@@ -13,8 +13,7 @@ namespace Tosh.Cli;
 /// text, which is the one place the inconsistency is most visible.
 /// </para>
 /// <para>
-/// The compilation and metadata-export flags stay in the options table rather than a
-/// footer. <c>TOAST-0003</c> is on record that they "existed and were undiscoverable",
+/// The metadata-export flags stay in the options table rather than a footer. <c>TOAST-0003</c> is on record that they "existed and were undiscoverable",
 /// and moving them out of the table someone scans would undo that.
 /// </para>
 /// </remarks>
@@ -84,7 +83,6 @@ internal static class ToshHelp
         new("tosh 'func ll => ls -la'", "Define a function"),
         new("tosh 'func recent(days: TimeSpan) { ls -la | where _.Modified > ((date now) - $days) }'",
             "A typed parameter, used in a filter"),
-        new("tosh --compile ./build.tosh -o ./build.dll", "Compile a script to an assembly"),
         new("tosh --export-command-metadata --latex", "The metadata the specification is generated from"),
     ];
 }

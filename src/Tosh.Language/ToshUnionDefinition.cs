@@ -107,11 +107,10 @@ public sealed class ToshUnionDefinition : IShellNamedType
             if (field.TypeName is { Length: > 0 } rawTypeName)
             {
                 var typeName = SubstituteTypeParameters(rawTypeName, typeArguments);
-                value = _owner.ConvertValueToAnnotatedType(
+                value = _owner.ConvertAnnotatedValue(
                     typeName,
                     value,
-                    field.Span.Start,
-                    field.Span.Length,
+                    field.Span,
                     SourceName,
                     SourceText,
                     $"field '{Name}.{variant.Name}.{field.Name}'");

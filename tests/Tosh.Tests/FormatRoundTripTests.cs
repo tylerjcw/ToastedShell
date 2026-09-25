@@ -117,7 +117,7 @@ public sealed class FormatRoundTripTests
     /// part, and the rendering display rather than source.
     ///
     /// `TOAST-0014` reverses it. `Format` is a *language* operation now — it is what
-    /// `$"{x}"`, `tee`, `template` and a compiled program's stdout produce — and a BCL type
+    /// `$"{x}"`, `tee` and `template` produce — and a BCL type
     /// name has no place in a string a portable program builds. The table view is
     /// unaffected: `DisplayEngine` builds its own structure and never asks the formatter
     /// for a container, which is why the header was invisible in practice.

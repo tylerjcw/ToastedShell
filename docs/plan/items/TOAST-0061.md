@@ -45,7 +45,7 @@ at both — the same reasoning that keeps `struct` and `raw struct` separate.
 `nint`/`nuint` exist only as native-signature spellings rather than as general types. `var h:
 Half = 1.5` currently fails with "the value does not match 'Half'".
 
-**Swizzling** — `$v.xy`, `$v.xzy`, `$c.rgb` — as a compiler rewrite over the blessed types.
+**Swizzling** — `$v.xy`, `$v.xzy`, `$c.rgb` — as a binder rewrite over the blessed types.
 Pure ergonomics, and the single most-used syntax in shader-adjacent code. Wants the
 expression-layer work in `TS-P2-11` to have landed.
 
@@ -63,7 +63,7 @@ skinning and particle work that is written against them.
 - [x] Arithmetic on the blessed types works through `TOAST-0051`, not a special case
 - [x] They render as values rather than as enumerables — `Vector3(1, 2, 3)`, not a table of
       three cells
-- [ ] Swizzle accessors on the vector and colour types, resolved at compile time
+- [ ] Swizzle accessors on the vector and colour types, resolved before evaluation
 - [ ] `Vector128<T>`/`Vector256<T>` are reachable and annotatable
 - [ ] A rotating-transform fixture allocates zero bytes per frame, measured
 

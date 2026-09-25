@@ -6,14 +6,10 @@ using Tosh.Runtime;
 namespace Tosh.Language.Bridge;
 
 /// <summary>
-/// Turns a parsed <c>raw struct</c> declaration into the shared
-/// <see cref="RawStructLayoutPlan"/> that both the runtime factory and (later)
-/// the compiler's emitter consume.
-///
-/// Keeping the layout <em>decision</em> here — rather than inside either
-/// emitter — is what stops the interpreted and compiled tiers from growing two
-/// subtly different layout algorithms. That divergence would be near-invisible:
-/// both tiers would run, and only one would read the right bytes.
+/// Turns a parsed <c>raw struct</c> declaration into the
+/// <see cref="RawStructLayoutPlan"/> the runtime factory consumes. Keeping the
+/// layout <em>decision</em> apart from the emission lets tests pin the layout
+/// without reading the emitted type.
 /// </summary>
 internal static class RawStructPlanBuilder
 {

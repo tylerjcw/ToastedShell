@@ -133,7 +133,7 @@ public sealed class DocumentationCoverageTests
             string.Join("\n  - ", missing) +
             "\nPlace the source under `src/Tosh.Stdlib/<Bucket>/` (the namespace then implies the category), " +
             "or add `[Stdlib(StdlibCategory.<bucket>)]` explicitly. " +
-            "For REPL-only commands, use `[ShellOnly]`. See docs/COMPILED_TOSH.md for the bucket layout. " +
+            "For REPL-only commands, use `[ShellOnly]`. " +
             "Use `[UndocumentedFor(\"stdlib\", \"reason\")]` only for legitimate cases.");
     }
 

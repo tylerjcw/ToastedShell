@@ -10,13 +10,10 @@ namespace Tosh.Tests;
 /// </summary>
 /// <remarks>
 /// Each of these was reached by annotating `bench/probes/compiler_shape.tosh` end to end
-/// and reading what the compiler said next. None was reported by a user; the probe exists
-/// to find out which parts of ToastScript fight back when you write compiler-shaped code,
-/// and these are what it caught.
+/// and seeing what failed next. None was reported by a user; the probe exists to find out
+/// which parts of ToastScript fight back when you write compiler-shaped code, and these are
+/// what it caught.
 /// </remarks>
-// Captures `Console.Out` to read a compiled program's output, so it must not run beside
-// another test doing the same — the symptom is an empty capture, not a wrong one.
-[Collection(ConsoleSerialCollection.Name)]
 public sealed class TypedCollectionAndMatchTests
 {
     private static string RunInterpreted(string source)
@@ -120,15 +117,10 @@ public sealed class TypedCollectionAndMatchTests
     /// </summary>
     /// <remarks>
     /// <para>
-    /// It returned <c>null</c>. Free functions had this rule and class methods did not, so
-    /// <c>class E { func M() -> int =&gt; 7 }</c> answered null compiled and 7 interpreted,
-    /// while the block-bodied <c>{ return 7 }</c> was correct throughout.
-    /// </para>
-    /// <para>
-    /// The comment on the free-function version already described the symptom exactly —
-    /// "the block was emitted for effect, its value dropped, and the fall-through returned
-    /// default(T) … silently, and for the most idiomatic way to write a function". The rule
-    /// is shared now rather than written twice, which is what let them drift.
+    /// Free functions had this rule and class methods did not, so
+    /// <c>class E { func M() -> int =&gt; 7 }</c> could answer null while the block-bodied
+    /// <c>{ return 7 }</c> was correct throughout. The rule is shared now rather than written
+    /// twice, which is what let them drift.
     /// </para>
     /// </remarks>
     [Theory]
@@ -179,15 +171,9 @@ public sealed class TypedCollectionAndMatchTests
     /// <remarks>
     /// <para>
     /// `Token` is a name a compiler-shaped program is very likely to choose, and the CLR has
-    /// a nested `System.Runtime.InteropServices.PosixSignalRegistration+Token`. Compiled,
-    /// `new Token(…)` found *that one*, and said so as a constructor-arity complaint about a
-    /// type the author has never heard of.
-    /// </para>
-    /// <para>
-    /// It needs a class the emitter cannot shell — a computed property is enough — because
-    /// such a class stays on source replay, and replayed source resolves through the engine.
-    /// The engine knew nothing about the shells emitted beside it, so the name fell through
-    /// to the platform index.
+    /// a nested `System.Runtime.InteropServices.PosixSignalRegistration+Token`. If the name
+    /// fell through to the platform index, `new Token(…)` would find *that one* and say so as
+    /// a constructor-arity complaint about a type the author has never heard of.
     /// </para>
     /// </remarks>
     [Fact]

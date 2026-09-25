@@ -40,7 +40,6 @@ File-path links go to the implementation. Spec line numbers reference [`docs/spe
 | **Scripts and Subcommand Dispatch** | ~3165 | 🟢 | ✅ New chapter added 2026-04-29. See [Gap §8](#gap-8--subcommand-dispatch-system). |
 | Built-In Command Catalog | ~3343 | 🟢 |  |
 | Common Tasks | ~3370 | 🟢 |  |
-| **Compilation (Part)** | ~3409 | � | New 12-chapter part added 2026-05-06; pending review. See [Gap §10](#gap-10--compiler--profiles). Covers CLI, profiles/tier model, type discipline, CLR shape, pipelines/redirections, function refs, MSBuild SDK, limits matrix, conformance layer, diagnostics. |
 | Command Reference (Part) | ~3920 | 🟢 | Generated from runtime metadata via `tosh --export-command-metadata`. |
 | **Diagnostic Code Reference (Part)** | ~end | 🟢 | ✅ Auto-generated from source; promoted from appendix to its own part 2026-05-06. See [Gap §9](#gap-9--diagnostic-code-reference). |
 
@@ -265,31 +264,9 @@ scripts/extract-diagnostic-codes.tosh
 
 ### Gap §10 — Compiler & profiles
 
-**Status:** 🟡 **In flight (2026-05-06).** New `\part{Compilation}` added to the spec (~24 pages, 12 chapters) between the Cookbook and Diagnostics parts. The compiler had been entirely undocumented in the spec prior to this; only [`docs/COMPILED_TOSH.md`](COMPILED_TOSH.md) covered it. The new part is authored but pending review and may need follow-up passes as the compiler surface evolves.
-
-<details>
-<summary>What landed</summary>
-
-| Chapter | Topic |
-|---|---|
-| Overview & Execution Model | Interpreter vs. compiler, pipeline (parse → bind → lower → type-check → emit), parity contract. |
-| Command-Line Interface | Every `--compile` flag (`-o`, `--profile`, `--allow-dynamic`, `--emit-refasm`, `--no-apphost`, `--publish-single-file`) with examples and error messages. |
-| Profiles & the Tier Model | Tiers 1/2/3 (native IL / runtime-hosted / source-replay), `permissive` / `runtime` / `pure` profiles, `RequireTier` semantics with deduplication. |
-| Type Discipline | `tosh.compile.missing_type_annotation`, `tosh.compile.implicit_dynamic`, explicit `: dynamic` opt-out semantics, `--allow-dynamic` scope. |
-| Public CLR Shape | Top-level statements, overloads, `[ToshOriginalName]` mangling, `[ToshType]` user-defined types, reference assemblies. |
-| Pipelines & Redirections | IL emission for stages, `RunStage`/`DrainStatement`/`EmptyInput`/`SeedFromValue`, `BeginRedirection` scoping, nested-redirection invariants (round-3 fix). |
-| Function References | Single-overload fast path, overload-set dispatch via `InvokeUserOverload`, `BindNamedArguments`, late-bound fallback. |
-| Other Bound-Shape Emitters | Records (incl. spread, computed keys), tuple destructuring, `throw` as expression, helper inventory. |
-| MSBuild Integration | `<Project Sdk="Tosh.Sdk">`, `ToshCompile` and `ToshStagePackageReferences` tasks, fallback path, NuGet consumption from C#. |
-| Limits Per Profile | Full matrix of shapes × profiles. |
-| Conformance Test Layer | `FeatureCases()` and `ConformanceCases()` rows in `CompilerFeatureMatrixTests`, console-serial collection requirement, recipe for adding a row. |
-| Compiler Diagnostics | `tosh.compile.*` codes with cause/fix, tier-violation diagnostic shape, runtime callable diagnostics reachable only through compiled paths. |
-
-**Source files referenced:** `src/Tosh.Compiler/CompileProfile.cs`, `src/Tosh.Compiler/BoundUnitEmitter.cs`, `src/Tosh.Compiler.Runtime/ToshHost.cs`, `src/Tosh.Sdk/Sdk/Sdk.{props,targets}`, `src/Tosh.Sdk.Tasks/ToshCompile.cs`, `src/Tosh.Runtime/ToshOriginalNameAttribute.cs`, `src/Tosh.Runtime/ToshTypeAttribute.cs`, `tests/Tosh.Tests/CompilerFeatureMatrixTests.cs`.
-
-**Forward work:** When new shapes are emitted, add a matching `RequireTier` call, a `FeatureCase` row, and (if the shape produces observable output) a `ConformanceCase` row, then add the shape to the limits matrix in the spec.
-
-</details>
+**Status:** ⛔ **Withdrawn (2026-09-25).** The compiler was decommissioned under
+`TOAST-ARCH-01` ([COMPILER_DECOMMISSIONING_PLAN.md](COMPILER_DECOMMISSIONING_PLAN.md)),
+and `\part{Compilation}` was removed from the spec with it.
 
 ---
 
@@ -529,18 +506,16 @@ Combined order across spec and cheatsheets — both surfaces should advance toge
 | 12 | Spec | [Gaps §3–§6](#gap-3--is-in-substring-behavior) — `is in` note, `throw` as expression, pattern forms, doc-comments | ✅ Done 2026-04-29 | Low |
 | 13 | Spec | Type aliases table: `array`, `hashtable`, `table` rows + `\ikw{redirection}` | ✅ Done 2026-04-29 | Trivial |
 | 14 | C# | `SourceCommand` metadata attributes | ✅ Done 2026-04-29 | Low |
-| 15 | Spec | [Gap §10](#gap-10--compiler--profiles) — Compilation part (CLI, profiles, CLR shape, MSBuild, conformance, diagnostics) | 🟡 In flight 2026-05-06 | High |
-| 16 | Cheatsheet | New `compiler/` cheatsheet (depends on #15) | Open | Medium |
+| 15 | Spec | [Gap §10](#gap-10--compiler--profiles) — Compilation part | ⛔ Withdrawn 2026-09-25 (no compiler) | — |
 
 ---
 
 ## Language spec update workflow
 
 Use this workflow whenever an implementation change affects ToastScript syntax,
-semantics, diagnostics, builtin behavior, compilation profiles, or public CLR
-shape. The goal is for the spec to be the language contract, not a delayed
-description of whichever path the interpreter or compiler currently happens to
-take.
+semantics, diagnostics, or builtin behavior. The goal is for the spec to be the
+language contract, not a delayed description of whichever path the evaluator
+currently happens to take.
 
 1. **Classify the change before editing docs.**
    - Normative language behavior belongs in
@@ -549,11 +524,6 @@ take.
      generated [`docs/spec/command-reference.tex`](spec/command-reference.tex).
    - Diagnostic-code behavior belongs in source diagnostics, then in generated
      [`docs/spec/diagnostic-codes.tex`](spec/diagnostic-codes.tex).
-   - Compiler/profile behavior belongs in the spec's Compilation part
-     ([`docs/spec/toastscript-spec.tex`](spec/toastscript-spec.tex),
-     `\part{Compilation}`); deeper internals stay in
-     [`COMPILED_TOSH.md`](COMPILED_TOSH.md) and
-     [`FIRST_CLASS_DOTNET_STATUS.md`](FIRST_CLASS_DOTNET_STATUS.md).
    - Implementation-only details belong in architecture notes, not the
      normative language spec, unless users can observe or depend on them.
 
@@ -562,22 +532,19 @@ take.
      expression forms, and precedence.
    - Syntax model: AST nodes, doc-comment shapes, modifier flags, and source
      span behavior.
-   - Binder/type checker/lowerer: name resolution, profile diagnostics,
+   - Binder/type checker/lowerer: name resolution, static diagnostics,
      narrowing, refinement checks, and lowered forms.
-   - Compiler emitter: native IL, runtime-hosted fallback, source replay,
-     public CLR metadata, and refasm shape.
    - Runtime/stdlib: builtin metadata, pipeline contracts, side effects,
      diagnostics, and examples.
-   - Tests: `CompilerFeatureMatrixTests`, evaluator/compiler parity tests,
-     focused regression tests, and C# consumer/refasm tests.
+   - Tests: focused regression tests, the drift guards between duplicated
+     implementations (e.g. `EqualityParityTests`, `OperatorParityTests`), and
+     `LanguageSurfaceParityTests`.
 
 3. **Update the normative spec in the same change as the implementation.**
    - Add grammar/syntax examples before prose if the feature introduces a new
      form.
-   - Describe runtime semantics, compile-time semantics, and profile limits
-     separately when they differ.
-   - State interpreter/compiler parity expectations explicitly for features
-     that cross both execution paths.
+   - Describe runtime semantics and static (type-checker) semantics separately
+     when they differ.
    - Document all user-visible diagnostics by code.
    - Mark intentional limitations as limitations, not vague TODOs.
    - Mark future/aspirational behavior as future behavior so it cannot be
@@ -627,22 +594,13 @@ take.
    - When a cheatsheet is created or updated, mark the corresponding row in the
      [Recommended documentation work order](#recommended-documentation-work-order)
      table as done or replace it with the next useful item.
-   - When the change affects compiled language status, update
-     [COMPILED_TOSH.md](COMPILED_TOSH.md) and
-     [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) in the same
-     documentation pass.
 
-7. **Use the feature matrix as the spec's executable checklist.**
+7. **Give every spec promise a test.**
    - Every syntax/operator/modifier/concept in the spec should eventually have
-     a `CompilerFeatureMatrixTests` row or a linked runtime/spec test.
-   - Every matrix row should point back to one of:
-     - native IL / Tier 1;
-     - runtime-hosted / Tier 2;
-     - source replay / Tier 3;
-     - deliberate unsupported diagnostic.
-   - This gives the project one loop: spec promise -> implementation path ->
+     a linked runtime/spec test.
+   - This gives the project one loop: spec promise -> implementation ->
      tests -> generated docs -> parity check.
 
-This document should age with the spec, compiler matrix, and cheatsheets. As
+This document should age with the spec and cheatsheets. As
 the spec catches up, this file should shrink toward a concise status ledger
 rather than becoming a second language manual.

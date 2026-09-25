@@ -5,10 +5,10 @@ using Tosh.Runtime;
 namespace Tosh.Tests;
 
 /// <summary>
-/// The compile-time path applies the trait/interface member contract that the interpreter
+/// The type checker applies the trait/interface member contract that the interpreter
 /// applies when a class is declared — <c>TOAST-0020</c>.
 /// </summary>
-public sealed class CompiledContractMemberTypeTests
+public sealed class StaticContractMemberTypeTests
 {
     [Theory]
     [InlineData(
@@ -41,7 +41,7 @@ public sealed class CompiledContractMemberTypeTests
         + "class CctBadQualified uses CctContracts.CctQualified { func value() -> int => 1 }",
         "CctContracts.CctQualified.value",
         "return type")]
-    public void Compiler_refuses_the_same_contract_mismatches(
+    public void Type_checker_refuses_the_same_contract_mismatches(
         string source,
         string member,
         string mismatch)
@@ -77,33 +77,34 @@ public sealed class CompiledContractMemberTypeTests
         "class CctInterfaceBase { }\nclass CctInterfaceLeaf extends CctInterfaceBase { }\n"
         + "interface CctInterfaceFactory { func make() -> CctInterfaceBase }\n"
         + "class CctInterfaceFactoryImpl implements CctInterfaceFactory { func make() -> CctInterfaceLeaf => new CctInterfaceLeaf() }")]
-    public void Compiler_accepts_conforming_or_unconstrained_members(string source)
+    public void Type_checker_accepts_conforming_or_unconstrained_members(string source)
         => Assert.Empty(ContractDiagnostics(source));
 
     [Fact]
-    public async Task Compiler_and_interpreter_produce_the_same_diagnostic()
+    public async Task Type_checker_and_interpreter_produce_the_same_diagnostic()
     {
         const string Source =
             "trait CctParity { func render() -> string }\n"
             + "class CctParityBad uses CctParity { func render() -> int => 42 }";
 
-        var compiled = TypeChecker.PromoteSeverity(
-            Assert.Single(ContractDiagnostics(Source)),
-            ToshDiagnosticSeverity.Error);
+        var checkedStatically = Assert.Single(ContractDiagnostics(Source)) with
+        {
+            Severity = ToshDiagnosticSeverity.Error,
+        };
 
         var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            () => engine.ExecuteToListAsync(Source, "<compiled-contract>", CancellationToken.None));
+            () => engine.ExecuteToListAsync(Source, "<contract>", CancellationToken.None));
         var interpreted = Assert.Single(exception.Diagnostics);
 
-        Assert.Equal(interpreted, compiled);
+        Assert.Equal(interpreted, checkedStatically);
     }
 
     private static IReadOnlyList<ToshDiagnostic> ContractDiagnostics(string source)
     {
         var runtime = ToshRuntime.CreateDefault();
         var engine = new ToshEngine(runtime.Language);
-        var parse = engine.Parse(source, "<compiled-contract>");
+        var parse = engine.Parse(source, "<contract>");
         Assert.Empty(parse.Diagnostics);
 
         var unit = Lowerer.Lower(parse, runtime.Commands);

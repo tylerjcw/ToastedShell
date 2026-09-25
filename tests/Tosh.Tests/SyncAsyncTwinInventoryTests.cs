@@ -14,9 +14,9 @@ namespace Tosh.Tests;
 /// implementation* rather than a delegation, so a semantic fix lands on one
 /// surface and silently misses the other. It has happened twice —
 /// <c>OperatorEvaluator.AreEqual</c> against <c>ToshEngine.AreEqualAsync</c>
-/// (<c>TS-P1-14</c>/<c>TS-P1-15</c>) and <c>ToshHost.DrainValue</c> against
-/// <c>InvokeValue</c> (<c>TS-P1-20</c>) — and each time the fix was to converge
-/// that one pair, which does nothing about the next one.
+/// (<c>TS-P1-14</c>/<c>TS-P1-15</c>) and the former compiled host's
+/// <c>DrainValue</c> against <c>InvokeValue</c> (<c>TS-P1-20</c>) — and each time the
+/// fix was to converge that one pair, which does nothing about the next one.
 /// </para>
 /// <para>
 /// So this is a ratchet rather than a check on any single pair. It pins the whole
@@ -53,9 +53,9 @@ public sealed class SyncAsyncTwinInventoryTests
         // rejected as a larger change than this item; it would get its own item.
         "IObjectAccessor.GetValue",
         "IObjectAccessor.SetValue",
-        // `TOAST-0006`: the synchronous compiler/runtime boundaries and asynchronous
-        // evaluator share this contract. ReflectionInvoker's async form delegates to the
-        // sync overload-selection core; another host may have a real async constructor.
+        // `TOAST-0006`: synchronous runtime callers and the asynchronous evaluator share
+        // this contract. ReflectionInvoker's async form delegates to the sync
+        // overload-selection core; another host may have a real async constructor.
         "IObjectInvoker.CreateInstance",
         "IShellEnumerableObject.EnumerateShellItems",
         "IShellInvocableObject.InvokeInstanceMethod",
@@ -153,10 +153,6 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshEngine.ApplyPendingParameterDefaults",
         "ToshEngine.SelectBestCallableMatches",
         "ToshEngine.TryConvertParameterValue",
-        //   GetIndexedValue -> TryGetIndexedValueBeforeRecords +
-        //                      GetIndexedValueAfterRecords, with each surface
-        //                      supplying only its own record step between them.
-        "ShellIndexingUtilities.GetIndexedValue",
 
         // ── Thin wrappers over one shared implementation ──────────────────────
         // Reclassified 2026-07-30 after measuring rather than counting. Each of
@@ -341,14 +337,13 @@ public sealed class SyncAsyncTwinInventoryTests
     }
 
     [Fact]
-    public void The_two_pairs_the_item_was_filed_for_are_converged()
+    public void The_pair_the_item_was_filed_for_is_converged()
     {
-        // TS-P1-14/TS-P1-15 and TS-P1-20. Named rather than merely absent from the
-        // inventory, so the specific regressions that motivated the item fail
-        // loudly rather than being one line in a list of thirty.
+        // TS-P1-14/TS-P1-15. Named rather than merely absent from the inventory, so the
+        // specific regression that motivated the item fails loudly rather than being one
+        // line in a list of thirty. (The TS-P1-20 pair left with the compiled host.)
         var twins = DiscoverTwins().ToHashSet(StringComparer.Ordinal);
 
         Assert.DoesNotContain("ToshEngine.AreEqual", twins);
-        Assert.DoesNotContain("ToshHost.DrainValue", twins);
     }
 }

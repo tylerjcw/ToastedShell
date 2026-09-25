@@ -11,7 +11,6 @@ namespace Tosh.Tests;
 /// and evaluation short-circuits, so a chain is not equivalent to
 /// rewriting the source with the middle operand repeated.
 /// </summary>
-[Collection(ConsoleSerialCollection.Name)]
 public sealed class ChainedComparisonTests : IClassFixture<ToshRuntimeFixture>
 {
     private readonly ToshRuntime _runtime;

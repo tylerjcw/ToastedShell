@@ -57,9 +57,8 @@ public class ToshError : Exception, IToshFailure
 
     /// <summary>
     /// Optional source span identifying where the error was raised.
-    /// Set automatically by the engine and the compiled-mode runtime
-    /// host when boundary-wrapping a thrown value; user code may
-    /// also assign it manually.
+    /// Set automatically by the engine when boundary-wrapping a thrown
+    /// value; user code may also assign it manually.
     /// </summary>
     public TextSpan Span { get; set; }
 

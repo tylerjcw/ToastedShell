@@ -56,8 +56,7 @@ public static class CommandLatexEmitter
         sb.AppendLine();
 
         // Stdlib bucket and shell-only badge — surface the library / shell-only
-        // partition called out in docs/COMPILED_TOSH.md so the appendix mirrors
-        // the eventual Tosh.Stdlib.* assembly layout.
+        // partition so the appendix mirrors the Tosh.Stdlib.* layout.
         if (!string.IsNullOrWhiteSpace(entry.Stdlib))
         {
             sb.AppendLine($"\\textit{{Library: \\code{{Tosh.Stdlib.{EscapeLatex(entry.Stdlib)}}}}}");

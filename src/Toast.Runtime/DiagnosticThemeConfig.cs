@@ -2,8 +2,8 @@ namespace Tosh.Runtime;
 
 // `TOAST-0006`. Colour is presentation, so these belong with the shell by the classification
 // this item set out — but `DiagnosticRenderer` names them, and the renderer cannot follow
-// them there: it is what a *compiled program* uses to report an unhandled exception, and a
-// compiled program dragging in the shell assembly is the opposite of what Phase B is for.
+// them there: it is what the language uses to report an error when no shell is present, and
+// an embedded language dragging in the shell assembly is the opposite of what Phase B is for.
 //
 // So they travel with the language, and the wrinkle is recorded rather than hidden. Removing
 // it means the renderer taking a contract instead of these classes, which is a change to the

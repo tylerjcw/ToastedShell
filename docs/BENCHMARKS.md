@@ -63,8 +63,8 @@ benchmarks for direct comparison.
    command stays under ~5 µs.
 2. **Parser and binder allocations are comparable in magnitude.**
 3. **A 500-line script costs ~0.9 ms to parse and another ~1.6 ms
-   to bind.** Fine for shell startup; matters for an incremental
-   compiler driving many files.
+   to bind.** Fine for shell startup; matters for an editor or
+   language server re-analysing many files.
 
 ---
 
@@ -94,17 +94,18 @@ external processes) so timings reflect the engine itself.
    bound IR with concrete element types would shrink that
    dramatically.
 4. **For-loop overhead is ~2.4 µs/iteration.** Fine for shell
-   workloads; the next obvious target for a compiled backend.
+   workloads; the next obvious target for the evaluator.
 
 ---
 
-## Strategic implications for the IL backend
+## Strategic implications for the evaluator
 
 The `WhereSort` result is the clearest signal: the evaluator boxes
-every pipeline element. An IL backend that specializes pipeline
-stages on element type (`int`, `string`, `FileSystemEntry`) should
-yield roughly an order of magnitude improvement on numeric pipelines
-— independent of any binder/parser work.
+every pipeline element. Specializing pipeline stages on element type
+(`int`, `string`, `FileSystemEntry`) inside the evaluator should yield
+a large improvement on numeric pipelines — independent of any
+binder/parser work. (There is no compiled backend; see
+[COMPILER_DECOMMISSIONING_PLAN.md](COMPILER_DECOMMISSIONING_PLAN.md).)
 
 ---
 

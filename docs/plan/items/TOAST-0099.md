@@ -63,7 +63,6 @@ resolvable, so its qualified form has a spelling to match.
 - [ ] `ShellFullName` is either the qualified name or documented as deliberately not being it
 - [ ] `TOAST-0092`'s writer names a module-scoped type instead of degrading to an anonymous record
 - [ ] Diagnostics that name a type disambiguate two same-named types from different modules
-- [ ] Interpreter and compiler agree
 
 ## Not in scope
 
@@ -71,3 +70,5 @@ A class with a **required primary constructor** still cannot use the typed-liter
 constructor parameters need not match its property names — `Point2D<T>(x: T, y: T)` against
 `prop X`, `prop Y`. That is a separate limitation and would still stop `Point2D` round-tripping
 by name even with this item done.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

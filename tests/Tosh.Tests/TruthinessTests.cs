@@ -8,7 +8,7 @@ namespace Tosh.Tests;
 public sealed class TruthinessTests
 {
     [Fact]
-    public void Runtime_interpreter_and_compiler_wrappers_share_the_canonical_matrix()
+    public void Runtime_and_operator_evaluator_share_the_canonical_matrix()
     {
         foreach (var (name, value, expected) in CanonicalCases())
         {

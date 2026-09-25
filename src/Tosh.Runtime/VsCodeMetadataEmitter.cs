@@ -18,8 +18,8 @@ public static class VsCodeMetadataEmitter
         foreach (var entry in metadata)
         {
             // Append the stdlib bucket and shell-only badge to each description so
-            // VS Code hovers and completion details surface the same library /
-            // shell-only partition documented in docs/COMPILED_TOSH.md.
+            // VS Code hovers and completion details surface the library /
+            // shell-only partition.
             var description = entry.Description;
             var suffix = new System.Text.StringBuilder();
             if (!string.IsNullOrWhiteSpace(entry.Stdlib))

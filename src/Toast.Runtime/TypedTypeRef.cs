@@ -4,8 +4,8 @@ namespace Tosh.Runtime;
 /// Structured, machine-readable type description for a command
 /// argument, option value, or output element. Sits alongside the
 /// existing free-form <c>TypeName</c> string so older consumers
-/// keep working while new tooling (LSP, MCP, the compiler's
-/// argument-shape checker) can reason about types programmatically.
+/// keep working while new tooling (LSP, MCP, the binder's
+/// argument-shape checks) can reason about types programmatically.
 /// </summary>
 /// <param name="ClrTypeName">
 /// Short CLR type name (<c>System.String</c>, <c>System.Int32</c>,

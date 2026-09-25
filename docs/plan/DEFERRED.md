@@ -4,8 +4,4 @@
 
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
-| [`TS-P1-48`](items/TS-P1-48.md) | P1 | deferred | — | Every compiled assembly in a process shares one global class registry, so two programs with a same-named cl... |
-| [`TS-P1-13`](items/TS-P1-13.md) | P1 | deferred | — | Compiled ordinary member/index assignments evaluate target components before the RHS, while the interpreter... |
-| [`TS-P1-46`](items/TS-P1-46.md) | P1 | deferred | — | An array literal is a real array interpreted and a `List<object>` compiled |
-| [`TS-P1-40`](items/TS-P1-40.md) | P1 | deferred | — | Index assignment has two live implementations on different surfaces |
 | [`TOSH-0005`](items/TOSH-0005.md) | P2 | deferred | 0/5 | External-program I/O compact: M5 polish, and TSSP rendering for interactive children |

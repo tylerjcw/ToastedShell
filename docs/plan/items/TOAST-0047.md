@@ -21,9 +21,8 @@ var v = (true ? 1 : throw new Error("x"))   # "could not pin down a concrete typ
 `BoundThrowExpression` is typed `BoundType.Dynamic`, so joining it with `int` gives
 `dynamic`. With a bottom type, `int ⊔ never = int` and this infers.
 
-That is not hypothetical: `throw` in a ternary arm and in a `match` arm both compile and
-run today, and `default => throw …` is the ordinary way to say an arm cannot happen —
-`TOAST-0044` taught the emitter to handle exactly that.
+That is not hypothetical: `throw` in a ternary arm and in a `match` arm both run today,
+and `default => throw …` is the ordinary way to say an arm cannot happen.
 
 ## Reference
 
@@ -69,5 +68,6 @@ unspecified and self-inconsistent unit type would make both harder to explain.
 - [ ] Joining `never` with any type yields that type — `(cond ? 1 : throw …)` infers `int`
 - [ ] `never` cannot be declared as a variable's or parameter's type
 - [ ] `docs/spec/` states what it is and how it joins
-- [ ] The interpreted and compiled backends agree
 - [ ] A negative control
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

@@ -261,58 +261,34 @@ That means the object still exists in the pipeline, but interactive display can 
 
 ## Project Structure
 
-Twenty-two projects build as part of `Tosh.slnx`. Sizes are C# source lines,
-excluding `bin/` and `obj/`, as of July 30, 2026.
+Twenty projects build as part of `Tosh.slnx`. Sizes are C# source lines,
+excluding `bin/` and `obj/`, as of September 25, 2026.
 
 | Project | Lines | Responsibility |
 |---|---:|---|
-| `Tosh.Runtime` | 56,373 | Shared runtime types, value model, display engine, command metadata |
-| `Tosh.Language` | 47,992 | Lexer, parser, binder, lowerer, evaluator (`ToshEngine`) |
-| `Tosh.Stdlib` | 37,215 | 249 built-in commands grouped by category |
-| `Tosh.Cli` | 22,428 | CLI entry point, REPL host, line editor, startup loader |
-| `Tosh.Compiler` | 11,447 | `tosh --compile` IL emitter (`PersistedAssemblyBuilder`) |
-| `Tosh.Tome` | 9,940 | Tōme — terminal text editor, ships as its own binary |
-| `Tosh.LanguageServices` | 6,441 | Shared analysis backend used by LSP and MCP |
-| `Tosh.Crumb` | 4,876 | Crumb — pacman/AUR wrapper; tables to TTYs, NDJSON to pipes |
-| `Tosh.Compiler.Runtime` | 3,100 | `ToshHost` shim that compiled assemblies link against |
-| `Tosh.Tui` | 1,678 | Terminal UI primitives (rendering, layout, input) |
-| `Tosh.Compiler.IR` | 1,616 | Bound-node IR shared by compiler front and back ends |
-| `Tosh.DevCompanion` | 1,745 | MCP memory server (`tools/`), see [AGENTS.md](../AGENTS.md) |
-| `Tosh.Mcp` | 787 | Model Context Protocol server for AI agents |
+| `Tosh.Language` | 74,271 | Lexer, parser, binder, lowerer, type checker, evaluator (`ToshEngine`) |
+| `Toast.Runtime` | 48,846 | Language runtime: value model, type system, operators, CLR interop, host contracts |
+| `Tosh.Stdlib` | 31,474 | Shell half of the built-in command library |
+| `Tosh.Tui` | 21,512 | Terminal UI primitives (rendering, layout, input) |
+| `Tosh.Cli` | 20,732 | CLI entry point, REPL host, line editor, startup loader |
+| `Tosh.Runtime` | 17,897 | Shell services: display engine, help catalog, jobs, session configuration |
+| `Toast.Stdlib` | 14,461 | Language half of the built-in command library |
+| `Tosh.Tome` | 9,939 | Tōme — terminal text editor, ships as its own binary |
+| `Tosh.LanguageServices` | 7,900 | Shared analysis backend used by LSP and MCP |
+| `Tosh.Crumb` | 5,381 | Crumb — pacman/AUR wrapper; tables to TTYs, NDJSON to pipes |
+| `Tosh.DevCompanion` | 1,775 | MCP memory server (`tools/`), see [AGENTS.md](../AGENTS.md) |
+| `Tosh.Mcp` | 838 | Model Context Protocol server for AI agents |
 | `Tosh.Client` | 680 | TSSP frame writer and `/dev/tty` helpers; no dependency on the rest of the tree |
-| `Tosh.Sdk.Tasks` | 610 | MSBuild tasks driving `.toshproj` build/run/publish/pack |
 | `Tosh.Lsp` | 527 | Language Server Protocol server (self-contained binary) |
-| `Tosh.ParityCheck` | 181 | Interpreter/compiler parity harness (`tools/`) |
-| `Tosh.Sdk`, `Tosh.Templates` | — | MSBuild SDK and `dotnet new` templates (no C# sources) |
+| `Tosh.Dap` | 524 | Debug Adapter Protocol server; dormant, exercised by `ProtocolSmokeTests` |
+| `Tosh.ParityCheck` | 183 | Build-time advisory: command documentation and operator parity (`tools/`) |
 
-Tests live in `tests/Tosh.Tests` (53,145 lines, 3,624 assertions) and
-`tests/Tosh.LspFixture`. Benchmarks live in `bench/Tosh.Benchmarks`. Total tree:
-~260,000 lines of C#.
+Tests live in `tests/Tosh.Tests` (105,234 lines) and `tests/Tosh.LspFixture`.
+Benchmarks live in `bench/`. Total tree: ~363,000 lines of C#.
 
-### Not in the build
-
-Two directories under `src/` are **not** part of `Tosh.slnx` and are not compiled.
-Recorded here because a reader would otherwise assume, as this document did, that
-everything under `src/` is live:
-
-- **`src/Tosh.Core`** (879 lines, last touched 2026-04-29) — has no `.csproj` at
-  all. Earlier described here as a "legacy shim being phased out"; the phase-out
-  finished in effect but never in the tree. Its only remaining mention elsewhere is
-  the string `"Tosh.Core.dll"` in `ToshPublisher.RuntimeDependencyFileNames`, which
-  is harmless — the copy loop is guarded by `File.Exists`, so a dependency that is
-  never built is simply never copied.
-- **`src/Tosh.Dap`** (514 lines, last touched 2026-04-30) — a Debug Adapter
-  Protocol server with a `.csproj` that no solution includes. Dormant rather than
-  dead: it compiled when it was written, and nothing has referenced it since.
-
-`examples/tsspdemo` is likewise outside the solution, which is appropriate for a
-sample.
-
-The earlier plan to split runtime, display, and interop into their own assemblies
-has landed: stdlib commands are factored out of the runtime core, the language
-project owns the full parse → bind → lower → emit pipeline, and the compiler
-runtime is a separate assembly that compiled artefacts link against rather than
-linking against the interpreter.
+There is no compiler. Scripts always run on the evaluator; single-file
+distribution packs the runtime together with the script files
+(`TOAST-ARCH-01`, [COMPILER_DECOMMISSIONING_PLAN.md](COMPILER_DECOMMISSIONING_PLAN.md)).
 
 ## Reference Codebases
 
@@ -403,9 +379,8 @@ Two decisions have been added since:
 
 8. **Paired collection delimiters** — `{` is block-only, `{| |}` is a record,
    `{% %}` a dict, `{: :}` a set (`TS-P2-25`).
-9. **Compiled ToastScript is an experiment, not a goal**, until the interpreted
-   language is rock-solid — see the standing priority decision in
-   [ROADMAP.md](ROADMAP.md).
+9. **There is no compiler.** The evaluator is the only execution engine — see the
+   standing decision in [ROADMAP.md](ROADMAP.md).
 
 ## Current Direction
 
@@ -422,8 +397,7 @@ lesson rather than a bug list: **the recurring root cause is two implementations
 of one operation** — sync/async twins, two import paths, the constant folder
 versus the operator evaluator, two equality paths. Where a second implementation
 is unavoidable, it needs a guard that asserts the two agree. That is what the
-standing drift guards in `tests/Tosh.Tests` exist for, and it is the argument for
-keeping the compiler in maintenance while semantics are still moving.
+standing drift guards in `tests/Tosh.Tests` exist for.
 
 The known structural weaknesses, stated plainly so they are not rediscovered:
 

@@ -33,8 +33,8 @@ public static class OperatorEvaluator
             // vectors, matrices, complex, storage sizes — applies unchanged, and an
             // operand that cannot be negated reports the type message they already give
             // instead of a message about the operator.
-            "-" => operand is Quantity quantity ? -quantity : Subtract(0, operand),
-            "+" => operand is Quantity quantity ? quantity : Add(0, operand),
+            "-" => operand is Quantity quantity ? -quantity : operand is QuantityArray qa ? -qa : Subtract(0, operand),
+            "+" => operand is Quantity quantity ? quantity : operand is QuantityArray qa ? qa : Add(0, operand),
 
             "bnot" => Bitwise(operand, operand, "bnot", (a, _) => ~a),
 
@@ -43,17 +43,13 @@ public static class OperatorEvaluator
     }
 
     /// <param name="resolveDeclaredTypeName">
-    /// Optional scoped resolver for a module-qualified declared-type name. Kept as a separate
-    /// overload rather than an optional parameter on the four-argument form: the compiler's
-    /// emitter binds these by exact signature
-    /// (<c>GetMethod(name, new[] { typeof(object), typeof(string), typeof(object) })</c>), so
-    /// widening the original would return null there and fail at emit rather than at compile.
+    /// Optional scoped resolver for a module-qualified declared-type name.
     /// </param>
     public static object? EvaluateBinary(
         object? left,
         string @operator,
         object? right,
-        Func<string, string?>? resolveDeclaredTypeName)
+        Func<string, string?>? resolveDeclaredTypeName = null)
     {
         if (TryInvokeShellBinaryOperator(left, @operator, right, reversed: false, out var leftResult))
         {
@@ -109,51 +105,6 @@ public static class OperatorEvaluator
         };
     }
 
-    /// <summary>
-    /// Evaluates an eager binary expression and attaches the canonical
-    /// structured source diagnostic to ordinary operator failures. User
-    /// throws, cancellation, control flow, defer failures, and diagnostics
-    /// preserve their identity.
-    /// </summary>
-    /// <remarks>
-    /// Declared *after* the implementation above on purpose: <c>OperatorParityTests</c> finds the
-    /// first <c>EvaluateBinary(</c> in this file and reads the operator switch out of its body, so
-    /// a forwarding overload placed first leaves the guard extracting nothing and passing vacuously.
-    /// </remarks>
-    public static object? EvaluateBinary(object? left, string @operator, object? right) =>
-        EvaluateBinary(left, @operator, right, resolveDeclaredTypeName: null);
-
-    public static object? EvaluateBinaryWithDiagnostics(
-        object? left,
-        string @operator,
-        object? right,
-        string sourceName,
-        string sourceText,
-        int spanStart,
-        int spanLength)
-    {
-        try
-        {
-            return EvaluateBinary(left, @operator, right);
-        }
-        catch (Exception exception) when (MustPreserveExpressionFailure(exception))
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: exception is InvalidOperationException
-                    ? "tosh.runtime.expression_failed"
-                    : "tosh.runtime.unexpected_exception",
-                Title: exception.Message,
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: new TextSpan(spanStart, spanLength),
-                Label: "while evaluating this expression"));
-        }
-    }
-
     private static bool TryInvokeShellBinaryOperator(
         object? instance,
         string @operator,
@@ -179,158 +130,21 @@ public static class OperatorEvaluator
                 out result);
         }
 
-        return TryInvokeCompiledSpecialMethod(
-            instance,
-            @operator,
-            [other],
-            out result);
+        return false;
     }
-
-    /// <summary>
-    /// Whether a CLR type is a compiled ToastScript type, answered from a cache.
-    /// </summary>
-    /// <remarks>
-    /// This is the gate every operator evaluation passes through, and it was asking
-    /// the reflection system directly: `GetCustomAttribute&lt;ToshTypeAttribute&gt;()`
-    /// walks the type's custom-attribute records, and it ran on both operands of every
-    /// operator. `$x += 1` in a loop asked whether `Int32` carries the attribute a
-    /// million times over, and the answer had been the same since the type was loaded —
-    /// custom-attribute machinery was ~5% of a profile of a loop that only increments
-    /// an integer (`TS-P2-119`).
-    ///
-    /// A type's attributes cannot change once it is loaded, so the answer is cached
-    /// permanently. The dictionary is bounded by the number of distinct CLR types that
-    /// reach an operator, which is small and does not grow with the work done.
-    /// </remarks>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, bool> _isCompiledToshType = new();
-
-    private static bool IsCompiledToshType(Type type)
-        => _isCompiledToshType.GetOrAdd(
-            type,
-            static candidate => candidate.GetCustomAttribute<ToshTypeAttribute>() is not null);
-
-    private static bool TryInvokeCompiledSpecialMethod(
-        object? instance,
-        string methodName,
-        object?[] arguments,
-        out object? result)
-    {
-        result = null;
-        if (instance is null ||
-            !IsCompiledToshType(instance.GetType()))
-        {
-            return false;
-        }
-
-        MethodInfo? method = null;
-        for (var current = instance.GetType();
-             current is not null &&
-             IsCompiledToshType(current);
-             current = current.BaseType)
-        {
-            method = current
-                .GetMethods(
-                    BindingFlags.Instance |
-                    BindingFlags.Public |
-                    BindingFlags.NonPublic |
-                    BindingFlags.DeclaredOnly)
-                .FirstOrDefault(candidate =>
-                    candidate.GetParameters().Length == arguments.Length &&
-                    string.Equals(
-                        candidate
-                            .GetCustomAttribute<ToshOriginalNameAttribute>()
-                            ?.OriginalName ?? candidate.Name,
-                        methodName,
-                        StringComparison.Ordinal));
-            if (method is not null)
-            {
-                break;
-            }
-        }
-
-        if (method is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            result = method.Invoke(instance, arguments);
-            return true;
-        }
-        catch (TargetInvocationException exception)
-            when (exception.InnerException is not null)
-        {
-            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
-    }
-
-    private static bool MustPreserveExpressionFailure(Exception exception) =>
-        exception is ToshDiagnosticException or
-            OperationCanceledException or
-            ShellControlFlowException or
-            ThrowSignalException ||
-        ToshDeferFailures.IsDeferFailure(exception) ||
-        exception.Data.Contains("tosh.thrown");
 
     private static string ToOperatorString(object? value) =>
-        ToOperatorString(
-            value,
-            new HashSet<object>(ReferenceEqualityComparer.Instance));
-
-    private static string ToOperatorString(
-        object? value,
-        HashSet<object> activeValues)
-    {
-        if (value is null)
-        {
-            return string.Empty;
-        }
-
-        var type = value.GetType();
-        if (!IsCompiledToshType(type))
-        {
-            return value.ToString() ?? string.Empty;
-        }
-
-        var fallbackName =
-            type.GetCustomAttribute<ToshOriginalNameAttribute>()?.OriginalName
-            ?? type.Name;
-        if (!activeValues.Add(value))
-        {
-            return fallbackName;
-        }
-
-        try
-        {
-            if (TryInvokeCompiledSpecialMethod(
-                    value,
-                    nameof(ToString),
-                    Array.Empty<object?>(),
-                    out var converted))
-            {
-                return ToOperatorString(converted, activeValues);
-            }
-
-            return fallbackName;
-        }
-        finally
-        {
-            activeValues.Remove(value);
-        }
-    }
+        value?.ToString() ?? string.Empty;
 
     /// <param name="resolveDeclaredTypeName">
-    /// See the note on <see cref="EvaluateBinary(object?, string, object?, Func{string, string?}?)"/>
-    /// — a separate overload, because the emitter binds the four-argument form by exact signature.
+    /// Optional scoped resolver for a module-qualified declared-type name.
     /// </param>
     public static bool Matches(
         object? actual,
         string @operator,
         object? expected,
         bool nullable,
-        Func<string, string?>? resolveDeclaredTypeName)
+        Func<string, string?>? resolveDeclaredTypeName = null)
     {
         if (actual is ShellTextLine actualLine) actual = actualLine.Text;
         if (expected is ShellTextLine expectedLine) expected = expectedLine.Text;
@@ -355,13 +169,6 @@ public static class OperatorEvaluator
             _ => throw new InvalidOperationException($"Unsupported operator '{@operator}'. Supported operators: ==, !=, =~, !~, in, not-in, >, >=, <, <=, contains, starts-with, ends-with, is, is-not."),
         };
     }
-
-
-    /// <remarks>
-    /// After the implementation, for the reason given on <see cref="EvaluateBinary(object?, string, object?)"/>.
-    /// </remarks>
-    public static bool Matches(object? actual, string @operator, object? expected, bool nullable) =>
-        Matches(actual, @operator, expected, nullable, resolveDeclaredTypeName: null);
 
     public static bool AreEqual(object? actual, object? expected)
     {
@@ -661,36 +468,6 @@ public static class OperatorEvaluator
         if (actual is null || expected is null)
         {
             return false;
-        }
-
-        if (TryInvokeCompiledSpecialMethod(
-                actual,
-                nameof(Equals),
-                [expected],
-                out var equality))
-        {
-            return ToBoolean(equality);
-        }
-
-        var type = actual.GetType();
-        var toshType = type.GetCustomAttribute<ToshTypeAttribute>();
-        if (toshType is not null &&
-            string.Equals(toshType.Kind, "record", StringComparison.Ordinal) &&
-            expected.GetType() == type)
-        {
-            foreach (var field in type.GetFields(
-                         BindingFlags.Instance |
-                         BindingFlags.Public |
-                         BindingFlags.NonPublic |
-                         BindingFlags.DeclaredOnly))
-            {
-                if (!AreEqual(field.GetValue(actual), field.GetValue(expected)))
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         return actual.Equals(expected);
@@ -1378,16 +1155,9 @@ public static class OperatorEvaluator
         // Check simple name match (e.g. "String", "Int32", "FileSystemEntry"), walking the
         // base chain — `TOAST-0030` cause D.
         //
-        // This used to compare `actualType` alone, and a declared hierarchy only answered
-        // correctly because the *interpreter's* instances are `ToshClassInstance`, which
-        // implements `IShellTypeCheckable` above and walks itself. A compiled class is a
-        // real emitted CLR type with real inheritance and no such interface, so
-        // `class D extends B` gave `(new D()) is B` false compiled and true interpreted —
-        // while inherited and overridden properties were both correct, which is what made
-        // it look like a type-test bug rather than an inheritance one.
-        //
-        // Walking here rather than in the emitter is the point: one rule, in the portable
-        // runtime, that both backends already call.
+        // A declared class answers through `IShellTypeCheckable` above and walks its own
+        // hierarchy; this walk is for CLR values, so `$info is FileSystemInfo` holds for a
+        // `FileInfo` rather than only for the exact runtime type.
         for (var candidate = actualType; candidate is not null; candidate = candidate.BaseType)
         {
             if (string.Equals(candidate.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
@@ -1473,10 +1243,8 @@ public static class OperatorEvaluator
     {
         if (left is null || right is null)
         {
-            // `TOAST-0030` cause C. The guidance belongs here rather than only on the
-            // interpreter's string-concatenation arm: the compiled path reaches *this*
-            // method, so it was raising the bare sentence and losing the remedy that makes
-            // raising reasonable in the first place.
+            // `TOAST-0030` cause C. Raise with the remedy attached rather than the bare
+            // sentence — the remedy is what makes raising reasonable in the first place.
             throw new InvalidOperationException(
                 left is string || right is string
                     ? ToastMessages.NullStringConcatenation

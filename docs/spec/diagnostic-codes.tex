@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 587 diagnostic codes currently emitted by the
+This chapter lists all 586 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -22,7 +22,6 @@ regenerated whenever new diagnostics are added.
 \midrule
 \texttt{tosh.bind.*} & 1 & --- \\
 \texttt{tosh.command.*} & 1 & --- \\
-\texttt{tosh.compile.*} & 1 & --- \\
 \texttt{tosh.config.*} & 1 & Raised by the configuration loader or by the `config` command. \\
 \texttt{tosh.edit.*} & 1 & --- \\
 \texttt{tosh.format.*} & 1 & --- \\
@@ -58,13 +57,6 @@ regenerated whenever new diagnostics are added.
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
 \item[\texttt{\small tosh.command.missing\_subcommand}] 'prompt' requires a segment name.
 \item[\texttt{\small tosh.command.unknown\_subcommand}] 'prompt \{subcommand\}' is not a recognized segment.
-\end{description}
-
-\section{\texttt{tosh.compile.*}}
-\begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
-\item[\texttt{\small tosh.compile.implicit\_dynamic}] \textit{(see source)}
-\item[\texttt{\small tosh.compile.missing\_type\_annotation}] Function '\{fn.Name\}' is missing a return-type annotation.
-\item[\texttt{\small tosh.compile.void\_function\_produces\_output}] Function '\{name\}' returns 'void' and cannot \{what\}.
 \end{description}
 
 \section{\texttt{tosh.config.*}}
@@ -130,6 +122,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.accidental\_double\_dot}] Did you mean '.' (member access) instead of '..' (range)?
 \item[\texttt{\small tosh.parser.assert\_does\_not\_accept\_message}] Assert no longer accepts a trailing custom message.
 \item[\texttt{\small tosh.parser.assignment\_in\_predicate}] Use '==' for equality comparisons, not '='.
+\item[\texttt{\small tosh.parser.conflicting\_modifiers}] Conflicting modifiers: 'strict' and 'fluid' cannot be used together.
 \item[\texttt{\small tosh.parser.const\_requires\_value}] A 'const' declaration requires an initializer.
 \item[\texttt{\small tosh.parser.duplicate\_input\_redirection}] Only one input redirection is allowed per pipeline.
 \item[\texttt{\small tosh.parser.duplicate\_subcommand\_modifier}] Subcommand modifier '\{modifierToken.Text\}' is repeated.
@@ -323,7 +316,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]
 \item[\texttt{\small tosh.runtime.alloc\_negative\_size}] Allocated buffers cannot have a negative size.
 \item[\texttt{\small tosh.runtime.alloc\_requires\_single\_value}] Allocated buffer declarations require exactly one size or type value.
-\item[\texttt{\small tosh.runtime.annotation\_conversion\_failed}] '\{owner\}' produced \{value\}, which cannot become '\{typeName\}' without discarding its fractional part.
+\item[\texttt{\small tosh.runtime.annotation\_conversion\_failed}] '\{owner\}' produced \{DescribeConversionSource(value)\}, which could not be converted to '\{typeName\}'.
 \item[\texttt{\small tosh.runtime.annotation\_unknown\_type}] Argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.assert\_requires\_predicate}] The 'assert' command requires a predicate block or callable.
 \item[\texttt{\small tosh.runtime.assertion\_failed}] \textit{(see source)}
@@ -338,9 +331,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.base\_type\_argument\_missing}] Class '\{@class.Name\}' extends generic class '\{baseClassDef.Name\}' without supplying type arguments.
 \item[\texttt{\small tosh.runtime.bind\_target\_not\_native\_module}] '\{statement.ModuleName\}' is not a native library module.
 \item[\texttt{\small tosh.runtime.break\_outside\_loop}] 'break' can only be used inside 'for', 'while', or 'each' blocks.
-\item[\texttt{\small tosh.runtime.callable\_argument\_count\_mismatch}] Callable '\{CallableName\}' expects \{expected\} but received \{received\}.
 \item[\texttt{\small tosh.runtime.callable\_invocation\_requires\_single\_value}] Callable invocation in expression context must produce exactly one value.
-\item[\texttt{\small tosh.runtime.callable\_named\_argument}] Callable '\{CallableName\}' has no parameter named '\{named.Key\}'.
 \item[\texttt{\small tosh.runtime.cartesian\_product\_args}] 'cartesian-product' requires a second sequence and an optional combiner.
 \item[\texttt{\small tosh.runtime.cast\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.chain\_requires\_sequence}] 'chain' requires at least one sequence argument.
@@ -357,6 +348,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.compose\_requires\_callable}] Argument \{i + 1\} is not callable.
 \item[\texttt{\small tosh.runtime.compose\_requires\_two\_callables}] The 'compose' command requires at least two callable values.
 \item[\texttt{\small tosh.runtime.compound\_assignment\_requires\_value}] Variable '\{assignment.Name\}' does not have a value yet.
+\item[\texttt{\small tosh.runtime.conflicting\_modifiers}] Record '\{record.Name\}' cannot be both 'strict' and 'fluid'.
 \item[\texttt{\small tosh.runtime.const\_reassignment}] Cannot reassign constant '\{name\}'.
 \item[\texttt{\small tosh.runtime.const\_redeclaration}] Cannot redeclare constant '\{name\}'.
 \item[\texttt{\small tosh.runtime.constructor\_cycle}] Constructor cycle detected while initializing class '\{Name\}'.
@@ -378,7 +370,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.duplicate\_class\_property}] Class '\{@class.Name\}' defines property '\{duplicateProperties.Key\}' more than once.
 \item[\texttt{\small tosh.runtime.duplicate\_constructor}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.duplicate\_function\_parameter}] Function '\{name\}' defines parameter '\{duplicateParameters.Key\}' more than once.
-\item[\texttt{\small tosh.runtime.duplicate\_named\_argument}] Named argument '\{namedArgument.Name\}' was supplied more than once.
+\item[\texttt{\small tosh.runtime.duplicate\_named\_argument}] Named argument '\{named.Name\}' was supplied more than once to \{calleeLabel\}.
 \item[\texttt{\small tosh.runtime.duplicate\_primary\_constructor\_chain}] Constructor '\{Name\}()' calls '\$this(...)' more than once.
 \item[\texttt{\small tosh.runtime.duplicate\_record\_field}] Record '\{record.Name\}' defines field '\{duplicateFields.Key\}' more than once.
 \item[\texttt{\small tosh.runtime.duplicate\_rune\_parameter}] Rune '\{rune.Name\}' defines parameter '\{duplicateParameters.Key\}' more than once.
@@ -475,6 +467,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.lsipc\_json\_parse\_failed}] Could not parse structured 'lsipc' output. \{exception.Message\}
 \item[\texttt{\small tosh.runtime.map\_requires\_callable\_or\_block}] 'map' requires exactly one callable value or block.
 \item[\texttt{\small tosh.runtime.member\_assignment\_failed}] \textit{(see source)}
+\item[\texttt{\small tosh.runtime.members\_add\_requires\_fluid}] Class '\{classInstance.Definition.Name\}' is not fluid. Declare the class with 'fluid' to allow dynamic member addition.
 \item[\texttt{\small tosh.runtime.missing\_base\_constructor\_initializer}] Class '\{requestedBy.Name\}' must initialize base class '\{Name\}' with constructor arguments.
 \item[\texttt{\small tosh.runtime.missing\_hollow\_methods}] Class '\{@class.Name\}' must implement hollow methods from '\{parentClass.Name\}': \{string.Join(
 \item[\texttt{\small tosh.runtime.missing\_hollow\_properties}] Class '\{@class.Name\}' must implement hollow properties from '\{parentClass.Name\}': \{string.Join(
@@ -527,7 +520,6 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.networkctl\_parse\_failed}] Could not parse structured 'networkctl list' output. \{exception.Message\}
 \item[\texttt{\small tosh.runtime.non\_exhaustive\_match}] This match expression did not match any arm.
 \item[\texttt{\small tosh.runtime.nonzero\_exit\_code}] Command exited with code \{exitCode\}.
-\item[\texttt{\small tosh.runtime.not\_callable}] Value of type '\{(target?.GetType().Name ?? 
 \item[\texttt{\small tosh.runtime.null\_dict\_key}] Dict keys cannot be null.
 \item[\texttt{\small tosh.runtime.object\_initializer\_entry\_unsupported}] An object initialiser takes named fields only.
 \item[\texttt{\small tosh.runtime.object\_initializer\_failed}] '\{newObject.EffectiveBareName\}' cannot take '\{field.Name\}': \{exception.Message\}
@@ -536,6 +528,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.parallel\_requires\_callable\_or\_block}] 'parallel' requires a callable value or block.
 \item[\texttt{\small tosh.runtime.parameter\_default\_conversion\_failed}] The default value for parameter '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.parameter\_type\_conversion\_failed}] Argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
+\item[\texttt{\small tosh.runtime.parse\_type\_conversion\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.partial\_argument\_count\_mismatch}] Callable '\{\_inner.CallableName\}' accepts at most \{maximum\} argument(s) but received \{combinedArguments.Length\}.
 \item[\texttt{\small tosh.runtime.partial\_merge\_non\_partial\_record}] Cannot merge partial record '\{record.Name\}' with existing non-partial record.
 \item[\texttt{\small tosh.runtime.partial\_merge\_non\_partial\_struct}] Cannot merge partial struct '\{@struct.Name\}' with existing non-partial struct.
@@ -615,7 +608,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.timeout\_elapsed}] Operation timed out after \{timeoutDuration.TotalSeconds:0.\#\#\#\} seconds.
 \item[\texttt{\small tosh.runtime.timeout\_invalid\_duration}] 'timeout' duration must be greater than zero.
 \item[\texttt{\small tosh.runtime.timeout\_requires\_seconds\_and\_operation}] 'timeout' requires a duration and an operation.
-\item[\texttt{\small tosh.runtime.to\_requires\_input}] 'to \{formatName\}' has nothing to serialize.
+\item[\texttt{\small tosh.runtime.to\_requires\_input}] 'to \{formatName\}' has nothing to serialize or convert.
 \item[\texttt{\small tosh.runtime.transpose\_requires\_records}] 'transpose' requires record/object pipeline items.
 \item[\texttt{\small tosh.runtime.tree\_command\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.tree\_command\_missing}] The system 'tree' command was not found.
@@ -650,14 +643,14 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unknown\_function\_reference}] Function '\{funcRef.Name\}' was not found.
 \item[\texttt{\small tosh.runtime.unknown\_implicit\_call}] Nothing named '\{methodCall.MethodName\}' is in scope, and the current item has no such method.
 \item[\texttt{\small tosh.runtime.unknown\_interface}] Class '\{@class.Name\}' fulfills unknown interface '\{ifaceName\}'.
-\item[\texttt{\small tosh.runtime.unknown\_named\_argument}] There is no parameter named '\{namedArgument.Name\}'.
+\item[\texttt{\small tosh.runtime.unknown\_named\_argument}] There is no parameter named '\{named.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_script\_flag}] Unknown script flag '--\{optionName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_static\_assignment\_target}] '\{path\}' does not name a static member, because '\{head\}' names no type.
 \item[\texttt{\small tosh.runtime.unknown\_tilde\_target}] '\textasciitilde{}\{expansion.Name\}' names neither a directory alias nor a user.
 \item[\texttt{\small tosh.runtime.unknown\_trait}] Class '\{@class.Name\}' uses unknown trait '\{traitName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_type}] Type '\{name\}' was not found.
 \item[\texttt{\small tosh.runtime.unknown\_type\_argument}] Type '\{name\}' could not be resolved as a type argument for '\{methodName\}'.
-\item[\texttt{\small tosh.runtime.unknown\_type\_constraint}] Generic interface '\{ifaceDefinition.Name\}' constrains 
+\item[\texttt{\small tosh.runtime.unknown\_type\_constraint}] '\{target.OwnerLabel\}' constrains '\{typeParameterName\}' to 
 \item[\texttt{\small tosh.runtime.unknown\_type\_name}] Type '\{typeName\}' could not be resolved for type parameter '\{typeParamsForSeed[i]\}' of function '\{definition.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_variable}] '\$\{variableReference.Name\}' is a constructor parameter of 
 \item[\texttt{\small tosh.runtime.unsupported\_native\_allocation\_type}] '\{type.FullName ?? type.Name\}' is not a supported native allocation type.
@@ -711,6 +704,7 @@ Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 \item[\texttt{\small tosh.type.operator}] Operator '\{op\}' is not compatible with operand types '\{left.DisplayName\}' and '\{right.DisplayName\}'.
 \item[\texttt{\small tosh.type.pipeline\_input}] Command '\{call.Name\}' does not accept pipeline input of type '\{previousOutput.DisplayName\}'.
 \item[\texttt{\small tosh.type.unknown\_option}] Command '\{call.Name\}' has no option '\{text\}'.
+\item[\texttt{\small tosh.type.void\_function\_produces\_output}] Function '\{name\}' returns 'void' and cannot \{what\}.
 \item[\texttt{\small tosh.type.wide\_integer\_literal}] This integer literal is wider than 64 bits and nothing says it should be.
 \end{description}
 

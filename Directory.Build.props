@@ -125,7 +125,7 @@
 
     Strong naming: deliberately not enabled. TōSh ships as an OSS shell
     + scripting runtime; signing the assemblies would force every
-    consumer (tosh-lib NuGets, plugins, etc.) to either sign too or
+    consumer (plugins, etc.) to either sign too or
     InternalsVisibleTo dance around it, which adds friction without
     meaningful security benefit. Revisit if a desktop/Windows-Defender
     integration ever requires it.

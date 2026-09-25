@@ -62,8 +62,8 @@ New items take an **area prefix**: `TOAST-0001` for the language, `TOSH-0001` fo
 shell, then `TOME-`, `CRUMB-`, `TUI-`, and `PLAN-` for work on this system itself.
 
 `TUI-` is the terminal UI framework. It earned its own area when it stopped being a
-feature of the shell and became a component with its own consumers: the shell, Tōast
-scripts, and eventually compiled Tōast programs. An item about how a widget lays
+feature of the shell and became a component with its own consumers: the shell and Tōast
+scripts. An item about how a widget lays
 itself out belongs to none of `toast` or `tosh`, which is the test the area prefix is
 supposed to apply.
 

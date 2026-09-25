@@ -12,7 +12,8 @@ internal readonly record struct ContractMemberTypeMismatch(
     string Actual);
 
 /// <summary>
-/// Backend-neutral trait/interface member-type rules — <c>TOAST-0020</c>.
+/// Trait/interface member-type rules shared by class declaration and the type checker —
+/// <c>TOAST-0020</c>.
 /// </summary>
 internal static class ContractMemberTypeRules
 {
@@ -80,7 +81,7 @@ internal static class ContractMemberTypeRules
             actual);
     }
 
-    /// <summary>Creates the identical source diagnostic for interpreter and compiler checks.</summary>
+    /// <summary>Creates the identical source diagnostic for runtime and type-checker checks.</summary>
     internal static ToshDiagnostic CreateDiagnostic(
         string className,
         string contractName,

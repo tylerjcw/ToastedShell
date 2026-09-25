@@ -502,9 +502,7 @@ internal static class TonWriter
             // Refused rather than stringified. `value.ToString()` on an unrecognised object
             // yields its type name, so the document would have said `"Some.Namespace.Thing"` and
             // looked like data — the same silent-wrongness as a dropped initialiser, and exactly
-            // what "round-trips or refuses" exists to prevent. It is how the compiled backend's
-            // divergence showed up: there a declared record is an emitted CLR class, so none of
-            // the shell-shape cases above match it.
+            // what "round-trips or refuses" exists to prevent.
             _ => throw ToshDiagnosticException.Create(new ToshDiagnostic(
                 Code: "tosh.ton.unrepresentable",
                 Title: $"A value of type '{value.GetType().Name}' has no TON spelling.",

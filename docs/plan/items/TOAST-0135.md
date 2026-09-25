@@ -1,11 +1,14 @@
 ---
 id: TOAST-0135
 title: "The compiled backend diverges from the interpreter in six recorded places"
-status: open
+status: withdrawn
 area: toast
 priority: 3
 opened: 2026-09-20
+closed: 2026-09-25
 ---
+
+> **Withdrawn 2026-09-25** under `TOAST-ARCH-01`: Tōast has no compiler ([COMPILER_DECOMMISSIONING_PLAN.md](../../COMPILER_DECOMMISSIONING_PLAN.md)). The recorded divergences were between the interpreter and the compiled backend, which is gone.
 
 ## Why this exists
 

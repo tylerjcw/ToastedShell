@@ -50,6 +50,10 @@ rewrite.
 
 ## Where this sits, corrected 2026-08-17
 
+> **2026-09-25:** the self-hosting and Phase C framing below is withdrawn with the compiler
+> (`TOAST-ARCH-01`, [COMPILER_DECOMMISSIONING_PLAN.md](../../COMPILER_DECOMMISSIONING_PLAN.md)). The item stands on its own as the evaluator's
+> structure and performance work.
+
 Two readings of this item were offered and both were wrong.
 
 It is **not** the gateway to self-hosting. `SELF_HOSTING_RFC.md` defines readiness

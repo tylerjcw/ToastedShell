@@ -67,7 +67,7 @@ or CLR calls still cross the unsafe/foreign boundary even when authorized.
       rather than being checked by a separate source scan
 - [ ] `TOAST-0059`'s unsafe blocks and native operations require the corresponding capability
 - [ ] `TOAST-0082` compile-time calls accept only a proven empty effect set
-- [ ] Interpreter, compiler, LSP/MCP metadata and sandbox integration tests agree
+- [ ] Interpreter, LSP/MCP metadata and sandbox integration tests agree
 
 ## Ordering
 
@@ -105,3 +105,5 @@ declaration, without which the corpus decays back to 6%. Both are added below.
 **Decided 2026-08-29: the vocabulary is a closed enum**, with grouping and aliases for display
 only. The checker matches it exhaustively, `pure` is the empty set, and the classification of
 252 commands is mechanical. See `DECISIONS.md`.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

@@ -50,7 +50,7 @@ public static class ToshExecutionDepthGuard
     public static int MaximumDepthForStack(ulong stackBytes) => Math.Clamp(
         (int)Math.Min(stackBytes / BytesPerFrameAllowance, int.MaxValue),
         MaximumSafeDepth,
-        MaximumCompiledDepth);
+        MaximumDepthCeiling);
 
     /// <summary>
     /// Stack budgeted per Tōast frame, which is deliberately not the measured cost.
@@ -68,21 +68,10 @@ public static class ToshExecutionDepthGuard
     /// The highest limit any stack may buy — `TOAST-0049`.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Not a per-backend number. Compiled code first got its own, on the strength of direct
-    /// compiled recursion surviving depth 50,000 against the interpreter's 300 — but that
-    /// is the cheapest compiled path, not the dearest. `new` on an emitted class is
-    /// constructed through reflection, and bisecting it out-of-process on 2026-08-22 put
-    /// its wall between depth 200 and 300: the same place the interpreter's is. A ceiling
-    /// has to hold for the worst path on the backend, so both share one.
-    /// </para>
-    /// <para>
-    /// This remains as the clamp on <see cref="MaximumDepthForStack"/>, so that an
-    /// extravagant stack size cannot talk the guard into a limit nothing has been measured
-    /// at.
-    /// </para>
+    /// The clamp on <see cref="MaximumDepthForStack"/>, so that an extravagant stack size
+    /// cannot talk the guard into a limit nothing has been measured at.
     /// </remarks>
-    public const int MaximumCompiledDepth = 10_000;
+    public const int MaximumDepthCeiling = 10_000;
 
     public static int DefaultMaximumDepth => MaximumDepthForThisProcess;
 
@@ -120,22 +109,20 @@ public static class ToshExecutionDepthGuard
     }
 
     /// <summary>
-    /// The absolute bound the guard will honour, which is the compiled limit.
+    /// The absolute bound the guard will honour, <see cref="MaximumDepthCeiling"/>.
     /// </summary>
     /// <remarks>
-    /// Deliberately looser than <see cref="ValidateConfiguredDepth"/>. Compiled code asks
-    /// for <see cref="MaximumCompiledDepth"/> and must be allowed it; a *script* setting
-    /// `$tosh.Config.Shell.MaxRecursionDepth` is held to the interpreter's limit, because
-    /// that is the stack it will actually run on.
+    /// Looser than <see cref="ValidateConfiguredDepth"/>, which holds a *script* setting
+    /// `$tosh.Config.Shell.MaxRecursionDepth` to the limit this process's stack supports.
     /// </remarks>
     public static void ValidateMaximumDepth(int maximumDepth)
     {
-        if (maximumDepth is < 1 or > MaximumCompiledDepth)
+        if (maximumDepth is < 1 or > MaximumDepthCeiling)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(maximumDepth),
                 maximumDepth,
-                $"ToastScript recursion depth must be between 1 and {MaximumCompiledDepth}.");
+                $"ToastScript recursion depth must be between 1 and {MaximumDepthCeiling}.");
         }
     }
 

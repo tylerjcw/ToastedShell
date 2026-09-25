@@ -83,16 +83,11 @@ public sealed class RefinementCoercionTests
     }
 
     /// <summary>
-    /// A refinement compiled into an assembly still coerces.
+    /// A refinement alias with a predicate still coerces rather than being treated as a
+    /// predicate-less alias.
     /// </summary>
-    /// <remarks>
-    /// A regression guard, and it caught a real one. Teaching `RegisterCompiledAssembly` to
-    /// read a compiled `type` alias back registered *refinement* aliases too, as
-    /// predicate-less ones — so `type PosInt = int where _ > 0 coerce …` stopped coercing
-    /// and `-21` stayed negative. The shell now records which kind it is.
-    /// </remarks>
     [Fact]
-    public async Task A_refinement_still_coerces_after_a_round_trip()
+    public async Task A_refinement_alias_with_a_predicate_coerces()
         => Assert.Equal(
             "21",
             await RunAsync(

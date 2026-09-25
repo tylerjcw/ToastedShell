@@ -14,7 +14,7 @@ LSP and MCP metadata change together.
 
 ToastScript already has a broad and compelling surface: structured
 pipelines, CLR interop, functions, classes, generics, records, modules,
-concurrency, an interpreter, a compiler, and language services.
+concurrency, an interpreter, and language services.
 
 The principal risk is now duplicated semantics. Truthiness, operators,
 assignment, callable binding, class construction, and language metadata
@@ -24,10 +24,15 @@ mode changes can therefore change program meaning.
 Until the P0 and P1 work below is complete:
 
 1. Safety and semantic convergence take priority over new syntax.
-2. A fix is incomplete if it only repairs one execution surface.
+2. A fix is incomplete if it only repairs one of several implementations of
+   the same operation.
 3. New behavior requires an executable conformance example.
-4. Optimized compiler paths may specialize only when they preserve the
-   canonical runtime semantics.
+4. Optimized evaluator paths (fast paths, constant folding) may specialize
+   only when they preserve the canonical runtime semantics.
+
+There is no compiler (`TOAST-ARCH-01`,
+[COMPILER_DECOMMISSIONING_PLAN.md](../COMPILER_DECOMMISSIONING_PLAN.md)): the evaluator is the
+only execution engine, so no rule here asks for agreement with a compiled path.
 
 ## Work Streams
 
@@ -39,10 +44,11 @@ It is an index only — the tables remain the source of truth, and nothing here
 changes their tooling. Item ids are deliberately not written in the `| \`id\` |`
 row form, so `scripts/file-item.tosh` anchor matching stays unambiguous.
 
-### Gate A — blocks self-hosting
+### Gate A — compiler-shaped code
 
-Nothing compiler-shaped compiles until these land. Established by writing a
-370-line lexer/parser/AST/visitor probe in ToastScript; see
+Self-hosting is withdrawn with the compiler, but these items stand: they are what
+makes compiler-shaped Tōast code (parsers, rewriters, the CAS) reliable. Established
+by writing a 370-line lexer/parser/AST/visitor probe in ToastScript; see
 `docs/SELF_HOSTING_RFC.md`.
 
 | Stream | Items |
@@ -50,21 +56,14 @@ Nothing compiler-shaped compiles until these land. Established by writing a
 | **Type system — critical** | TS-P2-107 (subclass not assignable to base), TS-P2-108 (`match` arms do not narrow), TS-P2-109 (interpreted/compiled divergence) |
 | **Type system — soundness** | TS-P2-87 (rebound variable keeps first inferred type), TS-P2-99 (interfaces unusable as annotations), TS-P2-85 (computed property on a struct), TS-P2-106 (class cannot name itself in its own return annotation), TS-P2-98 (unqualified refinement types) |
 | **Dispatch & higher-order code** | TS-P2-93 (callable in a property), TS-P2-94 (`&` on a method), TS-P2-92 (`T.Prop.Method()`), TS-P2-103 (`shy shared func` unreachable from its own class), TS-P2-104 (splat arguments) |
-| **Backend agreement** | TS-P1-13 (compiled vs interpreted assignment order), TS-P1-40 (two live index-assignment implementations), TS-P1-46 (array literal representation), TS-P1-47 (base-annotated variable rejects a subclass), TS-P1-48 (compiled assemblies share one global class registry), TS-P3-23 (differential execution across backends — **the corpus that found 46 and 47**) |
+| **Backend agreement** | Withdrawn with the compiler: TS-P1-13, TS-P1-46, TS-P1-48, TS-P3-23. TS-P1-40 resolved by it. TS-P1-47 (base-annotated variable rejects a subclass) was an interpreter fix and is complete. |
 | **Scale ergonomics** | TS-P2-89 (top-level `defer`), TS-P2-91 (dotted module leaf not auto-partial), TS-P2-105 (`as` precedence), TS-P3-14 (bitwise operators), TS-P3-05 (thrown-value protocol), TS-P3-02 (`let` bindings), TS-P3-04 (stream/collection shape) |
 
-### Gate B — blocks a native target
+### Gate B — withdrawn
 
-Filed 2026-08-13 after measuring tier coverage: **57 of 72 tracked features
-already reach Tier 1 (pure IL)**; 13 are Tier 2 and 2 are Tier 3.
-
-| Stream | Items |
-|---|---|
-| **Subset definition** | TS-P3-15 (define the `no_clr` subset), TS-P3-16 (ToastScript-owned core types + conformance corpus) |
-| **Tier promotion** | TS-P3-17 (builtin command dispatch — the stdlib port, largest single item), TS-P3-18 (defaulted parameters, the only Tier-3 entries), TS-P3-19 (annotated/fixed/refinement variable writes) |
-| **Native runtime** | TS-P3-20 (regex engine or documented dialect), TS-P3-21 (GC, object layout, startup budget) |
-| **Backend** | TS-P3-22 (emit C) |
-| **Native FFI (C ABI is a peer FFI in the target design)** | TS-P2-90 (native export tables shared per library path), TS-P2-88 (`-> ok` yields its return value) |
+The native target and its tier model were withdrawn with the compiler on 2026-09-25
+(TS-P3-15, TS-P3-17 through TS-P3-22). The native FFI items that sat here (TS-P2-90,
+TS-P2-88) are interpreter work and stand on their own.
 
 ### Gate C — neither; deferrable
 
@@ -80,8 +79,6 @@ already reach Tier 1 (pure IL)**; 13 are Tier 2 and 2 are Tier 3.
 An item is closed only when all applicable conditions hold:
 
 - the smallest public reproduction has a regression test;
-- interpreter and compiled behavior agree, or an unsupported compiler
-  shape produces a deliberate structured diagnostic;
 - cancellation and streaming behavior are tested where relevant;
 - diagnostics use a stable `tosh.*` code rather than leaking raw CLR
   exceptions;
@@ -111,8 +108,7 @@ spec's examples into fixtures would have caught all four mechanically.
 Run the same corpus through:
 
 - the ordinary interpreter;
-- any bound/optimized interpreter path;
-- compiled assemblies under `Tosh.Compiler.Runtime`; and
+- any bound/optimized interpreter path; and
 - MCP execution where cancellation or diagnostic transport matters.
 
 Compare values, CLR value types, stdout, stderr, diagnostic codes, and
@@ -127,9 +123,8 @@ Assignments and construction need explicit tests for:
 - resolve-before-mutate behavior;
 - partial failure;
 - annotations and generic type parameters;
-- const/immutable bindings;
-- nearest lexical scope; and
-- interpreter/compiler agreement.
+- const/immutable bindings; and
+- nearest lexical scope.
 
 ### 4. Generated-surface validation
 

@@ -5,12 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Tests;
 
 /// <summary>
-/// The interpreter and the IL emitter each used to carry their own copy of the
-/// native-interop type table, the by-ref-string rule, and the calling-convention
-/// table. They agreed only by hand, and where they disagreed the compiler
-/// degraded to source replay without saying so.
-///
-/// These tests pin the shared <see cref="NativeTypeLexicon"/> against
+/// These tests pin <see cref="NativeTypeLexicon"/> — the native-interop type
+/// table, the by-ref-string rule, and the calling-convention table — against
 /// <see cref="DotNetTypeResolver"/> — the interpreter's actual resolution path —
 /// so a future edit to one table that is not mirrored in the other fails here
 /// instead of at some caller's runtime.
@@ -180,9 +176,8 @@ public class NativeTypeLexiconTests
     }
 
     /// <summary>
-    /// The emitter used to silently fall back to Cdecl for an unknown name
-    /// while the engine threw, so `callconv bogus` compiled to something the
-    /// interpreter would have rejected.
+    /// An unknown calling-convention name is refused rather than silently
+    /// falling back to Cdecl.
     /// </summary>
     [Fact]
     public void Unknown_calling_convention_does_not_silently_default()

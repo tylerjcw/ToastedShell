@@ -1,11 +1,14 @@
 ---
 id: TOAST-0037
 title: "The compiler has four diagnostic codes and no performance budget"
-status: open
+status: withdrawn
 area: toast
 priority: 3
 opened: 2026-08-21
+closed: 2026-09-25
 ---
+
+> **Withdrawn 2026-09-25** under `TOAST-ARCH-01`: Tōast has no compiler ([COMPILER_DECOMMISSIONING_PLAN.md](../../COMPILER_DECOMMISSIONING_PLAN.md)). There is no compiler to give diagnostic codes or a performance budget.
 
 ## Problem
 

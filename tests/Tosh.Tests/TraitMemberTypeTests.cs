@@ -10,7 +10,7 @@ namespace Tosh.Tests;
 /// nothing reported it. Half of what a trait is for could not be relied on: a caller
 /// holding a `Display` still could not assume `render()` gave back a string, which makes
 /// the trait a naming convention rather than a contract — and is exactly the assumption a
-/// renderer or a compiler wants to make.
+/// renderer or a type checker wants to make.
 ///
 /// **Decided 2026-08-17: covariant returns, exact parameters, reported at class
 /// definition.**

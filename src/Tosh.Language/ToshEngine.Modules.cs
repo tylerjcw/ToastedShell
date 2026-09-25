@@ -555,12 +555,6 @@ public sealed partial class ToshEngine
     }
 
     /// <summary>
-    /// Looks up a user-defined named type (class, record, struct, enum,
-    /// union, interface, trait) in the engine's scope or runtime registry.
-    /// Exposed publicly so compiled tosh (the IL emitter's host bridge)
-    /// can resolve types for <c>new</c>-expressions without re-parsing.
-    /// </summary>
-    /// <summary>
     /// Resolves a module-qualified type name — <c>Outer.Inner.SmallInt</c> — by walking module
     /// exports, so a type declared inside a module can be named from outside it.
     /// </summary>

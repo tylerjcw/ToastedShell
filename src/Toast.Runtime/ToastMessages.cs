@@ -1,20 +1,18 @@
 namespace Tosh.Runtime;
 
 /// <summary>
-/// The wording of a diagnostic both backends can raise — `TOAST-0030` cause C.
+/// The wording of a diagnostic raised from more than one place — `TOAST-0030` cause C.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A message is part of the behaviour a specification describes, not decoration on top of
 /// it. `§What null Means` says reaching a member of `null` reports it *and* says how to opt
-/// out, so a backend that raises `NullReferenceException: member access 'Length' on null
-/// target` has not implemented that sentence.
+/// out, so raising `NullReferenceException: member access 'Length' on null target` would
+/// not implement that sentence.
 /// </para>
 /// <para>
-/// These were written twice — once in `Tosh.Language` and once in
-/// `Tosh.Compiler.Runtime` — and neither copy was in the portable runtime, so there was
-/// nowhere for them to be the same. That is the whole of `TOAST-0030` in miniature, which
-/// is why the fix is a shared place rather than a corrected string.
+/// Kept in one shared place rather than as strings at each raise site, so the language and
+/// the runtime's operator evaluator cannot drift apart in what they say.
 /// </para>
 /// </remarks>
 public static class ToastMessages
@@ -34,7 +32,7 @@ public static class ToastMessages
     /// `TOAST-0018` made this raise. It used to render as the empty string, so
     /// `null + "a"` was `"a"` while `null + 1` raised — a missing value vanishing silently
     /// into concatenated output. The guidance is the reason raising is acceptable, so a
-    /// backend that drops it has kept the breakage and lost the remedy.
+    /// raise site that drops it has kept the breakage and lost the remedy.
     /// </remarks>
     public static string NullStringConcatenation =>
         NullOperand("+") + " Use '?? \"\"' to treat null as empty text.";

@@ -345,8 +345,6 @@ public sealed partial class ToshEngine
             help: "choose a different alias name so refinements do not shadow real types.");
     }
 
-    /// <summary>
-    /// Registers a type alias read back from a compiled assembly — <c>TOAST-0035</c>.
     private bool TryGetRefinementType(string name, out RefinementTypeDefinition definition)
     {
         // Same reasoning as the class lookup in TryGetNamedType: a refinement
@@ -512,11 +510,7 @@ public sealed partial class ToshEngine
         }
 
         // `TOAST-0046`. Before the null check, because for `void` a null is the *only*
-        // acceptable value rather than a special case of one. This lives in the shared
-        // converter rather than beside the interpreter's return handling because the
-        // compiled backend checks its returns through here — without it, a compiled void
-        // function still contributed a value to the pipeline while the interpreted one
-        // contributed none, which the differential corpus caught.
+        // acceptable value rather than a special case of one.
         if (IsNothingAnnotation(normalizedTypeName))
         {
             converted = null;
@@ -573,8 +567,8 @@ public sealed partial class ToshEngine
 
         // `TOAST-0036`. What can be checked when the value arrives is that it is callable,
         // and that it can be called with this many arguments. The parameter *types* are a
-        // promise the compiler checks; at run time there is nothing to compare them against
-        // until the call happens, and rejecting on them here would be guessing.
+        // promise; at run time there is nothing to compare them against until the call
+        // happens, and rejecting on them here would be guessing.
         if (TryParseFunctionAnnotation(normalizedTypeName, out var wantedParameters, out _))
         {
             if (value is not IShellCallable callable)
@@ -799,12 +793,7 @@ public sealed partial class ToshEngine
         //
         // An annotation and `is` have to agree about what a type name means, and
         // `OperatorEvaluator` is where that meaning lives — including, since cause D, the
-        // walk up a CLR base chain. The compiled backend needs that here because nothing
-        // above can see its classes: an emitted class is a real CLR type rather than a
-        // registered shell definition, so `TryGetNamedType` finds nothing and every branch
-        // that walks a `ToshClassInstance` is skipped. `var b: DiffBase = new DiffLeaf(4)`
-        // then reached `TypeConversion.TryConvert`, which reported that a `DiffLeaf` could
-        // not be converted to the base it already derives from.
+        // walk up a CLR base chain by simple name.
         //
         // Trying it *first* was the obvious arrangement and it was wrong: an annotation can
         // legitimately retype a value it already matches, so `var a: array = [1, 2]` bound
@@ -843,22 +832,6 @@ public sealed partial class ToshEngine
         converted = null;
         return false;
     }
-
-    /// <summary>
-    /// Public bridge for compiled-IL refinement enforcement: converts
-    /// (and validates) <paramref name="value"/> against the named
-    /// annotated type, throwing a diagnostic on failure. Used by
-    /// <c>Tosh.Compiler.Runtime.ToshHost.CheckType</c>.
-    /// </summary>
-    public object? ConvertValueToAnnotatedType(
-        string typeName,
-        object? value,
-        int spanStart,
-        int spanLength,
-        string sourceName,
-        string sourceText,
-        string owner)
-        => ConvertAnnotatedValue(typeName, value, new TextSpan(spanStart, spanLength), sourceName, sourceText, owner);
 
     internal void ValidateUnionTypeArgument(
         string typeName,

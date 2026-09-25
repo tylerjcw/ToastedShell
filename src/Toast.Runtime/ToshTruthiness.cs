@@ -5,8 +5,8 @@ namespace Tosh.Runtime;
 
 /// <summary>
 /// Defines ToastScript's canonical conversion from a shell value to a
-/// truth value. Language, standard-library, and compiler surfaces must
-/// delegate here rather than using CLR boolean conversion.
+/// truth value. Language and standard-library surfaces must delegate
+/// here rather than using CLR boolean conversion.
 /// </summary>
 public static class ToshTruthiness
 {

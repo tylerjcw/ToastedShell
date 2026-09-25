@@ -280,7 +280,7 @@ public sealed class StaticMemberAssignmentTests
     {
         // Type resolution matches simple names across every loaded assembly, ignoring case, so
         // a variable can collide with a type nobody in this script has heard of. The full suite
-        // hit exactly that — a compiler test had emitted a `Person`, and `person.Name = "x"`
+        // hit exactly that — another test had loaded a `Person`, and `person.Name = "x"`
         // stopped reporting the forgotten `$`. The variable is asked about first because a
         // wrong hint costs a message while a wrong static write mutates shared state.
         var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);

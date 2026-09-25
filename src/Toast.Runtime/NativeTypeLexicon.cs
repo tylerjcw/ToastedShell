@@ -3,24 +3,18 @@ using System.Runtime.InteropServices;
 namespace Tosh.Runtime;
 
 /// <summary>
-/// Single source of truth for the native-interop type surface, shared by the
-/// interpreter (<c>Tosh.Language</c>) and the IL emitter (<c>Tosh.Compiler</c>).
+/// Single source of truth for the native-interop type surface: the type table,
+/// the by-ref-string rule, and the calling-convention table.
 ///
-/// Before this existed the two tiers each carried their own copy of the type
-/// table, the by-ref-string rule, and the calling-convention table. They agreed
-/// by hand, and where they disagreed the compiler degraded silently to source
-/// replay instead of reporting the mismatch.
-///
-/// This lives in <c>Tosh.Runtime</c> because it is the only assembly both tiers
-/// already reference. It deliberately does <em>not</em> mention
-/// <c>NativeParameterPassingMode</c> — that enum lives in
-/// <c>Tosh.Compiler.IR</c>, which references this assembly, so taking it here
-/// would be circular. Callers project the mode down to <c>isByRef</c>.
+/// It deliberately does <em>not</em> mention <c>NativeParameterPassingMode</c> —
+/// that enum lives in <c>Tosh.Language</c>, which references this assembly, so
+/// taking it here would be circular. Callers project the mode down to
+/// <c>isByRef</c>.
 /// </summary>
 public static class NativeTypeLexicon
 {
     /// <summary>
-    /// Type names both tiers resolve without consulting a type resolver.
+    /// Type names resolved without consulting a type resolver.
     /// Mirrors the interop-relevant subset of
     /// <see cref="DotNetTypeResolver"/>'s alias table; the round-trip between
     /// the two is covered by a table-driven test.

@@ -76,11 +76,11 @@ public sealed class ExecutionDepthLimitTests
             ToshExecutionDepthGuard.MaximumSafeDepth,
             ToshExecutionDepthGuard.MaximumDepthForStack(stackBytes));
 
-    /// <summary>No stack buys more than compiled code is allowed.</summary>
+    /// <summary>No stack buys more than the measured ceiling.</summary>
     [Fact]
-    public void The_limit_is_capped_at_the_compiled_ceiling()
+    public void The_limit_is_capped_at_the_ceiling()
         => Assert.Equal(
-            ToshExecutionDepthGuard.MaximumCompiledDepth,
+            ToshExecutionDepthGuard.MaximumDepthCeiling,
             ToshExecutionDepthGuard.MaximumDepthForStack(ulong.MaxValue));
 
     /// <summary>The setting is read the way the CLR reads it: hexadecimal, prefix optional.</summary>

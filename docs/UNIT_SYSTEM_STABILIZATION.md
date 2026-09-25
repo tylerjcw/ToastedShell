@@ -10,7 +10,7 @@ continues to record dated evidence; this document owns the unit-system design.
 ## Goals
 
 - Make quantity values reliable in literals, expressions, variables, functions,
-  classes, script arguments, interpreted execution, and compiled execution.
+  classes, and script arguments.
 - Make conversion explicit and readable: ``distance as `ft``,
   ``duration as `s``, and ``speed as `mph``; retain `.To("unit")` for
   programmatic use.
@@ -168,7 +168,6 @@ canonical category.
   function boundaries.
 - Complete `DataSize`/`StorageSize` and `DurationQuantity`/`TimeSpan` bridges.
 - Support quantities in `sum`, `average`, `min`, and `max`.
-- Emit quantity literals and resolve quantity annotations in compiled scripts.
 - Route `is`, `is-not`, `as`, and `cast` through the same type resolver.
 
 ### Stage D — dogfooding started; semantic work remains
@@ -188,11 +187,9 @@ canonical category.
 The deterministic reactor fixture, dimensionless count ratios, pure prefix
 lookup, immutable dimension views, and registry collision protection are now in
 place. The remaining Stage D architecture is deliberately not disguised as
-finished: existing interpreted values retain their resolved conversion through
-arithmetic, but compiled literals still serialize magnitude plus symbol and
-resolve that symbol when the assembly runs. Engine-scoped unit overlays and an
-immutable resolved-unit payload (including semantic kind and point/delta role)
-must close that last time-of-use gap.
+finished: values retain their resolved conversion through arithmetic, and the
+remaining work is engine-scoped unit overlays and a resolved-unit payload that
+carries semantic kind and point/delta role.
 
 ## Remaining follow-ups
 
@@ -200,8 +197,6 @@ must close that last time-of-use gap.
   enabling temperature addition, subtraction, scaling, or compound point units.
 - Carry semantic kind independently of dimensions so energy/torque and other
   equal-dimension concepts remain stable through derived arithmetic.
-- Serialize a resolved unit payload in compiled assemblies instead of looking up
-  a display symbol at execution time.
 - Make custom-unit registration engine-scoped. The current singleton now uses
   synchronized, non-mutating reads and refuses built-in replacement, but custom
   definitions still have process-wide lifetime.
@@ -222,7 +217,7 @@ used as evidence for this work.
 
 ## Validation policy
 
-Use narrow unit, lexer, conversion, compiler-emitter, and script-integration
+Use narrow unit, lexer, conversion, and script-integration
 selections. Do not run the full solution test suite: the stabilization log's
 full-test note documents its memory multiplier and the required constrained
 invocation. During the current memory investigation, no test or build command is

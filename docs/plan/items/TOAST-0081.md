@@ -58,10 +58,12 @@ hashing, iteration order and rendering remain the ordinary Tōast contracts.
 - [ ] A `prefer-const`/`prefer-frozen` analysis can identify bindings and values never mutated,
       without changing program behavior
 - [ ] Frozen values satisfy `TOAST-0086`'s automatic sendability rules
-- [ ] Interpreter, compiler, formatter, LSP and specification agree on the new forms
+- [ ] Interpreter, formatter, LSP and specification agree on the new forms
 
 ## Dependencies
 
 Record-update syntax is already called out by `TOAST-0048`. Compile-time values are deliberately
 separate in `TOAST-0082`; a value can be deeply immutable without having been computed at build
 time, and can be computed at build time without introducing a runtime binding at all.
+
+> Compiler-agreement criteria removed 2026-09-25: there is no compiler (`TOAST-ARCH-01`).

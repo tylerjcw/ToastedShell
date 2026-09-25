@@ -1,7 +1,7 @@
 # Architectural Plan: Decommissioning the Compiler & Compiled Path in Tōast / TōSh
 
 > **Document ID:** `TOAST-ARCH-01`  
-> **Status:** Approved Architectural Decision  
+> **Status:** Implemented (2026-09-25) — see §7 for what was removed and §6 for what remains  
 > **Target:** Tōast Language Runtime & TōSh Shell Suite  
 > **Related Plans:** [`docs/TOAST_SEPARATION_PLAN.md`](file:///home/komrad/projects/tosh/docs/TOAST_SEPARATION_PLAN.md), [`docs/SCIENTIFIC_COMPUTING_AND_CAS_DESIGN.md`](file:///home/komrad/projects/tosh/docs/SCIENTIFIC_COMPUTING_AND_CAS_DESIGN.md), [`docs/UNIT_SYSTEM_STABILIZATION.md`](file:///home/komrad/projects/tosh/docs/UNIT_SYSTEM_STABILIZATION.md)
 
@@ -173,34 +173,84 @@ With the compiler excised, the execution engine roadmap centers on the evaluator
 
 ---
 
-## 5. Modern Application Bundling Strategy
+## 5. Application Bundling Strategy
 
-To preserve the ability to distribute standalone applications without an AOT IL compiler, Tōast will adopt the **Self-Extracting Host Bundle** model:
+A standalone Tōast application is **the TōSh runtime packed together with the script
+files**, run the way Python runs a `zipapp`: nothing is compiled, and the bundled program
+runs on exactly the engine that powers the interactive shell.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   Single-File Standalone Executable                    │
 ├────────────────────────────────────────────────────────────────────────┤
-│ 1. Precompiled Native Tōast Host Engine (Native AOT / Single-File)    │
-│ 2. Appended Compressed Application Archive (.toast sources, manifests) │
-│ 3. Entry point metadata & embedded assets                              │
+│ 1. The TōSh host — the same single-file .NET publish `tosh` ships as   │
+│ 2. Appended application archive (.toast sources, manifest, assets)     │
+│ 3. Entry-point metadata                                                │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **How It Works**:
-   - Running `tosh bundle main.toast -o myapp` packages the script and dependencies into a zip/tar payload and appends it to a pre-compiled native host stub.
-   - When executed, the host detects its appended payload, mounts it in an in-memory virtual filesystem, and immediately begins evaluation.
-2. **Advantages**:
-   - **Zero Compilation Constraints**: The application retains 100% of Tōast's dynamic capabilities, physical units, and CAS.
-   - **Zero Build-Time Parity Bugs**: The code evaluated by the bundled binary runs the identical engine that powers the interactive shell.
-   - **Instant Packaging**: Bundling completes in milliseconds (simple archive concatenation) compared to heavy IL compilation.
+1. **How it works**:
+   - `tosh bundle main.toast -o myapp` packages the script and its dependencies into an
+     archive and appends it to a copy of the host.
+   - At start-up the host detects the payload, mounts it as a read-only source tree, and
+     evaluates the entry point.
+2. **The host is a single-file .NET publish, not Native AOT.** The evaluator uses
+   Reflection.Emit at run time (`raw struct` layouts, native callbacks, subclassing CLR
+   types) and loads assemblies at run time (`load-assembly`, `require` of a project).
+   Native AOT supports neither. `scripts/build.tosh` already produces the right artefact:
+   `PublishSingleFile` with `IncludeAllContentForSelfExtract`.
+3. **Advantages**:
+   - **No compilation constraints**: the application keeps all of Tōast's dynamic
+     capabilities, physical units and CAS.
+   - **No build-time parity bugs**: one engine, one semantics.
+   - **Instant packaging**: bundling is archive concatenation.
 
 ---
 
 ## 6. Acceptance Criteria
 
-- [ ] `Tosh.slnx` builds completely without `Tosh.Compiler*` or `Tosh.Sdk*`.
-- [ ] `tosh` runs scripts and interactive REPL sessions with zero references to `ToshHost` or compilation flags.
-- [ ] All remaining unit and integration tests in `Tosh.Tests` pass.
+- [x] `Tosh.slnx` builds completely without `Tosh.Compiler*` or `Tosh.Sdk*`.
+- [x] `tosh` runs scripts and interactive REPL sessions with zero references to `ToshHost` or compilation flags. (`--compile`/`-C` is kept only to report that it was retired.)
+- [x] All remaining unit and integration tests in `Tosh.Tests` pass.
 - [ ] `tosh-plot` builds and passes its test suite purely against interpreted execution.
 - [ ] The codebase is completely free of compiler workarounds in `Quantity.cs` and `ToshClassDefinition.cs`.
+
+---
+
+## 7. Residue Removal Record (2026-09-25)
+
+The first pass (`9b92be32`, `bf48e8f3`, `60c4b540`) removed the projects. A second pass removed
+what they left behind in the surviving code, tests, tooling and documentation.
+
+**Runtime (`Toast.Runtime`).** Deleted the types that existed only for emitted assemblies:
+`PortableObjectBoundary`, `AnnotationConversionBoundary`, `CallableParameterBoundary`,
+`ClrConstructionBoundary`, `CompiledProgramBoundary`, `CompiledBlockCallable`,
+`CompiledLambdaCallable`, `ToshNoValue`, `ToshValueFormatter`, and the attributes `ToshAbi`,
+`ToshModule`, `ToshModuleShell`, `ToshPackedArguments`, `ToshType`, `ToshOriginalName`.
+`OperatorEvaluator` no longer asks, on every operator, whether an operand is a compiled
+Tōast type; its emitter-mandated overloads and `EvaluateBinaryWithDiagnostics` are gone.
+`ToastRenderer` lost its emitted-class rendering path; `ShellBlock.Captures`, the sync
+`ShellIndexingUtilities.GetIndexedValue` twin and the IL-only pipeline-count helpers went too.
+
+**Language (`Tosh.Language`).** The lowering pass no longer runs closure-capture analysis,
+lowers redirection targets, stamps overload indices, or tracks unexpanded rune calls — all
+of it was read only by the emitter, and all of it ran on every script load.
+`RequiredTypeRegistry`, `BoundEvaluator`, `TypeChecker.CheckCompileAnnotations`
+(`--compile-allow-dynamic`) and the emitter-only bound-node fields are deleted. The one
+static diagnostic left in the `tosh.compile.*` namespace is now
+`tosh.type.void_function_produces_output`. Engine members made public for `ToshHost` are
+internal or gone. `ConstantFolder` now computes through `OperatorEvaluator` instead of a
+private copy of the numeric tower.
+
+**Tests.** Compiler-only tests deleted; parity tests over deleted surfaces converted to
+single-surface tests; `ConsoleSerialCollection` (serialised because tests captured compiled
+programs' `Console.Out`) removed.
+
+**Tooling and docs.** The CI `runtime-gate` job, the VS Code extension's `.slnx`/`.toshproj`
+Solution view and `build-solution` task, the `tosh --compile` help example, and
+`examples/compile-test.tosh` are gone; the diagnostic manifest is regenerated.
+`COMPILED_TOSH.md`, `CLR_ABI_v1.md`, `FIRST_CLASS_DOTNET_STATUS.md` and
+`refinement-types-dotnet-implementation.md` were deleted (recoverable from `git log`); the
+specification's `\part{Compilation}` (12 chapters) was removed; `SELF_HOSTING_RFC.md` is
+withdrawn except for Phase A. In the plan, sixteen compiler-only items are withdrawn and
+`TS-P1-40` and `TOSH-0008` are resolved by the removal.

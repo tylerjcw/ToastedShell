@@ -26,11 +26,12 @@ ip addr | where _.State == up | get _.Addresses
 ps | group-by User | each { {| User: $_.Key, Total: ($_.Value | sum CpuPercent) |} }
 ```
 
-The same script runs three ways:
+The same script runs two ways, on the same evaluator:
 
 1. **Interactive REPL** — colour-aware line editor with completions, hover, and inline diagnostics.
 2. **Scripts** — `#!/usr/bin/env tosh`, full LSP / MCP tooling.
-3. **Compiled IL** — `tosh --compile` lowers a hot subset of the language into a real .NET assembly (see [docs/COMPILED_TOSH.md](docs/COMPILED_TOSH.md)).
+
+There is no compiler. To ship a script as a single file, pack the TōSh runtime together with the script files.
 
 ---
 
@@ -105,7 +106,6 @@ tosh                              # interactive REPL
 tosh -c "command"                 # one-liner
 tosh script.tosh                  # run a script
 tosh --login | --safe | --no-profile
-tosh --compile script.tosh -o out.dll
 tosh --dump-builtins              # full machine-readable command catalogue (JSON)
 ```
 
@@ -133,13 +133,11 @@ Details: [docs/EDITOR_SUPPORT.md](docs/EDITOR_SUPPORT.md).
 | Path                              | Purpose                                                                |
 |-----------------------------------|------------------------------------------------------------------------|
 | [src/Tosh.Cli](src/Tosh.Cli)      | CLI entry point, REPL, startup loader                                  |
-| [src/Tosh.Core](src/Tosh.Core)    | Built-in commands, type system, runtime                                |
-| [src/Tosh.Language](src/Tosh.Language)         | Lexer, parser, evaluator (`ToshEngine`)                   |
-| [src/Tosh.Compiler](src/Tosh.Compiler)         | IR + IL emitter for `tosh --compile`                       |
-| [src/Tosh.Runtime](src/Tosh.Runtime), [src/Tosh.Compiler.Runtime](src/Tosh.Compiler.Runtime) | Runtime support for compiled assemblies |
+| [src/Tosh.Language](src/Tosh.Language)         | Lexer, parser, binder, type checker, evaluator (`ToshEngine`) |
+| [src/Toast.Runtime](src/Toast.Runtime), [src/Tosh.Runtime](src/Tosh.Runtime) | Language runtime (values, types, operators, interop) and shell services (display, help, jobs) |
+| [src/Toast.Stdlib](src/Toast.Stdlib), [src/Tosh.Stdlib](src/Tosh.Stdlib) | Built-in commands: the language half and the shell half |
 | [src/Tosh.Lsp](src/Tosh.Lsp), [src/Tosh.Mcp](src/Tosh.Mcp), [src/Tosh.Dap](src/Tosh.Dap) | LSP, MCP, and DAP servers           |
 | [src/Tosh.Tui](src/Tosh.Tui)      | Terminal UI widgets (`help browse`, `config browse`)                   |
-| [src/Tosh.Sdk](src/Tosh.Sdk), [src/Tosh.Templates](src/Tosh.Templates), [src/Tosh.Sdk.Tasks](src/Tosh.Sdk.Tasks) | `.toshproj` SDK, `dotnet new` templates, MSBuild tasks |
 | [tests/](tests/)                  | Unit and integration tests                                             |
 | [bench/Tosh.Benchmarks](bench/Tosh.Benchmarks) | BenchmarkDotNet pipeline / parser / evaluator suites      |
 | [scripts/build.tosh](scripts/build.tosh)       | Unified build dispatcher (`publish`, `test`, `bench`, `install`, `vsix`, `sync`, ...) |
@@ -172,16 +170,16 @@ On AMD Ryzen 9 9950X / .NET 10:
 |------------------------------------------------|-------:|--------------------------------------|
 | `echo hello` (parse + bind + eval)             | 3.2 µs | trivial pipeline                     |
 | 5-stage pipeline (`Tiny` parse + bind)         | ~3 µs  | typical REPL line                    |
-| `1..100 \| where >50 \| sort \| first 5`       | 151 µs | the obvious target for the IL backend |
+| `1..100 \| where >50 \| sort \| first 5`       | 151 µs | boxing-heavy pipeline                |
 
-Full numbers: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). The IL backend (`tosh --compile`) targets boxing-heavy pipelines like the last row.
+Full numbers: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Documentation
 
 - [Language Specification (PDF)](docs/spec/ToastScript.pdf) — authoritative grammar / type / operator reference
 - [AGENTS.md](AGENTS.md) — concise quick-reference for agents and contributors
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CONFIGURATION.md](docs/CONFIGURATION.md), [docs/EDITOR_SUPPORT.md](docs/EDITOR_SUPPORT.md)
-- [docs/COMPILED_TOSH.md](docs/COMPILED_TOSH.md), [docs/CLR_ABI_v1.md](docs/CLR_ABI_v1.md)
+- [docs/COMPILER_DECOMMISSIONING_PLAN.md](docs/COMPILER_DECOMMISSIONING_PLAN.md) — why there is no compiler
 - [docs/RUNTIME_NAMESPACES.md](docs/RUNTIME_NAMESPACES.md), [docs/TUI_ARCHITECTURE.md](docs/TUI_ARCHITECTURE.md), [docs/diagnostic-codes.md](docs/diagnostic-codes.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md), [docs/plan/](docs/plan/README.md) (history: [docs/BACKLOG-archive.md](docs/BACKLOG-archive.md))
 

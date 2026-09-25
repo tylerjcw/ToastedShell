@@ -25,17 +25,9 @@ public sealed record RawStructFieldPlan(
 
 /// <summary>
 /// The layout decision for a <c>raw struct</c>, computed once from the
-/// declaration and consumed by <em>both</em> emitters — the interpreter's
-/// runtime Reflection.Emit factory and the compiler's persisted-assembly
-/// emitter.
-///
-/// This type exists specifically so there is only one implementation of the
-/// layout algorithm. Two emitters computing offsets independently is the
-/// failure mode most likely to produce a silent mismatch between the
-/// interpreted and compiled tiers, and it is the one that would be hardest to
-/// notice: both tiers would run, and only one would read the right bytes.
-/// Tests assert against the <em>plan</em> rather than emitted IL, so the shared
-/// decision is what gets pinned.
+/// declaration and consumed by the runtime Reflection.Emit factory. Tests
+/// assert against the <em>plan</em> rather than the emitted type, so the
+/// layout decision is what gets pinned.
 ///
 /// Note what is deliberately absent: padding. <see cref="LayoutKind.Sequential"/>
 /// aligns each field naturally, exactly as a C compiler does, so declarations

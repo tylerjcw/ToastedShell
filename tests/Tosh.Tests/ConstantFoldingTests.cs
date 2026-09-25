@@ -211,22 +211,57 @@ public sealed class ConstantFoldingTests : IClassFixture<ToshRuntimeFixture>
     }
 
     /// <summary>
-    /// Every ordering against NaN is false at runtime, and no single integer
-    /// encodes that, so the ordering is declined rather than guessed.
+    /// Every ordering against NaN is false at runtime, and the fold says so because it asks
+    /// the evaluator rather than restating it.
     /// </summary>
     [Theory]
     [InlineData("<")]
     [InlineData("<=")]
     [InlineData(">")]
     [InlineData(">=")]
-    public void Refuses_to_order_nan(string op)
+    public void Orders_nan_the_way_the_evaluator_does(string op)
     {
         var folded = ConstantFolder.TryFoldBinary(
             new BoundLiteral(double.NaN, default, BoundType.FromClr(typeof(double))),
             op,
             new BoundLiteral(1.0, default, BoundType.FromClr(typeof(double))));
 
-        Assert.Same(ConstantFolder.Sentinel.NoFold, folded);
+        Assert.Equal(OperatorEvaluator.EvaluateBinary(double.NaN, op, 1.0), folded);
+    }
+
+    /// <summary>
+    /// A fold is the evaluator's answer, for every operator it folds — including the ones
+    /// a restated numeric tower got wrong: true division, mixed decimal/double, and the
+    /// sign of a negated zero.
+    /// </summary>
+    [Theory]
+    [InlineData(7, "/", 2)]
+    [InlineData(7, "%", 3)]
+    [InlineData(0.1, "+", 0.2)]
+    [InlineData(1, "<", 2.5)]
+    public void A_fold_is_the_evaluators_answer(object left, string op, object right)
+    {
+        var folded = ConstantFolder.TryFoldBinary(
+            new BoundLiteral(left, default, BoundType.FromClr(left.GetType())),
+            op,
+            new BoundLiteral(right, default, BoundType.FromClr(right.GetType())));
+
+        Assert.Equal(OperatorEvaluator.EvaluateBinary(left, op, right), folded);
+    }
+
+    [Fact]
+    public void A_negated_zero_folds_the_way_it_evaluates()
+    {
+        var folded = ConstantFolder.TryFoldUnary(
+            "-",
+            new BoundLiteral(0.0, default, BoundType.FromClr(typeof(double))));
+
+        // Compared bit for bit: `0.0` and `-0.0` are equal as doubles, and the sign is the
+        // difference a restated negation got wrong.
+        var evaluated = OperatorEvaluator.EvaluateUnary("-", 0.0);
+        Assert.Equal(
+            BitConverter.DoubleToInt64Bits(Assert.IsType<double>(evaluated)),
+            BitConverter.DoubleToInt64Bits(Assert.IsType<double>(folded)));
     }
 
     /// <summary>

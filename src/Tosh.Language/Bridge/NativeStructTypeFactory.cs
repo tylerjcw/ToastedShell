@@ -28,9 +28,8 @@ internal static class NativeInteropModule
 ///
 /// This is the keystone of fluent native interop: TōSh <c>struct</c> declarations
 /// produce a dictionary-backed object model that never becomes a
-/// <see cref="Type"/>, and the compiler's struct shells are <c>AutoLayout</c>
-/// with every field typed <c>object</c>. Neither can cross the native boundary,
-/// so <c>raw struct</c> emits its own type here.
+/// <see cref="Type"/>, so it cannot cross the native boundary, and
+/// <c>raw struct</c> emits its own type here.
 ///
 /// Modelled on <c>NativeDelegateTypeFactory</c>, which established the
 /// DefineType + CustomAttributeBuilder + structural-cache pattern in this

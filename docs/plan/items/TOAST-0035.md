@@ -1,11 +1,14 @@
 ---
 id: TOAST-0035
 title: "Source replay and implicit dynamic are how the compiler handles what it cannot emit"
-status: partial
+status: withdrawn
 area: toast
 priority: 2
 opened: 2026-08-21
+closed: 2026-09-25
 ---
+
+> **Withdrawn 2026-09-25** under `TOAST-ARCH-01`: Tōast has no compiler ([COMPILER_DECOMMISSIONING_PLAN.md](../../COMPILER_DECOMMISSIONING_PLAN.md)). Source replay and implicit dynamic were the compiler's fallbacks for what it could not emit; the evaluator runs every construct.
 
 ## Problem
 

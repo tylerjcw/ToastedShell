@@ -4,7 +4,7 @@ For open work items by area, see [the plan](plan/README.md).
 
 The active language-semantics program is tracked in
 [the plan](plan/README.md). It is the
-source of truth for interpreter/compiler convergence, parser hardening,
+source of truth for semantic convergence, parser hardening,
 and the safety fixes opened by the July 2026 ToastScript review.
 
 ## Vision
@@ -59,29 +59,25 @@ Objects of the same type should render the same way across commands unless the u
 
 Before `tosh` becomes a large language, it needs to become a great place to think. Editing, completion, diagnostics, paging, tables, and object inspection are core features, not extras.
 
-## Standing Priority Decision — July 30, 2026
+## Standing Decision — September 25, 2026: No Compiler
 
-**The interpreted language comes first. Compiled ToastScript is an experiment
-until it is rock-solid.**
+**Tōast has one execution engine: the evaluator.** The compiler (`Tosh.Compiler`,
+its IR and runtime bridge, the MSBuild SDK, the templates and `--compile`) was
+decommissioned under `TOAST-ARCH-01` — see
+[COMPILER_DECOMMISSIONING_PLAN.md](COMPILER_DECOMMISSIONING_PLAN.md). It replaces the
+July 30 decision that treated compiled ToastScript as a later goal.
 
-Compiled ToastScript ([COMPILED_TOSH.md](COMPILED_TOSH.md), `Tosh.Compiler` and
-its IR and runtime bridge) is a working second implementation of the language's
-semantics. That is what makes it valuable and also what makes it expensive: every
-semantic decision has to be made twice, and the stabilization programme is
-currently making a great many of them. It remains a goal, but a later one.
+What follows from it:
 
-Until the interpreted language is stable, this ordering holds:
+1. Every semantic decision is made once. There is no second implementation to keep
+   in step and no parity to maintain.
+2. Nothing in the language, runtime or tests exists to serve compiled artifacts;
+   anything that did is residue and can be removed.
+3. Single-file distribution packs the TōSh runtime together with the script files
+   and runs them, the way Python's `zipapp` does — no IL emission.
 
-1. Interpreted semantics, the shell, and the REPL.
-2. The compiler follows the language rather than constraining it. Compiler work
-   is maintenance — keep it building and its guards green — not new surface.
-3. A semantic decision is not blocked on the compiler's ability to implement it.
-   Where the two disagree, the interpreter is right by definition until this
-   decision is revisited.
-
-Revisit when the stabilization programme's P1 tier is closed. Recorded here
-rather than only in conversation because it changes what *not* to work on, and
-that is the kind of decision that silently reverts.
+Recorded here because it changes what *not* to work on, and that is the kind of
+decision that silently reverts.
 
 ## Architectural Direction
 

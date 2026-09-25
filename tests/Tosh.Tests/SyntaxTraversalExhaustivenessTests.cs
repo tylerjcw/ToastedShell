@@ -24,7 +24,7 @@ public sealed class SyntaxTraversalExhaustivenessTests
     /// </summary>
     private static readonly Dictionary<string, string> AcknowledgedGaps = new(StringComparer.Ordinal)
     {
-        ["ListComprehensionArgumentSyntax"] = "comprehension bodies are not walked for captures; must be extended when the compiler emits comprehensions",
+        ["ListComprehensionArgumentSyntax"] = "comprehension bodies are not walked for captures; they are evaluated through the engine's comprehension path",
         ["SetComprehensionArgumentSyntax"] = "as above",
         ["DictComprehensionArgumentSyntax"] = "as above",
         ["GeneratorComprehensionArgumentSyntax"] = "as above",
@@ -122,8 +122,8 @@ public sealed class SyntaxTraversalExhaustivenessTests
         // The lowerer deliberately does *not* need a case per node: it
         // ends in a fallback that wraps anything unrecognised in a
         // BoundDynamicExpression carrying the original syntax, so the
-        // construct still reaches the engine and the compiler can report
-        // it precisely. That fallback is the invariant worth protecting —
+        // construct still reaches the engine. That fallback is the
+        // invariant worth protecting —
         // requiring a named case for every node would have been wrong,
         // and comprehensions travel exactly this route.
         var source = ReadTraversalSource("Lowerer.cs");

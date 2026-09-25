@@ -22,7 +22,7 @@ namespace Tosh.Tests;
 /// </para>
 /// <para>
 /// The probe types are given distinctive names on purpose. Bare type-name resolution scans every
-/// loaded assembly, so a class called <c>B</c> can be captured by a type some emitter test left in
+/// loaded assembly, so a class called <c>B</c> can be captured by a type some other test left in
 /// the process — which is what `TS-P2-48` is about, and which this file's own
 /// <c>cast B $d</c> hit before the names were changed.
 /// </para>
