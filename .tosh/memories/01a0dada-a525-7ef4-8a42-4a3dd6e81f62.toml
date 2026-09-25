@@ -1,0 +1,18 @@
+[[memory]]
+id = "01a0dada-a525-7ef4-8a42-4a3dd6e81f62"
+created = 2026-09-25T23:15:57.350Z
+category = "fact"
+scope = "project"
+source = "ai"
+pinned = true
+session_id = "2026-09-25-core-review"
+tags = ["process", "redirection", "bug", "review-2026-09-25"]
+summary = "`ext out> file` also corrupts binary output (UTF-8 round trip); `cat x | gzip -c out> f.gz` yields a broken archive"
+content = "Verified 2026-09-25: redirecting an external command's stdout to a file goes through the same line-decoding path as external pipes. `/usr/bin/cat bin.dat out> out.bin` turned 100,000 random bytes into 181,127 (invalid UTF-8 replaced by U+FFFD), and `/usr/bin/cat bin.dat | /usr/bin/gzip -c out> out.gz` wrote an archive that gunzips to nothing. Downloads (`curl -s … out> file.png`), archives and compression are unsafe in the PoC. `writeline` streams raw text correctly; `echo` output is buffered and boxed. Note `>` is not a redirection operator in the PoC (it is `out>`): `cat f > g` passes '>' and 'g' to cat as arguments. The Rust design (Proposal 001 §7) makes `>`, `>>`, `2>` language-level redirections."
+links = [{ path = "src/Tosh.Stdlib/ExternalProcessCommand.cs" }]
+
+[[relation]]
+from = "01a0dada-a525-7ef4-8a42-4a3dd6e81f62"
+to = "01a0dac5-c485-7604-83f4-26ad6d919012"
+relationship = "related_to"
+created = 2026-09-25T23:16:02.562Z
