@@ -137,16 +137,10 @@ public sealed class SyncAsyncTwinInventoryTests
         //                                     had been spelling out a third time
         "ToshClassDefinition.TrySelectSpecialInstanceMethod",
         "ToshClassDefinition.TryInvokeEnumerator",
-        //   InvokeQualifiedMethod      -> PlanQualifiedInvocation
-        //   TryInvokeShellSymbol       -> TryPlanShellSymbol
         //   ResolveQualifiedMemberChain-> RequireMemberPath
-        // The synchronous side of this trio is not an interpreter path: it is what
-        // compiled ToastScript's host bridge calls, so a divergence here would mean
-        // compiled and interpreted programs resolving the same dotted call
-        // differently. Parity is asserted through InvokeQualifiedMethodPublic.
-        "ToshEngine.InvokeQualifiedMethod",
+        // Note: ToshEngine.InvokeQualifiedMethod and TryInvokeShellSymbol were retired
+        // with the decommissioning of the compiled path host bridge.
         "ToshEngine.ResolveQualifiedMemberChain",
-        "ToshEngine.TryInvokeShellSymbol",
         //   ApplyPendingParameterDefaults -> NeedsPendingDefault
         //   SelectBestCallableMatches     -> AccumulateBestMatch
         //   TryConvertParameterValue      -> DescribeAnnotationFailure

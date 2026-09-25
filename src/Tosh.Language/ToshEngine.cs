@@ -3908,36 +3908,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         return path;
     }
 
-    /// <summary>
-    /// Resolves and invokes a dotted-path static method like
-    /// <c>Lib.greet()</c> or <c>App.Math.add(1, 2)</c>. Public so
-    /// compiled tosh's host bridge can dispatch
-    /// <c>BoundStaticMethodCall</c> without re-parsing.
-    /// </summary>
-    public object? InvokeQualifiedMethodPublic(string path, IReadOnlyList<object?> arguments)
-        => InvokeQualifiedMethod(path, arguments);
-
-    public object? InvokeQualifiedMethodWithTypeArgumentsPublic(
-        string path,
-        IReadOnlyList<object?> arguments,
-        IReadOnlyList<string> typeArgumentNames)
-    {
-        if (TryInvokeGenericUnionVariant(path, arguments, typeArgumentNames, out var unionValue))
-        {
-            return unionValue;
-        }
-
-        var resolved = ResolveExplicitTypeArguments(
-            typeArgumentNames,
-            sourceName: "<compiled>",
-            sourceText: string.Empty,
-            span: new TextSpan(0, 0));
-        return InvokeQualifiedMethodAsync(path, arguments, CancellationToken.None, resolved)
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
-    }
-
     private bool TryInvokeGenericUnionVariant(
         string path,
         IReadOnlyList<object?> arguments,
@@ -4092,47 +4062,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         throw new InvalidOperationException($"Unable to resolve .NET access path '{path}'.");
-    }
-
-    private object? InvokeQualifiedMethod(string path, IReadOnlyList<object?> arguments)
-    {
-        if (TryPlanAliasCaseVariantAccess(path, out var caseVariantType, out var caseVariantMembers) &&
-            caseVariantMembers.Length == 1)
-        {
-            var caseVariantCall = LanguageRuntime.Invoker.InvokeStatic(
-                caseVariantType,
-                caseVariantMembers[0],
-                arguments);
-            return caseVariantCall.ReturnedVoid ? null : caseVariantCall.Value;
-        }
-
-        if (TryResolveShellStaticType(path, out _))
-        {
-            throw ConstructInsteadOfInvoking(path);
-        }
-
-        if (TryInvokeShellSymbol(path, arguments, out var shellResult))
-        {
-            return shellResult;
-        }
-
-        var plan = PlanQualifiedInvocation(path);
-
-        if (plan.Kind == QualifiedInvocationKind.Static)
-        {
-            var invocation = LanguageRuntime.Invoker.InvokeStatic(plan.DeclaringType, plan.MethodName, arguments);
-            return invocation.ReturnedVoid ? null : invocation.Value;
-        }
-
-        var target = ResolveQualifiedMemberChain(plan.DeclaringType, plan.MemberPath);
-
-        if (target is null)
-        {
-            throw new InvalidOperationException("Cannot invoke an instance method on null.");
-        }
-
-        var instanceInvocation = LanguageRuntime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
-        return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
     }
 
     /// <summary>
@@ -4489,46 +4418,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         plan = default;
         return false;
-    }
-
-    private bool TryInvokeShellSymbol(string path, IReadOnlyList<object?> arguments, out object? value)
-    {
-        if (!TryPlanShellSymbol(path, out var plan))
-        {
-            value = null;
-            return false;
-        }
-
-        if (plan.Kind == ShellSymbolKind.ShellStatic)
-        {
-            // With no member chain the name is a static method on the type itself;
-            // with one, the chain is walked from the static member and the call
-            // lands on whatever it produced (`TS-P2-92`).
-            if (plan.MemberPath is null)
-            {
-                var staticInvocation = LanguageRuntime.Invoker.InvokeStatic(plan.StaticType!, plan.MethodName, arguments);
-                value = staticInvocation.ReturnedVoid ? null : staticInvocation.Value;
-                return true;
-            }
-
-            var staticTarget = LanguageRuntime.ObjectAccessor.GetValue(plan.StaticType, plan.MemberPath)
-                               ?? throw CannotInvokeOnNull(plan.MethodName);
-            var chained = LanguageRuntime.Invoker.InvokeInstance(staticTarget, plan.MethodName, arguments);
-            value = chained.ReturnedVoid ? staticTarget : chained.Value;
-            return true;
-        }
-
-        var target = plan.Module!;
-
-        if (plan.MemberPath is not null)
-        {
-            target = LanguageRuntime.ObjectAccessor.GetValue(plan.Module, plan.MemberPath)
-                     ?? throw CannotInvokeOnNull(plan.MethodName);
-        }
-
-        var invocation = LanguageRuntime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
-        value = invocation.ReturnedVoid ? target : invocation.Value;
-        return true;
     }
 
     private static InvalidOperationException CannotInvokeOnNull(string methodName) =>
