@@ -16,4 +16,6 @@
 | [`TOAST-0142`](items/TOAST-0142.md) | P2 | open | 0/6 | Type discovery needs the single-file bundle extracted, which costs 1.3 GB and a legacy SDK mode |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOSH-0009`](items/TOSH-0009.md) | P3 | partial | 4/6 | TōSh can be built for Windows but not installed there |
+| [`TOSH-0012`](items/TOSH-0012.md) | P0 | in-progress | 0/7 | External programs' output is decoded as text, so pipes and redirections corrupt binary data |
+| [`TOSH-0013`](items/TOSH-0013.md) | P0 | open | 0/6 | A value that starts with a dash is parsed as an option, so `rm $name` can recurse |
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
