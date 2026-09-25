@@ -39,7 +39,7 @@ public sealed class TuiTerminalSession : IDisposable
     private int _restored;
     private int _cancelled;
 
-    private TuiTerminalSession(ITuiHost host)
+    private TuiTerminalSession(ITuiHost host, TerminalProfile? terminal)
     {
         _host = host;
 
@@ -53,12 +53,12 @@ public sealed class TuiTerminalSession : IDisposable
         // something that does not parse them types `[200~` into whatever has focus, so this
         // is worse than nothing without `TuiInputReader` reading it — see
         // `TuiBracketedPaste`.
-        if (TuiBracketedPaste.Detect(Environment.GetEnvironmentVariable))
+        if (TuiBracketedPaste.Detect(Environment.GetEnvironmentVariable, terminal))
         {
             _host.Write(TuiBracketedPaste.Enable);
         }
 
-        if (TuiTerminalFocus.Detect(Environment.GetEnvironmentVariable))
+        if (TuiTerminalFocus.Detect(Environment.GetEnvironmentVariable, terminal))
         {
             _host.Write(TuiTerminalFocus.Enable);
         }
@@ -66,7 +66,7 @@ public sealed class TuiTerminalSession : IDisposable
         // Last of the input protocols, and the one that changes how ordinary keys arrive:
         // with it, Ctrl+A is a key report rather than byte 1. The reader rebuilds the same
         // ConsoleKeyInfo either way, so nothing downstream can tell.
-        if (TuiKittyKeyboard.Detect(Environment.GetEnvironmentVariable))
+        if (TuiKittyKeyboard.Detect(Environment.GetEnvironmentVariable, terminal))
         {
             _host.Write(TuiKittyKeyboard.Enable);
         }
@@ -101,10 +101,14 @@ public sealed class TuiTerminalSession : IDisposable
     }
 
     /// <summary>Switches the terminal into full-screen mode.</summary>
-    public static TuiTerminalSession Enter(ITuiHost host)
+    /// <param name="terminal">
+    /// The terminal as the shell resolved it, so a screen asks for what the reader's
+    /// configuration says rather than re-deciding from the environment. Null works it out.
+    /// </param>
+    public static TuiTerminalSession Enter(ITuiHost host, TerminalProfile? terminal = null)
     {
         ArgumentNullException.ThrowIfNull(host);
-        return new TuiTerminalSession(host);
+        return new TuiTerminalSession(host, terminal);
     }
 
     private void Register(PosixSignal signal)

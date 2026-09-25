@@ -447,6 +447,74 @@ public sealed class TuiCoreTests
         Assert.Equal(TuiMouseButton.Left, mouse.Button);
     }
 
+    // ── CSI cursor, navigation and function keys ──
+    //
+    // `ESC [ A` is an arrow. The reader recognised `CSI I`/`O` (focus), `CSI <` (mouse) and
+    // digit-led sequences, and handed everything else back as a bare Escape — so every arrow
+    // press arrived as Escape, which closes a screen that has no form to cancel. It was not
+    // the Kitty protocol: the keys failed with that asked for and with it turned off.
+
+    [Theory]
+    [InlineData('A', ConsoleKey.UpArrow)]
+    [InlineData('B', ConsoleKey.DownArrow)]
+    [InlineData('C', ConsoleKey.RightArrow)]
+    [InlineData('D', ConsoleKey.LeftArrow)]
+    [InlineData('F', ConsoleKey.End)]
+    [InlineData('H', ConsoleKey.Home)]
+    [InlineData('P', ConsoleKey.F1)]
+    [InlineData('S', ConsoleKey.F4)]
+    [InlineData('Z', ConsoleKey.Tab)]
+    public void Tui_input_reader_names_the_key_a_csi_final_byte_stands_for(char final, ConsoleKey expected)
+    {
+        Assert.Equal(expected, TuiInputReader.CsiFinalKey(final));
+    }
+
+    [Theory]
+    [InlineData('I')]   // focus in, handled before this table
+    [InlineData('<')]   // SGR mouse, likewise
+    [InlineData('x')]
+    [InlineData('1')]
+    public void Tui_input_reader_claims_no_key_for_a_final_byte_it_does_not_know(char final)
+    {
+        Assert.Null(TuiInputReader.CsiFinalKey(final));
+    }
+
+    [Theory]
+    [InlineData(1, ConsoleKey.Home)]
+    [InlineData(2, ConsoleKey.Insert)]
+    [InlineData(3, ConsoleKey.Delete)]
+    [InlineData(4, ConsoleKey.End)]
+    [InlineData(5, ConsoleKey.PageUp)]
+    [InlineData(6, ConsoleKey.PageDown)]
+    [InlineData(15, ConsoleKey.F5)]
+    [InlineData(24, ConsoleKey.F12)]
+    public void Tui_input_reader_names_the_key_a_tilde_sequence_stands_for(int code, ConsoleKey expected)
+    {
+        Assert.Equal(expected, TuiInputReader.TildeKey(code));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(9)]
+    [InlineData(16)]
+    [InlineData(200)]   // a bracketed paste, handled before this table
+    public void Tui_input_reader_claims_no_key_for_a_tilde_code_it_does_not_know(int code)
+    {
+        Assert.Null(TuiInputReader.TildeKey(code));
+    }
+
+    /// <summary>Every arrow is distinct, so a list cannot move the wrong way.</summary>
+    [Fact]
+    public void Tui_input_reader_maps_the_four_arrows_to_four_different_keys()
+    {
+        var arrows = new[] { 'A', 'B', 'C', 'D' }
+            .Select(TuiInputReader.CsiFinalKey)
+            .ToArray();
+
+        Assert.DoesNotContain(null, arrows);
+        Assert.Equal(4, arrows.Distinct().Count());
+    }
+
     // ── ProcessInputBatch with mouse events ──
 
     [Fact]

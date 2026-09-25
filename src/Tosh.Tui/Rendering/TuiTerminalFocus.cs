@@ -37,10 +37,23 @@ public static class TuiTerminalFocus
     public const string Lost = "\x1b[O";
 
     /// <summary>Whether to ask, by the environment's account.</summary>
-    public static bool Detect(Func<string, string?> environment)
+    /// <param name="terminal">
+    /// The terminal as the shell resolved it — what the reader configured over what was
+    /// detected. Null works it out from the environment alone.
+    /// </param>
+    public static bool Detect(Func<string, string?> environment, TerminalProfile? terminal = null)
     {
         ArgumentNullException.ThrowIfNull(environment);
 
-        return environment("TOSH_TUI_FOCUS") is not ("0" or "off" or "false" or "no");
+        // The environment variable is the emergency override and stays the last word. Below
+        // it the terminal decides, which used to be nothing at all: the request went to every
+        // terminal, including the multiplexers that do not relay it and the consoles that
+        // cannot honour it, where what reached the screen was the request itself.
+        if (environment("TOSH_TUI_FOCUS") is { } told)
+        {
+            return told is not ("0" or "off" or "false" or "no");
+        }
+
+        return (terminal ?? TerminalProfile.Detect(environment)).FocusReporting;
     }
 }

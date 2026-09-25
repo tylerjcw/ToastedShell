@@ -27,20 +27,20 @@ internal static class TuiRequestDispatcher
 
         if (value is HelpBrowseRequest request)
         {
-            TuiApplication.Run(new ConsoleTuiHost(), new HelpBrowserScreen(runtime, request));
+            TuiApplication.Run(new ConsoleTuiHost(), new HelpBrowserScreen(runtime, request), runtime.Config.ResolvedTerminal);
             return true;
         }
 
         if (value is ConfigBrowseRequest configRequest)
         {
-            TuiApplication.Run(new ConsoleTuiHost(), new ConfigBrowserScreen(runtime, configRequest));
+            TuiApplication.Run(new ConsoleTuiHost(), new ConfigBrowserScreen(runtime, configRequest), runtime.Config.ResolvedTerminal);
             return true;
         }
 
         if (value is TuiPickRequest pickRequest)
         {
             var screen = new TuiPickScreen(pickRequest, runtime.Formatter);
-            TuiApplication.Run(new ConsoleTuiHost(), screen);
+            TuiApplication.Run(new ConsoleTuiHost(), screen, runtime.Config.ResolvedTerminal);
             outcomeValues = BuildOutcomeValues(screen.Outcome, pickRequest.ReturnOutcome);
             return true;
         }
@@ -48,7 +48,7 @@ internal static class TuiRequestDispatcher
         if (value is TuiConfirmRequest confirmRequest)
         {
             var screen = new TuiConfirmScreen(confirmRequest);
-            TuiApplication.Run(new ConsoleTuiHost(), screen);
+            TuiApplication.Run(new ConsoleTuiHost(), screen, runtime.Config.ResolvedTerminal);
             outcomeValues = BuildOutcomeValues(screen.Outcome, confirmRequest.ReturnOutcome);
             return true;
         }
@@ -56,7 +56,7 @@ internal static class TuiRequestDispatcher
         if (value is TuiInputRequest inputRequest)
         {
             var screen = new TuiInputScreen(inputRequest);
-            TuiApplication.Run(new ConsoleTuiHost(), screen);
+            TuiApplication.Run(new ConsoleTuiHost(), screen, runtime.Config.ResolvedTerminal);
             outcomeValues = BuildOutcomeValues(screen.Outcome, inputRequest.ReturnOutcome);
             return true;
         }
@@ -64,7 +64,7 @@ internal static class TuiRequestDispatcher
         if (value is TuiFilePickRequest fileRequest)
         {
             var screen = new TuiFilePickerScreen(fileRequest);
-            TuiApplication.Run(new ConsoleTuiHost(), screen);
+            TuiApplication.Run(new ConsoleTuiHost(), screen, runtime.Config.ResolvedTerminal);
             outcomeValues = BuildOutcomeValues(screen.Outcome, fileRequest.ReturnOutcome);
             return true;
         }
@@ -99,7 +99,7 @@ internal static class TuiRequestDispatcher
                 return true;
             }
 
-            TuiApplication.Run(new ConsoleTuiHost(), screen);
+            TuiApplication.Run(new ConsoleTuiHost(), screen, runtime.Config.ResolvedTerminal);
 
             outcomeValues = screen.HasForm && !treeRequest.ReturnOutcome
                 ? null

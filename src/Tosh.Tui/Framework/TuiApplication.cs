@@ -26,7 +26,11 @@ public static class TuiApplication
     /// </remarks>
     private static readonly TimeSpan WaitSlice = TimeSpan.FromMilliseconds(25);
 
-    public static void Run(ITuiHost host, ITuiScreen screen)
+    /// <param name="terminal">
+    /// The terminal as the shell resolved it — the reader's configuration over what was
+    /// detected. Null works it out from the environment alone.
+    /// </param>
+    public static void Run(ITuiHost host, ITuiScreen screen, TerminalProfile? terminal = null)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(screen);
@@ -37,7 +41,7 @@ public static class TuiApplication
         }
 
         // Owns the terminal modes and restores them even if the process is signalled.
-        using var session = TuiTerminalSession.Enter(host);
+        using var session = TuiTerminalSession.Enter(host, terminal);
 
         TuiBuffer? presented = null;
         var failure = new TuiHandlerFailureReporter();

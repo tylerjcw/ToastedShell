@@ -33,12 +33,26 @@ public sealed class TuiTerminalFocusTests
         Assert.Equal("\x1b[O", TuiTerminalFocus.Lost);
     }
 
+    /// <summary>An explicit setting is the last word; otherwise the terminal decides.</summary>
+    /// <remarks>
+    /// This used to be the opt-out alone, so the request went to every terminal — including
+    /// the multiplexers that do not relay it and the consoles that cannot honour it, where
+    /// what reached the screen was the request itself.
+    /// </remarks>
     [Fact]
-    public void It_is_on_unless_turned_off()
+    public void An_explicit_setting_wins_over_what_the_terminal_says()
     {
-        Assert.True(TuiTerminalFocus.Detect(Env()));
         Assert.False(TuiTerminalFocus.Detect(Env(("TOSH_TUI_FOCUS", "0"))));
-        Assert.True(TuiTerminalFocus.Detect(Env(("TOSH_TUI_FOCUS", "1"))));
+        Assert.False(TuiTerminalFocus.Detect(Env(("TOSH_TUI_FOCUS", "off"))));
+        Assert.True(TuiTerminalFocus.Detect(Env(("TOSH_TUI_FOCUS", "1"), ("TERM", "linux"))));
+    }
+
+    [Fact]
+    public void A_windowed_terminal_is_asked_and_a_console_is_not()
+    {
+        Assert.True(TuiTerminalFocus.Detect(Env(("TERM", "xterm-256color"), ("DISPLAY", ":0"))));
+        Assert.False(TuiTerminalFocus.Detect(Env(("TERM", "linux"))));
+        Assert.False(TuiTerminalFocus.Detect(Env(("TMUX", "/tmp/t"))));
     }
 
     /// <summary>A focus report is its own kind, and carries which way it went.</summary>

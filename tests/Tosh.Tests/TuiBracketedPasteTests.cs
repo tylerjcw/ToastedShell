@@ -43,13 +43,25 @@ public sealed class TuiBracketedPasteTests
         Assert.Equal("\x1b[201~", TuiBracketedPaste.Finish);
     }
 
+    /// <summary>An explicit setting is the last word; otherwise the terminal decides.</summary>
     [Fact]
-    public void It_is_on_unless_turned_off()
+    public void An_explicit_setting_wins_over_what_the_terminal_says()
     {
-        Assert.True(TuiBracketedPaste.Detect(Env()));
         Assert.False(TuiBracketedPaste.Detect(Env(("TOSH_TUI_PASTE", "0"))));
         Assert.False(TuiBracketedPaste.Detect(Env(("TOSH_TUI_PASTE", "off"))));
-        Assert.True(TuiBracketedPaste.Detect(Env(("TOSH_TUI_PASTE", "1"))));
+        Assert.True(TuiBracketedPaste.Detect(Env(("TOSH_TUI_PASTE", "1"), ("TERM", "dumb"))));
+    }
+
+    /// <summary>
+    /// A console can take a bracketed paste even though it can take no other protocol here;
+    /// a terminal that answers for almost nothing cannot.
+    /// </summary>
+    [Fact]
+    public void Only_a_terminal_that_answers_for_nothing_is_left_out()
+    {
+        Assert.True(TuiBracketedPaste.Detect(Env(("TERM", "xterm-256color"), ("DISPLAY", ":0"))));
+        Assert.True(TuiBracketedPaste.Detect(Env(("TERM", "linux"))));
+        Assert.False(TuiBracketedPaste.Detect(Env(("TERM", "dumb"))));
     }
 
     /// <summary>A paste is its own kind of event, carrying text and no key.</summary>

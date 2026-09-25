@@ -36,7 +36,7 @@ public sealed class TuiInputReader
 
         var key = Console.ReadKey(intercept: true);
 
-        if (key.Key == ConsoleKey.Escape && Console.KeyAvailable)
+        if (key.Key == ConsoleKey.Escape && SequenceFollows())
         {
             return ReadAfterEscape(key);
         }
@@ -63,7 +63,7 @@ public sealed class TuiInputReader
 
         var key = Console.ReadKey(intercept: true);
 
-        if (key.Key == ConsoleKey.Escape && Console.KeyAvailable)
+        if (key.Key == ConsoleKey.Escape && SequenceFollows())
         {
             inputEvent = ReadAfterEscape(key);
             return true;
@@ -132,10 +132,74 @@ public sealed class TuiInputReader
                     return ReadParameterised(escapeKey, seen, introducer);
                 }
 
+                // `CSI A`..`CSI D` are the arrow keys, and the rest of this table is the
+                // other keys a terminal spells the same way. They used to fall through to
+                // the Escape below, so every arrow press read as Escape — which closes a
+                // screen that has no form to cancel.
+                if (CsiFinalKey(introducer) is { } named)
+                {
+                    return FromNamedKey(named, introducer == 'Z' ? ConsoleModifiers.Shift : 0);
+                }
+
                 Replay(seen);
                 return TuiInputEvent.FromKey(escapeKey);
         }
     }
+
+    /// <summary>The key a CSI final byte names, or null when it names none.</summary>
+    /// <remarks>
+    /// .NET decodes these itself when it is reading the terminal in its own mode. Asking for
+    /// the Kitty protocol's "disambiguate escape codes" is what stops it: the terminal then
+    /// reports keys in a form .NET's terminfo does not match, so they arrive here raw.
+    /// </remarks>
+    internal static ConsoleKey? CsiFinalKey(char final) => final switch
+    {
+        'A' => ConsoleKey.UpArrow,
+        'B' => ConsoleKey.DownArrow,
+        'C' => ConsoleKey.RightArrow,
+        'D' => ConsoleKey.LeftArrow,
+        'F' => ConsoleKey.End,
+        'H' => ConsoleKey.Home,
+        'P' => ConsoleKey.F1,
+        'Q' => ConsoleKey.F2,
+        'R' => ConsoleKey.F3,
+        'S' => ConsoleKey.F4,
+        'Z' => ConsoleKey.Tab,
+        _ => null,
+    };
+
+    /// <summary>The key a <c>CSI &lt;n&gt; ~</c> sequence names, or null when it names none.</summary>
+    internal static ConsoleKey? TildeKey(int code) => code switch
+    {
+        1 or 7 => ConsoleKey.Home,
+        2 => ConsoleKey.Insert,
+        3 => ConsoleKey.Delete,
+        4 or 8 => ConsoleKey.End,
+        5 => ConsoleKey.PageUp,
+        6 => ConsoleKey.PageDown,
+        11 => ConsoleKey.F1,
+        12 => ConsoleKey.F2,
+        13 => ConsoleKey.F3,
+        14 => ConsoleKey.F4,
+        15 => ConsoleKey.F5,
+        17 => ConsoleKey.F6,
+        18 => ConsoleKey.F7,
+        19 => ConsoleKey.F8,
+        20 => ConsoleKey.F9,
+        21 => ConsoleKey.F10,
+        23 => ConsoleKey.F11,
+        24 => ConsoleKey.F12,
+        _ => null,
+    };
+
+    /// <summary>A decoded key, as the press it stands for.</summary>
+    private static TuiInputEvent FromNamedKey(ConsoleKey key, ConsoleModifiers modifiers) =>
+        TuiInputEvent.FromKey(new ConsoleKeyInfo(
+            '\0',
+            key,
+            modifiers.HasFlag(ConsoleModifiers.Shift),
+            modifiers.HasFlag(ConsoleModifiers.Alt),
+            modifiers.HasFlag(ConsoleModifiers.Control)));
 
     /// <summary>
     /// Reads <c>CSI &lt;params&gt; &lt;final&gt;</c>, having read the first digit.
@@ -184,6 +248,23 @@ public sealed class TuiInputReader
                         TuiKittyKeyboard.Modifiers(parameters.Count > 1 ? parameters[1] : 1)));
 
                 default:
+                    // A modified arrow is `CSI 1 ; 5 A`, and Home/End/PageUp and the
+                    // function keys are `CSI <n> ~`. Both ended up as Escape here.
+                    var modifiers = TuiKittyKeyboard.Modifiers(
+                        parameters.Count > 1 ? parameters[1] : 1);
+
+                    if (next == '~' && TildeKey(parameters[0]) is { } tilde)
+                    {
+                        return FromNamedKey(tilde, modifiers);
+                    }
+
+                    if (CsiFinalKey(next) is { } named)
+                    {
+                        return FromNamedKey(
+                            named,
+                            next == 'Z' ? modifiers | ConsoleModifiers.Shift : modifiers);
+                    }
+
                     Replay(seen);
                     return TuiInputEvent.FromKey(escapeKey);
             }
@@ -243,7 +324,7 @@ public sealed class TuiInputReader
     /// <summary>Reads one character, if the console has one waiting.</summary>
     private static bool TryTake(StringBuilder seen, out char character)
     {
-        if (!Console.KeyAvailable)
+        if (!SequenceFollows())
         {
             character = default;
             return false;
@@ -252,6 +333,38 @@ public sealed class TuiInputReader
         character = Console.ReadKey(intercept: true).KeyChar;
         seen.Append(character);
         return true;
+    }
+
+    /// <summary>How long to wait for the rest of an escape sequence before calling it a lone Escape.</summary>
+    private const int SequenceGraceMilliseconds = 30;
+
+    /// <summary>Whether more of an escape sequence is coming, waiting briefly to find out.</summary>
+    /// <remarks>
+    /// A terminal writes a sequence in one go, but the read that returned its <c>ESC</c> can
+    /// still land before the remainder reaches the buffer — and asking
+    /// <see cref="Console.KeyAvailable"/> at that instant answers no. The sequence was then
+    /// read as a lone Escape followed by loose characters, which closes a screen that has no
+    /// form to cancel. The grace costs a pressed Escape this long and nothing else.
+    /// </remarks>
+    private static bool SequenceFollows()
+    {
+        if (Console.KeyAvailable)
+        {
+            return true;
+        }
+
+        var deadline = Environment.TickCount64 + SequenceGraceMilliseconds;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (Console.KeyAvailable)
+            {
+                return true;
+            }
+
+            Thread.Sleep(1);
+        }
+
+        return false;
     }
 
     /// <summary>Hands characters back as keystrokes, in the order they were read.</summary>
