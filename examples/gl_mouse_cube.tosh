@@ -9,7 +9,7 @@
 ##   turns two screen points into a quaternion, so the cube follows the cursor rather than
 ##   accumulating independent pitch and yaw.
 ## @example examples/gl_mouse_cube.tosh
-require ToastLib.Gl from "/home/komrad/.config/tosh/lib/ToastLib.Gl.tosh" as Gl
+require ToastLib.Gl as Gl
 
 using System.Drawing
 using System.Numerics

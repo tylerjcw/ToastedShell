@@ -1,0 +1,115 @@
+partial module Build.Desktop
+
+## @summary Installs MIME, icon, desktop and GtkSourceView integration.
+func Install(root: Core.DirectoryPath, system: bool) {
+    Core.Sep("LINUX DESKTOP")
+    var languageSpec = $root | join -p "editor" "gtksourceview" "tosh.lang"
+    var icon = $root | join -p "editor" "vscode" "tosh.tosh-lang" "icons" "tosh-dark.svg"
+    Fs.RequireSafeFile($languageSpec, "GtkSourceView language spec")
+    Fs.RequireSafeFile($icon, "Icon")
+
+    var dataRoot = ""
+    var useSudo = false
+    if ($system) {
+        $dataRoot = "/usr/share"
+        var uid = (id -u).Uid
+        if ($uid != 0) { $useSudo = true }
+    } else {
+        $dataRoot = ($env.XDG_DATA_HOME ?? $"{$env.HOME}/.local/share")
+        if ($dataRoot == "") { $dataRoot = $"{$env.HOME}/.local/share" }
+    }
+
+    var applications = $"{$dataRoot}/applications"
+    var mime = $"{$dataRoot}/mime"
+    var icons = $"{$dataRoot}/icons/hicolor"
+    var currentDefault = ""
+    if (not $system) {
+        best-effort { $currentDefault = (xdg-mime query default text/x-tosh).Trim() }
+    }
+
+    var temporary = (mkdir-temp tosh-desktop).FullName
+    defer { best-effort { rm -rf $temporary | ignore } }
+
+    write-file $"{$temporary}/tosh.xml" '<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-tosh">
+    <comment>TōSh script</comment>
+    <icon name="text-x-tosh"/>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.tosh" weight="100"/>
+    <magic priority="80">
+      <match type="string" value="#!/usr/bin/tosh" offset="0"/>
+      <match type="string" value="#!/bin/tosh" offset="0"/>
+      <match type="string" value="#!/bin/env tosh" offset="0"/>
+      <match type="string" value="#!/usr/bin/env tosh" offset="0"/>
+    </magic>
+  </mime-type>
+</mime-info>
+'
+
+    write-file $"{$temporary}/tosh.desktop" '[Desktop Entry]
+Type=Application
+Name=TōSh
+GenericName=Shell
+Comment=ToastedShell interactive shell
+Exec=tosh
+TryExec=tosh
+Icon=tosh
+Terminal=true
+Categories=System;TerminalEmulator;
+StartupNotify=false
+'
+
+    write-file $"{$temporary}/tosh-open.desktop" '[Desktop Entry]
+Type=Application
+Name=Run with TōSh
+GenericName=Shell
+Comment=Run a TōSh script
+Exec=tosh %f
+TryExec=tosh
+Icon=tosh
+Terminal=true
+NoDisplay=true
+MimeType=text/x-tosh;
+Categories=System;TerminalEmulator;
+StartupNotify=false
+'
+
+    ## @summary Installs one file, elevating when the destination needs it.
+    func InstallFile(source: string, destination: string) {
+        if ($useSudo) {
+            sudo install -Dm644 $source $destination | ignore
+        } else {
+            install -Dm644 $source $destination | ignore
+        }
+    }
+
+    Core.Info($"Installing into {$dataRoot}")
+    InstallFile($"{$temporary}/tosh.xml", $"{$mime}/packages/tosh.xml")
+    InstallFile($icon, $"{$icons}/scalable/mimetypes/text-x-tosh.svg")
+    InstallFile($icon, $"{$icons}/scalable/apps/tosh.svg")
+    InstallFile($"{$temporary}/tosh.desktop", $"{$applications}/tosh.desktop")
+    InstallFile($"{$temporary}/tosh-open.desktop", $"{$applications}/tosh-open.desktop")
+    for version in ["2.0", "3.0", "4", "5"] {
+        InstallFile($languageSpec, $"{$dataRoot}/gtksourceview-{$version}/language-specs/tosh.lang")
+    }
+
+    if ($useSudo) {
+        best-effort { sudo update-mime-database $mime | ignore }
+        best-effort { sudo gtk-update-icon-cache -f -t $icons | ignore }
+        best-effort { sudo update-desktop-database $applications | ignore }
+    } else {
+        best-effort { update-mime-database $mime | ignore }
+        best-effort { gtk-update-icon-cache -f -t $icons | ignore }
+        best-effort { update-desktop-database $applications | ignore }
+    }
+
+    if (not $system and $currentDefault != "" and $currentDefault != "tosh-open.desktop") {
+        best-effort { xdg-mime default $currentDefault text/x-tosh | ignore }
+    }
+
+    Core.Ok("Linux desktop integration installed")
+    Core.Info($"  MIME:         {$mime}/packages/tosh.xml")
+    Core.Info($"  App launcher: {$applications}/tosh.desktop")
+    Core.Info($"  Open With:    {$applications}/tosh-open.desktop")
+}

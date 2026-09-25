@@ -1,0 +1,177 @@
+partial module Build.Bench
+
+## Startup cost of the three publish configurations worth comparing.
+
+## @summary One configuration to publish and measure.
+record Configuration(Label: string, Key: string, SelfContained: bool, ReadyToRun: bool)
+
+const Configurations = [
+    new Configuration("Self-Contained", "sc", true, false),
+    new Configuration("Self-Contained, Ready-To-Run", "sc_r2r", true, true),
+    new Configuration("Framework-Dependent", "fdd", false, false),
+]
+
+## @summary One configuration's measurements.
+record Measurement(Label: string, PublishSec: string, SizeMB: string, ColdMs: string, WarmMs: string)
+record Delta(Label: string, Cold: string, Warm: string)
+record HistoryEntry(
+    kind: string,
+    ts: string,
+    sc_cold_ms: string,
+    sc_warm_ms: string,
+    sc_r2r_cold_ms: string,
+    sc_r2r_warm_ms: string,
+    fdd_cold_ms: string,
+    fdd_warm_ms: string)
+
+## @summary Reads a numeric field from a previous history entry, or null.
+func PreviousField(previous: object, key: string) -> double? {
+    var read = attempt {
+        var value = $previous.GetProperty($key)
+        ($value.ValueKind == System.Text.Json.JsonValueKind.String
+            ? System.Double.Parse($value.GetString(), System.Globalization.CultureInfo.InvariantCulture)
+            : $value.GetDouble())
+    }
+    return match ($read) {
+        Ok(number) => $number
+        default    => null
+    }
+}
+
+## @summary Times one start of a binary, throwing if it does not exit cleanly.
+shy func TimeStart(binary: string, label: string) -> double {
+    var run = Core.Capture($binary, ["--safe", "-c", "exit"])
+    if ($run.ExitCode != 0) {
+        throw $"Startup probe failed for {$label} (exit {$run.ExitCode})."
+    }
+    return $run.Duration.TotalMilliseconds
+}
+
+## @summary Publishes each configuration and measures cold and warm start.
+func Run(rid: string = "", runs: int = 5, output: string = "", compare: bool = false) {
+    if ($runs < 1) { throw "--runs must be >= 1" }
+
+    var host = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
+    var runtimeId = Safety.ValidateRuntimeId(($rid == "" ? $host : $rid))
+    if ($runtimeId != $host) {
+        throw $"Startup benchmarks must execute on their target RID (host: {$host}, requested: {$runtimeId})."
+    }
+
+    var root = Core.RepoRoot()
+    with-lock "bench" {
+        var directory = ($output == ""
+            ? (Core.At($root, "artifacts", "benchmarks"))
+            : System.IO.Path.GetFullPath($output))
+        var runDirectory = $directory | join -p $runtimeId $"run-{(guid new).ToString("N")}"
+        var keepRunDirectory = ($output != "")
+        defer {
+            if (not $keepRunDirectory and Fs.IsDir($runDirectory)) {
+                best-effort { System.IO.Directory.Delete($runDirectory, true) }
+            }
+        }
+
+        var transaction = Safety.NewStaging($root, "benchmark")
+        defer { best-effort { Safety.RemoveStaging($root, $transaction) } }
+        var artifactsDirectory = Safety.StagingDirectory($root, ($transaction | join -p "build"))
+        System.IO.Directory.CreateDirectory($artifactsDirectory) | ignore
+        mkdir -p $runDirectory | ignore
+
+        var project = Core.At($root, "src", "Tosh.Cli", "Tosh.Cli.csproj")
+        var previous = null
+        var previousDocument = null
+        defer { if ($previousDocument != null) { $previousDocument.Dispose() | ignore } }
+
+        if ($compare) {
+            var line = History.ReadLast($root, "bench")
+            if ($line == null) {
+                Core.Warn("No previous benchmark in history; comparison will be omitted.")
+            } else {
+                $previousDocument = System.Text.Json.JsonDocument.Parse($line)
+                $previous = $previousDocument.RootElement
+                Core.Info($"Comparing against previous run from {($previous.GetProperty("ts").GetString())}")
+            }
+        }
+
+        Core.Sep("BENCH")
+        Core.Info($"RID: {$runtimeId}  runs: {$runs}  output: {$runDirectory}")
+        Core.Gap()
+
+        Dotnet.Restore($project, $artifactsDirectory, $runtimeId, true, true, false, "benchmark restore")
+
+        var results = []
+        for configuration in $Configurations {
+            var configurationDirectory = $runDirectory | join -p $configuration.Key
+            mkdir -p $configurationDirectory | ignore
+            Core.Info($"Publishing '{$configuration.Label}'...")
+
+            var started = date now
+            Dotnet.Publish(
+                $project, $runtimeId, $configurationDirectory, $artifactsDirectory,
+                (Dotnet.SingleFileArgs($configuration.SelfContained, $configuration.ReadyToRun, false)),
+                $"publish {$configuration.Label}")
+            var publishSeconds = ((((date now) - $started).TotalSeconds).ToString("F2"))
+
+            var suffix = (($runtimeId starts-with "win-") ? ".exe" : "")
+            var candidates = [
+                ($configurationDirectory | join -p $"tosh{$suffix}"),
+                ($configurationDirectory | join -p $"Tosh.Cli{$suffix}"),
+            ]
+            var binary = $candidates | where { (is-file $_).IsFile } | first
+            if ($binary == null) {
+                Core.Warn($"Binary not found for {$configuration.Label}; skipping.")
+                continue
+            }
+
+            var info = ls $binary | first
+            var sizeMb = (($info.Size.Bytes / 1048576.0).ToString("F1"))
+            Core.Info($"  Published {$sizeMb} MB in {$publishSeconds}s; measuring startup...")
+
+            var coldMs = TimeStart($binary, $configuration.Label)
+            var warmTotal = 0.0
+            var run = 0
+            while ($run < $runs) {
+                $warmTotal += TimeStart($binary, $configuration.Label)
+                $run += 1
+            }
+
+            var cold = $coldMs.ToString("F1")
+            var warm = (($warmTotal / $runs).ToString("F1"))
+            Core.Ok($"{$configuration.Label}  publish={$publishSeconds}s  size={$sizeMb}MB  cold={$cold}ms  warm={$warm}ms")
+            $results = [...$results, new Measurement($configuration.Label, $publishSeconds, $sizeMb, $cold, $warm)]
+        }
+
+        Core.Sep("SUMMARY")
+        echo $results
+
+        if ($compare and $previous != null) {
+            Core.Gap()
+            Core.Sep("COMPARE vs previous")
+            var deltas = []
+            for result in $results {
+                var configuration = $Configurations | where { $_.Label == $result.Label } | first
+                var wasCold = PreviousField($previous, $"{$configuration.Key}_cold_ms")
+                var wasWarm = PreviousField($previous, $"{$configuration.Key}_warm_ms")
+                if ($wasCold != null and $wasWarm != null) {
+                    $deltas = [...$deltas, new Delta(
+                        $result.Label,
+                        $"{((($result.ColdMs as double) - $wasCold).ToString("+0.0;-0.0;0.0"))}ms",
+                        $"{((($result.WarmMs as double) - $wasWarm).ToString("+0.0;-0.0;0.0"))}ms")]
+                }
+            }
+            if (($deltas | count) > 0) { echo $deltas }
+        }
+
+        var field = func(label, which) {
+            var result = $results | where { $_.Label == $label } | first
+            return ($result == null ? "0" : ($which == "cold" ? $result.ColdMs : $result.WarmMs))
+        }
+        History.Append($root, new HistoryEntry(
+            "bench", Core.TimestampNow(),
+            (invoke $field "Self-Contained" "cold"),
+            (invoke $field "Self-Contained" "warm"),
+            (invoke $field "Self-Contained, Ready-To-Run" "cold"),
+            (invoke $field "Self-Contained, Ready-To-Run" "warm"),
+            (invoke $field "Framework-Dependent" "cold"),
+            (invoke $field "Framework-Dependent" "warm")))
+    }
+}

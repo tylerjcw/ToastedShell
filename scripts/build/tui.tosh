@@ -1,0 +1,182 @@
+#!/usr/bin/env tosh
+
+## @summary A dashboard over the TōSh build library.
+## @example tui.tosh
+##
+## The same `Build.*` library the CLI uses. Read-only state is read from it
+## directly; an *action* is run as `build.tosh <subcommand>` in a background job
+## with its output redirected to a log, and the log's tail is what the Output pane
+## shows. Two reasons for the split, both measured rather than assumed:
+##
+##   - The library reports through `writeline`, straight to the console. A screen
+##     has that console, so a library call that printed would draw over the frame.
+##   - A handler holds the render loop and is stopped after five seconds. A build
+##     takes minutes, so it cannot run in one.
+##
+## Inside `async`, a command pipeline is buffered rather than streamed — all of its
+## output arrives in one value when the command exits — so the documented `Feed`
+## shape does not give a live log here. A background job writing to a file, tailed
+## by a pull binding, does, and leaves the log readable afterwards.
+
+require ./lib/init.tosh
+
+## @summary One thing this dashboard can run, as a `build.tosh` subcommand.
+record Action(Key: string, Args: array, Summary: string)
+
+const Actions = [
+    new Action("build",      ["build"],                        "compile and report diagnostics"),
+    new Action("check",      ["check"],                        "build, then the smoke tests"),
+    new Action("test smoke", ["test", "--group", "smoke"],     "the fast test set"),
+    new Action("test all",   ["test"],                         "the whole suite"),
+    new Action("clean",      ["clean"],                        "build output"),
+    new Action("clean all",  ["clean", "--scope", "all"],      "everything a clean may remove"),
+    new Action("bundles",    ["clean", "--scope", "bundles"],  "stale ~/.net extraction dirs"),
+    new Action("docs",       ["docs"],                         "regenerate chapters, build PDFs"),
+    new Action("vsix",       ["vsix"],                         "package the VS Code extension"),
+]
+
+var root = Build.Core.RepoRoot()
+var script = $root | join -p "scripts" "build" "build.tosh"
+var logPath = $root | join -p "artifacts" "build-tui.log"
+
+## The child appends this when it exits, with its exit code. Completion is read
+## from the log rather than from `jobs`, because a pull binding runs on the render
+## loop's thread and does not see the job the handler started.
+const Marker = "@@tui-done"
+
+var running = null
+var startedAt = null
+var lastExit = null
+var state = []
+
+## @summary Re-reads the repository state shown in the State pane.
+func RefreshState() {
+    var version = Build.Version.Full(Build.Version.Read($root))
+    var branch = Build.Core.FirstLine(Build.Core.Capture("git", ["-C", $root, "rev-parse", "--abbrev-ref", "HEAD"]))
+    var dirty = (Build.Core.Capture("git", ["-C", $root, "status", "--porcelain"])).Output | count
+    var sdk = Build.Core.FirstLine(Build.Core.Capture("dotnet", ["--version"]))
+    var lastTest = Build.History.ReadLast($root, "test")
+
+    var tests = "(no history yet)"
+    if ($lastTest != null) {
+        var entry = $lastTest | from json
+        $tests = $"{$entry.passed}/{$entry.total} · {$entry.group} · {$entry.duration}"
+    }
+
+    $state = [
+        $"Version   {$version}",
+        $"Git       {$branch} ({$dirty} modified)",
+        $"SDK       {$sdk}",
+        $"Tests     {$tests}",
+        $"Log       {$logPath}",
+    ]
+}
+
+## @summary The State pane's lines. A pull binding, so it follows `$state`.
+func State() => $state
+
+## @summary The last lines of the running action's log.
+func Output() {
+    if (not (Build.Fs.IsFile($logPath))) {
+        return ["Choose an action on the left and press Enter."]
+    }
+    var lines = cat $logPath | lines | where { not (($_ as string) starts-with $Marker) } | collect
+    var total = ($lines | count)
+    return ($total <= 400 ? $lines : ($lines | skip ($total - 400) | collect))
+}
+
+## @summary The child's exit code once it has written its marker, otherwise null.
+func FinishedCode() -> int? {
+    if (not (Build.Fs.IsFile($logPath))) { return null }
+    var done = cat $logPath | lines | where { ($_ as string) starts-with $Marker } | first
+    if ($done == null) { return null }
+    return (($done as string).Substring($Marker.Length).Trim() as int)
+}
+
+## @summary Whether the launched action is still going; notices when it stops.
+# The state refresh happens here because this is the only moment the answer changes.
+func IsRunning() -> bool {
+    if ($running == null) { return false }
+    var code = FinishedCode()
+    if ($code == null) { return true }
+
+    var verdict = ($code == 0 ? "ok" : $"exit {$code}")
+    $lastExit = $"{$running} — {$verdict}  ({(((date now) - $startedAt).ToString("hh\\:mm\\:ss"))})"
+    $running = null
+    RefreshState()
+    return false
+}
+
+## @summary The status line under the panes.
+func Status() {
+    if (IsRunning()) {
+        return $"● {$running}   {(((date now) - $startedAt).ToString("hh\\:mm\\:ss"))}"
+    }
+    return ($startedAt == null ? "idle" : $"○ {$lastExit}")
+}
+
+## @summary Launches an action in the background, redirecting its log.
+func Start(action) {
+    if (IsRunning()) { return }
+    $running = $action.Key
+    $startedAt = date now
+    $lastExit = $"{$action.Key} started"
+    write-file $logPath $"$ build.tosh {($action.Args | join " ")}\n" | ignore
+
+    # The redirect is what makes this safe inside `async`: a command pipeline is
+    # buffered there, but output sent straight to a file is not, so the log fills
+    # as the action runs.
+    var args = $action.Args
+    async {
+        tosh --no-profile $script ...$args o+e>> $logPath
+        echo $"{$Marker} {$tosh.Last.ExitCode}" out>> $logPath
+    } | ignore
+}
+
+## @summary Runs the action the list has selected.
+func Chosen(item) {
+    var action = $Actions | where { $_.Key == ($item as string) } | first
+    if ($action != null) { Start($action) }
+}
+
+RefreshState()
+
+var screen = {|
+    Column = [
+        {|
+            Row = [
+                {|
+                    Box = [ {|
+                        List     = [$a.Key <| for a in $Actions],
+                        Id       = "action",
+                        OnSelect = &Chosen
+                    |} ],
+                    Title = "Actions",
+                    Size  = "1/4 16..28"
+                |},
+                {|
+                    Column = [
+                        {| Box = [ {| Lines = &State |} ], Title = "State", Size = "7" |},
+                        {| Box = [ {| Lines = &Output, Scrollbar = true |} ], Title = "Output", Size = "*" |}
+                    ],
+                    Size = "*"
+                |}
+            ],
+            Gap  = 1,
+            Size = "*"
+        |},
+        {| Text = &Status, Size = "1" |},
+        {| Help = "", Size = "1" |}
+    ],
+    Keys = [
+        {| Key = "r", Does = "refresh", Do   = &RefreshState |},
+        {| Key = "q", Does = "quit",    Exit = true          |}
+    ]
+|}
+
+if (System.Console.IsOutputRedirected) {
+    Build.Core.Fail("tui.tosh needs a terminal. Use build.tosh for a pipeline or a redirect.")
+    exit 1
+}
+
+tui run $screen --title "TōSh Build" --refresh 500ms

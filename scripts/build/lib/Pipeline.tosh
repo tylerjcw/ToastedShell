@@ -1,0 +1,120 @@
+partial module Build.Pipeline
+
+## The whole release, in order: clean, check, publish, install, package the
+## extension, and optionally the documentation.
+
+## @summary Bumps the version everywhere without building anything.
+func BumpVersion() {
+    var root = Core.RepoRoot()
+    step "ALL · VERSION" {
+        var next = Version.Apply($root, (Version.Next(Version.Read($root))))
+        Core.Ok($"Version: {(Version.Full($next))}")
+    }
+}
+
+## @summary Pushes what is already built, compiling nothing.
+## @param=selection Targets whose packages to push.
+## @param=noPackages Skip the Arch packages.
+## @param=noVsix Skip the VS Code extension.
+func Push(
+    selection = "all",
+    noPackages: bool = false,
+    noVsix: bool = false,
+    marketplaceUrl: string = "http://localhost:7781") {
+
+    var root = Core.RepoRoot()
+    with-lock "push" {
+        if (not $noPackages) {
+            var bundle = Publish.BundleRoot(true, $selection)
+            Fs.RequireDir($bundle, "Promoted publish bundle")
+
+            # Re-cut from the promoted bundle: `makepkg` reuses the binaries already
+            # verified there, so this runs no compiler.
+            var archives = Package.Create($selection, $bundle, null)
+            try {
+                Package.VerifyPayloads($archives, $bundle)
+                step "PUSH · PACKAGES" { Package.PublishToRepository($archives.Files, "") | ignore }
+            } finally {
+                Package.Cleanup($archives)
+            }
+        }
+
+        if (not $noVsix) {
+            step "PUSH · VSIX" {
+                var artifacts = Core.At($root, "artifacts")
+                var built = ls $artifacts | where { $_.Name.EndsWith(".vsix") } | sort -d Modified | collect
+                var newest = $built | first
+                if ($newest == null) {
+                    Core.Warn("No .vsix has been built yet; run `vsix` first.")
+                } else {
+                    Vscode.PushToMarketplace($newest.FullName, $marketplaceUrl)
+                }
+            }
+        }
+
+        Core.Sep("DONE")
+    }
+}
+
+## @summary Runs the complete release pipeline.
+func Run(
+    bump: bool = false,
+    noClean: bool = false,
+    skipTests: bool = false,
+    noPublish: bool = false,
+    noInstall: bool = false,
+    noVsix: bool = false,
+    selection = "all",
+    docs: bool = false) {
+
+    var root = Core.RepoRoot()
+    with-lock "all" {
+        var targets = Targets.Normalize($selection)
+        var keys = [$t.Key <| for t in $targets]
+
+        Core.Sep("ALL · START")
+
+        if (not $noClean) {
+            # Preserve the last committed release and the extension's dependencies;
+            # `clean --scope all` remains available as an explicit destructive action.
+            step "ALL · CLEAN" { Clean.Run([], false) }
+        }
+        step "ALL · CHECK" { Tests.Check($skipTests, false, "all", null) }
+
+        if ($noPublish) {
+            if ($bump) { BumpVersion() }
+            if (not $noInstall) {
+                step "ALL · INSTALL" { Package.Run($keys, false, false, null) }
+            }
+        } else {
+            Core.Sep("ALL · PUBLISH")
+            # DevCompanion is intentionally not shipped in the release bundle, so it is
+            # published from source afterwards rather than rebuilding all five for it.
+            var releaseKeys = $keys | where { $_ != "devcompanion" } | collect
+            var wantsCompanion = ("devcompanion" in $keys)
+            var installFromBundle = (not $noInstall and ($releaseKeys | count) > 0)
+
+            Publish.Run(
+                "", "", false, false,
+                (not $installFromBundle),
+                (not $bump),
+                (($releaseKeys | count) > 0 ? $releaseKeys : "all")) | ignore
+
+            if ($wantsCompanion and not $noInstall) {
+                step "ALL · INSTALL DEVCOMPANION" { Package.Run(["devcompanion"], false, false, null) }
+            }
+        }
+
+        if (not $noVsix) {
+            step "ALL · VSIX" { Vscode.Package(false, false, "http://localhost:7781") }
+        }
+
+        ## Opt-in: the documentation needs a LaTeX toolchain the rest of the pipeline
+        ## does not, and a release should not fail for want of one. It runs after the
+        ## publish so the command reference is exported from the build just installed.
+        if ($docs) { step "ALL · DOCS" { Docs.Run(false, false, false) | ignore } }
+
+        Core.Sep("ALL · DONE")
+        Core.Ok("Full pipeline completed successfully.")
+    }
+}

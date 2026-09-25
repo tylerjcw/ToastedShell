@@ -1,0 +1,251 @@
+#!/usr/bin/env tosh
+
+## @summary TōSh build system.
+## @example build.tosh publish
+## @example build.tosh test --group lsp
+## @example build.tosh clean --scope bundles
+## @example build.tosh --help
+##
+## This file is the command line and nothing else: every subcommand resolves its
+## arguments and hands them to the library, which is where the work lives. A
+## subcommand that grows logic of its own is a sign something belongs in `lib/`.
+
+## The file is named rather than the directory: `require ./lib` does not resolve a
+## directory holding an `init.tosh`, because that rule belongs to the library-name
+## form and this is a path.
+require ./lib/init.tosh
+
+## @summary Open the TōSh workspace in Tōme.
+subcommand edit {
+    tome (Build.Core.RepoRoot() | join -p "ToSh.tome")
+}
+
+## @summary Print a digest of the current repository state.
+subcommand info {
+    Build.Report.Show()
+}
+
+## @summary Build the solution, and report its diagnostics.
+subcommand build {
+    ## @summary Target, comma-separated targets, or `all` for the whole solution.
+    arg targets = "all"
+    ## @summary Emit the diagnostics as JSON instead of styled lines.
+    flag json: bool = false
+    ## @summary List the available targets and exit.
+    flag list: bool = false
+
+    if ($list) { Build.Targets.List(); return }
+
+    Build.Dotnet.Report($targets, $json)
+}
+
+## @summary Run the test suite, or a named slice of it.
+subcommand test {
+    ## @summary Named group; `all` runs everything, `smoke` the fast set.
+    flag group: string = "all"
+    ## @summary Explicit xUnit filter, overriding `--group`.
+    flag filter: string = ""
+    ## @summary Rerun exactly the tests that failed last time.
+    flag failed: bool = false
+    ## @summary Reuse existing build output instead of building first.
+    flag noBuild: bool = false
+    ## @summary List the available groups and exit.
+    flag groups: bool = false
+    ## @summary Detailed console logging.
+    flag verbose: bool = false
+    ## @summary Enable the test-host blame collector.
+    flag blame: bool = false
+    ## @summary Results directory; empty uses artifacts/test-results.
+    flag results: string = ""
+
+    if ($groups) { Build.Tests.ListGroups(); return }
+
+    Build.Tests.Run(
+        $group,
+        ($filter == "" ? null : $filter),
+        $failed,
+        $noBuild,
+        $verbose,
+        $blame,
+        ($results == "" ? null : $results))
+}
+
+## @summary Build the solution and run the fast test set. The pre-commit check.
+subcommand check {
+    ## @summary Stop after a successful build.
+    flag noTest: bool = false
+    ## @summary Run the whole suite instead of the smoke set.
+    flag full: bool = false
+    ## @summary Explicit xUnit filter, overriding the group.
+    flag filter: string = ""
+
+    Build.Tests.Check($noTest, (not $full), "all", ($filter == "" ? null : $filter))
+}
+
+## @summary Remove build and test artifacts.
+subcommand clean {
+    ## @summary Extra scopes to clean, comma-separated, or `all`.
+    flag scope: string = ""
+    ## @summary Shorthand for `--scope all`.
+    flag all: bool = false
+    ## @summary Report what would be removed, and remove nothing.
+    flag dryRun: bool = false
+    ## @summary List the available scopes and exit.
+    flag scopes: bool = false
+
+    if ($scopes) { Build.Clean.ListScopes(); return }
+
+    var scopes = ($scope == "" ? [] : ($scope | split "," | collect))
+    if ($all) { $scopes = ["all"] }
+
+    Build.Clean.Run($scopes, $dryRun)
+}
+
+## @summary Inspect or set the persisted version.
+subcommand version {
+    ## @summary Two-digit CalVer year; omitted keeps the current one.
+    flag year: int? = null
+    ## @summary CalVer month in 1..12; omitted keeps the current one.
+    flag month: int? = null
+    ## @summary Publish counter; omitted keeps the current one.
+    flag publish: int? = null
+    ## @summary .NET major stamped into the version.
+    flag dotnet: int? = null
+    ## @summary Show the resulting version without writing anything.
+    flag dryRun: bool = false
+
+    Build.Version.Command($year, $month, $publish, $dotnet, $dryRun)
+}
+
+## @summary Build, version-bump, package, and optionally install a release.
+subcommand publish {
+    ## @summary Target, comma-separated targets, or `all`; built, published and installed.
+    arg targets = "all"
+    ## @summary Target Runtime Identifier; empty selects this platform.
+    flag rid: string = ""
+    ## @summary Output below artifacts/publish; empty selects the RID/mode default.
+    flag output: string = ""
+    ## @summary Enable partial IL trimming.
+    flag trimmed: bool = false
+    ## @summary Produce a framework-dependent build.
+    flag frameworkDependent: bool = false
+    ## @summary Skip the Arch installation step.
+    flag noInstall: bool = false
+    ## @summary Reuse the persisted version instead of incrementing it.
+    flag noBump: bool = false
+    ## @summary Replace this process with the published binary on success.
+    flag exec: bool = false
+    ## @summary Skip publishing the built packages to the local repository.
+    flag noPush: bool = false
+    ## @summary List the available targets and exit.
+    flag list: bool = false
+
+    if ($list) { Build.Targets.List(); return }
+
+    var result = Build.Publish.Run(
+        $rid, $output, $trimmed, $frameworkDependent, $noInstall, $noBump, $targets, $noPush)
+    if ($exec) { exec $result.Binary }
+    $result
+}
+
+## @summary Build and install Arch packages.
+subcommand install {
+    ## @summary Target, comma-separated targets, or `all`.
+    arg targets = "all"
+    ## @summary Package the validated publish bundle instead of rebuilding.
+    flag reusePublished: bool = false
+    ## @summary Also install MIME, icon, desktop and GtkSourceView integration.
+    flag desktop: bool = false
+    ## @summary Install desktop integration under /usr/share, using sudo.
+    flag system: bool = false
+    ## @summary List the available targets and exit.
+    flag list: bool = false
+
+    if ($list) { Build.Targets.List(); return }
+
+    Build.Package.Run($targets, $desktop, $system, (Build.Publish.BundleRoot($reusePublished, $targets)))
+}
+
+## @summary Push what is already built: Arch packages and the VS Code extension.
+##
+## Nothing is compiled. Packages are re-cut from the promoted publish bundle, which takes
+## seconds and no SDK, and the newest built `.vsix` is handed to the marketplace.
+subcommand push {
+    ## @summary Target, comma-separated targets, or `all`.
+    arg targets = "all"
+    ## @summary Skip the Arch packages.
+    flag noPackages: bool = false
+    ## @summary Skip the VS Code extension.
+    flag noVsix: bool = false
+    ## @summary Marketplace base URL.
+    flag marketplaceUrl: string = "http://localhost:7781"
+
+    Build.Pipeline.Push($targets, $noPackages, $noVsix, $marketplaceUrl)
+}
+
+## @summary Build the VS Code extension package, and install and publish it.
+subcommand vsix {
+    ## @summary Sync the working copy and stop, without packaging.
+    flag syncOnly: bool = false
+    ## @summary Force dependency regeneration during the sync.
+    flag regenerate: bool = false
+    ## @summary Build the package without installing it locally.
+    flag noInstall: bool = false
+    ## @summary Skip publishing to the local marketplace.
+    flag noPublish: bool = false
+    ## @summary Marketplace base URL.
+    flag marketplaceUrl: string = "http://localhost:7781"
+
+    if ($syncOnly) { Build.Vscode.Sync(false, $regenerate); return }
+
+    Build.Vscode.Package($noInstall, $noPublish, $marketplaceUrl)
+}
+
+## @summary Regenerate the generated chapters and build the PDFs.
+subcommand docs {
+    ## @summary Skip regenerating the diagnostic code reference.
+    flag noDiagnostics: bool = false
+    ## @summary Skip regenerating the command reference.
+    flag noCommands: bool = false
+    ## @summary Regenerate the inputs without running LaTeX.
+    flag noPdf: bool = false
+
+    Build.Docs.Run($noDiagnostics, $noCommands, $noPdf)
+}
+
+## @summary Benchmark the canonical publish configurations.
+subcommand bench {
+    ## @summary Target Runtime Identifier; empty selects this platform.
+    flag rid: string = ""
+    ## @summary Warm-start samples per configuration.
+    flag runs: int = 5
+    ## @summary Output directory; empty uses artifacts/benchmarks.
+    flag output: string = ""
+    ## @summary Compare against the most recent benchmark in history.
+    flag compare: bool = false
+
+    Build.Bench.Run($rid, $runs, $output, $compare)
+}
+
+## @summary Run the whole release: clean, check, publish, install, vsix.
+subcommand all {
+    ## @summary Target, comma-separated targets, or `all`.
+    arg targets = "all"
+    ## @summary Increment the version exactly once during the pipeline.
+    flag bump: bool = false
+    ## @summary Skip the cleaning step.
+    flag noClean: bool = false
+    ## @summary Build without running tests.
+    flag skipTests: bool = false
+    ## @summary Skip the publish step.
+    flag noPublish: bool = false
+    ## @summary Skip Arch package installation.
+    flag noInstall: bool = false
+    ## @summary Skip VSIX packaging and publication.
+    flag noVsix: bool = false
+    ## @summary Also regenerate the documentation and build its PDFs.
+    flag docs: bool = false
+
+    Build.Pipeline.Run(
+        $bump, $noClean, $skipTests, $noPublish, $noInstall, $noVsix, $targets, $docs)
+}

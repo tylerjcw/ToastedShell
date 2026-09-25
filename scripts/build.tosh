@@ -843,16 +843,18 @@ module Build {
 
         ## @remarks
         ##   `Run` emits as it works — `dotnet` writes build output through it — and still
-        ##   returns this. It could not be annotated `-> Result` until `TOSH-0010`, because
+        ##   returns this. It could not be annotated `-> BuildResult` until `TOSH-0010`, because
         ##   a return annotation was checked against every value the function produced, so
-        ##   the `Result` was refused for arriving behind a hundred lines of restore output.
-        record Result(
+        ##   the `BuildResult` was refused for arriving behind a hundred lines of restore output.
+        record BuildResult(
             Binary: string,
             Size: StorageSize,
             RID: string,
             Output: string,
             SelfContained: bool,
             Trimmed: bool,
+            StartDate: System.DateOnly,
+            StartTime: System.TimeOnly,
             Duration: string,
             Version: string)
 
@@ -863,7 +865,7 @@ module Build {
             frameworkDependent: bool,
             noInstall: bool,
             noBump: bool,
-            packageTargets) -> Result {
+            packageTargets) -> BuildResult {
 
             var plan = new Plan()
             if ($rid != "") { $plan.RuntimeId = $rid }
@@ -935,6 +937,8 @@ module Build {
 
             try {
                 var started = date now
+                var startDate: System.DateOnly = date -d now
+                var startTime: System.TimeOnly = date -t now
                 if ($plan.NoBump) {
                     Helpers.Info($"Using existing version {$version} (--no-bump)")
                     $metadataMutationStarted = true
@@ -1058,13 +1062,15 @@ module Build {
                 Helpers.Ok($"Binary: {$plan.Binary}")
                 Helpers.Ok($"Version: {$version}")
 
-                return new Result(
+                return new BuildResult(
                     $plan.Binary,
                     $binaryInfo.Size,
                     $plan.RuntimeId,
                     $plan.Directory,
                     $plan.SelfContained,
                     $plan.Trimmed,
+                    $startDate,
+                    $startTime,
                     $elapsed,
                     $version)
             } catch ($error) {
@@ -1282,13 +1288,68 @@ module Build {
     }
 
     module Cleanup {
+        ## @summary The apps this repository publishes, by every name their bundle extracts under.
+        ## @remarks
+        ##   `TOAST-0142`. A single-file app with `IncludeAllContentForSelfExtract` extracts itself
+        ##   to `$DOTNET_BUNDLE_EXTRACT_BASE_DIR` (or `~/.net`) into a directory keyed by build
+        ##   hash, and nothing ever removes the old ones. Measured 2026-09-21: 18 GB across the
+        ##   family, `tosh` alone holding 12 GB in 132 directories going back to July, at roughly
+        ##   90 MB per publish.
+        ##
+        ##   Only this repository's own products are listed. `~/.net` also holds the extraction
+        ##   directories of every ToastScript program the reader has compiled — `hello`,
+        ##   `mandelbrot` and friends — and those are theirs to keep or remove, not a build
+        ##   script's business.
+        const ExtractedApps = [
+            "Tosh.Cli", "Tosh.Lsp", "Tosh.Mcp", "Tosh.Tome", "Tosh.Crumb",
+            "tosh", "tosh-lsp", "tosh-mcp", "tosh-dap", "tosh-devcompanion", "tome", "crumb",
+        ]
+
+        ## @summary Removes stale single-file extraction directories, newest kept.
+        ## @param=dryRun Report without removing.
+        ## @param=keep How many of the most recent directories to keep per app.
+        ## @returns The number of directories removed.
+        ## @remarks
+        ##   The most recent is always kept: it is the one a running shell is executing from, and
+        ##   a `tosh` started before the clean still has files open in it.
+        func PruneExtractedBundles(dryRun: bool, keep: int = 1) -> int {
+            var base = ($env.DOTNET_BUNDLE_EXTRACT_BASE_DIR ?? ($env.HOME | join -p ".net"))
+            if (not (is-dir $base).IsDirectory) { return 0 }
+
+            var removed = 0
+            for app in $ExtractedApps {
+                var appDir = ($base | join -p $app)
+                if (not (is-dir $appDir).IsDirectory) { continue }
+
+                var versions = (ls $appDir | where { (is-dir $_.FullName).IsDirectory } | sort -d Modified | collect)
+                if (($versions | count) <= $keep) { continue }
+
+                var index = 0
+                for v in $versions {
+                    if ($index >= $keep) {
+                        if ($dryRun) {
+                            Helpers.Info($"[dry-run] would remove bundle: {$v.FullName}")
+                        } else {
+                            rm -rf $v.FullName | ignore
+                            Helpers.Info($"removed bundle: {$v.FullName}")
+                        }
+                        $removed += 1
+                    }
+                    $index += 1
+                }
+            }
+
+            return $removed
+        }
+
         func Run(
             dryRun: bool,
             includeAll: bool,
             includePackaging: bool = false,
             includeTools: bool = false,
             includePublish: bool = false,
-            includePackages: bool = false) {
+            includePackages: bool = false,
+            includeBundles: bool = false) {
 
             var root = Helpers.RepoRoot()
             var workspaceLock = WorkspaceLock.Acquire($root, "clean")
@@ -1398,6 +1459,11 @@ module Build {
                         }
                     }
                 }
+            }
+
+            # 6. Stale single-file extraction bundles under ~/.net
+            if ($includeAll or $includeBundles) {
+                $removed += PruneExtractedBundles($dryRun, 1)
             }
 
             Helpers.Sep("DONE")
@@ -1527,7 +1593,7 @@ module Build {
     }
 
     module Benchmark {
-        record Result(
+        record BuildResult(
             Label: string,
             PublishSec: string,
             SizeMB: string,
@@ -1718,7 +1784,7 @@ module Build {
                 var warmAverage = (($warmTotal / $runs).ToString("F1"))
 
                 Helpers.Ok($"{$configuration.Label}  publish={$publishSeconds}s  size={$sizeMb}MB  cold={$coldMs}ms  warm={$warmAverage}ms")
-                $results = [...$results, new Result(
+                $results = [...$results, new BuildResult(
                     $configuration.Label,
                     $publishSeconds,
                     $sizeMb,
@@ -2387,7 +2453,7 @@ StartupNotify=false
     ## reference is exported from a *built* `tosh`, and both generated chapters are
     ## `\input` by the document, so the PDF is produced last.
     module Spec {
-        record Result(
+        record BuildResult(
             Diagnostics: bool,
             CommandReference: bool,
             Pdf: bool,
@@ -2504,7 +2570,7 @@ StartupNotify=false
             return true
         }
 
-        func Run(noDiagnostics: bool, noCommands: bool, noPdf: bool) -> Result {
+        func Run(noDiagnostics: bool, noCommands: bool, noPdf: bool) -> BuildResult {
             var root = Helpers.RepoRoot()
 
             Helpers.Sep("SPEC · GENERATE")
@@ -2518,7 +2584,7 @@ StartupNotify=false
                 WriteGuide($root) | ignore
             }
 
-            return new Result(
+            return new BuildResult(
                 (not $noDiagnostics),
                 (not $noCommands),
                 $built,
@@ -2764,6 +2830,9 @@ subcommand publish {
     ## @summary Replace the current process with the published binary on success.
     flag exec: bool = false
 
+    var startDate: DateOnly = date -d now
+    var startTime: TimeOnly = date -t now
+
     var result = Build.Publish.Run(
         $rid,
         $output,
@@ -2848,8 +2917,10 @@ subcommand clean {
     flag publish: bool = false
     ## @summary Remove all built package files (.pkg.tar.zst, .vsix).
     flag packages: bool = false
+    ## @summary Remove stale single-file extraction directories under `~/.net`, newest kept.
+    flag bundles: bool = false
 
-    Build.Cleanup.Run($dryRun, $all, $packaging, $tools, $publish, $packages)
+    Build.Cleanup.Run($dryRun, $all, $packaging, $tools, $publish, $packages, $bundles)
 }
 
 ## @summary Print a digest of the current repository state.

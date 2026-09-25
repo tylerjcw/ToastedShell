@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 586 diagnostic codes currently emitted by the
+This chapter lists all 587 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -711,6 +711,7 @@ Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 \item[\texttt{\small tosh.type.operator}] Operator '\{op\}' is not compatible with operand types '\{left.DisplayName\}' and '\{right.DisplayName\}'.
 \item[\texttt{\small tosh.type.pipeline\_input}] Command '\{call.Name\}' does not accept pipeline input of type '\{previousOutput.DisplayName\}'.
 \item[\texttt{\small tosh.type.unknown\_option}] Command '\{call.Name\}' has no option '\{text\}'.
+\item[\texttt{\small tosh.type.wide\_integer\_literal}] This integer literal is wider than 64 bits and nothing says it should be.
 \end{description}
 
 \section{\texttt{tosh.user.*}}

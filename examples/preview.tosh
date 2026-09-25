@@ -19,7 +19,7 @@
 ##   few that is on nearly every machine and full of pictures.
 ## @example examples/preview.tosh ~/Pictures
 
-# var where = "/usr/share/pixmaps"
+# var dir = "/usr/share/pixmaps"
 var dir = "/data/etc/walls"
 
 var given = $tosh.Script.Args
@@ -40,7 +40,9 @@ tui run --title "preview" {|
         {|
             Size = "*",
             Row = [
-               {| Title = "Files", Size = "1/3",
+               {| 
+                    Title = "Files",
+                    Size = "1/3",
                     Box = [ {|
                         List     = func() => $files,
                         Id       = "files",
@@ -51,7 +53,8 @@ tui run --title "preview" {|
                     |} ]
                 |},
                {|
-                    Title = "Preview", Size = "*",
+                    Title = "Preview",
+                    Size = "*",
                     Box = [ {|
                         Image = func() => $chosen,
                         Fit = "letterbox",

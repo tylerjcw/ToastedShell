@@ -1,0 +1,123 @@
+partial module Build.Targets
+
+# Everything the build knows about a shippable program, one row each. Adding a
+# program means adding a row here and nothing else.
+
+## @summary One shippable program and every name it goes by.
+## @param=Key The canonical name, as the CLI accepts it.
+## @param=Aliases Other spellings accepted for `Key`.
+## @param=Project The `.csproj` stem, which is also the name its build assets go under.
+## @param=ProjectDir The directory holding that project, relative to the repository root.
+## @param=Published The file name `dotnet publish` emits, before normalisation.
+## @param=Bundle The file name inside a promoted release bundle.
+## @param=Installed Where the Arch package puts it.
+## @param=Member The path of that executable inside the package archive.
+## @param=InRelease Whether the canonical publish bundle carries it.
+## @summary One shippable program and every name it goes by.
+record Target(
+    Key: string,
+    Aliases: array,
+    Project: string,
+    ProjectDir: string,
+    Published: string?,
+    Bundle: string?,
+    Installed: string,
+    Member: string,
+    InRelease: bool)
+
+## The order is PKGBUILD's `pkgname` order, so a selection lines up element for
+## element with `makepkg --packagelist`. `tosh` is first because a publish takes
+## the first release artifact as the bundle's smoke-test subject.
+## @summary Every shippable program, in PKGBUILD `pkgname` order.
+const All = [
+    new Target("tosh", ["cli"], "Tosh.Cli", "src", "Tosh.Cli", "tosh",
+        "/usr/bin/tosh", "usr/bin/tosh", true),
+    new Target("lsp", [], "Tosh.Lsp", "src", "Tosh.Lsp", "Tosh.Lsp",
+        "/usr/bin/tosh-lsp", "usr/bin/tosh-lsp", true),
+    new Target("mcp", [], "Tosh.Mcp", "src", "Tosh.Mcp", "Tosh.Mcp",
+        "/usr/bin/tosh-mcp", "usr/bin/tosh-mcp", true),
+    new Target("tome", ["editor"], "Tosh.Tome", "src", "tome", "tome",
+        "/usr/bin/tome", "usr/bin/tome", true),
+    new Target("crumb", ["pkg"], "Tosh.Crumb", "src", "crumb", "crumb",
+        "/usr/bin/crumb", "usr/bin/crumb", true),
+    new Target("devcompanion", ["dc", "companion"], "Tosh.DevCompanion", "tools", "Tosh.DevCompanion", "tosh-devcompanion",
+        "/usr/bin/tosh-devcompanion", "usr/bin/tosh-devcompanion", false),
+    new Target("dap", ["debug"], "Tosh.Dap", "src", "Tosh.Dap", "tosh-dap",
+        "/usr/bin/tosh-dap", "usr/bin/tosh-dap", false),
+]
+
+## @summary The targets the canonical publish bundle carries, in bundle order.
+func Release() -> array => $All | where { $_.InRelease } | collect
+
+## @summary Every name the CLI accepts, for a diagnostic that lists the choices.
+func Names() -> array => $All | each { $_.Key } | collect
+
+## @summary Resolves one spelling to its target, or null when nothing matches.
+func Find(name: string) -> Target? {
+    var wanted = ($name ?? "").Trim().ToLowerInvariant()
+    return $All | where { $_.Key == $wanted or ($wanted in $_.Aliases) } | first
+}
+
+## @summary Resolves a target selection to canonical targets, in table order.
+## @param=selection An array, a comma-separated string, or `"all"`.
+## @exception When any name is unknown, or the selection resolves to nothing.
+func Normalize(selection) -> array {
+    var requested = match ($selection) {
+        _ is array => $selection
+        default    => (($selection as string).Trim().ToLowerInvariant() == "all"
+            ? [$t.Key <| for t in (Release())]
+            : (($selection as string) | split "," | collect))
+    }
+
+    var unknown = $requested
+        | where { Find(($_ as string)) == null }
+        | each { ($_ as string).Trim() }
+        | collect
+
+    if (($unknown | count) > 0) {
+        throw $"Unknown package target(s): {($unknown | join ", ")}. Choose from: {(Names() | join ", ")}, all."
+    }
+
+    var chosen = $requested | each { (Find(($_ as string))).Key } | collect
+    if (($chosen | count) == 0) {
+        throw $"No package targets were selected. Choose from: {(Names() | join ", ")}, all."
+    }
+    return $All | where { $_.Key in $chosen } | collect
+}
+
+## @summary The published and bundle file names for a RID, `.exe` where Windows needs it.
+func ForRuntime(target: Target, runtimeId: string) -> Target {
+    if (not ($runtimeId starts-with "win-")) { return $target }
+    return new Target(
+        $target.Key,
+        $target.Aliases,
+        $target.Project,
+        $target.ProjectDir,
+        $"{$target.Published}.exe",
+        $"{$target.Bundle}.exe",
+        $target.Installed,
+        $target.Member,
+        $target.InRelease)
+}
+
+## @summary Every name this repository's programs extract themselves under in `~/.net`.
+func ExtractionNames() -> array {
+    var fromProjects = $All | each { $_.Project } | collect
+    var fromInstalled = $All | each { System.IO.Path.GetFileName($_.Installed) } | collect
+    return [...$fromProjects, ...$fromInstalled] | distinct | collect
+}
+
+## @summary Prints the target table.
+func List() {
+    step "PACKAGE TARGETS" {
+        for target in $All {
+            var aliases = (($target.Aliases | count) > 0 ? $" ({($target.Aliases | join ", ")})" : "")
+            var role = ($target.InRelease ? "release bundle" : "from source only")
+            Core.Info($"{($target.Key + $aliases).PadRight(28)} {$role.PadRight(18)} {$target.Installed}")
+        }
+    }
+}
+
+## @summary The path of a target's project file, relative to the repository root.
+func ProjectFile(target: Target) -> string =>
+    $target.ProjectDir | join -p $target.Project $"{$target.Project}.csproj"

@@ -1,0 +1,180 @@
+partial module Build.Tests
+
+## The suite, and the named slices of it worth running on their own.
+
+## @summary One named slice of the suite and the filter that selects it.
+record Group(Name: string, Filter: string?, Summary: string)
+
+## `all` carries a null filter, which is how "run everything" is spelled to
+## `dotnet test`. The smoke set is a group like any other rather than a flag,
+## so `--fast` and `--group smoke` cannot disagree about what it contains.
+const Groups = [
+    new Group("repl", "ReplLineEditor|ReplCompletion|ReplInput|ReplHistory", "line editor, completion, history"),
+    new Group("syntax", "SyntaxHighlighter", "highlighting"),
+    new Group("engine", "EngineTests|ComplexCommand|Comprehension|ExpressionEval", "evaluation core"),
+    new Group("tui", "TuiCommand|TuiCore|TuiInline|TuiScreen|ConfigBrowser|ConsolePager", "terminal UI"),
+    new Group("concurrency", "Concurrency|ScopeAndChannel|SpawnCommand|ConcurrentRedirection", "scopes and channels"),
+    new Group("lsp", "LspFeature|McpServer", "language and model-context servers"),
+    new Group("display", "DisplayEngine|DisplayProfile|ObjectFormatter|DiagnosticRenderer", "rendering"),
+    new Group("config", "ConfigCommand|ConfigCollection|VarsCommand", "configuration"),
+    new Group("data", "DataProcessing|StructuredData|Matrix|Vector|StreamCommand|StreamHandle", "structured data"),
+    new Group("pipeline", "PipelineData|PipelineHardening|MixedPipeline", "pipelines"),
+    new Group("system", "SystemdJson|TimeCommand|UtilityCommand|ExternalCommand|ExecCommand|StartupLoader", "system surface"),
+    new Group("clr", "CliInvocation|CommandIntrospection|MemberPath|Rune|NativeInterop", "CLR bridge and runes"),
+    new Group("smoke", "EngineTests|ComplexCommand|Comprehension|ExpressionEval|SystemdJson|TimeCommand|UtilityCommand|ExternalCommand|ExecCommand|StartupLoader|PipelineData|PipelineHardening|MixedPipeline", "the fast pre-commit set"),
+    new Group("all", null, "everything"),
+]
+
+## @summary A test run, as recorded in the history file.
+record HistoryEntry(
+    kind: string,
+    ts: string,
+    group: string,
+    total: int,
+    passed: int,
+    failed: int,
+    duration: string)
+
+## @summary Resolves a group name to its filter, or throws naming the valid ones.
+func FindGroup(name: string) -> Group {
+    var group = $Groups | where { $_.Name == ($name ?? "").Trim().ToLowerInvariant() } | first
+    if ($group == null) {
+        var names = [$g.Name <| for g in $Groups]
+        throw $"Unknown test group '{$name}'. Valid groups: {($names | join ", ")}"
+    }
+    return $group
+}
+
+## @summary Prints the group table.
+func ListGroups() {
+    step "TEST GROUPS" {
+        for group in $Groups {
+            Core.Info($"{$group.Name.PadRight(12)} {$group.Summary}")
+        }
+    }
+}
+
+## @summary A filter selecting exactly the tests that failed in the last run.
+## @returns The filter, or null when the TRX is absent or recorded no failures.
+func FailedFilter(trxPath: string) -> string? {
+    return null unless (Fs.IsFile($trxPath))
+
+    var content = System.IO.File.ReadAllText($trxPath)
+    var resultRx = new System.Text.RegularExpressions.Regex(
+        "(?s)<UnitTestResult\\b[^>]+outcome=\"Failed\"[^>]*(?:/>|>.*?</UnitTestResult>)")
+    var nameRx = new System.Text.RegularExpressions.Regex("testName=\"([^\"]+)\"")
+    var filters = [
+        $"(FullyQualifiedName={$name.Groups[1].Value})"
+        <| for result in ($resultRx.Matches($content))
+        where ($nameRx.Match($result.Value).Success)
+        let name = $nameRx.Match($result.Value)
+    ]
+
+    return null if (($filters | count) == 0)
+    return ($filters | join "|")
+}
+
+## @summary Totals recorded by the last run, as `[total, passed, failed]`.
+func ReadTotals(trxPath: string) -> array {
+    return [0, 0, 0] unless (Fs.IsFile($trxPath))
+    var stats = echo (System.IO.File.ReadAllText($trxPath))
+        | parse -s "total=\"(?<Total>\\d+)\".*?passed=\"(?<Passed>\\d+)\".*?failed=\"(?<Failed>\\d+)\""
+        | first
+    return [0, 0, 0] if ($stats == null)
+    return [($stats.Total as int), ($stats.Passed as int), ($stats.Failed as int)]
+}
+
+## @summary Builds the solution, and runs some or all of the suite.
+## @param=group A group name; ignored when `filter` is given.
+## @param=filter An explicit xUnit filter, overriding `group`.
+## @param=rerunFailed Run exactly the tests that failed last time.
+## @param=noBuild Reuse existing build output.
+func Run(
+    group: string = "all",
+    filter: string? = null,
+    rerunFailed: bool = false,
+    noBuild: bool = false,
+    verbose: bool = false,
+    blame: bool = false,
+    resultsDir: string? = null) {
+
+    var root = Core.RepoRoot()
+    with-lock "test" {
+        var solution = Core.Solution($root)
+        var output = ($resultsDir ?? ($root | join -p "artifacts" "test-results"))
+        var trxPath = $output | join -p "last.trx"
+
+        var effectiveFilter = $filter
+        var label = ""
+        if ($rerunFailed) {
+            $effectiveFilter = FailedFilter($trxPath)
+            if ($effectiveFilter == null) {
+                Core.Ok("No failed tests found in the last run.")
+                return
+            }
+            var count = ($effectiveFilter | match "FullyQualifiedName=" | count)
+            Core.Info($"Rerunning {$count} failed test(s)...")
+            $label = "failed tests"
+        } else if ($effectiveFilter != null) {
+            $label = $"filter '{$effectiveFilter}'"
+        } else {
+            var selected = FindGroup($group)
+            $effectiveFilter = $selected.Filter
+            $label = ($selected.Name == "all" ? "all tests" : $"group '{$selected.Name}'")
+        }
+
+        if (not $noBuild) {
+            step "BUILD" { Dotnet.Build($solution, "Debug", "quiet") }
+        }
+
+        Core.Sep($"TEST · {$label}")
+        mkdir -p $output | ignore
+
+        # The runner either just built or was explicitly told to reuse a build.
+        var safety = Dotnet.SafetyArgs()
+        var args = [
+            "test", $solution,
+            "--no-build",
+            $"--results-directory={$output}",
+            "--logger=trx;LogFileName=last.trx",
+            ...$safety,
+        ]
+        if ($effectiveFilter != null and $effectiveFilter != "") {
+            $args = [...$args, $"--filter={$effectiveFilter}"]
+        }
+        if ($verbose) { $args = [...$args, "--logger", "console;verbosity=detailed"] }
+        if ($blame) { $args = [...$args, "--blame"] }
+
+        var started = date now
+        dotnet ...$args
+        var exitCode = $tosh.Last.ExitCode
+        var elapsed = Core.Elapsed($started)
+        var totals = ReadTotals($trxPath)
+
+        Core.Sep("RESULTS")
+        if ($exitCode != 0) {
+            Core.Fail($"Tests FAILED (exit {$exitCode}, {$elapsed})")
+            throw "Test run failed"
+        }
+
+        Core.Ok($"All tests passed ({$elapsed})")
+        History.Append($root, new HistoryEntry(
+            "test", Core.TimestampNow(), $group,
+            $totals[0], $totals[1], $totals[2], $elapsed))
+    }
+}
+
+## @summary Builds, then runs a slice of the suite. The pre-commit check.
+func Check(noTest: bool = false, fast: bool = false, group: string = "all", filter: string? = null) {
+    var root = Core.RepoRoot()
+    with-lock "check" {
+        step "CHECK · BUILD" {
+            Dotnet.Build((Core.Solution($root)), "Debug", "minimal")
+            Core.Ok("Build succeeded")
+        }
+        if (not $noTest) {
+            Run(($fast ? "smoke" : $group), $filter, false, true, false, false, null)
+        }
+        Core.Sep("CHECK PASSED")
+    }
+}

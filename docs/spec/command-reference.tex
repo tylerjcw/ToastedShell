@@ -81,6 +81,8 @@ Deprecated. Prefer member-access syntax: `\$obj.Method(\$args)`.
 \begin{cmdbox}{cast}
 Casts pipeline values to a CLR type or a type declared in ToastScript.
 
+\textit{Aliases:} \code{as}
+
 \begin{signature}
 cast <type> [value ...]
 \end{signature}
@@ -463,16 +465,17 @@ load-assembly Newtonsoft.Json.dll System.Data.dll  # Load multiple assemblies
 Lists or queries members for CLR types or pipeline objects.
 
 \begin{signature}
-members [has|\allowbreak get|\allowbreak props|\allowbreak fields|\allowbreak methods|\allowbreak events] [name] | members [type \\
-\quad ...]
+members [has|\allowbreak get|\allowbreak props|\allowbreak fields|\allowbreak methods|\allowbreak events|\allowbreak add|\allowbreak del] [name] | members \\
+\quad [type ...]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-subcommand-or-type & Optional subcommand keyword (`has`, `get`, `props`, `fields`, `methods`, `events`) or a type name. (optional) \\
+subcommand-or-type & Optional subcommand keyword (`has`, `get`, `props`, `fields`, `methods`, `events`, `add`, `del`) or a type name. (optional) \\
 name & Operand for `has`/`get`: the member name to look up. (optional) \\
+args ... & Optional additional arguments, names for `del`, or values and flags for `add`. (optional) \\
 \bottomrule
 \end{tabular}
 
@@ -489,6 +492,9 @@ $obj | members get FullName  # Return the descriptor for member 'FullName' (or n
 $obj | members props  # Filter to properties only
 $obj | members fields  # Filter to fields only
 $obj | members methods  # Filter to methods only
+$obj | members add "Key" "value"  # Add a dynamic property to a fluid object
+$obj | members add { prop Name: string = "value" }  # Add properties using declaration block
+$obj | members del Key  # Delete a dynamic property from an object
 \end{lstlisting}
 
 \end{cmdbox}

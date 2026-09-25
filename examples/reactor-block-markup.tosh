@@ -39,6 +39,11 @@ class Reactor(name: string, heat: power, percent: double, fuel) {
     fixed prop FuelEnergy     : energy       => $this._fuel.Energy.UnderlyingValue * 1`GJ
     fixed prop NeighborPower  : power        => ($this.NeighborPercent / 100) * $this.Heat
     fixed prop BurnTime       : timequantity => $this.FuelEnergy / $this.Heat
+
+    shared prop Uranium   : Reactor => new Reactor("Nuclear",   40`MW, 100, Fuel.Uranium  )
+    shared prop Plutonium : Reactor => new Reactor("Nuclear",   40`MW, 100, Fuel.Plutonium)
+    shared prop Mox       : Reactor => new Reactor("MOX",       20`MW, 150, Fuel.Mox      )
+    shared prop Breeder   : Reactor => new Reactor("Breeder",   20`MW, 50,  Fuel.Breeder  )
 }
 
 # ── Reactor block calculator ──────────────────────────────────────────
@@ -80,22 +85,6 @@ class ReactorBlock(reactorType: Reactor, width: int = 2, height: int = 2, buffer
 ## repeat. `using Tosh.Tui.Widgets` is only wanted by a script that also reaches for the
 ## types directly.
 
-## @summary Resolves a reactor type by name.
-## @remarks
-##   Folded here rather than at each call site, so a type supplied on the command line is
-##   matched the same way as one chosen in the form — and so the live preview and the
-##   final answer cannot disagree about what "MOX" means.
-func ReactorFor(name: string) -> Reactor {
-    return match($name.ToLower()) {
-        "nuclear"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
-        "uranium"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
-        "plutonium" => new Reactor("Nuclear", 40`MW, 100, Fuel.Plutonium)
-        "mox"       => new Reactor("MOX",     20`MW, 150, Fuel.Mox      )
-        "breeder"   => new Reactor("Breeder", 20`MW, 50,  Fuel.Breeder  )
-        default     => throw $"Unknown reactor type '{$name}'. Valid: nuclear, uranium, plutonium, mox, breeder"
-    }
-}
-
 ## @summary The right-hand pane of the form: the block as the numbers currently stand.
 ## @remarks
 ##   A pull binding. The form hands it every field's current value and it returns what to
@@ -112,24 +101,25 @@ func Preview(values) {
         var s = Whole($values.Seconds,  1)
         var c = Whole($values.Capacity, 1)
 
-        var rb = new ReactorBlock(ReactorFor($"{$values.ReactorType}"), $w, $h, $s * 1`s, $c * 1`L)
+        var reactor = eval $"Reactor.{$values.ReactorType}"
+        var rb = new ReactorBlock($reactor, $w, $h, $s * 1`s, $c * 1`L)
 
         return $"""
-{$rb.ReactorCount}x {$rb.Type.Name} ({$rb.Type.Heat})
-    Dimensions  {$rb.Width}x{$rb.Height}, {$rb.Links} links
-    Bonus       {$rb.Type.NeighborPercent}% ({$rb.Type.NeighborPower})
-    Fuel        {$rb.FuelPerMin} {$rb.Type.FuelName}/min
+            {$rb.ReactorCount}x {$rb.Type.Name} ({$rb.Type.Heat})
+                Dimensions  {$rb.Width}x{$rb.Height}, {$rb.Links} links
+                Bonus       {$rb.Type.NeighborPercent}% ({$rb.Type.NeighborPower})
+                Fuel        {$rb.FuelPerMin} {$rb.Type.FuelName}/min
 
-Power
-    Heat        {$rb.OutputPower}
-    Electrical  {$rb.ElectricalPower}
+            Power
+                Heat        {$rb.OutputPower}
+                Electrical  {$rb.ElectricalPower}
 
-Plumbing
-    {$rb.Pumps}x offshore pump(s)
-    {$rb.Exchangers}x exchangers, {$rb.WaterPerSecond}
-    {$rb.Turbines}x turbines, {$rb.SteamPerSecond}
-    {$rb.Tanks}x tanks, {$rb.BufferDuration.TimeSpan}
-"""
+            Plumbing
+                {$rb.Pumps}x offshore pump(s)
+                {$rb.Exchangers}x exchangers, {$rb.WaterPerSecond}
+                {$rb.Turbines}x turbines, {$rb.SteamPerSecond}
+                {$rb.Tanks}x tanks, {$rb.BufferDuration.TimeSpan}
+            """
     } catch (e) {
         return "..."
     }
@@ -144,10 +134,6 @@ func Whole(value, fallback: int) -> int {
         return $fallback
     }
 
-    ## A cast is not a test. `"abc" as int` throws rather than yielding null — the same
-    ## trap `TS-P2-111` records against the argument shift below — so the shape has to be
-    ## checked before the value is read, and a half-typed field is exactly where that
-    ## matters.
     if (not ($trimmed =~ "^[0-9]+$")) {
         return $fallback
     }
@@ -183,15 +169,6 @@ subcommand calc {
     ## @summary Capacity of the steam tanks
     arg Capacity   : int    = 25000
 
-    ## `ReactorType` is the first positional, so omitting it shifts every later
-    ## argument one place left: `calc 2 2 300 25000` lands the width in
-    ## `ReactorType`. A leading number is what that looks like, and the arguments
-    ## are shifted back before the picker fills in the type.
-    ##
-    ## The test is a regex rather than a cast on purpose. `"2" as int` succeeds,
-    ## but `"Nuclear" as int` *throws* rather than yielding something falsy, so
-    ## using the cast as the condition fails on exactly the inputs that do not
-    ## need shifting (`TS-P2-111`).
     if ($ReactorType =~ "^[0-9]+$") {
         $Capacity    = $Seconds
         $Seconds     = $Height
@@ -200,42 +177,30 @@ subcommand calc {
         $ReactorType = ""
     }
 
-    ## The form is the fallback, not the only way in: passing the type keeps the
-    ## script runnable non-interactively. It asks for everything rather than only the
-    ## type, with the block itself alongside the fields — the numbers move as they are
-    ## typed, so the shape of the answer is visible before committing to it.
-    ##
-    ## Written as a value rather than assembled: the whole window is one record, and the
-    ## first key of each node says what that node is. A tree that is a value can be moved
-    ## into a file of its own and brought back with `source`, which is the reason to write
-    ## one this way.
-    ##
-    ## `Text = &Preview` is a pull binding: a property set to a function is asked again on
-    ## every redraw, and a keystroke is what causes a redraw. That is the whole of the live
-    ## right-hand pane — there is no update code to write.
-    ##
-    ## Markup holds no variables, so `OnSubmit` is handed the form and reads the widgets by
-    ## the ids the markup gave them. The object-built version keeps the widgets in variables
-    ## and reads those instead; both run at the same moment, while the form is still up.
     if ($ReactorType == "") {
         var cancelled = false
 
-        var screen = {|
+        tui run {|
             Form = [ {|
                 Row = [
                     {|
+                        Title = "Inputs",
+                        Size  = "2*",
                         Box = [
-                            {| List  = ["Nuclear", "Plutonium", "MOX", "Breeder"], Id = "ReactorType" |},
+                            {| List  = ["Uranium", "Plutonium", "MOX", "Breeder"], Id = "ReactorType" |},
                             {| Field = "Wide",     Id = "Width",    Value = $"{$Width}"    |},
                             {| Field = "High",     Id = "Height",   Value = $"{$Height}"   |},
                             {| Field = "Seconds",  Id = "Seconds",  Value = $"{$Seconds}"  |},
                             {| Field = "Capacity", Id = "Capacity", Value = $"{$Capacity}" |}
-                        ],
-                        Title = "Inputs",
-                        Size  = "2*"
+                        ]
                     |},
-
-                    {| Box = [ {| Text = &Preview |} ], Title = "Block", Size = "3*" |}
+                    {|
+                        Title = "Block",
+                        Size = "3*",
+                        Box = [
+                            {| Text = &Preview |}
+                        ]
+                    |}
                 ]
             |} ],
 
@@ -252,41 +217,11 @@ subcommand calc {
             OnCancel = func() { $cancelled = true }
         |}
 
-        tui run $screen
-
         if ($cancelled) {
-            throw "Cancelled."
+            throw (new Error("No reactor type chosen"))
         }
     }
 
-    var reactor = ReactorFor($ReactorType)
-
-    var rb = new ReactorBlock($reactor, $Width, $Height, $Seconds * 1`s, $Capacity * 1`L)
-
-    writeline $"""
-    {$rb.ReactorCount}x {$rb.Type.Name} Reactors ({$rb.Type.Heat}):
-        Fuel       = {$rb.Type.FuelName} ({$rb.Type.FuelEnergy}, {$rb.Type.BurnTime})
-        Fuel / min = {$rb.FuelPerMin} {$rb.Type.FuelName}/min
-        Bonus      = {$rb.Type.NeighborPercent}% ({$rb.Type.NeighborPower})
-        Dimensions = {$rb.Width}x{$rb.Height} ({$rb.Links} links)
-        Tot. Power = {$rb.OutputPower}
-    
-    {$rb.Pumps}x Offshore Pump(s)
-    
-    {$rb.Exchangers}x Exchangers:
-        Output Heat = {$rb.OutputPower}
-        Water / sec = {$rb.WaterPerSecond}
-    
-    {$rb.Turbines}x Turbines:
-        Energy      = {$rb.ElectricalPower}
-        Steam / sec = {$rb.SteamPerSecond}
-    
-    {$rb.Tanks}x Water Tanks:
-        Capacity = {$rb.TankCapacity * $rb.Tanks} ({$rb.SteamBuffer})
-        Duration = {$rb.BufferDuration.TimeSpan}
-    """
-
-    ## The rendering above is for a reader; the block itself is for a pipeline, so
-    ## `reactor-block.tosh calc Nuclear | get OutputPower` works.
-    $rb
+    var reactor = eval $"Reactor.{$ReactorType}"
+    return new ReactorBlock($reactor, $Width, $Height, $Seconds * 1`s, $Capacity * 1`L)
 }

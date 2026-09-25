@@ -1,0 +1,94 @@
+partial module Build.Docs
+
+# The specification and the TUI guide. Two of the three inputs are generated, and
+# order matters: the command reference comes from a *built* `tosh` and both
+# generated chapters are `\input` by the document, so the PDF is built last.
+
+## @summary A LaTeX document this repository builds.
+record Document(Name: string, Stem: string, Summary: string)
+
+## Separate documents because one describes the language and the other a library;
+## adding seven chapters to a 330 KB specification would bury both.
+const Documents = [
+    new Document("spec", "toastscript-spec", "the language specification"),
+    new Document("guide", "tui-guide", "the TUI guide"),
+]
+
+## @summary Path of a document's LaTeX source.
+func SourcePath(root: Core.DirectoryPath, document: Document) -> string =>
+    Core.At($root, "docs", "spec", $"{$document.Stem}.tex")
+
+## @summary Path of a document's built PDF.
+func PdfPath(root: Core.DirectoryPath, document: Document) -> string =>
+    Core.At($root, "docs", "spec", $"{$document.Stem}.pdf")
+
+## @summary Whether a LaTeX toolchain is available.
+func HasLatexmk() -> bool {
+    var probe = best-effort { (Core.Capture("latexmk", ["-v"])).ExitCode }
+    return ($probe == 0)
+}
+
+## @summary Regenerates `docs/diagnostic-codes.md` and the runtime's code manifest.
+func WriteDiagnostics(root: Core.DirectoryPath) {
+    var script = Core.At($root, "scripts", "extract-diagnostic-codes.tosh")
+    var job = Core.Capture("tosh", ["--no-profile", $script, "--quiet"])
+    if ($job.ExitCode != 0) { throw $"Diagnostic extraction failed (exit {$job.ExitCode})." }
+    Core.Ok("Diagnostic code reference regenerated.")
+}
+
+## @summary Regenerates the command reference from the *installed* `tosh`.
+func WriteCommandReference(root: Core.DirectoryPath) {
+    var output = Core.At($root, "docs", "spec", "command-reference.tex")
+    var job = Core.Capture("tosh", ["--export-command-metadata", "--latex", "-o", $output])
+    if ($job.ExitCode != 0) { throw $"Command metadata export failed (exit {$job.ExitCode})." }
+    Core.Ok("Command reference regenerated.")
+}
+
+## @summary Builds one document's PDF, recovering once from poisoned auxiliary files.
+# A failed LaTeX run leaves a truncated `.aux`/`.out` that the next run dies on,
+# naming nothing about the edit that caused it — so one real error made every later
+# build fail. Measured: `-halt-on-error` is not the cause. Cleaning and retrying is.
+func Write(root: Core.DirectoryPath, document: Document) -> bool {
+    if (not (HasLatexmk())) {
+        Core.Warn($"latexmk not found — skipping {$document.Summary}. Install texlive to build it.")
+        return false
+    }
+
+    var source = SourcePath($root, $document)
+    var latexmk = func() => (Core.Capture("latexmk", ["-cd", "-pdf", "-interaction=nonstopmode", $source]))
+
+    if ((invoke $latexmk).ExitCode != 0) {
+        Core.Warn($"latexmk failed on {$document.Summary}; cleaning auxiliary files and retrying once.")
+        Core.Capture("latexmk", ["-C", "-cd", $source]) | ignore
+
+        var retry = invoke $latexmk
+        if ($retry.ExitCode != 0) {
+            throw $"latexmk failed on {$document.Summary} (exit {$retry.ExitCode}), including after a clean retry. See docs/spec/{$document.Stem}.log."
+        }
+    }
+
+    Core.Ok($"Wrote {(PdfPath($root, $document))}")
+    return true
+}
+
+## @summary What a documentation build produced.
+record Outcome(Diagnostics: bool, CommandReference: bool, Pdfs: array)
+
+## @summary Regenerates the generated chapters and builds the PDFs.
+func Run(noDiagnostics: bool = false, noCommands: bool = false, noPdf: bool = false) -> Outcome {
+    var root = Core.RepoRoot()
+
+    step "DOCS · GENERATE" {
+        if (not $noDiagnostics) { WriteDiagnostics($root) }
+        if (not $noCommands) { WriteCommandReference($root) }
+    }
+
+    var built = []
+    if (not $noPdf) {
+        step "DOCS · PDF" {
+            $built = [$d.Name <| for d in $Documents where (Write($root, $d))]
+        }
+    }
+
+    return new Outcome((not $noDiagnostics), (not $noCommands), $built)
+}

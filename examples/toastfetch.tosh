@@ -1,0 +1,118 @@
+type SafeFile = string where ((is-file _).IsFile and not (is-link _).IsLink)
+
+partial module SysInfo {
+    raw struct InfoStruct {
+        uptime: long
+        loads: ulong[3]
+        totalram: ulong
+        freeram: ulong
+        sharedram: ulong
+        bufferram: ulong
+        totalswap: ulong
+        freeswap: ulong
+        procs: ushort
+        totalhigh: ulong
+        freehigh: ulong
+        mem_unit: uint
+    }
+
+    raw struct UtsName {
+        sysname: cstring[65]
+        nodename: cstring[65]
+        release: cstring[65]
+        version: cstring[65]
+        machine: cstring[65]
+        domainname: cstring[65]
+    }
+
+    bind native "libc.so.6" as Raw {
+        func sysinfo(out info: InfoStruct) -> ok
+        func uname(out buf: UtsName) -> ok
+        func gethostname(out name: buffer[256]) -> ok
+        func getloadavg(out avg: double[3], count: int) -> int where (_ == 3)
+        func sysconf(name: int) -> count
+    }
+
+    hermit class Host {
+        shared prop Name => Raw.gethostname()
+    }
+}
+
+func safe-read(path: SafeFile) -> string {
+    try {
+        return (read-file $path).Replace("\0", "").Trim()
+    } catch (err) {
+        throw $err
+    }
+}
+
+func sanitize-dmi(value: string) -> string {
+    var result = $value.Replace("\0", "").Trim()
+    if ($result.Length == 0) {
+        return ""
+    }
+    if ($result.ToLowerInvariant() is in [
+        "none",
+        "unknown",
+        "default string",
+        "not specified",
+        "not applicable",
+        "system product name",
+        "system version",
+        "system manufacturer",
+        "board vendor",
+        "board name",
+        "board version",
+        "to be filled by o.e.m.",
+        "to be filled by oem"
+    ]) {
+        return ""
+    }
+    return $result
+}
+
+func decode-value(value: string) -> string {
+    var result = $value.Trim()
+    if ($result.Length >= 2 and $result.StartsWith('"') and $result.EndsWith('"')) {
+        $result = $result[1 .. ($result.Length - 2)].Replace("\\\\", "\\").Replace("\\\"", "\"")
+    }
+    return $result
+}
+
+func read-key-value-file(path: SafeFile) -> map<string, string> {
+    var result = {%%}
+    for line in (read-file $path) {
+        var trimmed = line.Trim()
+        if (($trimmed.Length == 0) or $trimmed.StartsWith("#")) { continue }
+
+        var parts = $trimmed.Split("=", 2)
+        if ($parts.Length == 2) { $result[$parts[0].Trim()] = $parts[1].Trim() }
+    }
+    return result
+}
+
+func read-title() -> string {
+    var userName = $tosh.Host.UserName
+    var hostName = safe-read "/proc/sys/kernel/hostname"
+    return $"{$userName}@{$hostName}"
+}
+
+record BiosInfo(
+    Summary: string,
+    Vendor: string,
+    Version: string,
+    Date: DateOnly
+)
+
+func read-bios-info() -> BiosInfo {
+    var vendor = sanitize-dmi(safe-read("/sys/class/dmi/id/bios_vendor"))
+    var version = sanitize-dmi(safe-read("/sys/class/dmi/id/bios_version"))
+    var dateString = sanitize-dmi(safe-read("/sys/class/dmi/id/bios_date"))
+    
+    return new BiosInfo(
+        Summary = $"{$vendor} {$version} ({$dateString})",
+        Vendor  = $vendor,
+        Version = $version,
+        Date    = (date -d parse $dateString)
+    )
+}

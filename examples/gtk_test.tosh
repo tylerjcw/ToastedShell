@@ -14,7 +14,7 @@
 ##   is what makes the cleanup reliable — `defer` does not run at top-level
 ##   script scope.
 ## @example examples/gtk_test.tosh
-require ToastLib.Gtk from "/home/komrad/.config/tosh/lib/ToastLib.Gtk.tosh" as Gtk
+require ToastLib.Gtk as Gtk
 
 using System.Drawing
 

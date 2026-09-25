@@ -7590,22 +7590,59 @@ config init                         # Scaffold missing startup files
 \code{\$tosh.Function.Args} & Arguments passed to the current function (\code{list}). \\
 \code{\$tosh.Function.Input} & Pipeline input to the current function. \\
 \midrule
+\multicolumn{2}{l}{\textit{Last result}} \\
+\code{\$tosh.Last.StartedAt} & When the last command began (\code{DateTimeOffset}). \\
+\code{\$tosh.Last.HasError} & \code{true} when the last command failed. \\
+\code{\$tosh.Last.Error} & The error the last command raised, or null. \\
+\code{\$tosh.Last.Diagnostic} & The diagnostic the last command reported, or null. \\
+\midrule
 \multicolumn{2}{l}{\textit{Session}} \\
 \code{\$tosh.Session.CurrentDirectory} & Shell working directory (equivalent to \code{pwd}). \\
 \code{\$tosh.Session.JobCount} & Number of running background jobs. \\
+\code{\$tosh.Session.Jobs} & The background jobs themselves (\code{list}). \\
 \code{\$tosh.Session.OpenHandleCount} & Number of open file/stream handles. \\
+\code{\$tosh.Session.OpenHandles} & The open handles themselves (\code{list}). \\
+\code{\$tosh.Session.HistoryCount} & Number of entries in the history file. \\
+\code{\$tosh.Session.HistoryFilePath} & Absolute path of the history file. \\
 \code{\$tosh.Session.NextHistoryId} & ID that will be assigned to the next history entry. \\
+\code{\$tosh.Session.StartupProfile} & Phase-by-phase startup timing, when \code{-{}-profile-startup} asked for it. \\
 \code{\$tosh.IsLoginShell} & \code{true} when running as a login shell. \\
 \midrule
 \multicolumn{2}{l}{\textit{Host}} \\
 \code{\$tosh.Host.Version} & TōSh version string. \\
 \code{\$tosh.Host.RuntimeId} & .NET runtime identifier (e.g.\ \code{linux-x64}). \\
-\code{\$tosh.Host.Framework} & Target framework moniker (e.g.\ \code{net10.0}). \\
+\code{\$tosh.Host.Framework} & Target framework moniker (e.g.\ \code{net11.0}). \\
+\code{\$tosh.Host.OSDescription} & Operating system description string. \\
 \code{\$tosh.Host.ProcessId} & PID of the current shell process. \\
+\code{\$tosh.Host.ExecutablePath} & Absolute path of the running \code{tosh} executable. \\
+\code{\$tosh.Host.BuildSha256} & SHA-256 of that executable, for identifying a build. \\
+\code{\$tosh.Host.IsInteractive} & \code{true} when standard input is a terminal. \\
+\code{\$tosh.Host.StdinRedirected} & \code{true} when standard input comes from elsewhere. \\
+\code{\$tosh.Host.StdoutRedirected} & \code{true} when standard output goes elsewhere --- what to check before drawing. \\
+\code{\$tosh.Host.StderrRedirected} & \code{true} when standard error goes elsewhere. \\
+\code{\$tosh.Host.UserId} & Effective user id: what the process may do, not who started it. \\
+\code{\$tosh.Host.UserName} & Account name TōSh is running as. \\
+\code{\$tosh.Host.IsElevated} & \code{true} when running with administrative rights. \\
+\midrule
+\multicolumn{2}{l}{\textit{Terminal}} \\
+\code{\$tosh.Terminal.Name} & Short name: \code{ghostty}, \code{kitty}, \code{linux-console}, \dots \\
+\code{\$tosh.Terminal.Surface} & Where it is displayed: \code{Window}, \code{Console}, \code{Multiplexer} or \code{Basic}. \\
+\code{\$tosh.Terminal.Console} & \code{true} on a kernel console, with no graphical environment. \\
+\code{\$tosh.Terminal.Multiplexed} & \code{true} when tmux or screen sits in between. \\
+\code{\$tosh.Terminal.Remote} & \code{true} when reached over SSH. \\
+\code{\$tosh.Terminal.Width}, \code{.Height} & Size in columns and rows, measured on each access. \\
+\code{\$tosh.Terminal.Colors} & 2, 8, 16, 256 or 16777216. \\
+\code{\$tosh.Terminal.TrueColor} & \code{true} when 24-bit colour is accepted. \\
+\code{\$tosh.Terminal.Unicode} & \code{true} when it can draw beyond its console font. \\
+\code{\$tosh.Terminal.KittyKeyboard} & \code{true} when asked for unambiguous key reports. \\
+\code{\$tosh.Terminal.BracketedPaste} & \code{true} when asked to bracket pastes. \\
+\code{\$tosh.Terminal.FocusReporting} & \code{true} when asked for focus reports. \\
+\code{\$tosh.Terminal.Graphics} & Picture protocol: \code{kitty}, \code{sixel}, \code{half-blocks} or \code{none}. \\
 \midrule
 \multicolumn{2}{l}{\textit{Environment and configuration}} \\
 \code{\$env.NAME} & Environment variable (case-insensitive lookup). Assigning to \code{\$env.NAME = "value"} routes through the same export path as \code{export NAME = "value"} and is also case-insensitive against existing variables. \\
 \code{\$tosh.Config} & Live configuration object; see Chapter~\ref{ch:config}. \\
+\code{\$tosh.Config.Terminal} & What the reader has said about their terminal. Each setting is optional, and an unset one is detected. \\
 \bottomrule
 \caption{Special variables}
 \label{tab:specialvars}

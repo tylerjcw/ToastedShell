@@ -1,0 +1,98 @@
+partial module Build.Core
+
+## @summary Refinement type guaranteeing a non-null, non-empty string.
+type NonEmptyString = string where (not String.IsNullOrEmpty(_))
+
+## @summary Refinement type for paths that must already exist as a directory.
+type DirectoryPath = string where (is-dir _).IsDirectory
+
+## @summary Refinement type for paths that must already exist as a file.
+type FilePath = string where (is-file _).IsFile
+
+# Output. Always `writeline`, never `echo`: `echo` emits into the pipeline, so a
+# function that echoes progress and returns a value returns both — `var a = f()`
+# gives `["working", 42]`, and a return annotation does not filter it.
+
+## @summary Prints a success message with a green checkmark.
+func Ok(msg: NonEmptyString) => styled $"  ✓ {$msg}" --fg bright-green | writeline
+
+## @summary Prints an informational message in dim gray.
+func Info(msg: NonEmptyString) => styled $"  {$msg}" --fg gray --dim | writeline
+
+## @summary Prints a warning message with a yellow ⚠ symbol.
+func Warn(msg: NonEmptyString) => styled $"  ⚠ {$msg}" --fg yellow | writeline
+
+## @summary Prints an error message with a red ✗ symbol.
+func Fail(msg: NonEmptyString) => styled $"  ✗ {$msg}" --fg bright-red --bold | writeline
+
+## @summary Prints a highlighted state transition, such as a version bump.
+func Change(msg: NonEmptyString) => styled $"  {$msg}" --fg bright-yellow --bold | writeline
+
+## @summary Prints a centred, bracketed section header in bright cyan.
+func Sep(label: NonEmptyString) {
+    var pad = (28 - (($label | count) // 2))
+    if ($pad < 2) { $pad = 2 }
+    styled $"{'─' * $pad}[ {$label} ]{'─' * $pad}" --fg bright-cyan --bold | writeline
+}
+
+## @summary Prints a blank line.
+func Gap() => writeline ""
+
+## @summary Reports a count of things done, or that there was nothing to do.
+## @param=done How to open the line on a real run, e.g. `"Removed"`.
+## @param=would How to open it on a preview, e.g. `"Would remove"`.
+## @param=idle What to say when the count is zero, e.g. `"Already clean."`.
+## @param=pending When true, the run was a preview and nothing changed.
+func Tally(
+    count: int,
+    done: NonEmptyString,
+    would: NonEmptyString,
+    idle: NonEmptyString,
+    pending: bool) {
+    if ($count == 0) { Ok($idle); return }
+    Ok($"{($pending ? $would : $done)} {$count} item{($count == 1 ? "" : "s")}.")
+}
+
+## ──────────────────────────────── Process ────────────────────────────────
+
+## @summary Asserts that the most-recent external command exited with code 0.
+## @exception When `$tosh.Last.ExitCode != 0`, naming the step and the code.
+func AssertOk(label: NonEmptyString) {
+    if ($tosh.Last.ExitCode != 0) {
+        throw $"{$label} failed (exit {$tosh.Last.ExitCode})"
+    }
+}
+
+## @summary Runs a command to completion and returns the finished job.
+func Capture(command: NonEmptyString, args: array) -> object =>
+    spawn $command ...$args | wait-for | first
+
+## @summary The first line of a captured job's output, trimmed.
+func FirstLine(job: object) -> string {
+    var line = ($job.Output | first)
+    return ($line == null ? "" : $line.ToString().Trim())
+}
+
+## ───────────────────────────────── Repo ─────────────────────────────────
+
+## @summary Resolves the absolute path of the repository root.
+func RepoRoot() -> DirectoryPath {
+    var result = Capture("git", ["rev-parse", "--show-toplevel"])
+    if ($result.ExitCode != 0) {
+        throw "Run this command from inside the TōSh repository."
+    }
+    return FirstLine($result)
+}
+
+## @summary The solution file every build, test and clean operates on.
+func Solution(root: DirectoryPath) -> string => $root | join -p "Tosh.slnx"
+
+## @summary Absolute path of a repository-relative path.
+## @example Core.At($root, "artifacts", "publish")
+func At(root: DirectoryPath, parts...) -> string => $root | join -p ...$parts
+
+## @summary The current UTC timestamp as ISO 8601, for history entries.
+func TimestampNow() -> string => System.DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+## @summary Formats a duration the way every history entry and summary does.
+func Elapsed(started) -> string => (((date now) - $started).ToString("hh\\:mm\\:ss\\.fff"))

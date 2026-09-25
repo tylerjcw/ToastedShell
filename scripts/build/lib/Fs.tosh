@@ -1,0 +1,108 @@
+partial module Build.Fs
+
+# Filesystem predicates and edits. The predicates exist to *refuse*: following a
+# symlink the build did not create is how a publish damages a tree it meant to stage.
+
+## @summary True when the path is a regular file that is not a symbolic link.
+func IsSafeFile(path: string) -> bool =>
+    ((is-file $path).IsFile and not (is-link $path).IsLink)
+
+## @summary True when the path exists as a directory.
+func IsDir(path: string) -> bool => (is-dir $path).IsDirectory
+
+## @summary True when the path exists as a file, link or not.
+func IsFile(path: string) -> bool => (is-file $path).IsFile
+
+## @summary True when anything at all occupies the path.
+func Exists(path: string) -> bool =>
+    ((is-file $path).IsFile or (is-dir $path).IsDirectory or (is-link $path).IsLink)
+
+## @summary Throws unless the path is a regular, non-symlink file.
+## @param=what What the file is, used in the message: "Release artifact".
+func RequireSafeFile(path: string, what: Core.NonEmptyString) {
+    if (not IsSafeFile($path)) { throw $"{$what} is missing or unsafe: {$path}" }
+}
+
+## @summary Throws unless the path is an existing directory.
+func RequireDir(path: string, what: Core.NonEmptyString) {
+    if (not IsDir($path)) { throw $"{$what} not found: {$path}" }
+}
+
+## @summary Throws when anything already occupies the path.
+func RequireVacant(path: string, what: Core.NonEmptyString) {
+    if (Exists($path)) { throw $"{$what} already exists: {$path}" }
+}
+
+## @summary Throws unless the file exists and holds at least one byte.
+func RequireNonEmpty(path: string, what: Core.NonEmptyString) -> object {
+    RequireSafeFile($path, $what)
+    var info = ls $path | first
+    if ($info.Size.Bytes <= 0) { throw $"{$what} is empty: {$path}" }
+    return $info
+}
+
+## @summary The lowercase hexadecimal SHA-256 of a file's contents.
+func Sha256(path: string) -> string {
+    var stream = System.IO.File.OpenRead($path)
+    defer { $stream.Dispose() | ignore }
+    return System.Convert.ToHexString(
+        System.Security.Cryptography.SHA256.HashData($stream)).ToLowerInvariant()
+}
+
+## @summary True when two files exist and hold byte-identical contents.
+func SameContents(left: string, right: string) -> bool =>
+    (IsFile($left) and IsFile($right) and Sha256($left) == Sha256($right))
+
+## @summary Removes a directory tree, reporting or previewing the removal.
+## @returns 1 when something was removed or would be, otherwise 0.
+func RemoveDir(path: string, dryRun: bool) -> int {
+    if (not IsDir($path)) { return 0 }
+    if ($dryRun) { Core.Info($"[dry-run] would remove: {$path}") }
+    else { rm -rf $path | ignore; Core.Info($"removed: {$path}") }
+    return 1
+}
+
+## @summary Removes a single file, reporting or previewing the removal.
+## @returns 1 when something was removed or would be, otherwise 0.
+func RemoveFile(path: string, dryRun: bool) -> int {
+    if (not IsFile($path)) { return 0 }
+    if ($dryRun) { Core.Info($"[dry-run] would remove: {$path}") }
+    else { rm $path | ignore; Core.Info($"removed: {$path}") }
+    return 1
+}
+
+## @summary Removes all but the newest `keep` entries of a listing.
+## @param=entries Listing entries, in any order; sorted here by `Modified`.
+## @param=keep How many of the most recently modified entries to retain.
+## @param=label What is being removed, used in the message: `"bundle"`.
+## @returns The number removed, or that would be removed.
+## @param=report Whether to name each removal. False counts without saying anything.
+func KeepNewest(entries, keep: int, dryRun: bool, label: string = "", report: bool = true) -> int {
+    # `ls` on a directory that matches nothing yields a null rather than an empty
+    # sequence, and sorting that reads `Modified` off it.
+    var ordered = ($entries | where { $_ != null } | sort -d Modified | collect)
+    if (($ordered | count) <= $keep) { return 0 }
+
+    var noun = ($label == "" ? "" : $"{$label}: ")
+    var removed = 0
+    var index = 0
+    for entry in $ordered {
+        if ($index >= $keep) {
+            if ($dryRun) {
+                if ($report) { Core.Info($"[dry-run] would remove {$noun}{$entry.FullName}") }
+            } else {
+                rm -rf $entry.FullName | ignore
+                if ($report) { Core.Info($"removed {$noun}{$entry.FullName}") }
+            }
+            $removed += 1
+        }
+        $index += 1
+    }
+    return $removed
+}
+
+## @summary Reads a JSON file and hands its root element to a body, then disposes it.
+func WithJson(path: string, body) {
+    var document = System.Text.Json.JsonDocument.Parse((read-file $path))
+    try { return ($body($document.RootElement)) } finally { $document.Dispose() | ignore }
+}

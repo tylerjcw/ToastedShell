@@ -1,0 +1,112 @@
+partial module Build.Lock
+
+# One build at a time, per workspace: a sentinel file held with `FileShare.None`,
+# plus an owner file. The owner file is what lets a nested step — a publish calling
+# a package build calling an install — recognise its own lease instead of deadlocking.
+
+## @summary The file recording which process holds the lock.
+func OwnerPath(root: string) -> string => $root | join -p "artifacts" ".build.lock.owner"
+
+## @summary Mints a token identifying this process and this start of it.
+# The start time is in the token because pids are reused: without it, a stale owner
+# file naming a pid something else now occupies reads as live.
+func CreateOwnerToken() -> string {
+    var pid = System.Environment.ProcessId
+    var started = System.Diagnostics.Process.GetProcessById($pid).StartTime.ToUniversalTime().Ticks
+    return $"{$pid}:{$started}:{(guid new).ToString("N")}"
+}
+
+## @summary True when `token` names the live process that already holds the lock.
+func IsActiveInheritedLease(root: string, token: string) -> bool {
+    return false if ($token == "")
+    var ownerPath = OwnerPath($root)
+    return false unless (Fs.IsSafeFile($ownerPath))
+
+    var probe = attempt {
+        var activeToken = System.IO.File.ReadAllText($ownerPath).Trim()
+        if ($activeToken == "" or $activeToken != $token) { throw "not ours" }
+
+        var parts = $activeToken.Split(":".ToCharArray())
+        if ($parts.Length != 3) { throw "malformed" }
+        var process = System.Diagnostics.Process.GetProcessById(System.Convert.ToInt32($parts[0]))
+        var drift = ($process.StartTime.ToUniversalTime().Ticks - System.Convert.ToInt64($parts[1]))
+        if ($drift < 0) { $drift = -$drift }
+        (not $process.HasExited and $drift <= System.TimeSpan.TicksPerSecond)
+    }
+
+    return match ($probe) {
+        Ok(live) => $live
+        default  => false
+    }
+}
+
+## @summary A held workspace lock. Disposing it releases the lock this lease took.
+sealed class Lease {
+    prop Handle: object? = null
+    prop OwnsLock: bool = false
+    prop PreviousToken: string = ""
+    prop Token: string = ""
+    prop OwnerFile: string = ""
+
+    Lease(root: string, operation: string) {
+        var artifacts = Safety.ArtifactsDirectory($root)
+        mkdir -p $artifacts | ignore
+        Safety.ArtifactsDirectory($root) | ignore
+
+        $this.PreviousToken = ($env.TOSH_REWRITTEN_BUILD_LOCK_TOKEN ?? "")
+        if (IsActiveInheritedLease($root, $this.PreviousToken)) { return }
+
+        # Keep this sentinel permanently: unlinking a held lock can split ownership across inodes.
+        var lockPath = $artifacts | join -p ".build.lock"
+        $this.OwnerFile = OwnerPath($root)
+        mkdir -p (dirname $lockPath) | ignore
+        if ((is-link $lockPath).IsLink or (is-link $this.OwnerFile).IsLink) {
+            throw $"Refusing symbolic-link build lock state under {dirname $lockPath}."
+        }
+
+        try {
+            $this.Handle = new System.IO.FileStream(
+                $lockPath,
+                System.IO.FileMode.OpenOrCreate,
+                System.IO.FileAccess.ReadWrite,
+                System.IO.FileShare.None)
+            $this.Token = CreateOwnerToken()
+            System.IO.File.WriteAllText($this.OwnerFile, $this.Token)
+        } catch ($error) {
+            # The cause travels with the message. Three things happen inside this
+            # `try` — opening the sentinel, minting a token, recording the owner —
+            # and only the first is "another build is running". A failure in either
+            # of the others was reported as a held lock, which sent the reader to
+            # look for a process that was never there.
+            var held = ($this.Handle == null)
+            if ($this.Handle != null) { $this.Handle.Dispose() | ignore }
+            $this.Handle = null
+            throw ($held
+                ? $"Could not acquire the build lock for '{$operation}' at '{$lockPath}'. Another build may be running, or the lock path is unavailable.\n{$error}"
+                : $"Took the build lock for '{$operation}' but could not record its owner at '{$this.OwnerFile}'.\n{$error}")
+        }
+
+        $this.OwnsLock = true
+        $env.TOSH_REWRITTEN_BUILD_LOCK_TOKEN = $this.Token
+    }
+
+    ## @summary Releases the lock, if this lease is the one that took it.
+    func Dispose() {
+        if (not $this.OwnsLock) { return }
+        try {
+            $env.TOSH_REWRITTEN_BUILD_LOCK_TOKEN = $this.PreviousToken
+            best-effort {
+                if (Fs.IsSafeFile($this.OwnerFile)
+                    and System.IO.File.ReadAllText($this.OwnerFile).Trim() == $this.Token) {
+                    System.IO.File.WriteAllText($this.OwnerFile, "")
+                }
+            }
+        } finally {
+            if ($this.Handle != null) { $this.Handle.Dispose() | ignore }
+            $this.OwnsLock = false
+        }
+    }
+}
+
+## @summary Takes the workspace lock for an operation.
+func Acquire(root: string, operation: string) -> Lease => new Lease($root, $operation)

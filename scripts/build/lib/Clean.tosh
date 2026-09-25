@@ -1,0 +1,131 @@
+partial module Build.Clean
+
+# What a clean may remove. Build output always; everything else by named scope,
+# with `all` meaning every scope.
+
+## @summary A named cleaning scope.
+record Scope(Name: string, Summary: string)
+
+const Scopes = [
+    new Scope("packaging", "Arch build trees (packaging/archlinux/src, pkg)"),
+    new Scope("tools", "bin and obj under tools/ and bench/"),
+    new Scope("publish", "the promoted publish output (artifacts/publish)"),
+    new Scope("packages", "built package archives (.pkg.tar.zst, .vsix)"),
+    new Scope("bundles", "stale single-file extraction directories under ~/.net"),
+    new Scope("deps", "the extension's node_modules"),
+]
+
+## @summary Resolves a selection of scope names, with `all` meaning every scope.
+func SelectScopes(names: array) -> array {
+    if ("all" in $names) { return [$s.Name <| for s in $Scopes] }
+
+    var known = [$s.Name <| for s in $Scopes]
+    var unknown = $names | where { not ($_ in $known) } | collect
+    if (($unknown | count) > 0) {
+        throw $"Unknown clean scope(s): {($unknown | join ", ")}. Choose from: {($known | join ", ")}, all."
+    }
+    return $names
+}
+
+## @summary Prints the scope table.
+func ListScopes() {
+    step "CLEAN SCOPES" {
+        for scope in $Scopes { Core.Info($"{$scope.Name.PadRight(11)} {$scope.Summary}") }
+    }
+}
+
+## @summary Removes stale single-file extraction directories, newest kept.
+# `TOAST-0142`. A single-file app with `IncludeAllContentForSelfExtract` unpacks into a
+# hash-named directory and nothing removes the old ones: 18 GB across the family when
+# measured, ~90 MB per publish. Only this repository's own products are touched, and the
+# newest is always kept — a running shell is still executing from it.
+## @param=report Whether to name each directory. False counts without saying anything.
+func PruneBundles(dryRun: bool, keep: int = 1, report: bool = true) -> int {
+    var base = ($env.DOTNET_BUNDLE_EXTRACT_BASE_DIR ?? ($env.HOME | join -p ".net"))
+    return 0 unless (Fs.IsDir($base))
+
+    var removed = 0
+    for app in (Targets.ExtractionNames()) {
+        var appDir = $base | join -p $app
+        continue unless (Fs.IsDir($appDir))
+        var versions = ls $appDir | where { (is-dir $_.FullName).IsDirectory }
+        $removed += Fs.KeepNewest($versions, $keep, $dryRun, "bundle", $report)
+    }
+    return $removed
+}
+
+## @summary Removes build and test artifacts.
+## @param=scopes Extra scopes beyond the always-cleaned build output; `["all"]` for every one.
+## @param=dryRun Report what would be removed, and remove nothing.
+func Run(scopes: array = [], dryRun: bool = false) {
+    var root = Core.RepoRoot()
+    var selected = SelectScopes($scopes)
+
+    with-lock "clean" {
+        var removed = 0
+        var safetyArgs = Dotnet.SafetyArgs()
+        if (not ("publish" in $selected)) {
+            $safetyArgs = [...$safetyArgs, "-p:PreserveToshPublishArtifacts=true"]
+        }
+
+        step "CLEAN" {
+            if ($dryRun) {
+                Core.Info("[dry-run] would run: dotnet clean")
+            } else {
+                dotnet clean (Core.Solution($root)) --verbosity quiet ...$safetyArgs
+                Core.AssertOk("dotnet clean")
+            }
+
+            # Build output, always. `tools` and `bench` only when asked, because
+            # rebuilding them is slow and they are not what a publish uses.
+            var searchRoots = ["src", "tests"]
+            if ("tools" in $selected) { $searchRoots = [...$searchRoots, "tools", "bench"] }
+
+            for name in ["bin", "obj", "TestResults"] {
+                for relative in $searchRoots {
+                    var searchPath = $root | join -p $relative
+                    continue unless (Fs.IsDir($searchPath))
+                    for entry in (find $searchPath -type d -name $name) {
+                        if ($entry.FullName != null) {
+                            $removed += Fs.RemoveDir($entry.FullName, $dryRun)
+                        }
+                    }
+                }
+            }
+            $removed += Fs.RemoveDir((Core.At($root, "artifacts", "test-results")), $dryRun)
+
+            if ("publish" in $selected) {
+                $removed += Fs.RemoveDir((Core.At($root, "artifacts", "publish")), $dryRun)
+            }
+            if ("packaging" in $selected) {
+                $removed += Fs.RemoveDir((Core.At($root, "packaging", "archlinux", "src")), $dryRun)
+                $removed += Fs.RemoveDir((Core.At($root, "packaging", "archlinux", "pkg")), $dryRun)
+            }
+            if ("deps" in $selected) {
+                $removed += Fs.RemoveDir(
+                    (Core.At($root, "editor", "vscode", "tosh.tosh-lang", "node_modules")), $dryRun)
+            }
+
+            # Archives: keep the most recent of each kind unless `packages` was asked
+            # for by name, so an ordinary clean does not throw away the last release.
+            if (("packages" in $selected) or ("packaging" in $selected)) {
+                var keep = (("packages" in $selected) ? 0 : 1)
+                var archDir = Core.At($root, "packaging", "archlinux")
+                var artifactsDir = Core.At($root, "artifacts")
+                if (Fs.IsDir($archDir)) {
+                    var archives = ls $archDir | where { $_.Name.EndsWith(".pkg.tar.zst") } | collect
+                    $removed += Fs.KeepNewest($archives, $keep, $dryRun, "package")
+                }
+                if (Fs.IsDir($artifactsDir)) {
+                    var vsixes = ls $artifactsDir | where { $_.Name.EndsWith(".vsix") } | collect
+                    $removed += Fs.KeepNewest($vsixes, $keep, $dryRun, "vsix")
+                }
+            }
+
+            if ("bundles" in $selected) { $removed += PruneBundles($dryRun, 1) }
+        }
+
+        Core.Sep("DONE")
+        Core.Tally($removed, "Removed", "Would remove", "Already clean.", $dryRun)
+    }
+}

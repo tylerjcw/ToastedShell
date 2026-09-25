@@ -1,0 +1,101 @@
+partial module Build.Vscode
+
+## The VS Code extension: keeping the working copy in sync, and packaging it.
+
+## @summary The extension's source directory.
+func Directory(root: Core.DirectoryPath) -> string =>
+    Core.At($root, "editor", "vscode", "tosh.tosh-lang")
+
+## @summary Runs the extension sync script.
+func Sync(quiet: bool = false, regenerate: bool = false) {
+    var root = Core.RepoRoot()
+    with-lock "sync" {
+        var args = ["--safe", (Core.At($root, "scripts", "sync_vscode_extension.tosh"))]
+        if ($quiet) { $args = [...$args, "--quiet"] }
+        if ($regenerate) { $args = [...$args, "--regenerate"] }
+        tosh ...$args
+        Core.AssertOk("sync_vscode_extension.tosh")
+    }
+}
+
+## @summary Publishes a built VSIX to a local marketplace, if one is listening.
+## @summary Publishes a built VSIX to the marketplace, if one is listening.
+func PushToMarketplace(vsix: string, marketplaceUrl: string) {
+    var reachable = best-effort {
+        (http get $"{$marketplaceUrl}/health" --as response).StatusCode == 200
+    }
+    if ($reachable != true) {
+        Core.Warn($"Valinor Marketplace is not reachable at {$marketplaceUrl}; skipping publish.")
+        return
+    }
+    curl -sS -f -o /dev/null -X POST -F $"file=@{$vsix}" $"{$marketplaceUrl}/publish" | ignore
+    Core.AssertOk("marketplace publish")
+    Core.Ok($"Published to Valinor Marketplace ({$marketplaceUrl})")
+}
+
+## @summary Installs a built VSIX into the local VS Code, if its CLI is present.
+shy func InstallLocally(vsix: string) {
+    if ((which code | first) == null) {
+        Core.Warn("VS Code CLI ('code') is not on PATH; skipping install.")
+        return
+    }
+    # `DEP0169: url.parse()` comes from VS Code's own Node CLI, not from anything here —
+    # its hint names `code --trace-deprecation`. Nothing in this repository can fix it, and
+    # a warning nobody can act on teaches a reader to skim the ones they can.
+    with-env {% "NODE_OPTIONS" => "--no-deprecation" %} {
+        code --install-extension $vsix --force | ignore
+        Core.AssertOk("code --install-extension")
+    }
+    Core.Ok("Extension installed in local VS Code")
+}
+
+## @summary Builds the extension package, then optionally installs and publishes it.
+func Package(noInstall: bool = false, noPublish: bool = false, marketplaceUrl: string = "http://localhost:7781") {
+    var root = Core.RepoRoot()
+    with-lock "vsix" {
+        var directory = Directory($root)
+        Fs.RequireDir($directory, "Extension directory")
+        var artifacts = Core.At($root, "artifacts")
+
+        step "VSIX" {
+            # The package carries the release's version, so bring it into line first.
+            match (attempt { Version.WriteExtension($root, (Version.Read($root))) }) {
+                Ok(_)      => null
+                Err(error) => Core.Warn($"Could not sync the extension version: {$error}")
+            }
+
+            in-dir $directory {
+                if (not (Fs.IsDir(($directory | join -p "node_modules")))) {
+                    Core.Info("Installing npm dependencies...")
+                    npm install --no-audit --no-fund --silent
+                    Core.AssertOk("npm install")
+                }
+
+                best-effort { for stale in (ls *.vsix) { rm $stale.FullName | ignore } }
+
+                Core.Info("Packaging extension with vsce...")
+                # npm narrates which binary it is about to run, twice, on every package.
+                with-env {% "NPM_CONFIG_LOGLEVEL" => "error" %} {
+                    npx --yes @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license --out . | ignore
+                    Core.AssertOk("vsce package")
+                }
+
+                var vsix = ls *.vsix | first
+                if ($vsix == null) { throw "vsce produced no .vsix file" }
+
+                mkdir -p $artifacts | ignore
+                var destination = $artifacts | join -p $vsix.Name
+                cp $vsix.FullName $destination | ignore
+                Core.Ok($"Built {$vsix.Name}")
+                Core.Info($"Copied to {$destination}")
+
+                if ($noInstall) { Core.Info("Skipping local install (--noInstall)") }
+                else { InstallLocally($destination) }
+
+                if ($noPublish) { Core.Info("Skipping marketplace publish (--noPublish)") }
+                else { PushToMarketplace($destination, $marketplaceUrl) }
+            }
+        }
+        Core.Sep("DONE")
+    }
+}

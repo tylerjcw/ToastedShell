@@ -17,7 +17,7 @@
 ##   ordinary typing to make a menu label look right.
 ## @example tosh examples/notepad.tosh
 ## @example tosh examples/notepad.tosh notes.txt
-require ToastLib.Gtk from "/home/komrad/.config/tosh/lib/ToastLib.Gtk.tosh" as Gtk
+require ToastLib.Gtk as Gtk
 
 using System.Drawing
 
@@ -1063,8 +1063,8 @@ export class Notepad {
 
 # A file named on the command line is opened at startup, the way
 # `notepad.exe notes.txt` does.
-# var requested = null
-# var passed = $tosh.Script.Args
-# if (($passed | count) > 0) { $requested = $passed[0] }
-# 
-# (new Notepad()).Start($requested)
+var requested = null
+var passed = $tosh.Script.Args
+if (($passed | count) > 0) { $requested = $passed[0] }
+
+(new Notepad()).Start($requested)

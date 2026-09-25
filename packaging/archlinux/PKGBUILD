@@ -74,12 +74,12 @@ _selected_count=${#_pkgs[@]}
 
 pkgbase=tosh
 pkgname=("${_pkgs[@]}")
-pkgver=26.8.50.10
+pkgver=26.9.34.11
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/komrad/tosh'
 license=('MIT')
-makedepends=('dotnet-sdk-10.0')
+makedepends=('dotnet-sdk-preview-bin')
 options=('!strip')  # .NET single-file bundles append assemblies after the ELF stub; strip destroys them
 source=()
 sha256sums=()
@@ -191,7 +191,7 @@ _validate_prebuilt() {
   _manifest_expect trimmed false || return 1
   _manifest_expect ready_to_run true || return 1
   _manifest_expect include_all_content_for_self_extract true || return 1
-  _manifest_expect dotnet_major 10 || return 1
+  _manifest_expect dotnet_major 11 || return 1
   _manifest_expect artifact_count 5 || return 1
 
   for target in tosh lsp mcp tome crumb devcompanion dap; do

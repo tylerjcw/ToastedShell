@@ -1,0 +1,185 @@
+partial module Build.Dotnet
+
+## Every `dotnet` invocation the build makes, and the switches they share.
+
+## @summary The .NET major version this repository targets.
+const DefaultMajor = 11
+
+## @summary Switches that keep a build deterministic and side-effect free.
+# `-nr:false` and `MSBUILDDISABLENODEREUSE` are both kept: measured from a clean node
+# count, the switch alone left 4 nodes behind and the variable alone left 0. The switch
+# reaches this invocation, the variable reaches the `dotnet` processes it spawns.
+func SafetyArgs() -> array => [
+    "-m:1",
+    "-nr:false",
+    "-p:DisableToshSpecBuild=true",
+    "-p:DisableToshParityCheck=true",
+    "-p:DisableToshVsCodeExtensionSync=true",
+]
+
+## @summary Refuses to start when the `dotnet` on PATH cannot build the framework.
+func AssertSdkSupports(major: int) {
+    var sdks = Core.Capture("dotnet", ["--list-sdks"])
+    if ($sdks.ExitCode != 0) {
+        throw "No 'dotnet' on PATH. Install the .NET SDK, or put the one you mean first."
+    }
+
+    var usable = $sdks.Output | where { (($_ as string).Trim() starts-with $"{$major}.") } | count
+    if ($usable > 0) { return }
+
+    var found = Core.FirstLine(Core.Capture("dotnet", ["--version"]))
+    throw $"'dotnet' on PATH is {$found}, which cannot target net{$major}.0. Put a .NET {$major} SDK first on PATH (for example ~/.dotnet), or install one."
+}
+
+## @summary Runs `dotnet`, streaming its output, and throws unless it succeeded.
+## @param=label What to name the step in the failure message.
+func Run(args: array, label: Core.NonEmptyString) {
+    dotnet ...$args
+    Core.AssertOk($label)
+}
+
+## @summary Builds a solution or project.
+func Build(target: string, configuration: string, verbosity: string) {
+    var safety = SafetyArgs()
+    var args = ["build", $target, "-c", $configuration, "--verbosity", $verbosity, ...$safety]
+    Run($args, "dotnet build")
+}
+
+## @summary Restores a solution or project into a private artifacts directory.
+func Restore(
+    target: string,
+    artifactsDirectory: string,
+    runtimeId: string,
+    selfContained: bool,
+    readyToRun: bool,
+    trimmed: bool,
+    label: Core.NonEmptyString) {
+    var safety = SafetyArgs()
+    var args = [
+        "restore", $target,
+        "--artifacts-path", $artifactsDirectory,
+        $"-p:RuntimeIdentifier={$runtimeId}",
+        "-p:Configuration=Release",
+        $"-p:SelfContained={$selfContained}",
+        $"-p:PublishReadyToRun={$readyToRun}",
+        ...$safety,
+    ]
+    if ($trimmed) { $args = [...$args, "-p:PublishTrimmed=true", "-p:TrimMode=partial"] }
+    Run($args, $label)
+}
+
+## @summary The switches that define a single-file bundle, shared by publish and bench.
+func SingleFileArgs(selfContained: bool, readyToRun: bool, trimmed: bool) -> array {
+    var args = [
+        "-p:PublishSingleFile=true",
+        $"-p:PublishReadyToRun={$readyToRun}",
+        "-p:IncludeAllContentForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=false",
+        "-p:DebugType=None",
+        "-p:DebugSymbols=false",
+        $"-p:SelfContained={$selfContained}",
+    ]
+    return ($trimmed ? [...$args, "-p:PublishTrimmed=true", "-p:TrimMode=partial"] : $args)
+}
+
+## @summary Publishes one project into a directory as a single-file bundle.
+func Publish(
+    project: string,
+    runtimeId: string,
+    outputDirectory: string,
+    artifactsDirectory: string,
+    modeArgs: array,
+    label: Core.NonEmptyString) {
+    var safety = SafetyArgs()
+    var args = [
+        "publish", $project,
+        "-c", "Release", "-r", $runtimeId,
+        "-o", $outputDirectory,
+        "--artifacts-path", $artifactsDirectory,
+        "--no-restore",
+        ...$modeArgs,
+        ...$safety,
+    ]
+    Run($args, $label)
+}
+
+## @summary One compiler diagnostic, parsed out of MSBuild's output.
+record Diagnostic(
+    Severity: string,
+    Code: string,
+    File: string,
+    Line: int,
+    Col: int,
+    Message: string)
+
+## @summary Builds the solution, or named targets, and reports the diagnostics.
+## @param=selection Targets to compile, or `all` for the whole solution.
+## @param=asJson Emit a JSON array instead of styled lines.
+func Report(selection = "all", asJson: bool = false) {
+    var root = Core.RepoRoot()
+    with-lock "build" {
+        # `all` builds the solution rather than the seven projects in turn: one invocation
+        # restores once and shares the graph, where seven repeat both.
+        var whole = (($selection as string).Trim().ToLowerInvariant() == "all")
+        var chosen = ($whole ? [] : (Targets.Normalize($selection)))
+        var subjects = ($whole
+            ? [(Core.Solution($root))]
+            : [($root | join -p (Targets.ProjectFile($t))) <| for t in $chosen])
+
+        if (not $asJson) {
+            Core.Sep("BUILD")
+            if (not $whole) {
+                Core.Info($"Building {([$t.Key <| for t in $chosen] | join ", ")}")
+            }
+        }
+
+        # One invocation per subject: `dotnet build` takes a single project or solution, and
+        # handing it several silently builds only the first.
+        var safety = SafetyArgs()
+        var lines = []
+        var failed = 0
+        for subject in $subjects {
+            var job = Core.Capture("dotnet", ["build", $subject, "-c", "Debug", "-nologo", ...$safety])
+            var out = $job.Output | collect
+            var err = $job.ErrorLines | collect
+            $lines = [...$lines, ...$out, ...$err]
+            if ($job.ExitCode != 0) { $failed += 1 }
+        }
+
+        var pattern = new System.Text.RegularExpressions.Regex(
+            "^\\s*(.+?)\\((\\d+),(\\d+)\\):\\s*(error|warning)\\s+(\\w+):\\s*(.+?)(?:\\s*\\[.+?\\])?\\s*$")
+
+        var diagnostics = [
+            (new Diagnostic(
+                $m.Groups[4].Value,
+                $m.Groups[5].Value,
+                $m.Groups[1].Value,
+                ($m.Groups[2].Value as int),
+                ($m.Groups[3].Value as int),
+                $m.Groups[6].Value))
+            <| for line in $lines
+            where ($pattern.Match($line.ToString()).Success)
+            let m = $pattern.Match($line.ToString())
+        ]
+
+        if ($asJson) {
+            writeline (System.Text.Json.JsonSerializer.Serialize($diagnostics, $diagnostics.GetType()))
+            return
+        }
+
+        var errors = $diagnostics | where { $_.Severity == "error" } | collect
+        var warnings = $diagnostics | where { $_.Severity == "warning" } | collect
+
+        if (($errors | count) == 0 and ($warnings | count) == 0) {
+            if ($failed == 0) { Core.Ok("No errors or warnings.") }
+            else { Core.Fail($"{$failed} build(s) failed, but no diagnostics were parseable.") }
+            return
+        }
+
+        for d in $errors   { Core.Fail($"[{$d.Code}] {$d.File}({$d.Line},{$d.Col}): {$d.Message}") }
+        for d in $warnings { Core.Warn($"[{$d.Code}] {$d.File}({$d.Line},{$d.Col}): {$d.Message}") }
+
+        Core.Gap()
+        Core.Info($"{($errors | count)} error(s), {($warnings | count)} warning(s)")
+    }
+}

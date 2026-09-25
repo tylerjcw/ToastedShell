@@ -1,0 +1,41 @@
+partial module Build.Report
+
+## What the repository looks like right now: version, toolchain, git, last runs.
+
+## @summary One labelled line of the digest.
+record Line(Label: string, Value: string, Known: bool)
+
+shy func GitLine(root: Core.DirectoryPath) -> string {
+    var branch = Core.FirstLine(Core.Capture("git", ["-C", $root, "rev-parse", "--abbrev-ref", "HEAD"]))
+    var dirty = (Core.Capture("git", ["-C", $root, "status", "--porcelain"])).Output | count
+    return ($dirty > 0 ? $"{$branch} ({$dirty} modified)" : $"{$branch} (clean)")
+}
+
+## @summary One digest line built from the last history entry of a kind.
+shy func HistoryLine(root: Core.DirectoryPath, kind: string, format) -> Line {
+    var line = History.ReadLast($root, $kind)
+    if ($line == null) { return new Line($"Last {$kind}", "(no history yet)", false) }
+    return new Line($"Last {$kind}", (invoke $format ($line | from json)), true)
+}
+
+## @summary Prints the digest.
+func Show() {
+    var root = Core.RepoRoot()
+    step "INFO" {
+        var lines = [
+            new Line("Version", (Version.Full(Version.Read($root))), true),
+            new Line(".NET SDK", (Core.FirstLine(Core.Capture("dotnet", ["--version"]))), true),
+            new Line("Git", (GitLine($root)), true),
+            (HistoryLine($root, "test", func(e) =>
+                $"{$e.ts}  group={$e.group}  {$e.passed}/{$e.total} passed  {$e.duration}")),
+            (HistoryLine($root, "bench", func(e) =>
+                $"{$e.ts}  sc cold={$e.sc_cold_ms}ms warm={$e.sc_warm_ms}ms")),
+            new Line("Bundles", $"{(Clean.PruneBundles(true, 1, false))} stale extraction dir(s) under ~/.net", true),
+        ]
+
+        for line in $lines {
+            var text = $"{$line.Label.PadRight(10)} {$line.Value}"
+            if ($line.Known) { Core.Ok($text) } else { Core.Info($text) }
+        }
+    }
+}

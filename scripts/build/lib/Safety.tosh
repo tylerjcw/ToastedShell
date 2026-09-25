@@ -1,0 +1,102 @@
+partial module Build.Safety
+
+# Containment for every path the build writes to. Each `rm -rf` and `Directory.Move`
+# targets a path assembled from a RID, a flag or a guid, so each is proven to be a
+# child of the directory it claims to be in, reached without crossing a symlink.
+
+## @summary The shape a Runtime Identifier is allowed to take.
+const RuntimeIdPattern = "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+
+## @summary Validates a Runtime Identifier before it is used as a path component.
+func ValidateRuntimeId(runtimeId: string) -> string {
+    if (System.String.IsNullOrWhiteSpace($runtimeId)
+        or $runtimeId.Length > 100
+        or not System.Text.RegularExpressions.Regex.IsMatch($runtimeId, $RuntimeIdPattern)) {
+        throw $"Invalid RID '{$runtimeId}'. Use lowercase letters, digits, dots, underscores, and hyphens only."
+    }
+    return $runtimeId
+}
+
+## @summary Walks from a candidate up to an anchor, refusing links and files on the way.
+shy func RejectUnsafeComponents(anchor: string, candidate: string) {
+    var probe = $candidate
+    while (true) {
+        if ((is-link $probe).IsLink) { throw $"Managed build path crosses a symbolic link: {$probe}" }
+        if ((is-file $probe).IsFile) { throw $"Managed build directory crosses a file: {$probe}" }
+
+        if (System.IO.Path.GetRelativePath($anchor, $probe) == ".") { break }
+        var parent = System.IO.Path.GetDirectoryName($probe)
+        if ($parent == null or $parent == $probe) {
+            throw $"Could not prove managed-path containment for '{$candidate}'."
+        }
+        $probe = $parent
+    }
+}
+
+## @summary Proves a path is a child of `artifacts/<area>` and returns it canonicalised.
+shy func ValidateManagedDirectory(root: string, path: string, area: string) -> string {
+    var artifacts = System.IO.Path.GetFullPath(($root | join -p "artifacts"))
+    var allowed = System.IO.Path.GetFullPath(($artifacts | join -p $area))
+    var candidate = System.IO.Path.GetFullPath($path)
+    var relative = System.IO.Path.GetRelativePath($allowed, $candidate)
+    var separator = System.IO.Path.DirectorySeparatorChar.ToString()
+    var altSeparator = System.IO.Path.AltDirectorySeparatorChar.ToString()
+
+    if ($relative == "."
+        or $relative == ".."
+        or ($relative starts-with $"..{$separator}")
+        or ($relative starts-with $"..{$altSeparator}")
+        or System.IO.Path.IsPathRooted($relative)) {
+        throw $"Refusing unmanaged build path '{$candidate}'. Expected a child of '{$allowed}'."
+    }
+
+    RejectUnsafeComponents($artifacts, $candidate)
+    return $candidate
+}
+
+## @summary Returns a safe, canonical publish destination below `artifacts/publish`.
+func PublishDirectory(root: string, path: string) -> string =>
+    ValidateManagedDirectory($root, $path, "publish")
+
+## @summary Returns a safe, canonical transaction directory below `artifacts/staging`.
+func StagingDirectory(root: string, path: string) -> string =>
+    ValidateManagedDirectory($root, $path, "staging")
+
+## @summary Validates the stable artifacts directory used by workspace locks.
+func ArtifactsDirectory(root: string) -> string {
+    var artifacts = System.IO.Path.GetFullPath(($root | join -p "artifacts"))
+    if ((is-link $artifacts).IsLink) { throw $"Refusing symbolic-link artifacts directory: {$artifacts}" }
+    if ((is-file $artifacts).IsFile) { throw $"Artifacts directory is a file: {$artifacts}" }
+    return $artifacts
+}
+
+## @summary Reserves a fresh, uniquely named staging directory and creates it.
+## @param=prefix What the directory is for, e.g. `"publish"`; a guid follows it.
+## @returns The created directory's canonical path.
+func NewStaging(root: string, prefix: Core.NonEmptyString) -> string {
+    var candidate = $root | join -p "artifacts" "staging" $"{$prefix}-{(guid new).ToString("N")}"
+    var directory = StagingDirectory($root, $candidate)
+    Fs.RequireVacant($directory, $"{$prefix} transaction path")
+    System.IO.Directory.CreateDirectory($directory) | ignore
+    return $directory
+}
+
+## @summary Removes a staging directory, after proving it is one.
+## @remarks
+##   A restore writes files into the build artifacts directory that it leaves read-only, and
+##   `Directory.Delete` refuses those rather than clearing the bit — which is why a publish
+##   that had otherwise finished cleanly still warned that it could not tidy up after itself.
+##   The recursive `rm` handles them; the managed delete stays first because it is the one
+##   that reports a genuinely unexpected failure.
+func RemoveStaging(root: string, path: string) {
+    var safePath = StagingDirectory($root, $path)
+    if (not (is-dir $safePath).IsDirectory) { return }
+
+    var removed = attempt { System.IO.Directory.Delete($safePath, true) }
+    if ($removed.Variant == "Ok") { return }
+
+    rm -rf $safePath | ignore
+    if ((is-dir $safePath).IsDirectory) {
+        throw $"Could not remove '{$safePath}': {(match ($removed) { Ok(_) => "" Err(e) => $"{$e}" })}"
+    }
+}

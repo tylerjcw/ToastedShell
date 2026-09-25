@@ -1,0 +1,312 @@
+partial module Build.Package
+
+## Arch packaging: build archives with `makepkg`, prove they carry the bundle
+## that was published, then install them with one `pacman` transaction.
+
+## @summary The archives one `makepkg` run produced, and what they were built from.
+record Archives(
+    Targets: array,
+    Files: array,
+    Hashes: array,
+    PrebuiltRoot: string?,
+    Directory: string)
+
+## @summary Builds package archives for a selection of targets.
+## @param=prebuiltRoot A validated publish bundle to package instead of compiling.
+## @param=directory Where to put the archives; a fresh staging directory when null.
+func Create(selection, prebuiltRoot: string?, directory: string?) -> Archives {
+    var root = Core.RepoRoot()
+
+    # Assigned from inside the runes rather than returned through them. A rune answers with
+    # everything its body produced, and `makepkg` writes its progress into that — so the
+    # record came back behind a hundred lines of packaging output.
+    var built = null
+
+    with-lock "package" {
+        var targets = Targets.Normalize($selection)
+        var keys = [$t.Key <| for t in $targets]
+        var targetSpec = $keys | join ","
+
+        Core.Sep("PACKAGE")
+        var bundle = $prebuiltRoot
+        if ($bundle != null and $bundle != "") {
+            $bundle = Safety.PublishDirectory($root, $bundle)
+            Core.Info($"Packaging prebuilt targets: {$targetSpec}")
+            Core.Info($"Prebuilt bundle: {$bundle}")
+        } else {
+            $bundle = null
+            Core.Info($"Building targets: {$targetSpec}")
+        }
+
+        var packageDirectory = $directory
+        if ($packageDirectory == null or $packageDirectory == "") {
+            $packageDirectory = Safety.NewStaging($root, "packages")
+        } else {
+            $packageDirectory = Safety.StagingDirectory($root, $packageDirectory)
+            Fs.RequireVacant($packageDirectory, "Package transaction path")
+            System.IO.Directory.CreateDirectory($packageDirectory) | ignore
+        }
+
+        try {
+            in-dir (Core.At($root, "packaging", "archlinux")) {
+                # makepkg leaves these read-only when a previous run was interrupted. On a
+                # clean tree they simply are not there, and chmod says so on its own stderr —
+                # which `best-effort` cannot catch, because the failure is the child's.
+                for stale in ["pkg", "src"] {
+                    # Bound, not left bare: an expression statement whose value nothing
+                    # consumes is emitted, and it would ride back out with the record.
+                    var cleared = best-effort { /usr/bin/chmod -R u+rwx $stale }
+                    $cleared | ignore
+                }
+                rm -rf pkg src | ignore
+
+                with-env {% "TOSH_TARGETS" => $targetSpec,
+                            "TOSH_PREBUILT_ROOT" => $bundle,
+                            "PKGDEST" => $packageDirectory %} {
+                    # Do not use makepkg --syncdeps here: package creation must not
+                    # mutate the system before the explicit pacman transaction.
+                    #
+                    # --nodeps because TOSH_PREBUILT_ROOT is set: `build()` reuses a bundle
+                    # this script has already compiled and validated, so it runs no compiler
+                    # and the PKGBUILD's makedepends describe a path not being taken. Without
+                    # it, a publish that had built, verified and promoted its output died at
+                    # the last step over an SDK it never needed — the one the bundle in its
+                    # hands was built with.
+                    #
+                    # The declaration stays honest for `makepkg` run by hand, where nothing
+                    # is prebuilt and the SDK is genuinely required.
+                    # `| ignore` keeps makepkg's progress on the console while discarding
+                    # the values it would otherwise contribute: a rune answers with whatever
+                    # its body produced, so they would ride back out with the record.
+                    makepkg -fC --nodeps --noconfirm PKGBUILD | ignore
+                    Core.AssertOk("makepkg")
+
+                    var probe = Core.Capture("makepkg", ["--packagelist", "PKGBUILD"])
+                    if ($probe.ExitCode != 0) {
+                        throw $"makepkg --packagelist failed (exit {$probe.ExitCode})."
+                    }
+                    var files = $probe.Output
+                        | each { $_.ToString().Trim() }
+                        | where { $_ != "" }
+                        | collect
+
+                    if (($files | count) != ($targets | count)) {
+                        throw $"makepkg produced {($files | count)} package path(s) for {($targets | count)} selected target(s)."
+                    }
+                    for file in $files { Fs.RequireSafeFile($file, "Expected package archive") }
+
+                    Core.Ok($"Packaged: {$targetSpec}")
+                    $built = new Archives(
+                        $targets,
+                        $files,
+                        [Fs.Sha256($f) <| for f in $files],
+                        $bundle,
+                        $packageDirectory)
+                }
+            }
+        } catch ($error) {
+            best-effort { Safety.RemoveStaging($root, $packageDirectory) }
+            throw $error
+        }
+    }
+
+    if ($built == null) { throw "Packaging produced no archive set." }
+    return $built
+}
+
+## @summary Throws unless every archive still hashes to what it did when built.
+func VerifyArchives(build: Archives) {
+    if (($build.Files | count) != ($build.Hashes | count)) {
+        throw "Package archive/hash count mismatch."
+    }
+    var index = 0
+    for file in $build.Files {
+        Fs.RequireSafeFile($file, "Package archive")
+        if (Fs.Sha256($file) != $build.Hashes[$index]) {
+            throw $"Package archive changed after creation: {$file}"
+        }
+        $index += 1
+    }
+}
+
+## @summary Throws unless each archive's executable matches the promoted bundle's.
+func VerifyPayloads(build: Archives, bundleRoot: string) {
+    VerifyArchives($build)
+    var root = Core.RepoRoot()
+    var verifyDirectory = Safety.NewStaging($root, "package-verify")
+    try {
+        var index = 0
+        for target in $build.Targets {
+            var targetDirectory = $verifyDirectory | join -p $target.Key
+            System.IO.Directory.CreateDirectory($targetDirectory) | ignore
+            bsdtar -xf $build.Files[$index] -C $targetDirectory $target.Member
+            Core.AssertOk($"extract package payload {$target.Key}")
+
+            var extracted = System.IO.Path.Combine($targetDirectory, $target.Member)
+            Fs.RequireSafeFile($extracted, "Package payload")
+            if (not (Fs.SameContents($extracted, ($bundleRoot | join -p $target.Bundle)))) {
+                throw $"Package payload does not match the promoted release: {$target.Key}"
+            }
+            $index += 1
+        }
+    } finally {
+        best-effort { Safety.RemoveStaging($root, $verifyDirectory) }
+    }
+    VerifyArchives($build)
+    Core.Ok("Package archives match the promoted release")
+}
+
+## @summary Installs the archives in one transaction; returns pacman's exit code.
+func Install(build: Archives) -> int {
+    /usr/bin/sudo /usr/bin/pacman -U --noconfirm ...$build.Files
+    return $tosh.Last.ExitCode
+}
+
+## @summary Throws unless each installed executable matches the promoted bundle's.
+func VerifyInstalled(targets: array, bundleRoot: string) {
+    for target in $targets {
+        Fs.RequireSafeFile($target.Installed, "Installed executable")
+        if (not (Fs.SameContents($target.Installed, ($bundleRoot | join -p $target.Bundle)))) {
+            throw $"Installed executable does not match the promoted release: {$target.Installed}"
+        }
+    }
+    Core.Ok("Installed executables match the promoted release")
+}
+
+## @summary How many installed executables already match the bundle. For a failure report.
+func CountInstalledMatches(targets: array, bundleRoot: string) -> int {
+    var matches = 0
+    for target in $targets {
+        var same = best-effort {
+            (Fs.IsSafeFile($target.Installed)
+                and Fs.SameContents($target.Installed, ($bundleRoot | join -p $target.Bundle)))
+        }
+        if ($same == true) { $matches += 1 }
+    }
+    return $matches
+}
+
+## @summary Removes an archive set's staging directory and makepkg's scratch trees.
+func Cleanup(build: Archives) {
+    var root = Core.RepoRoot()
+    match (attempt { Safety.RemoveStaging($root, $build.Directory) }) {
+        Ok(_)      => null
+        Err(error) => Core.Warn($"Could not remove package transaction directory: {$error}")
+    }
+    for name in ["src", "pkg"] {
+        best-effort { rm -rf (Core.At($root, "packaging", "archlinux", $name)) | ignore }
+    }
+}
+
+## @summary Where built packages are published for `pacman` to find them.
+const RepositoryDirectory = "/srv/pkgrepo"
+
+## @summary The repository database `repo-add` maintains there.
+const RepositoryDatabase = "valinor.db.tar.zst"
+
+## @summary Copies package archives into the local repository and indexes them.
+## @param=files The `.pkg.tar.zst` paths to publish.
+## @param=directory The repository directory; empty uses the configured one.
+## @returns The number of archives published.
+func PublishToRepository(files: array, directory: string = "") -> int {
+    var repo = ($directory == "" ? $RepositoryDirectory : $directory)
+    Fs.RequireDir($repo, "Package repository")
+
+    var published = []
+    for file in $files {
+        Fs.RequireSafeFile($file, "Package archive")
+        var destination = $repo | join -p (basename $file)
+        cp $file $destination | ignore
+        Core.AssertOk($"copy {(basename $file)} to the repository")
+        $published = [...$published, $destination]
+    }
+
+    # `repo-add` rewrites the database in place, so it runs once for the whole set
+    # rather than once per archive.
+    in-dir $repo {
+        repo-add $RepositoryDatabase ...$published
+        Core.AssertOk("repo-add")
+    }
+
+    Core.Ok($"Published {($published | count)} package(s) to {$repo}")
+    return ($published | count)
+}
+
+## @summary Post-install steps: raw-socket capability, desktop integration, a reminder.
+func FinishInstall(targets: array, linuxDesktop: bool, system: bool) {
+    var keys = [$t.Key <| for t in $targets]
+    if (("tosh" in $keys) and System.OperatingSystem.IsLinux()) {
+        Core.Info("Setting cap_net_raw on /usr/bin/tosh...")
+        match (attempt { sudo setcap cap_net_raw+ep /usr/bin/tosh; Core.AssertOk("setcap") }) {
+            Ok(_)      => Core.Ok("Raw sockets enabled for `ping`")
+            Err(error) => Core.Warn($"Could not set cap_net_raw, so `ping` will need root: {$error}")
+        }
+    }
+    if ($linuxDesktop) { Desktop.Install((Core.RepoRoot()), $system) }
+    Core.Warn("Restart running tosh shells (`exec tosh`) to pick up the new binary.")
+    Core.Sep("DONE")
+}
+
+## @summary Builds and installs packages, from source or from a validated bundle.
+func Run(selection, linuxDesktop: bool = false, system: bool = false, prebuiltRoot: string? = null) {
+    var root = Core.RepoRoot()
+    with-lock "install" {
+        var build = null
+        var retain = false
+        try {
+            $build = Create($selection, $prebuiltRoot, null)
+            VerifyArchives($build)
+            if ($build.PrebuiltRoot != null) { VerifyPayloads($build, $build.PrebuiltRoot) }
+
+            Core.Sep("INSTALL")
+            var exitCode = Install($build)
+            if ($exitCode != 0) {
+                $retain = true
+                throw $"pacman -U failed (exit {$exitCode})."
+            }
+            var keys = [$t.Key <| for t in $build.Targets]
+            Core.Ok($"Installed: {($keys | join ", ")}")
+
+            if ($build.PrebuiltRoot != null) {
+                try { VerifyInstalled($build.Targets, $build.PrebuiltRoot) }
+                catch ($error) { $retain = true; throw $error }
+            }
+            FinishInstall($build.Targets, $linuxDesktop, $system)
+        } finally {
+            if ($build != null and $retain) {
+                Core.Warn($"Package archives retained for retry: {$build.Directory}")
+            } else if ($build != null) {
+                Cleanup($build)
+            }
+        }
+    }
+}
+
+## @summary Stages the install scripts into a promoted bundle and zips it, for Windows.
+func CreateWindowsArchive(
+    root: Core.DirectoryPath,
+    bundleDirectory: Core.DirectoryPath,
+    version: Core.NonEmptyString,
+    runtimeId: Core.NonEmptyString) -> string {
+
+    for name in ["install.ps1", "uninstall.ps1"] {
+        var from = Core.At($root, "packaging", "windows", $name)
+        Fs.RequireSafeFile($from, "Windows packaging script")
+        System.IO.File.Copy($from, ($bundleDirectory | join -p $name), true)
+    }
+
+    # The Arch package installs the licence to /usr/share/licenses; a zip has nowhere
+    # comparable, so it travels beside the binaries.
+    var licence = $root | join -p "LICENSE"
+    if (Fs.IsFile($licence)) {
+        System.IO.File.Copy($licence, ($bundleDirectory | join -p "LICENSE"), true)
+    }
+
+    var archive = System.IO.Path.GetFullPath(
+        ($bundleDirectory | join -p ".." $"tosh-{$version}-{$runtimeId}.zip"))
+    if (Fs.IsFile($archive)) { System.IO.File.Delete($archive) }
+
+    System.IO.Compression.ZipFile.CreateFromDirectory($bundleDirectory, $archive)
+    Core.Ok($"Windows package → {$archive}")
+    return $archive
+}

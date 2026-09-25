@@ -1,0 +1,26 @@
+partial module Build.History
+
+# Append-only JSONL beside the build's artifacts. Each line carries a `kind`, so
+# `test` and `bench` entries share one file.
+
+## @summary Resolves the absolute path of the JSONL history file.
+func Path(root: Core.DirectoryPath) -> string => $root | join -p "artifacts" "history.jsonl"
+
+## @summary Appends one record, flattened to a single line.
+func Append(root: Core.DirectoryPath, entry) {
+    var path = Path($root)
+    mkdir -p (dirname $path) | ignore
+    echo (($entry | to json).Replace("\n", "").Replace("  ", "")) out>> $path
+}
+
+## @summary Reads the most recent entry of a kind, or null when there is none.
+func ReadLast(root: Core.DirectoryPath, kind: Core.NonEmptyString) -> string? {
+    var path = Path($root)
+    return null unless (Fs.IsFile($path))
+
+    var last = null
+    for line in (cat $path | lines) {
+        if ($line =~ $"\"kind\":\\s*\"{$kind}\"") { $last = $line }
+    }
+    return $last
+}

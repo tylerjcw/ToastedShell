@@ -1,0 +1,37 @@
+## @summary Loads every `Build.*` module. Requiring this file requires the build system.
+
+## Reused by nested `dotnet` processes this build spawns, which is where the
+## MSBuild nodes that outlive a build come from. See `Dotnet.SafetyArgs`.
+$env.MSBUILDDISABLENODEREUSE = "1"
+
+## Foundations: output, filesystem, path containment, the lock.
+require ./Core.tosh
+require ./Fs.tosh
+require ./Safety.tosh
+require ./Lock.tosh
+
+## The cross-cutting wrappers. Everything below is written in terms of these.
+require ./Runes.tosh
+
+## Shared tables and toolchain access.
+require ./Targets.tosh
+require ./Dotnet.tosh
+require ./History.tosh
+require ./Version.tosh
+
+## Capabilities.
+require ./Tests.tosh
+require ./Clean.tosh
+require ./Bench.tosh
+require ./Desktop.tosh
+require ./Docs.tosh
+require ./Vscode.tosh
+require ./Package.tosh
+require ./Publish.tosh
+require ./Report.tosh
+
+## Drives all of the above.
+require ./Pipeline.tosh
+
+## The declaration that makes this directory importable as one thing.
+export partial module Build

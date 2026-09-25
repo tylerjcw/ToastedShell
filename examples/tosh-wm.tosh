@@ -1,0 +1,614 @@
+#!/usr/bin/tosh
+## @summary A floating window manager, in TōSh.
+##
+## Run it in a nested server for testing:  tosh-wm-test
+## Or on its own VT:                       xinit /usr/bin/tosh --no-profile <this file> -- :2 vt3
+##
+## Super+Return      open a terminal
+## Super+j / Super+k raise and focus the next / previous window
+## Super+q           quit
+## Super+drag        left button moves a window, right button resizes it
+
+# ── X11 memory layouts ──────────────────────────────────────────────────────
+# Transcribed from Xlib.h. `size` asserts the layout the declaration came out
+# to, so a mis-transcribed struct is a declaration-time error rather than
+# silent memory corruption.
+
+raw struct XKeyEvent size 96 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    window: nuint
+    root: nuint
+    subwindow: nuint
+    time: nuint
+    x: int
+    y: int
+    x_root: int
+    y_root: int
+    state: uint
+    keycode: uint
+    same_screen: int
+}
+
+raw struct XButtonEvent size 96 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    window: nuint
+    root: nuint
+    subwindow: nuint
+    time: nuint
+    x: int
+    y: int
+    x_root: int
+    y_root: int
+    state: uint
+    button: uint
+    same_screen: int
+}
+
+raw struct XMotionEvent size 96 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    window: nuint
+    root: nuint
+    subwindow: nuint
+    time: nuint
+    x: int
+    y: int
+    x_root: int
+    y_root: int
+    state: uint
+    is_hint: byte
+    same_screen: int
+}
+
+raw struct XMapRequestEvent size 48 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    parent: nuint
+    window: nuint
+}
+
+raw struct XDestroyWindowEvent size 48 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    event: nuint
+    window: nuint
+}
+
+raw struct XUnmapEvent size 56 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    event: nuint
+    window: nuint
+    from_configure: int
+}
+
+raw struct XConfigureRequestEvent size 96 {
+    type: int
+    serial: nuint
+    send_event: int
+    display: ptr
+    parent: nuint
+    window: nuint
+    x: int
+    y: int
+    width: int
+    height: int
+    border_width: int
+    above: nuint
+    detail: int
+    value_mask: nuint
+}
+
+## @summary XEvent's trailing `long pad[24]`, spelled out field by field.
+# An inline array cannot be a raw union member today: `T[n]` is emitted as an
+# object reference, and the CLR refuses to overlap one with a scalar. A nested
+# struct lays out identically and loads, so the padding is written the long way.
+raw struct XEventPad size 192 {
+    a: long; b: long; c: long; d: long; e: long; f: long; g: long; h: long
+    i: long; j: long; k: long; l: long; m: long; n: long; o: long; p: long
+    q: long; r: long; s: long; t: long; u: long; v: long; w: long; x: long
+}
+
+## @summary The X event union: every event overlaid at offset zero.
+raw union XEvent size 192 {
+    type: int
+    key: XKeyEvent
+    button: XButtonEvent
+    motion: XMotionEvent
+    map_request: XMapRequestEvent
+    destroy_window: XDestroyWindowEvent
+    unmap: XUnmapEvent
+    configure_request: XConfigureRequestEvent
+    pad: XEventPad
+}
+
+## @summary What X knows about a window: where it is, how big, and whether to manage it.
+raw struct XWindowAttributes size 136 {
+    x: int
+    y: int
+    width: int
+    height: int
+    border_width: int
+    depth: int
+    visual: ptr
+    root: nuint
+    class: int
+    bit_gravity: int
+    win_gravity: int
+    backing_store: int
+    backing_planes: nuint
+    backing_pixel: nuint
+    save_under: int
+    colormap: nuint
+    map_installed: int
+    map_state: int
+    all_event_masks: long
+    your_event_mask: long
+    do_not_propagate_mask: long
+    override_redirect: int
+    screen: ptr
+}
+
+raw callback XErrorHandler(display: ptr, event: ptr) -> int
+
+bind native "libX11.so.6" as X {
+    func XOpenDisplay(name: ptr) -> ptr
+    func XCloseDisplay(dpy: ptr) -> int
+    func XDefaultScreen(dpy: ptr) -> int
+    func XDisplayWidth(dpy: ptr, screen: int) -> int
+    func XDisplayHeight(dpy: ptr, screen: int) -> int
+    func XDefaultRootWindow(dpy: ptr) -> nuint
+    func XSelectInput(dpy: ptr, w: nuint, mask: long) -> int
+    func XSync(dpy: ptr, discard: int) -> int
+    func XNextEvent(dpy: ptr, out event: XEvent) -> auto
+    func XMapWindow(dpy: ptr, w: nuint) -> int
+    func XRaiseWindow(dpy: ptr, w: nuint) -> int
+    func XMoveWindow(dpy: ptr, w: nuint, x: int, y: int) -> int
+    func XResizeWindow(dpy: ptr, w: nuint, width: uint, height: uint) -> int
+    func XMoveResizeWindow(dpy: ptr, w: nuint, x: int, y: int, width: uint, height: uint) -> int
+    func XSetInputFocus(dpy: ptr, w: nuint, revert: int, time: nuint) -> int
+    func XKeysymToKeycode(dpy: ptr, keysym: nuint) -> byte
+    func XGrabKey(dpy: ptr, keycode: int, mods: uint, grab: nuint, owner: int, pmode: int, kmode: int) -> int
+    func XGrabButton(dpy: ptr, button: uint, mods: uint, grab: nuint, owner: int, mask: uint,
+                     pmode: int, kmode: int, confine: nuint, cursor: nuint) -> int
+    func XGrabPointer(dpy: ptr, grab: nuint, owner: int, mask: uint, pmode: int, kmode: int,
+                      confine: nuint, cursor: nuint, time: nuint) -> int
+    func XUngrabPointer(dpy: ptr, time: nuint) -> int
+    func XSetErrorHandler(handler: XErrorHandler) -> ptr
+    func XQueryTree(dpy: ptr, w: nuint, out root: nuint, out parent: nuint, out children: ptr, out count: uint) -> auto
+    func XGetWindowAttributes(dpy: ptr, w: nuint, out attributes: XWindowAttributes) -> auto
+    func XFree(data: ptr) -> int
+}
+
+# ── X11 enums ───────────────────────────────────────────────────────────────
+# Flags enums spell out the bit position with `shl`, so there is one place to
+# look when adding a mask and nothing to count by hand.
+
+## @summary Event masks for XSelectInput, XGrabPointer, and XGrabButton.
+flags enum EventMask : int {
+    ButtonPress          = 1 shl 2
+    ButtonRelease        = 1 shl 3
+    PointerMotion        = 1 shl 6
+    SubstructureNotify   = 1 shl 19
+    SubstructureRedirect = 1 shl 20
+}
+
+## @summary The event types that arrive on the XEvent union.
+enum EventType : int {
+    KeyPress         = 2
+    ButtonPress      = 4
+    ButtonRelease    = 5
+    MotionNotify     = 6
+    DestroyNotify    = 17
+    UnmapNotify      = 18
+    MapRequest       = 20
+    ConfigureRequest = 23
+}
+
+## @summary X11 keysym values for the shortcuts this WM uses.
+enum Keysym : uint {
+    Q      = 0x71
+    J      = 0x6A
+    K      = 0x6B
+    Return = 0xFF0D
+    D      = 0x64
+    E      = 0x65
+}
+
+## @summary Modifier masks. Only Super is used.
+flags enum ModMask : uint {
+    Mod4 = 1 shl 6
+}
+
+## @summary Mouse buttons. Left moves, right resizes.
+enum MouseButton : uint {
+    Left  = 1
+    Right = 3
+}
+
+# X11 protocol constants that are not worth an enum of their own.
+const RevertToPointerRoot = 1
+const GrabModeAsync       = 1
+const CurrentTime         = 0
+const NoWindow            = 0
+const NoCursor            = 0
+const IsViewable          = 2
+
+## @summary The smallest a window may be dragged down to.
+const MinimumSize = 40
+
+## @summary The shortest gap between two drag redraws, in milliseconds.
+# X delivers a motion event per pointer sample, which is far more than a window
+# needs to be moved. Without this the queue grows faster than it drains and the
+# window trails the cursor.
+const DragInterval = 16                      # ~60 per second
+
+# ── drag state ──────────────────────────────────────────────────────────────
+
+## @summary Everything the WM needs to know about the drag in progress.
+# Both kinds of drag — move and resize — record the same thing: where the
+# pointer was when the gesture began and what the window looked like before
+# it was touched. A computed `active` property replaces the string-equality
+# guard the old eight-variable form used.
+class DragState {
+    prop kind: string = "none"
+    prop win = 0
+    prop from-x: int = 0
+    prop from-y: int = 0
+    prop at-x: int = 0
+    prop at-y: int = 0
+    prop was-w: int = 0
+    prop was-h: int = 0
+    prop last: ulong = 0UL
+
+    prop active: bool => $this.kind != "none"
+
+    func reset() {
+        $this.kind = "none"
+        $this.win = 0
+        $this.last = 0UL
+    }
+}
+
+# ── becoming the window manager ─────────────────────────────────────────────
+var taken = false
+
+## @summary Records that the display already has a window manager.
+# Only one client may hold SubstructureRedirect. X reports the refusal
+# asynchronously, so the attempt is made, XSync forces the round trip, and this
+# handler is what the refusal arrives as.
+func on-startup-error(display, event) {
+    $taken = true
+    return 0
+}
+
+## @summary Swallows later errors, so a race with a dying window cannot kill the WM.
+# A window can be destroyed between the event announcing it and the request
+# acting on it. That race is normal, and the request failing is the correct
+# outcome rather than a reason to take the session down.
+func on-x-error(display, event) {
+    return 0
+}
+
+var dpy = X.XOpenDisplay(0)
+if ($dpy == 0) {
+    writeline "tosh-wm: cannot open a display. Is DISPLAY set?"
+    exit 1
+}
+
+var screen = X.XDefaultScreen($dpy)
+var width  = X.XDisplayWidth($dpy, $screen)
+var height = X.XDisplayHeight($dpy, $screen)
+var root   = X.XDefaultRootWindow($dpy)
+
+X.XSetErrorHandler(&on-startup-error) | ignore
+X.XSelectInput($dpy, $root,
+    ((EventMask.SubstructureRedirect bor EventMask.SubstructureNotify) as long)) | ignore
+X.XSync($dpy, 0) | ignore
+
+if ($taken) {
+    writeline $"tosh-wm: another window manager is already running on {$env.DISPLAY}."
+    writeline "  Only one may manage a display. Start this one on a display of its own."
+    exit 1
+}
+
+X.XSetErrorHandler(&on-x-error) | ignore
+
+# ── state ───────────────────────────────────────────────────────────────────
+var clients = []
+var focused = -1
+var drag    = new DragState()
+
+# ── window management ───────────────────────────────────────────────────────
+
+## @summary Raises a window and gives it the keyboard.
+func focus-window(win) {
+    X.XRaiseWindow($dpy, $win) | ignore
+    X.XSetInputFocus($dpy, $win, $RevertToPointerRoot, $CurrentTime) | ignore
+}
+
+## @summary Raises and focuses one managed window, by index.
+func focus(index: int) {
+    var n = ($clients | count)
+    if ($index < 0 or $index >= $n) { $focused = -1; return }
+
+    $focused = $index
+    focus-window $clients[$index]
+}
+
+## @summary Takes a window under management, leaving it where it asked to be.
+# A floating manager places nothing: the window keeps the geometry it chose,
+# and the only thing added is that it is now known about and focused.
+func manage(win) {
+    if ($clients contains $win) { return }
+
+    $clients = [...$clients, $win]
+    focus (($clients | count) - 1)
+}
+
+## @summary Drops a window, and focuses whatever is left.
+func unmanage(win) {
+    var kept = [$c <| for c in $clients where $c != $win]
+    if (($kept | count) == ($clients | count)) { return }
+
+    $clients = $kept
+    if ($drag.win == $win) { $drag.reset() }
+    focus (($kept | count) == 0 ? -1 : (($kept | count) - 1))
+}
+
+## @summary Takes on the windows that already existed when the WM started.
+# Without this, anything mapped before the WM is never focused or raised.
+# Override-redirect windows are skipped: menus and tooltips place themselves
+# deliberately, and a manager that moves them breaks them.
+func adopt-existing() {
+    var tree = X.XQueryTree($dpy, $root)
+    var found = ($tree.count as int)
+    if ($found == 0 or $tree.children == 0) { return }
+
+    for i in 0..($found - 1) {
+        var win = (native-read nuint $tree.children --at ($i * 8))
+        var attributes = X.XGetWindowAttributes($dpy, $win)
+
+        continue if ($attributes.override_redirect != 0)
+        continue if ($attributes.map_state != $IsViewable)
+
+        manage $win
+    }
+
+    X.XFree($tree.children) | ignore
+}
+
+func spawn(cmd: string) {
+    try {
+        System.Diagnostics.Process.Start("/bin/sh", $"-c \"{$cmd}\"") | ignore
+    } catch ($err) {
+        writeline $"tosh-wm: failed to launch {$cmd}: {$err}"
+    }
+}
+
+func spawn-launcher     => spawn "rofi -show drun"   # or "dmenu_run"
+func spawn-file-manager => spawn "pcmanfm"           # or "dolphin"
+
+## @summary Opens a terminal, trying several emulators in order.
+# $TERMINAL is honoured first; the fallback list covers the common defaults
+# so the WM works out of the box on most systems.
+func spawn-terminal() {
+    var terminals = [($env.TERMINAL ?? ""), "alacritty", "kitty", "xterm"]
+    for t in $terminals {
+        continue if ($t == "")
+        try {
+            System.Diagnostics.Process.Start($t) | ignore
+            return
+        } catch { continue }
+    }
+    writeline "tosh-wm: no terminal emulator found"
+}
+
+func auto-start() {
+    var daemons = [
+        "comptoast &",
+        "feh --bg-fill /data/etc/walls/4k-Serene-Nature-Torii-Arch-4K-Wallpaper.jpg &"
+    ]
+
+    for cmd in $daemons {
+        try {
+            System.Diagnostics.Process.Start("/bin/sh", $"-c \"{$cmd}\"") | ignore
+        } catch ($err) {
+            writeline $"tosh-wm: failed to start {$cmd}: {$err}"
+        }
+    }
+}
+
+## @summary Focuses the next managed window, wrapping at the end.
+func focus-next() {
+    var n = ($clients | count)
+    if ($n == 0) { return }
+    focus (($focused + 1) % $n)
+}
+
+## @summary Focuses the previous managed window, wrapping at the start.
+func focus-prev() {
+    var n = ($clients | count)
+    if ($n == 0) { return }
+    focus (($focused - 1 + $n) % $n)
+}
+
+## @summary Exits the window manager cleanly.
+func quit() {
+    writeline "tosh-wm: exiting"
+    X.XCloseDisplay($dpy) | ignore
+    exit 0
+}
+
+# ── drag ────────────────────────────────────────────────────────────────────
+
+## @summary Begins a move or a resize, remembering where everything started.
+func begin-drag(kind: string, event) {
+    var win = $event.subwindow
+    if ($win == 0) { return }
+
+    var attributes = X.XGetWindowAttributes($dpy, $win)
+
+    $drag.kind   = $kind
+    $drag.win    = $win
+    $drag.from-x = $event.x_root
+    $drag.from-y = $event.y_root
+    $drag.at-x   = $attributes.x
+    $drag.at-y   = $attributes.y
+    $drag.was-w  = $attributes.width
+    $drag.was-h  = $attributes.height
+    $drag.last   = 0UL
+
+    focus-window $win
+
+    # The pointer is grabbed for the duration so motion keeps arriving even
+    # once the cursor leaves the window being dragged — which, when resizing
+    # something smaller than the gesture, it immediately does.
+    X.XGrabPointer($dpy, $root, 0,
+        ((EventMask.ButtonRelease bor EventMask.PointerMotion) as uint),
+        $GrabModeAsync, $GrabModeAsync, $NoWindow, $NoCursor, $CurrentTime) | ignore
+}
+
+## @summary Puts the dragged window where a pointer at this position implies.
+func apply-drag(pointer-x: int, pointer-y: int) {
+    var dx = ($pointer-x - $drag.from-x)
+    var dy = ($pointer-y - $drag.from-y)
+
+    if ($drag.kind == "move") {
+        X.XMoveWindow($dpy, $drag.win, ($drag.at-x + $dx), ($drag.at-y + $dy)) | ignore
+        return
+    }
+
+    var new-w = (Math.Max($MinimumSize, ($drag.was-w + $dx)) as int)
+    var new-h = (Math.Max($MinimumSize, ($drag.was-h + $dy)) as int)
+    X.XResizeWindow($dpy, $drag.win, $new-w, $new-h) | ignore
+}
+
+## @summary Follows the pointer, at a rate a window can actually be redrawn at.
+# Rate-limited against the event's own clock rather than a wall clock, so
+# it is the X server's view of when the pointer moved that governs.
+func continue-drag(event) {
+    var now = ($event.time as ulong)
+    if ((not $drag.active) or (($now - $drag.last) < $DragInterval)) {
+        return
+    }
+
+    $drag.last = $now
+
+    apply-drag $event.x_root $event.y_root
+}
+
+## @summary Ends a drag, settling the window where the pointer actually finished.
+# The rate limit above drops motion events, and the one it drops is as likely as
+# not to be the last one — which would leave the window short of the cursor by
+# however far it travelled in the final frame. The release carries the true
+# final position, so the drag ends on that rather than on whatever survived.
+func end-drag(event) {
+    if (not $drag.active) { return }
+
+    apply-drag $event.x_root $event.y_root
+
+    $drag.reset()
+    X.XUngrabPointer($dpy, $CurrentTime) | ignore
+}
+
+# ── keybindings ─────────────────────────────────────────────────────────────
+# A binding is a keysym and a function reference. Adding a shortcut is one line
+# in this table; the grab loop and the event dispatch both read from it.
+
+var key-bindings = [
+    {| sym = Keysym.Q,      action = &quit                |},
+    {| sym = Keysym.Return, action = &spawn-terminal      |},
+    {| sym = Keysym.J,      action = &focus-next          |},
+    {| sym = Keysym.K,      action = &focus-prev          |},
+    {| sym = Keysym.D,      action = &spawn-file-manager  |},
+    {| sym = Keysym.E,      action = &spawn-launcher      |},
+]
+
+## @summary Keycode → action lookup, built once from the binding table.
+# The dict comprehension resolves each keysym to its hardware keycode through
+# the X server, so the dispatch in the event loop is a single dict lookup
+# rather than a cascade of `if` checks.
+var key-dispatch = {% $code => $b.action
+                   <| for b in $key-bindings
+                      let code = (X.XKeysymToKeycode($dpy, $b.sym as nuint) as int) %}
+
+## @summary Mouse button → drag kind, for the button-press handler.
+var button-actions = {%
+    (MouseButton.Left  as uint) => "move",
+    (MouseButton.Right as uint) => "resize"
+%}
+
+## @summary Dispatches a key event through the binding table.
+func handle-key(event) {
+    var action = $key-dispatch[$event.keycode as int,]
+    if ($action == null) { return }
+    invoke $action
+}
+
+# ── grabs ───────────────────────────────────────────────────────────────────
+
+for b in $key-bindings {
+    X.XGrabKey($dpy, (X.XKeysymToKeycode($dpy, $b.sym as nuint) as int),
+        (ModMask.Mod4 as uint), $root, 1, $GrabModeAsync, $GrabModeAsync) | ignore
+}
+
+# Grabbed on the root with owner_events false, so Super+click is the manager's
+# gesture wherever the pointer is and the application below never sees it.
+for button in [MouseButton.Left, MouseButton.Right] {
+    X.XGrabButton($dpy, ($button as uint), (ModMask.Mod4 as uint), $root, 0,
+        ((EventMask.ButtonPress bor EventMask.ButtonRelease bor EventMask.PointerMotion) as uint),
+        $GrabModeAsync, $GrabModeAsync, $NoWindow, $NoCursor) | ignore
+}
+
+adopt-existing
+writeline $"tosh-wm running on {$width}x{$height} — Super+Return terminal, Super+drag to move, Super+right-drag to resize, Super+q to quit"
+
+# ── event loop ──────────────────────────────────────────────────────────────
+while (true) {
+    var ev = X.XNextEvent($dpy)
+
+    switch ($ev.type) {
+        case (EventType.MapRequest as int) {
+            var w = $ev.map_request.window
+            X.XMapWindow($dpy, $w) | ignore
+            manage $w
+        }
+
+        case (EventType.DestroyNotify as int) { unmanage $ev.destroy_window.window }
+        case (EventType.UnmapNotify as int)   { unmanage $ev.unmap.window }
+
+        case (EventType.ConfigureRequest as int) {
+            # A floating manager grants these: the window knows where it wants
+            # to be, and nothing here has a better idea.
+            var c = $ev.configure_request
+            X.XMoveResizeWindow($dpy, $c.window, $c.x, $c.y, $c.width, $c.height) | ignore
+        }
+
+        case (EventType.ButtonPress as int) {
+            var b = $ev.button
+            var kind = $button-actions[$b.button,]
+            if ($kind != null) { begin-drag $kind $b }
+        }
+
+        case (EventType.MotionNotify as int)  { continue-drag $ev.motion }
+        case (EventType.ButtonRelease as int) { end-drag $ev.button }
+        case (EventType.KeyPress as int)      { handle-key $ev.key }
+
+        default { }
+    }
+}

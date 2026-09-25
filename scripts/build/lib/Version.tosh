@@ -1,0 +1,215 @@
+partial module Build.Version
+
+# The release version and the four files that must agree about it. A version is
+# `YY.M.publish.dotnet`, written to `.tosh-publish-state`, the Arch `PKGBUILD`, and
+# the extension's `package.json` and `package-lock.json` — the last two take only
+# `YY.M.publish`, because npm will not accept a fourth component.
+
+## @summary The persisted version state.
+record State(CalVer: string, Publish: int, DotnetMajor: int)
+
+## @summary Path of the persisted publish state.
+func StatePath(root: Core.DirectoryPath) -> string => $root | join -p ".tosh-publish-state"
+
+## @summary Path of the Arch PKGBUILD.
+func PkgbuildPath(root: Core.DirectoryPath) -> string => $root | join -p "packaging" "archlinux" "PKGBUILD"
+
+## @summary Path of the extension's package.json.
+func PackagePath(root: Core.DirectoryPath) -> string =>
+    $root | join -p "editor" "vscode" "tosh.tosh-lang" "package.json"
+
+## @summary Path of the extension's package-lock.json.
+func PackageLockPath(root: Core.DirectoryPath) -> string =>
+    $root | join -p "editor" "vscode" "tosh.tosh-lang" "package-lock.json"
+
+## @summary The four-part version stamped into the release and the Arch package.
+func Full(state: State) -> string => $"{$state.CalVer}.{$state.Publish}.{$state.DotnetMajor}"
+
+## @summary The three-part version the VS Code extension carries.
+func Semver(state: State) -> string => $"{$state.CalVer}.{$state.Publish}"
+
+## @summary This month's CalVer stem.
+func CurrentCalVer() -> string => System.DateTime.UtcNow.ToString("yy.M")
+
+## @summary Splits a CalVer stem into its year and month.
+func ParseCalVer(calver: string) -> array {
+    var parts = $calver.Split(".".ToCharArray())
+    if ($parts.Length != 2) { throw $"calver '{$calver}' is not in YY.M form" }
+    return [System.Convert.ToInt32($parts[0]), System.Convert.ToInt32($parts[1])]
+}
+
+## @summary Reads the persisted state.
+func Read(root: Core.DirectoryPath) -> State {
+    var path = StatePath($root)
+    var line = (cat $path | lines | first)
+    var parts = $line.Split(":")
+    if ($parts.Length < 2) { throw $".tosh-publish-state is corrupt: {$line}" }
+    return new State(
+        $parts[0],
+        System.Convert.ToInt32($parts[1]),
+        ($parts.Length >= 3 ? System.Convert.ToInt32($parts[2]) : Dotnet.DefaultMajor))
+}
+
+## @summary Writes the persisted state.
+func Write(root: Core.DirectoryPath, state: State) {
+    write-file (StatePath($root)) $"{$state.CalVer}:{$state.Publish}:{$state.DotnetMajor}" | ignore
+}
+
+## @summary The state that follows this one: same month bumps, a new month restarts.
+func Next(state: State) -> State {
+    var calver = CurrentCalVer()
+    return new State($calver, ($calver == $state.CalVer ? ($state.Publish + 1) : 1), $state.DotnetMajor)
+}
+
+## @summary The three version fields npm keeps, read in one pass.
+func NpmVersions(root: Core.DirectoryPath) -> array {
+    var package = read-file (PackagePath($root)) | from json
+    var lock = Fs.WithJson((PackageLockPath($root)), func(document) => [
+        $document.GetProperty("version").GetString(),
+        $document.GetProperty("packages").GetProperty("").GetProperty("version").GetString(),
+    ])
+    return [$package.version, ...$lock]
+}
+
+## @summary Brings the VS Code extension's version into line, if it is not already.
+func WriteExtension(root: Core.DirectoryPath, state: State) {
+    var packageJson = PackagePath($root)
+    Fs.RequireSafeFile($packageJson, "Extension package.json")
+    Fs.RequireSafeFile((PackageLockPath($root)), "Extension package-lock.json")
+
+    var desired = Semver($state)
+    var current = NpmVersions($root)
+    if ($current | all func(v) => ($v == $desired)) { return }
+
+    in-dir (dirname $packageJson) {
+        npm pkg set $"version={$desired}" | ignore
+        Core.AssertOk("npm pkg set version")
+        # npm 12 no longer updates package-lock.json as a side effect of
+        # `npm pkg set`; reconcile both lockfile version fields explicitly.
+        npm install --package-lock-only --ignore-scripts --no-audit --no-fund | ignore
+        Core.AssertOk("npm package-lock version sync")
+    }
+    Core.Ok($"Synced extension version → {$desired}")
+}
+
+## @summary Rewrites `pkgver=` in the Arch PKGBUILD.
+func WritePkgbuild(root: Core.DirectoryPath, state: State) {
+    var path = PkgbuildPath($root)
+    read-file $path | replace -r "pkgver=.*" $"pkgver={(Full($state))}" | write-file $path | ignore
+}
+
+## @summary Throws unless all four files carry the expected version.
+func Verify(root: Core.DirectoryPath, expected: State) {
+    var expectedFull = Full($expected)
+    if (Full(Read($root)) != $expectedFull) {
+        throw $"Publish state does not contain expected version {$expectedFull}."
+    }
+
+    var pkgver = cat (PkgbuildPath($root))
+        | lines
+        | where { ($_ as string) starts-with "pkgver=" }
+        | collect
+    if (($pkgver | count) != 1 or ($pkgver | first).ToString().Trim() != $"pkgver={$expectedFull}") {
+        throw $"PKGBUILD does not contain exactly one pkgver={$expectedFull} declaration."
+    }
+
+    var expectedSemver = Semver($expected)
+    var npm = NpmVersions($root)
+    if (not ($npm | all func(v) => ($v == $expectedSemver))) {
+        throw $"Extension versions are {($npm | join ", ")}, expected all three to be '{$expectedSemver}'."
+    }
+}
+
+## A saved copy of every file a version change touches, and the ability to put it back.
+##
+## @summary A saved copy of every file a version change touches, and the way back.
+sealed class Snapshot {
+    prop Root: string = ""
+    shy prop _state: object? = null
+    shy prop _pkgbuild: object? = null
+    shy prop _package: object? = null
+    shy prop _packageLock: object? = null
+
+    Snapshot(root: string) {
+        $this.Root = $root
+        $this._state = (Fs.IsFile(StatePath($root)) ? (read-file (StatePath($root))) : null)
+        $this._pkgbuild = (Fs.IsFile(PkgbuildPath($root)) ? (read-file (PkgbuildPath($root))) : null)
+        $this._package = (Fs.IsFile(PackagePath($root)) ? (read-file (PackagePath($root))) : null)
+        $this._packageLock = (Fs.IsFile(PackageLockPath($root)) ? (read-file (PackageLockPath($root))) : null)
+    }
+
+    ## @summary Restores every file this snapshot captured.
+    func Restore() {
+        if ($this._state != null)       { write-file (StatePath($this.Root)) $this._state | ignore }
+        if ($this._pkgbuild != null)    { write-file (PkgbuildPath($this.Root)) $this._pkgbuild | ignore }
+        if ($this._package != null)     { write-file (PackagePath($this.Root)) $this._package | ignore }
+        if ($this._packageLock != null) { write-file (PackageLockPath($this.Root)) $this._packageLock | ignore }
+    }
+}
+
+## @summary Captures the current state of every versioned file.
+func Capture(root: Core.DirectoryPath) -> Snapshot => new Snapshot($root)
+
+## @summary Writes a version everywhere, verifies it, and rolls back if anything fails.
+## @returns The state that was written.
+func Apply(root: Core.DirectoryPath, next: State) -> State {
+    var snapshot = Capture($root)
+    try {
+        Write($root, $next)
+        WritePkgbuild($root, $next)
+        WriteExtension($root, $next)
+        Verify($root, $next)
+        return $next
+    } catch ($error) {
+        $snapshot.Restore()
+        throw $error
+    }
+}
+
+## @summary The `version` command: show the current version, or set parts of it.
+func Command(
+    year: int? = null,
+    month: int? = null,
+    publish: int? = null,
+    dotnet: int? = null,
+    dryRun: bool = false) {
+
+    var root = Core.RepoRoot()
+    with-lock "version" {
+        var state = Read($root)
+
+        if ($year == null and $month == null and $publish == null and $dotnet == null) {
+            var parts = ParseCalVer($state.CalVer)
+            step "VERSION" {
+                Core.Ok($"Current: {(Full($state))}")
+                Core.Info($"CalVer:  {$state.CalVer}  (year={$parts[0]}, month={$parts[1]})")
+                Core.Info($"Publish: {$state.Publish}")
+                Core.Info($"Dotnet:  {$state.DotnetMajor}")
+                Core.Info($"State:   {(StatePath($root))}")
+            }
+            return
+        }
+
+        var current = ParseCalVer($state.CalVer)
+        var nextYear = ($year ?? $current[0])
+        var nextMonth = ($month ?? $current[1])
+        var nextPublish = ($publish ?? $state.Publish)
+        var nextDotnet = ($dotnet ?? $state.DotnetMajor)
+
+        if ($nextYear < 0 or $nextYear > 99) { throw $"--year must be in 0..99 (got {$nextYear})" }
+        if ($nextMonth < 1 or $nextMonth > 12) { throw $"--month must be in 1..12 (got {$nextMonth})" }
+        if ($nextPublish < 1) { throw $"--publish must be >= 1 (got {$nextPublish})" }
+        if ($nextDotnet < 1) { throw $"--dotnet must be >= 1 (got {$nextDotnet})" }
+
+        var next = new State($"{$nextYear}.{$nextMonth}", $nextPublish, $nextDotnet)
+        step "VERSION" {
+            Core.Change($"{(Full($state))} → {(Full($next))}")
+            if ($dryRun) {
+                Core.Info("(--dryRun) state, PKGBUILD and extension package unchanged.")
+                return
+            }
+            Apply($root, $next) | ignore
+            Core.Ok($"Wrote {(StatePath($root))}, the PKGBUILD, and the extension package.")
+        }
+    }
+}

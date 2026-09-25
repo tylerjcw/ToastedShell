@@ -1,0 +1,59 @@
+# Cross-cutting wrappers. Runes rather than functions because a `{ }` block is not
+# callable as an argument, so the function form would need `func() => …` at every
+# call site. `export` makes them visible to the other `Build.*` modules, though not
+# to the library's consumer.
+
+## @summary Runs a body while holding the workspace lock for an operation.
+## @example with-lock "clean" { … }
+export rune with-lock(operation, body) {
+    var __lock = Build.Lock.Acquire(Build.Core.RepoRoot(), $operation)
+    try { $body } finally { $__lock.Dispose() | ignore }
+}
+
+## @summary Runs a body with the process working directory moved, then restores it.
+## @example in-dir $extensionDirectory { npm install }
+export rune in-dir(directory, body) {
+    var __previous = (pwd).FullName
+    cd $directory | ignore
+    try { $body } finally { attempt { cd $__previous | ignore } | ignore }
+}
+
+## @summary Runs a body with environment variables set, restoring them after.
+## @param=values A dictionary of name/value pairs; a null value unsets.
+## @example with-env {% "PKGDEST" => $dir %} { makepkg -fC }
+export rune with-env(values, body) {
+    var __names = [$k <| for k in $values.Keys]
+    var __saved = [System.Environment.GetEnvironmentVariable($n) <| for n in $__names]
+    try {
+        for __name in $__names {
+            System.Environment.SetEnvironmentVariable($__name, $values[$__name])
+        }
+        $body
+    } finally {
+        var __index = 0
+        for __name in $__names {
+            best-effort { System.Environment.SetEnvironmentVariable($__name, $__saved[$__index]) }
+            $__index += 1
+        }
+    }
+}
+
+## @summary Prints a section header, then runs the body beneath it.
+## @example step "PUBLISH" { … }
+export rune step(label, body) {
+    Build.Core.Sep($label)
+    $body
+}
+
+## @summary Runs a body and discards any failure, returning null instead.
+## @remarks
+##   For work whose failure does not matter. It cannot be used to *detect* failure: a body
+##   that succeeds without producing a value answers null too, so `== null` reports a failure
+##   every time the body is a void call. Use `attempt` and `match` where the answer matters.
+## @example best-effort { sudo update-mime-database $mime | ignore }
+export rune best-effort(body) {
+    match (attempt { $body }) {
+        Ok(value)  => $value
+        Err(_)     => null
+    }
+}

@@ -1,0 +1,539 @@
+partial module Build.Publish
+
+# A release, built as a transaction: staged, verified, then moved into place. The
+# previous output is moved aside rather than deleted so a late failure can put it
+# back, and version metadata is captured beforehand and restored the same way.
+
+## @summary What to build, how, and where it goes.
+sealed class Plan {
+    prop Trimmed: bool = false
+    prop SelfContained: bool = true
+    prop ReadyToRun: bool = true
+    prop NoInstall: bool = false
+    prop NoBump: bool = false
+    prop ArtifactsDirectory: string = ""
+
+    shy prop _runtimeId: string? = null
+    shy prop _directory: string? = null
+    shy prop _workingDirectory: string? = null
+
+    prop RepoRoot: string { get => Core.RepoRoot() }
+    prop Binary: string? = null
+
+    prop RuntimeId: string {
+        get => ($this._runtimeId ?? System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier)
+        set => $this._runtimeId = $value
+    }
+
+    ## @summary The directory name that says which of the three modes this is.
+    prop ModeDirectory: string {
+        get => ($this.Trimmed
+            ? "single-file-trimmed"
+            : ($this.SelfContained ? "single-file" : "single-file-framework-dependent"))
+    }
+
+    prop Directory: string {
+        get => ($this._directory != null and $this._directory != ""
+            ? System.IO.Path.GetFullPath($this._directory)
+            : ($this.RepoRoot | join -p "artifacts" "publish" $this.RuntimeId $this.ModeDirectory))
+        set => $this._directory = $value
+    }
+
+    prop WorkingDirectory: string {
+        get => ($this._workingDirectory ?? $this.Directory)
+        set => $this._workingDirectory = $value
+    }
+
+    Plan() {}
+
+    ## @summary The MSBuild switches this plan's mode implies.
+    func ModeArgs() -> array =>
+        Dotnet.SingleFileArgs($this.SelfContained, $this.ReadyToRun, $this.Trimmed)
+}
+
+const BundleManifestName = ".tosh-publish-manifest"
+
+## @summary Moves a published executable to the name the bundle uses.
+func NormalizeArtifact(directory: string, target) -> string {
+    var wanted = $directory | join -p $target.Bundle
+    if (Fs.IsFile($wanted)) { return $wanted }
+
+    var published = $directory | join -p $target.Published
+    if (not (Fs.IsFile($published))) {
+        throw $"Publish produced no {$target.Project} executable at {$published}."
+    }
+    System.IO.File.Move($published, $wanted, true)
+    return $wanted
+}
+
+## @summary Throws unless every expected artifact is present and non-empty.
+func VerifyArtifacts(directory: string, targets: array) {
+    for target in $targets {
+        Fs.RequireNonEmpty(($directory | join -p $target.Bundle), "Release artifact") | ignore
+    }
+}
+
+## @summary Throws unless the isolated restore covered every project for this RID.
+func VerifyRestore(artifactsDirectory: string, runtimeId: string, targets: array, dotnetMajor: int) {
+    var expected = $"net{$dotnetMajor}.0/{$runtimeId}"
+    for target in $targets {
+        var assetsPath = $artifactsDirectory | join -p "obj" $target.Project "project.assets.json"
+        if (not (Fs.IsFile($assetsPath))) {
+            throw $"Isolated restore produced no assets file for {$target.Project}: {$assetsPath}"
+        }
+
+        var found = Fs.WithJson($assetsPath, func(document) {
+            for entry in ($document.GetProperty("targets").EnumerateObject()) {
+                if ($entry.Name == $expected) { return true }
+            }
+            return false
+        })
+        if (not $found) {
+            throw $"Restore assets for {$target.Project} do not contain '{$expected}'."
+        }
+    }
+    Core.Ok($"Isolated restore assets cover all {($targets | count)} publish projects")
+}
+
+## @summary Writes the manifest describing what a bundle is and what it contains.
+func WriteManifest(directory: string, version: string, plan: Plan, targets: array, dotnetMajor: int) {
+    var lines = [
+        "format=2",
+        $"version={$version}",
+        $"rid={$plan.RuntimeId}",
+        $"mode={$plan.ModeDirectory}",
+        $"self_contained={$plan.SelfContained.ToString().ToLowerInvariant()}",
+        $"trimmed={$plan.Trimmed.ToString().ToLowerInvariant()}",
+        $"ready_to_run={$plan.ReadyToRun.ToString().ToLowerInvariant()}",
+        "include_all_content_for_self_extract=true",
+        $"dotnet_major={$dotnetMajor}",
+        $"artifact_count={($targets | count)}",
+        $"targets={([$t.Key <| for t in $targets] | join ",")}",
+    ]
+    var digests = [
+        $"{$t.Key}_sha256={(Fs.Sha256(($directory | join -p $t.Bundle)))}" <| for t in $targets
+    ]
+    write-file ($directory | join -p $BundleManifestName) (([...$lines, ...$digests] | join "\n") + "\n") | ignore
+}
+
+## @summary Owns the staging and rollback paths for one publish.
+sealed class Transaction {
+    prop RepoRoot: string = ""
+    prop FinalDirectory: string = ""
+    prop StagingRoot: string = ""
+    prop StagingDirectory: string = ""
+    prop PreviousDirectory: string = ""
+    prop FailedDirectory: string = ""
+    prop Promoted: bool = false
+    prop PreviousMoved: bool = false
+    prop RetainForRecovery: bool = false
+
+    Transaction(root: string, finalDirectory: string) {
+        $this.RepoRoot = $root
+        $this.FinalDirectory = Safety.PublishDirectory($root, $finalDirectory)
+        $this.StagingRoot = Safety.NewStaging($root, "publish")
+        $this.StagingDirectory = $this.StagingRoot | join -p "output"
+        $this.PreviousDirectory = $this.StagingRoot | join -p "previous"
+        $this.FailedDirectory = $this.StagingRoot | join -p "failed-output"
+        System.IO.Directory.CreateDirectory($this.StagingDirectory) | ignore
+    }
+
+    ## @summary Moves the staged output into place, keeping the previous output aside.
+    func Promote() {
+        Safety.PublishDirectory($this.RepoRoot, $this.FinalDirectory) | ignore
+        Safety.StagingDirectory($this.RepoRoot, $this.StagingRoot) | ignore
+
+        if (Fs.IsFile($this.FinalDirectory)) {
+            throw $"Publish destination is a file: {$this.FinalDirectory}"
+        }
+        if (not (Fs.IsDir($this.StagingDirectory))) {
+            throw $"Publish staging output is missing: {$this.StagingDirectory}"
+        }
+
+        var parent = System.IO.Path.GetDirectoryName($this.FinalDirectory)
+        if ($parent == null) { throw $"Publish destination has no parent: {$this.FinalDirectory}" }
+        System.IO.Directory.CreateDirectory($parent) | ignore
+
+        if (Fs.IsDir($this.FinalDirectory)) {
+            System.IO.Directory.Move($this.FinalDirectory, $this.PreviousDirectory)
+            $this.PreviousMoved = true
+        }
+
+        try {
+            System.IO.Directory.Move($this.StagingDirectory, $this.FinalDirectory)
+            $this.Promoted = true
+        } catch ($promotionError) {
+            if ($this.PreviousMoved) {
+                try {
+                    System.IO.Directory.Move($this.PreviousDirectory, $this.FinalDirectory)
+                    $this.PreviousMoved = false
+                } catch ($restoreError) {
+                    $this.RetainForRecovery = true
+                    throw $"Publish promotion failed and the previous output could not be restored. Previous: {$this.PreviousDirectory}; destination: {$this.FinalDirectory}; restore error: {$restoreError}"
+                }
+            }
+            throw $promotionError
+        }
+    }
+
+    ## @summary Puts the previous output back. Returns false when it could not.
+    func Rollback() -> bool {
+        if (not $this.Promoted and not $this.PreviousMoved) { return true }
+
+        try {
+            if ($this.Promoted) {
+                if ((is-link $this.FinalDirectory).IsLink or Fs.IsFile($this.FinalDirectory)) {
+                    throw $"Committed publish destination changed type: {$this.FinalDirectory}"
+                }
+                Fs.RequireVacant($this.FailedDirectory, "Recovery path")
+                if (Fs.IsDir($this.FinalDirectory)) {
+                    System.IO.Directory.Move($this.FinalDirectory, $this.FailedDirectory)
+                }
+                $this.Promoted = false
+            }
+
+            if ($this.PreviousMoved) {
+                Fs.RequireVacant($this.FinalDirectory, "Publish destination")
+                var parent = System.IO.Path.GetDirectoryName($this.FinalDirectory)
+                if ($parent == null) {
+                    throw $"Publish destination has no parent: {$this.FinalDirectory}"
+                }
+                System.IO.Directory.CreateDirectory($parent) | ignore
+                System.IO.Directory.Move($this.PreviousDirectory, $this.FinalDirectory)
+                $this.PreviousMoved = false
+            }
+            $this.RetainForRecovery = false
+            return true
+        } catch ($error) {
+            $this.RetainForRecovery = true
+            Core.Warn($"Could not restore the previous publish output: {$error}")
+            Core.Warn($"Recovery data retained at {$this.StagingRoot}")
+            return false
+        }
+    }
+
+    ## @summary Accepts the promotion and drops the previous output.
+    func Commit() {
+        if ($this.PreviousMoved and Fs.IsDir($this.PreviousDirectory)) {
+            try {
+                System.IO.Directory.Delete($this.PreviousDirectory, true)
+                $this.PreviousMoved = false
+            } catch ($error) {
+                $this.RetainForRecovery = true
+                Core.Warn($"Release committed, but the previous output could not be removed: {$error}")
+            }
+        }
+    }
+
+    ## @summary Removes the transaction's scratch space, unless it is needed for recovery.
+    func Cleanup() {
+        if ($this.PreviousMoved) {
+            $this.RetainForRecovery = true
+            Core.Warn($"Previous publish output still needs recovery: {$this.PreviousDirectory}")
+        }
+        if ($this.RetainForRecovery) {
+            Core.Warn($"Publish transaction retained for recovery: {$this.StagingRoot}")
+            return
+        }
+        match (attempt { Safety.RemoveStaging($this.RepoRoot, $this.StagingRoot) }) {
+            Ok(_)      => null
+            Err(error) => Core.Warn($"Could not remove publish staging directory: {$error}")
+        }
+    }
+}
+
+## @summary Runs the staged binary and checks it reports the version just built.
+func VerifyStagedBinary(binary: string, runtimeId: string, version: string) {
+    Fs.RequireNonEmpty($binary, "Staged binary") | ignore
+
+    var host = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
+    if ($runtimeId != $host) {
+        Core.Info($"Skipping executable smoke test for cross-RID output {$runtimeId} (host: {$host}).")
+        return
+    }
+
+    var probe = Core.Capture($binary, ["--version"])
+    if ($probe.ExitCode != 0) {
+        throw $"Staged binary smoke test failed (exit {$probe.ExitCode}): {$binary}"
+    }
+
+    var parts = $version.Split(".".ToCharArray())
+    if ($parts.Length == 4) {
+        var expected = $"{$parts[0]}.{$parts[1]}-{$parts[2]}-{$parts[3]}"
+        var reported = Core.FirstLine($probe)
+        if (not ($reported ends-with $expected)) {
+            throw $"Staged binary reports '{$reported}', expected release {$expected}."
+        }
+    }
+    Core.Ok("Staged binary smoke test passed")
+}
+
+## @summary What a completed publish produced.
+# `Run` reports as it works and still returns this; it could not be annotated
+# `-> Outcome` until `TOSH-0010`, when a return annotation stopped being checked
+# against every value the function produced.
+record Outcome(
+    Binary: string,
+    Size: StorageSize,
+    RID: string,
+    Output: string,
+    SelfContained: bool,
+    Trimmed: bool,
+    StartDate: DateOnly,
+    StartTime: TimeOnly,
+    Duration: string,
+    Version: string)
+
+## @summary Refuses a plan that cannot end in a working Arch install.
+shy func AssertInstallable(plan: Plan, selection) {
+    if ($plan.NoInstall) { return }
+
+    var host = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
+    if ($plan.RuntimeId != "linux-x64" or $host != "linux-x64" or not System.OperatingSystem.IsLinux()) {
+        throw $"Arch package installation supports only a linux-x64 host and target. Use --noInstall for RID '{$plan.RuntimeId}'."
+    }
+    if (not $plan.SelfContained or $plan.Trimmed) {
+        throw "Arch package installation requires the standard self-contained, untrimmed bundle. Use --noInstall for other publish modes."
+    }
+
+    var selected = Targets.Normalize($selection)
+    var keys = [$t.Key <| for t in $selected]
+    if ("devcompanion" in $keys) {
+        throw "DevCompanion is not part of the release bundle. Install it separately with the install command."
+    }
+}
+
+## @summary Builds, verifies, promotes and optionally installs a release.
+func Run(
+    rid: string = "",
+    output: string = "",
+    trimmed: bool = false,
+    frameworkDependent: bool = false,
+    noInstall: bool = false,
+    noBump: bool = false,
+    selection = "all",
+    noPush: bool = false) -> Outcome {
+
+    var plan = new Plan()
+    if ($rid != "") { $plan.RuntimeId = $rid }
+    if ($output != "") { $plan.Directory = $output }
+    $plan.Trimmed = $trimmed
+    $plan.SelfContained = (not $frameworkDependent)
+    $plan.NoInstall = $noInstall
+    $plan.NoBump = $noBump
+
+    var root = $plan.RepoRoot
+    var state = Version.Read($root)
+
+    # Before the lock and before anything is mutated: a publish that cannot compile
+    # should say so now rather than after it has bumped the version.
+    Dotnet.AssertSdkSupports($state.DotnetMajor)
+
+    with-lock "publish" {
+        $plan.RuntimeId = Safety.ValidateRuntimeId($plan.RuntimeId)
+        AssertInstallable($plan, $selection)
+        $plan.Directory = Safety.PublishDirectory($root, $plan.Directory)
+
+        var transaction = new Transaction($root, $plan.Directory)
+        defer { $transaction.Cleanup() }
+        $plan.WorkingDirectory = $transaction.StagingDirectory
+        # Version-state changes can trigger an IDE restore into src/*/obj.
+        # Keep RID assets private so --no-restore publishes cannot be raced.
+        $plan.ArtifactsDirectory = Safety.StagingDirectory(
+            $root, ($transaction.StagingRoot | join -p "build"))
+        Core.Info($"Staging output: {$plan.WorkingDirectory}")
+
+        var snapshot = Version.Capture($root)
+        var released = $state
+        var committed = false
+
+        try {
+            var started = date now
+            var startDate = date -d now
+            var startTime = date -t now
+
+            if ($plan.NoBump) {
+                Core.Info($"Using existing version {(Version.Full($state))} (--noBump)")
+            } else {
+                $released = Version.Next($state)
+                Core.Change($"Version: {(Version.Full($state))} → {(Version.Full($released))}")
+            }
+            Version.Apply($root, $released) | ignore
+            var version = Version.Full($released)
+
+            # Bound first: piping a function's array return does not spread it, so
+            # `Normalize(...) | where` hands the whole array to the block as one item.
+            var selected = Targets.Normalize($selection)
+            var chosen = $selected | where { $_.InRelease } | collect
+            var targets = [Targets.ForRuntime($t, $plan.RuntimeId) <| for t in $chosen]
+            var whole = (($targets | count) == ((Targets.Release()) | count))
+            if (($targets | count) == 0) {
+                var names = [$t.Key <| for t in (Targets.Release())]
+                throw $"Nothing to publish: the selection names no target the release bundle carries. Choose from {($names | join ", ")}, or all."
+            }
+
+            # Promotion replaces the bundle directory, so a partial publish leaves a bundle
+            # that carries only these. That is legitimate for iterating on one program and
+            # wrong to hand out as a release, and the difference is invisible from the
+            # directory alone — hence the warning here and `targets=` in the manifest.
+            if (not $whole) {
+                var names = [$t.Key <| for t in $targets]
+                Core.Warn($"Publishing only {($names | join ", ")}. The bundle will carry these alone, and is not a complete release.")
+            }
+
+            step "RESTORE" {
+                Dotnet.Restore(
+                    (Core.Solution($root)), $plan.ArtifactsDirectory, $plan.RuntimeId,
+                    $plan.SelfContained, $plan.ReadyToRun, $plan.Trimmed, "dotnet restore")
+                VerifyRestore($plan.ArtifactsDirectory, $plan.RuntimeId, $targets, $state.DotnetMajor)
+            }
+
+            step "PUBLISH" {
+                for target in $targets {
+                    Dotnet.Publish(
+                        ($root | join -p (Targets.ProjectFile($target))),
+                        $plan.RuntimeId,
+                        $plan.WorkingDirectory,
+                        $plan.ArtifactsDirectory,
+                        ($plan.ModeArgs()),
+                        $"dotnet publish {$target.Project}")
+                    NormalizeArtifact($plan.WorkingDirectory, $target) | ignore
+                    Core.Ok($"Published {$target.Project}")
+                }
+            }
+
+            VerifyArtifacts($plan.WorkingDirectory, $targets)
+            WriteManifest($plan.WorkingDirectory, $version, $plan, $targets, $state.DotnetMajor)
+
+            # `tosh` is the only one of the five that reports the release version: the two
+            # servers refuse `--version` outright, and `tome` and `crumb` carry their own.
+            # So it is the subject of the smoke test whenever it was built, and when it was
+            # not there is nothing here that can answer the question.
+            var subject = $targets | where { $_.Key == "tosh" } | first
+            var bundleName = ($subject ?? ($targets | first)).Bundle
+            step "VERIFY" {
+                if ($subject != null) {
+                    VerifyStagedBinary(($plan.WorkingDirectory | join -p $bundleName), $plan.RuntimeId, $version)
+                } else {
+                    Core.Info("Skipping the version smoke test: it is `tosh` that reports the release version, and this publish did not build it.")
+                }
+            }
+
+            $transaction.Promote()
+            Core.Ok($"Promoted output → {$plan.Directory}")
+            $plan.Binary = $plan.Directory | join -p $bundleName
+            var binaryInfo = Fs.RequireNonEmpty($plan.Binary, "Promoted binary")
+
+            # A Windows bundle gets its installer here, in the same place the Arch path
+            # gets its package. Cross-published output cannot be *installed* from Linux,
+            # so this produces the artifact and stops there (`TOSH-0009`).
+            if ($plan.RuntimeId starts-with "win-") {
+                Package.CreateWindowsArchive($root, $plan.Directory, $version, $plan.RuntimeId) | ignore
+            }
+
+            if ($plan.NoInstall) {
+                $committed = true
+                $transaction.Commit()
+            } else {
+                var archives = Package.Create(
+                    $selection, $plan.Directory, ($transaction.StagingRoot | join -p "packages"))
+                Package.VerifyPayloads($archives, $plan.Directory)
+                Fs.RequireSafeFile($plan.Binary, "Promoted binary after packaging")
+
+                Core.Sep("INSTALL")
+                # From this point a nonzero pacman result may represent a partial or
+                # post-hook failure. Preserve the matching release, previous output,
+                # and exact packages until success is proven.
+                $committed = true
+                $transaction.RetainForRecovery = true
+                var exitCode = Package.Install($archives)
+                if ($exitCode != 0) {
+                    var matched = Package.CountInstalledMatches($archives.Targets, $plan.Directory)
+                    Core.Warn($"pacman failed; {$matched} selected executable(s) match the new release. Recovery data will be retained.")
+                    throw $"pacman -U failed (exit {$exitCode})."
+                }
+                var keys = [$t.Key <| for t in $archives.Targets]
+                Core.Ok($"Installed: {($keys | join ", ")}")
+                Package.VerifyInstalled($archives.Targets, $plan.Directory)
+
+                # Published from the transaction's own archives, before it is cleaned up:
+                # these are the exact files just verified against the promoted bundle.
+                if (not $noPush) {
+                    step "PUSH · PACKAGES" {
+                        match (attempt { Package.PublishToRepository($archives.Files, "") }) {
+                            Ok(_)      => null
+                            Err(error) => Core.Warn($"Could not publish to the package repository: {$error}")
+                        }
+                    }
+                }
+                $transaction.RetainForRecovery = false
+                $transaction.Commit()
+                Package.FinishInstall($archives.Targets, false, false)
+
+                step "SYNC EXTENSION" {
+                    match (attempt { Vscode.Sync(true, false) }) {
+                        Ok(_)      => Core.Ok("VS Code extension synced")
+                        Err(error) => Core.Warn($"Could not sync the VS Code extension: {$error}")
+                    }
+                }
+            }
+
+            Core.Sep("DONE")
+            Core.Ok($"Binary: {$plan.Binary}")
+            Core.Ok($"Version: {$version}")
+
+            return new Outcome(
+                $plan.Binary, $binaryInfo.Size, $plan.RuntimeId, $plan.Directory,
+                $plan.SelfContained, $plan.Trimmed,
+                $startDate, $startTime, (Core.Elapsed($started)), $version)
+        } catch ($error) {
+            Core.Fail($"Publish failed: {$error}")
+            var restored = ($committed ? true : $transaction.Rollback())
+
+            if (not $committed and $restored) {
+                Core.Warn("Rolling back release metadata...")
+                $snapshot.Restore()
+            } else if (not $committed) {
+                Core.Warn("Publish output recovery failed; preserving version state to avoid a second mismatch.")
+            } else {
+                Core.Warn("Release output was already committed; preserving version state.")
+            }
+            throw $error
+        }
+    }
+}
+
+## @summary The target keys a promoted bundle carries, or null when it has no manifest.
+func ManifestTargets(bundleRoot: string) -> array? {
+    var manifest = $bundleRoot | join -p $BundleManifestName
+    return null unless (Fs.IsFile($manifest))
+
+    var line = cat $manifest | lines | where { ($_ as string) starts-with "targets=" } | first
+    # `format=2` manifests predate this field; they were always whole bundles.
+    return null if ($line == null)
+    return (($line as string).Substring("targets=".Length) | split "," | collect)
+}
+
+## @summary The bundle an install should package, or null to build from source.
+## @param=reusePublished Package the canonical publish bundle instead of compiling.
+## @exception When the selection includes a target the bundle does not carry.
+func BundleRoot(reusePublished: bool, selection) -> string? {
+    if (not $reusePublished) { return null }
+
+    var selected = Targets.Normalize($selection)
+    var outsiders = $selected | where { not $_.InRelease } | collect
+    if (($outsiders | count) > 0) {
+        var keys = [$t.Key <| for t in $outsiders]
+        throw $"{($keys | join ", ")} is not part of the canonical publish bundle; install it from source."
+    }
+
+    var root = Core.At((Core.RepoRoot()), "artifacts", "publish", "linux-x64", "single-file")
+    var carried = ManifestTargets($root)
+    if ($carried != null) {
+        var absent = [$t.Key <| for t in $selected where (not ($t.Key in $carried))]
+        if (($absent | count) > 0) {
+            throw $"The published bundle carries {($carried | join ", ")} and not {($absent | join ", ")}. Publish those targets, or install from source."
+        }
+    }
+    return $root
+}
