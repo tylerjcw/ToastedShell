@@ -1,8 +1,6 @@
-namespace Tosh.Compiler.IR;
+namespace Tosh.Language.Binding;
 
 // These enums are shared between the bound IR and the parser/language layers.
-// They live here so Tosh.Compiler.IR remains self-contained (referencing only
-// Tosh.Runtime), while Tosh.Language can reference Tosh.Compiler.IR to obtain them.
 
 public enum DeclarationModifier
 {

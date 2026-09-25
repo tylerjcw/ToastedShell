@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Tosh.Compiler.IR\Tosh.Compiler.IR.csproj" />
     <ProjectReference Include="..\Toast.Runtime\Toast.Runtime.csproj" />
   </ItemGroup>
 

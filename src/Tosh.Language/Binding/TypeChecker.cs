@@ -1,5 +1,4 @@
 using System.Globalization;
-using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 using Tosh.Runtime.Units;

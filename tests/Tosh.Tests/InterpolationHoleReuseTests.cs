@@ -150,7 +150,7 @@ public class InterpolationHoleReuseTests
             .Parse("writeline $\"[{name()}]\"");
         var unit = Tosh.Language.Binding.Lowerer.Lower(shared, ToshRuntime.CreateDefault().Commands);
 
-        static async Task<string> EvaluateAsync(Tosh.Compiler.IR.BoundUnit unit, string definition)
+        static async Task<string> EvaluateAsync(BoundUnit unit, string definition)
         {
             var output = new StringWriter();
             var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output).Language);

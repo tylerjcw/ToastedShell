@@ -18,9 +18,6 @@ public sealed class TruthinessTests
             Assert.True(
                 OperatorEvaluator.ToBoolean(value) == expected,
                 $"{name}: OperatorEvaluator returned {!expected}.");
-            Assert.True(
-                global::Tosh.Compiler.Runtime.ToshHost.IsTruthy(value) == expected,
-                $"{name}: ToshHost returned {!expected}.");
         }
     }
 

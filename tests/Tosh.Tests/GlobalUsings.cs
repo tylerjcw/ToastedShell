@@ -1,2 +1,2 @@
-global using Tosh.Compiler.IR;
+global using Tosh.Language.Binding;
 global using Tosh.Tui.Requests;

@@ -1,4 +1,3 @@
-using Tosh.Compiler.IR;
 using Tosh.Language;
 using Tosh.Language.Binding;
 using Tosh.Runtime;

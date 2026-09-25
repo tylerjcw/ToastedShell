@@ -68,7 +68,7 @@ public sealed class ConfigBrowserScreenTests
         Assert.Contains("Config Browser", rendered, StringComparison.Ordinal);
         Assert.Contains("Configuration", rendered, StringComparison.Ordinal);
         Assert.Contains("Box Style", rendered, StringComparison.Ordinal);
-        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, rendered);
+        Assert.Contains('╭', rendered);
     }
 
     [Fact]

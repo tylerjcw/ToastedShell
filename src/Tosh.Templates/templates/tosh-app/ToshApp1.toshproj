@@ -1,8 +1,0 @@
-<Project Sdk="Tosh.Sdk/TOSH_SDK_VERSION">
-
-  <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
-
-</Project>

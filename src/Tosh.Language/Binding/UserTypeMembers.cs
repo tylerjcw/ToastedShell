@@ -1,4 +1,3 @@
-using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 
 namespace Tosh.Language.Binding;

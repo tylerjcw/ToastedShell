@@ -1,5 +1,4 @@
 using System.Reflection;
-using Tosh.Compiler;
 using Tosh.Language;
 using Tosh.Language.Binding;
 using Tosh.Runtime;
@@ -25,30 +24,6 @@ public sealed class TypedCollectionAndMatchTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault().Language);
         var results = engine.ExecuteToListAsync(source).GetAwaiter().GetResult();
         return string.Join("\n", results.Select(v => ToastRenderer.Render(v)?.Trim())).Trim();
-    }
-
-    private static (bool Clean, string Output, IReadOnlyList<string> Shapes) Compile(string source)
-    {
-        var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime.Language);
-        var parse = engine.Parse(source, "<typed>");
-        Assert.True(parse.Diagnostics.Count == 0, $"parse: {string.Join(", ", parse.Diagnostics)}");
-
-        var unit = Lowerer.Lower(parse, runtime.Commands);
-        var assemblyName = $"ToshTyped_{Guid.NewGuid():N}";
-        using var stream = new MemoryStream();
-        var result = BoundUnitEmitter.Emit(unit, assemblyName, stream);
-        if (!result.IsClean) { return (false, string.Empty, result.UnsupportedShapes); }
-
-        var main = Assembly.Load(stream.ToArray()).GetType($"{assemblyName}.Program")!
-            .GetMethod("Main", BindingFlags.Public | BindingFlags.Static)!;
-
-        var originalOut = Console.Out;
-        var capture = new StringWriter();
-        try { Console.SetOut(capture); main.Invoke(null, new object?[] { Array.Empty<string>() }); }
-        finally { Console.SetOut(originalOut); }
-
-        return (true, capture.ToString().Replace("\r", "").Trim(), result.UnsupportedShapes);
     }
 
     private const string Tokens = """
@@ -137,40 +112,7 @@ public sealed class TypedCollectionAndMatchTests
             echo $"{(f (new B()))}"
             """;
 
-        var compiled = Compile(Source);
-        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
-        Assert.Equal("b", compiled.Output);
         Assert.Equal("b", RunInterpreted(Source));
-    }
-
-    /// <summary>
-    /// A refused shape is reported, and nothing is written.
-    /// </summary>
-    /// <remarks>
-    /// The emitter serialized unconditionally, so a shape it had already declined left
-    /// incomplete IL — a branch whose target was never marked — and the assembly writer
-    /// threw from deep inside `PersistedAssemblyBuilder`. The diagnostic naming the actual
-    /// problem had been recorded and was then discarded with a stack trace on top of it.
-    ///
-    /// This asserts the *mechanism* rather than a particular unsupported shape, so it keeps
-    /// working as shapes become supported: a `require` of a file that is not part of the
-    /// compilation stays Tier 3 by design.
-    /// </remarks>
-    [Fact]
-    public void A_refused_shape_reports_instead_of_crashing()
-    {
-        var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime.Language);
-        var parse = engine.Parse("bind libc {\n    func getpid() -> int\n}\necho \"x\"", "<refused>");
-        var unit = Lowerer.Lower(parse, runtime.Commands);
-
-        using var stream = new MemoryStream();
-        var result = BoundUnitEmitter.Emit(unit, $"ToshRefused_{Guid.NewGuid():N}", stream);
-
-        if (result.IsClean) { return; }
-
-        Assert.NotEmpty(result.UnsupportedShapes);
-        Assert.Equal(0, stream.Length);
     }
 
     /// <summary>
@@ -208,9 +150,6 @@ public sealed class TypedCollectionAndMatchTests
         """, "3")]
     public void A_class_method_with_an_expression_body_returns_its_value(string source, string expected)
     {
-        var compiled = Compile(source);
-        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
-        Assert.Equal(expected, compiled.Output);
         Assert.Equal(expected, RunInterpreted(source));
     }
 
@@ -226,15 +165,12 @@ public sealed class TypedCollectionAndMatchTests
     [Fact]
     public void A_block_body_and_a_dynamic_return_are_unchanged()
     {
-        var block = Compile("class E { func M() -> int { return 7 } }\necho $\"{((new E()).M())}\"");
-        Assert.True(block.Clean);
-        Assert.Equal("7", block.Output);
+        var block = RunInterpreted("class E { func M() -> int { return 7 } }\necho $\"{((new E()).M())}\"");
+        Assert.Equal("7", block);
 
-        // Not compared against the interpreter: a `dynamic` method's stream is a separate
-        // divergence, present before this change and unaffected by it.
-        var dyn = Compile("class E { func M() -> dynamic { echo 1\n echo 2 } }\n"
+        var dyn = RunInterpreted("class E { func M() -> dynamic { echo 1\n echo 2 } }\n"
                           + "echo $\"{(((new E()).M()) | count)}\"");
-        Assert.True(dyn.Clean);
+        Assert.Equal("2", dyn);
     }
 
     /// <summary>
@@ -267,9 +203,6 @@ public sealed class TypedCollectionAndMatchTests
             echo $"{((new Mk()).Make().K)}"
             """;
 
-        var compiled = Compile(Source);
-        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
-        Assert.Equal("a", compiled.Output);
         Assert.Equal("a", RunInterpreted(Source));
     }
 
@@ -282,8 +215,7 @@ public sealed class TypedCollectionAndMatchTests
     [Fact]
     public void An_undeclared_clr_type_still_resolves()
     {
-        var compiled = Compile("var sb = new StringBuilder()\necho $\"{$sb.Length}\"");
-        Assert.True(compiled.Clean, $"unsupported: {string.Join(", ", compiled.Shapes)}");
-        Assert.Equal("0", compiled.Output);
+        var output = RunInterpreted("var sb = new StringBuilder()\necho $\"{$sb.Length}\"");
+        Assert.Equal("0", output);
     }
 }

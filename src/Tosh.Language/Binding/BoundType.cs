@@ -1,6 +1,6 @@
 using Tosh.Runtime;
 
-namespace Tosh.Compiler.IR;
+namespace Tosh.Language.Binding;
 
 /// <summary>
 /// Static type information attached to a <see cref="BoundExpression"/>

@@ -388,11 +388,11 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │      • Italic                       │ │                                                                              │
 │      • Underline                    │ │Sample Success Preview                                                        │
 │      • Dim                          │ │[1;34m<prompt preview>
-│    ▾ Git                            │ │[1;36mtosh[0m [96m ❯ [0m                                                      │
+│    ▾ Git                            │ │[1;36mtosh[0m [96m > [0m                                                      │
 │      • Foreground                   │ │                                                                              │
 │      • Background                   │ │Sample Failure Preview                                                        │
 │      • Bold                         │ │[1;34m<prompt preview>
-│      • Italic                       │ │[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                         │
+│      • Italic                       │ │[1;31mx 7[0m [1;36mtosh[0m [96m > [0m                                         │
 │      • Underline                    │ │                                                                              │
 │      • Dim                          │ │Members                                                                       │
 │    ▾ User Host                      │ │  Time [Group] (ToshTextStyleConfig)                                          │
@@ -437,11 +437,11 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │      • Underline                    │ │                                                                              │
 │      • Dim                          │ │Sample Success Preview                                                        │
 │    ▾ User Host                      │ │[1;34m<prompt preview>
-│      • Foreground                   │ │[1;36mtosh[0m [96m ❯ [0m                                                      │
+│      • Foreground                   │ │[1;36mtosh[0m [96m > [0m                                                      │
 │      • Background                   │ │                                                                              │
 │      • Bold                         │ │Sample Failure Preview                                                        │
 │      • Italic                       │ │[1;34m<prompt preview>
-│      • Underline                    │ │[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                         │
+│      • Underline                    │ │[1;31mx 7[0m [1;36mtosh[0m [96m > [0m                                         │
 │      • Dim                          │ │                                                                              │
 │    ▾ History Id                     │ │Style Editor                                                                  │
 │      • Foreground                   │ │   -  Foreground: "gray"                                                      │

@@ -1,6 +1,5 @@
 using Tosh.Language;
 using Tosh.Language.Binding;
-using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 

@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Collections.Immutable;
-using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 

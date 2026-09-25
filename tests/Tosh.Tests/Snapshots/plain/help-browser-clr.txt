@@ -9,9 +9,9 @@
 │    └▾ Text [40T/4N]                 │ │Path: CLR / .NET / System                                                     │
 │      ├▾ Encodings [0T/1N]           │ │Namespace: System                                                             │
 │      │ └▾ Web [7T/0N]               │ │Assembly Scope: merged tree across all discoverable CLR assemblies            │
-│        │   ├─ AllowedBmpCodePointsBi│ │Assemblies Contributing: 91                                                   │
+│        │   ├─ AllowedBmpCodePointsBi│ │Assemblies Contributing: 90                                                   │
 │        │   ├─ AsciiByteMap+<Buffer>e│ │Direct Types: 305                                                             │
-│        │   ├─ HtmlEncoder           │ │Subtree Types: 4223                                                           │
+│        │   ├─ HtmlEncoder           │ │Subtree Types: 4218                                                           │
 │        │   ├─ JavaScriptEncoder     │ │Child Namespaces: 23  Descendants: yes                                        │
 │        │   ├─ TextEncoder           │ │                                                                              │
 │        │   ├─ TextEncoderSettings   │ │Press Enter to collapse or expand this namespace branch. Press RightArrow or  │

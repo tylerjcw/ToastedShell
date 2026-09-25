@@ -868,14 +868,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
     /// <summary>
-    /// Evaluate a previously-lowered <see cref="Tosh.Compiler.IR.BoundUnit"/>.
+    /// Evaluate a previously-lowered <see cref="BoundUnit"/>.
     /// v1 delegates to the parse-tree evaluator using the unit's
-    /// <see cref="Tosh.Compiler.IR.BoundUnit.ParseResult"/>;
+    /// <see cref="BoundUnit.ParseResult"/>;
     /// future commits will fast-path individual carved-out bound
     /// shapes without changing this public seam.
     /// </summary>
     public IAsyncEnumerable<object?> EvaluateAsync(
-        Tosh.Compiler.IR.BoundUnit unit,
+        BoundUnit unit,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(unit);

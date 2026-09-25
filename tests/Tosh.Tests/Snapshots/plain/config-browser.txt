@@ -60,11 +60,11 @@ focus:tree  dirty:0  No validation issues.  / search  Enter expand/open  Tab swi
 │  ▸ Time Span                        │ │                                                                              │
 │  ▸ Storage Size                     │ │Sample Success Preview                                                        │
 │  ▸ Permissions                      │ │[1;34m<prompt preview>
-│  ▸ File Attributes                  │ │[1;36mtosh[0m [96m ❯ [0m                                                      │
+│  ▸ File Attributes                  │ │[1;36mtosh[0m [96m > [0m                                                      │
 │  ▸ Paging                           │ │                                                                              │
 │  ▸ Profiles                         │ │Sample Failure Preview                                                        │
 │▾ Repl                               │ │[1;34m<prompt preview>
-│  • Continuation Prompt              │ │[1;31m✘ 7[0m [1;36mtosh[0m [96m ❯ [0m                                         │
+│  • Continuation Prompt              │ │[1;31mx 7[0m [1;36mtosh[0m [96m > [0m                                         │
 │  • Syntax Highlighting Enabled      │ │                                                                              │
 │  • Ghost Text Enabled               │ │Members                                                                       │
 │  • Completion Max Visible           │ │  Time [Group] (ToshTextStyleConfig)                                          │

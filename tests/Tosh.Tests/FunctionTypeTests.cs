@@ -1,5 +1,4 @@
 using System.Reflection;
-using Tosh.Compiler;
 using Tosh.Language;
 using Tosh.Language.Binding;
 using Tosh.Runtime;
@@ -60,17 +59,14 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     /// here untyped". An unannotated lambda emits perfectly cleanly and is still exactly
     /// what this item is about, so the annotation check is the one to assert on.
     /// </remarks>
-    private (EmitResult Result, IReadOnlyList<ToshDiagnostic> Strictness) Compile(string source)
+    private IReadOnlyList<ToshDiagnostic> CheckAnnotations(string source)
     {
         var engine = new ToshEngine(_runtime.Language);
         var parse = engine.Parse(source, "<function-type-test>");
         Assert.True(parse.Diagnostics.Count == 0, $"parse errors: {string.Join(", ", parse.Diagnostics)}");
 
         var unit = Lowerer.Lower(parse, _runtime.Commands);
-        var strictness = TypeChecker.CheckCompileAnnotations(unit, allowDynamic: false);
-
-        using var stream = new MemoryStream();
-        return (BoundUnitEmitter.Emit(unit, $"ToshTest_{Guid.NewGuid():N}", stream), strictness);
+        return TypeChecker.CheckCompileAnnotations(unit, allowDynamic: false);
     }
 
     private const string Dbl = "func dbl(x: int) -> int => $x * 2\n";
@@ -153,14 +149,11 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("func adder(n: int) -> func(int) -> int {\n return func(x: int) -> int => $x + $n\n}\nvar a: func(int) -> int = (adder 10)\necho $a(32)")]
     public void A_typed_higher_order_shape_compiles_without_a_dynamic_fallback(string source)
     {
-        var (result, strictness) = Compile(source);
+        var strictness = CheckAnnotations(source);
 
         Assert.True(
             strictness.Count == 0,
             "expected no dynamic fallback, got: " + string.Join(", ", strictness.Select(d => d.Code)));
-        Assert.True(
-            result.IsClean,
-            "expected no source replay, got: " + string.Join(", ", result.UnsupportedShapes));
     }
 
     /// <summary>
@@ -174,7 +167,7 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void A_lambda_that_declares_its_types_is_inferred()
     {
-        var (_, strictness) = Compile("var lam = func(x: int) -> int => $x + 1\necho $lam(41)");
+        var strictness = CheckAnnotations("var lam = func(x: int) -> int => $x + 1\necho $lam(41)");
 
         Assert.True(
             strictness.Count == 0,
@@ -193,7 +186,7 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void An_unannotated_lambda_is_still_dynamic()
     {
-        var (_, strictness) = Compile("var lam = func(x) => $x + 1\necho $lam(41)");
+        var strictness = CheckAnnotations("var lam = func(x) => $x + 1\necho $lam(41)");
 
         Assert.Contains(strictness, diagnostic => diagnostic.Code == "tosh.compile.implicit_dynamic");
     }
@@ -216,7 +209,7 @@ public sealed class FunctionTypeTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("class K { func M(x: int) -> int => $x + 1 }\nvar k = new K()\necho $k.M(41)")]
     public void The_features_that_already_compiled_still_compile(string source)
     {
-        var (_, strictness) = Compile(source);
+        var strictness = CheckAnnotations(source);
 
         Assert.True(
             strictness.Count == 0,

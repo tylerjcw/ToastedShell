@@ -1,7 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Tosh.Compiler.IR;
 
 namespace Tosh.Language.Binding;
 

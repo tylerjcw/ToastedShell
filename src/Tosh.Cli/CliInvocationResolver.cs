@@ -62,63 +62,10 @@ internal static class CliInvocationResolver
 
         if (effectiveArgs[0] is "--compile" or "-C")
         {
-            if (effectiveArgs.Count < 2)
-            {
-                throw new InvalidOperationException("The '--compile'/'-C' flag requires at least one script path.");
-            }
-
-            var inputPaths = new List<string>();
-            string? outputPath = null;
-            string? profile = null;
-            var allowDynamic = false;
-            var emitRefasm = false;
-            var emitAppHost = true;
-            var publishSingleFile = false;
-
-            for (var i = 1; i < effectiveArgs.Count; i++)
-            {
-                switch (effectiveArgs[i])
-                {
-                    case "-o" or "--output" when i + 1 < effectiveArgs.Count:
-                        outputPath = PathUtilities.ResolvePath(currentDirectory, effectiveArgs[++i]);
-                        break;
-                    case "--profile" when i + 1 < effectiveArgs.Count:
-                        profile = effectiveArgs[++i];
-                        break;
-                    case "--compile-allow-dynamic" or "--allow-dynamic":
-                        allowDynamic = true;
-                        break;
-                    case "--emit-refasm":
-                        emitRefasm = true;
-                        break;
-                    case "--no-apphost":
-                        emitAppHost = false;
-                        break;
-                    case "--publish-single-file":
-                        publishSingleFile = true;
-                        break;
-                    default:
-                        if (effectiveArgs[i].StartsWith("--profile="))
-                        {
-                            profile = effectiveArgs[i]["--profile=".Length..];
-                            break;
-                        }
-                        if (effectiveArgs[i].StartsWith('-'))
-                        {
-                            throw new InvalidOperationException($"Unknown option '{effectiveArgs[i]}' for --compile.");
-                        }
-                        inputPaths.Add(PathUtilities.ResolvePath(currentDirectory, effectiveArgs[i]));
-                        break;
-                }
-            }
-
-            if (inputPaths.Count == 0)
-            {
-                throw new InvalidOperationException("The '--compile'/'-C' flag requires at least one script path.");
-            }
-
-            return CliInvocationPlan.Compile(inputPaths.ToArray(), outputPath, profile, allowDynamic, emitRefasm, emitAppHost, publishSingleFile);
+            throw new InvalidOperationException(
+                "The '--compile'/'-C' flag has been retired. Tōast executes scripts directly: use 'tosh <script.toast>'.");
         }
+
 
         if (effectiveArgs[0] is "--export-command-metadata" or "--dump-builtins")
         {
@@ -283,12 +230,7 @@ internal readonly record struct CliInvocationPlan(
     bool SkipProfile = false,
     bool IsLoginShell = false,
     bool SafeMode = false,
-    bool ProfileStartup = false,
-    string? CompileProfileName = null,
-    bool CompileAllowDynamic = false,
-    bool EmitRefasm = false,
-    bool EmitAppHost = true,
-    bool PublishSingleFile = false)
+    bool ProfileStartup = false)
 {
     public static CliInvocationPlan Repl(bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false, bool safeMode = false, bool profileStartup = false) =>
         new(CliInvocationKind.Repl, null, Array.Empty<string>(), LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell, SafeMode: safeMode, ProfileStartup: profileStartup);
@@ -304,9 +246,6 @@ internal readonly record struct CliInvocationPlan(
 
     public static CliInvocationPlan ExportMetadata(string format, string? outputPath, bool profileStartup = false) => new(CliInvocationKind.ExportMetadata, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false, ProfileStartup: profileStartup);
 
-    public static CliInvocationPlan Compile(string[] inputPaths, string? outputPath, string? compileProfileName = null, bool compileAllowDynamic = false, bool emitRefasm = false, bool emitAppHost = true, bool publishSingleFile = false) =>
-        new(CliInvocationKind.Compile, outputPath, inputPaths, LoadStartup: false, CompileProfileName: compileProfileName, CompileAllowDynamic: compileAllowDynamic, EmitRefasm: emitRefasm, EmitAppHost: emitAppHost, PublishSingleFile: publishSingleFile);
-
     public static CliInvocationPlan Version(bool profileStartup = false) => new(CliInvocationKind.Version, null, Array.Empty<string>(), LoadStartup: false, ProfileStartup: profileStartup);
 }
 
@@ -319,5 +258,4 @@ internal enum CliInvocationKind
     ToshScript,
     ExternalScript,
     ExportMetadata,
-    Compile,
 }

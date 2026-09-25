@@ -1,6 +1,6 @@
 using Tosh.Runtime;
 
-namespace Tosh.Compiler.IR;
+namespace Tosh.Language.Binding;
 
 /// <summary>
 /// Root of the bound IR. Every node carries the original <see cref="TextSpan"/>

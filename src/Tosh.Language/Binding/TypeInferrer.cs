@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Reflection;
-using Tosh.Compiler.IR;
 using Tosh.Runtime;
 using Tosh.Runtime.Units;
 
