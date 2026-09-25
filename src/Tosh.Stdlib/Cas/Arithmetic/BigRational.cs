@@ -84,6 +84,37 @@ public readonly struct BigRational : IComparable<BigRational>, IEquatable<BigRat
 
     public double ToDouble() => (double)Numerator / (double)Denominator;
 
+    public static BigRational FromDouble(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+        {
+            throw new ArgumentException("Cannot convert NaN or Infinity to BigRational.", nameof(value));
+        }
+
+        if (Math.Abs(value - Math.Round(value)) < 1e-10 && Math.Abs(value) < 1e15)
+        {
+            return new BigRational((long)Math.Round(value));
+        }
+
+        try
+        {
+            decimal dec = (decimal)value;
+            int[] bits = decimal.GetBits(dec);
+            byte scale = (byte)((bits[3] >> 16) & 0x7F);
+            bool sign = (bits[3] & 0x80000000) != 0;
+            BigInteger unscaled = (new BigInteger((uint)bits[2]) << 64) |
+                                  (new BigInteger((uint)bits[1]) << 32) |
+                                  new BigInteger((uint)bits[0]);
+            if (sign) unscaled = -unscaled;
+            BigInteger denom = BigInteger.Pow(10, scale);
+            return new BigRational(unscaled, denom);
+        }
+        catch (OverflowException)
+        {
+            return new BigRational((long)(value * 1_000_000), 1_000_000);
+        }
+    }
+
     public static implicit operator BigRational(long value) => new(value);
     public static implicit operator BigRational(int value) => new(value);
     public static explicit operator double(BigRational value) => value.ToDouble();

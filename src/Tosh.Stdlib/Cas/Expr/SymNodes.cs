@@ -1,4 +1,5 @@
 using System.Globalization;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Stdlib.Cas;
 
@@ -277,4 +278,54 @@ public sealed class SymFunction : SymExpr
         foreach (var a in Arguments) hash.Add(a);
         return hash.ToHashCode();
     }
+}
+
+public sealed class SymQuantity : SymExpr
+{
+    public BigRational Magnitude { get; }
+    public UnitExpression Dimension { get; }
+    public string Symbol { get; }
+    public string? SemanticKind { get; }
+
+    public override int Precedence => 100;
+    public override bool IsZero => Magnitude.IsZero;
+    public override bool IsOne => Magnitude.IsOne && Dimension.IsDimensionless;
+    public override bool IsNumber => false;
+
+    public SymQuantity(BigRational magnitude, UnitExpression dimension, string symbol, string? semanticKind = null)
+    {
+        Magnitude = magnitude;
+        Dimension = dimension;
+        Symbol = symbol ?? string.Empty;
+        SemanticKind = semanticKind;
+    }
+
+    public SymQuantity(Quantity quantity)
+        : this(BigRational.FromDouble(quantity.Magnitude), quantity.Dimension, quantity.UnitSymbol, quantity.SemanticKind)
+    {
+    }
+
+    public override SymExpr Differentiate(string variable) => Zero;
+    public override SymExpr Substitute(string variable, SymExpr replacement) => this;
+    public override double Evaluate(IReadOnlyDictionary<string, double>? context = null) => Magnitude.ToDouble();
+    public override double Approximate => Magnitude.ToDouble();
+    public override IEnumerable<string> GetVariables() => Enumerable.Empty<string>();
+
+    public Quantity ToQuantity()
+    {
+        var mag = Magnitude.ToDouble();
+        var sym = string.IsNullOrEmpty(Symbol)
+            ? UnitRegistry.Instance.GetCanonicalUnitSymbol(Dimension)
+            : Symbol;
+        return UnitRegistry.Instance.CreateTyped(mag, Dimension, sym);
+    }
+
+    public override bool Equals(SymExpr? other) =>
+        other is SymQuantity q &&
+        Magnitude.Equals(q.Magnitude) &&
+        Dimension.Equals(q.Dimension) &&
+        string.Equals(SemanticKind, q.SemanticKind, StringComparison.OrdinalIgnoreCase);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Magnitude, Dimension, SemanticKind?.ToLowerInvariant());
 }

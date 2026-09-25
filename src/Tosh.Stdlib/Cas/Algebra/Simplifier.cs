@@ -1,4 +1,5 @@
 using System.Numerics;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Stdlib.Cas;
 
@@ -13,6 +14,10 @@ public static class Simplifier
         if (a is SymNumber num)
         {
             return new SymNumber(-num.Value);
+        }
+        if (a is SymQuantity q)
+        {
+            return new SymQuantity(-q.Magnitude, q.Dimension, q.Symbol, q.SemanticKind);
         }
         return Multiply(new SymNumber(-1), a);
     }
@@ -53,6 +58,40 @@ public static class Simplifier
                 {
                     return new SymNumber(baseNum.Value.Pow(p));
                 }
+            }
+        }
+
+        if (@base is SymQuantity baseQty && exponent is SymNumber expNum2)
+        {
+            if (expNum2.Value.IsZero) return SymExpr.One;
+            if (expNum2.Value == BigRational.One) return baseQty;
+
+            if (expNum2.Value.IsInteger)
+            {
+                var p = (int)expNum2.Value.Numerator;
+                if (Math.Abs(p) < 100)
+                {
+                    var newDim = baseQty.Dimension.Power((RationalExponent)p);
+                    var newMag = baseQty.Magnitude.Pow(p);
+                    if (newDim.IsDimensionless && baseQty.SemanticKind == null)
+                    {
+                        return new SymNumber(newMag);
+                    }
+                    var sym = UnitRegistry.Instance.GetCanonicalUnitSymbol(newDim);
+                    return new SymQuantity(newMag, newDim, sym, baseQty.SemanticKind);
+                }
+            }
+            else
+            {
+                var ratExp = new RationalExponent((int)expNum2.Value.Numerator, (int)expNum2.Value.Denominator);
+                var newDim = baseQty.Dimension.Power(ratExp);
+                var newMag = BigRational.FromDouble(Math.Pow(baseQty.Magnitude.ToDouble(), ratExp.ToDouble()));
+                if (newDim.IsDimensionless && baseQty.SemanticKind == null)
+                {
+                    return new SymNumber(newMag);
+                }
+                var sym = UnitRegistry.Instance.GetCanonicalUnitSymbol(newDim);
+                return new SymQuantity(newMag, newDim, sym, baseQty.SemanticKind);
             }
         }
 
@@ -130,6 +169,11 @@ public static class Simplifier
     {
         var flattened = new List<SymExpr>();
         BigRational constantProd = BigRational.One;
+        BigRational qtyMagnitude = BigRational.One;
+        UnitExpression unitDim = UnitExpression.Dimensionless;
+        string? unitSymbol = null;
+        string? semanticKind = null;
+        bool hasQuantity = false;
 
         void Flatten(SymExpr expr)
         {
@@ -141,6 +185,21 @@ public static class Simplifier
             {
                 constantProd *= num.Value;
             }
+            else if (expr is SymQuantity qty)
+            {
+                hasQuantity = true;
+                qtyMagnitude *= qty.Magnitude;
+                unitDim = unitDim.Multiply(qty.Dimension);
+                if (semanticKind == null) semanticKind = qty.SemanticKind;
+                else if (qty.SemanticKind != null && !string.Equals(semanticKind, qty.SemanticKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    semanticKind = null;
+                }
+                if (unitSymbol == null && !string.IsNullOrEmpty(qty.Symbol))
+                {
+                    unitSymbol = qty.Symbol;
+                }
+            }
             else
             {
                 flattened.Add(expr);
@@ -149,7 +208,22 @@ public static class Simplifier
 
         foreach (var f in rawFactors) Flatten(f);
 
-        if (constantProd.IsZero) return SymExpr.Zero;
+        if (constantProd.IsZero || (hasQuantity && qtyMagnitude.IsZero))
+        {
+            if (hasQuantity && !unitDim.IsDimensionless)
+            {
+                var zeroSym = UnitRegistry.Instance.GetCanonicalUnitSymbol(unitDim);
+                return new SymQuantity(BigRational.Zero, unitDim, zeroSym, semanticKind);
+            }
+            return SymExpr.Zero;
+        }
+
+        // If dimension cancelled to dimensionless and no semantic kind, fold into constantProd
+        if (hasQuantity && unitDim.IsDimensionless && semanticKind == null)
+        {
+            constantProd *= qtyMagnitude;
+            hasQuantity = false;
+        }
 
         // Group factors by base: e.g. x * x^2 -> x^3
         var grouped = new Dictionary<SymExpr, SymExpr>();
@@ -163,7 +237,15 @@ public static class Simplifier
         }
 
         var resultFactors = new List<SymExpr>();
-        if (constantProd != BigRational.One || grouped.Count == 0)
+        if (hasQuantity)
+        {
+            var totalMag = constantProd * qtyMagnitude;
+            var sym = UnitRegistry.Instance.GetCanonicalUnitSymbol(unitDim);
+            if (string.IsNullOrEmpty(sym) && !string.IsNullOrEmpty(unitSymbol))
+                sym = unitSymbol;
+            resultFactors.Add(new SymQuantity(totalMag, unitDim, sym, semanticKind));
+        }
+        else if (constantProd != BigRational.One || grouped.Count == 0)
         {
             resultFactors.Add(new SymNumber(constantProd));
         }
@@ -183,11 +265,31 @@ public static class Simplifier
 
     private static (BigRational Coeff, SymExpr Kernel) DecomposeTerm(SymExpr expr)
     {
-        if (expr is SymMul mul && mul.Factors.Count > 0 && mul.Factors[0] is SymNumber num)
+        if (expr is SymMul mul && mul.Factors.Count > 0)
         {
-            var remaining = mul.Factors.Skip(1).ToList();
-            var kernel = remaining.Count == 1 ? remaining[0] : new SymMul(remaining);
-            return (num.Value, kernel);
+            if (mul.Factors[0] is SymNumber num)
+            {
+                var remaining = mul.Factors.Skip(1).ToList();
+                var kernel = remaining.Count == 1 ? remaining[0] : new SymMul(remaining);
+                return (num.Value, kernel);
+            }
+            if (mul.Factors[0] is SymQuantity q)
+            {
+                var unitKernel = new SymQuantity(BigRational.One, q.Dimension, q.Symbol, q.SemanticKind);
+                var remaining = mul.Factors.Skip(1).ToList();
+                if (remaining.Count == 0)
+                {
+                    return (q.Magnitude, unitKernel);
+                }
+                var kernelFactors = new List<SymExpr> { unitKernel };
+                kernelFactors.AddRange(remaining);
+                return (q.Magnitude, new SymMul(kernelFactors));
+            }
+        }
+        if (expr is SymQuantity qty)
+        {
+            var unitKernel = new SymQuantity(BigRational.One, qty.Dimension, qty.Symbol, qty.SemanticKind);
+            return (qty.Magnitude, unitKernel);
         }
         return (BigRational.One, expr);
     }
@@ -217,18 +319,29 @@ public static class Simplifier
     private static SymExpr SimplifyFunction(SymFunction fn)
     {
         var simplifiedArgs = fn.Arguments.Select(Simplify).ToList();
-        if (simplifiedArgs.Count == 1 && simplifiedArgs[0] is SymNumber num)
+        if (simplifiedArgs.Count == 1)
         {
-            // Evaluate well-known special values
-            if (fn.Name == "sin" && num.Value.IsZero) return SymExpr.Zero;
-            if (fn.Name == "cos" && num.Value.IsZero) return SymExpr.One;
-            if (fn.Name == "tan" && num.Value.IsZero) return SymExpr.Zero;
-            if (fn.Name == "exp" && num.Value.IsZero) return SymExpr.One;
-            if (fn.Name == "ln" && num.Value == BigRational.One) return SymExpr.Zero;
-            if (fn.Name == "sqrt" && num.Value.IsZero) return SymExpr.Zero;
-            if (fn.Name == "sqrt" && num.Value == BigRational.One) return SymExpr.One;
+            if (simplifiedArgs[0] is SymQuantity sq)
+            {
+                if (fn.Name == "sqrt")
+                {
+                    return Power(sq, new SymNumber(new BigRational(1, 2)));
+                }
+            }
+            else if (simplifiedArgs[0] is SymNumber num)
+            {
+                // Evaluate well-known special values
+                if (fn.Name == "sin" && num.Value.IsZero) return SymExpr.Zero;
+                if (fn.Name == "cos" && num.Value.IsZero) return SymExpr.One;
+                if (fn.Name == "tan" && num.Value.IsZero) return SymExpr.Zero;
+                if (fn.Name == "exp" && num.Value.IsZero) return SymExpr.One;
+                if (fn.Name == "ln" && num.Value == BigRational.One) return SymExpr.Zero;
+                if (fn.Name == "sqrt" && num.Value.IsZero) return SymExpr.Zero;
+                if (fn.Name == "sqrt" && num.Value == BigRational.One) return SymExpr.One;
+            }
         }
 
         return new SymFunction(fn.Name, simplifiedArgs);
     }
 }
+

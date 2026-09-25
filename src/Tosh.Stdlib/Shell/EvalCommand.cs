@@ -1,6 +1,7 @@
 using System.Text;
 using Tosh.Language;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using Tosh.Stdlib.Cas;
 
 namespace Tosh.Stdlib.Shell;
@@ -118,7 +119,11 @@ public sealed class EvalCommand : ShellCommand
             case SymExpr expr:
                 if (!expr.GetVariables().Any())
                 {
-                    if (expr is SymNumber num)
+                    if (expr is SymQuantity qty)
+                    {
+                        yield return qty.ToQuantity();
+                    }
+                    else if (expr is SymNumber num)
                     {
                         yield return ToNumericValue(num.Value);
                     }
@@ -131,6 +136,10 @@ public sealed class EvalCommand : ShellCommand
                 {
                     yield return Simplifier.Simplify(expr);
                 }
+                break;
+
+            case Quantity q:
+                yield return q;
                 break;
 
             case BigRational r:

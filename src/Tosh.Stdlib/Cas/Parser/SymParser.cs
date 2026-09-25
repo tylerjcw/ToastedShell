@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Stdlib.Cas;
 
@@ -181,6 +182,7 @@ public sealed class SymParser
         }
 
         var numStr = _input[start.._pos];
+        BigRational rationalVal;
         if (hasDot)
         {
             // Parse decimal to exact rational
@@ -189,13 +191,46 @@ public sealed class SymParser
             var fracPart = parts[1];
             var denom = BigInteger.Pow(10, fracPart.Length);
             var num = intPart * denom + BigInteger.Parse(fracPart, CultureInfo.InvariantCulture);
-            return new SymNumber(new BigRational(num, denom));
+            rationalVal = new BigRational(num, denom);
         }
         else
         {
             var intVal = BigInteger.Parse(numStr, CultureInfo.InvariantCulture);
-            return new SymNumber(new BigRational(intVal));
+            rationalVal = new BigRational(intVal);
         }
+
+        if (_pos < _input.Length && (_input[_pos] == '`' || _input[_pos] == '°'))
+        {
+            var isDegree = _input[_pos] == '°';
+            if (!isDegree) _pos++;
+            int unitStart = _pos;
+            int unitParenDepth = 0;
+            while (_pos < _input.Length && !char.IsWhiteSpace(_input[_pos]))
+            {
+                if (_input[_pos] == '(') { unitParenDepth++; _pos++; continue; }
+                if (_input[_pos] == ')')
+                {
+                    if (unitParenDepth > 0) { unitParenDepth--; _pos++; continue; }
+                    break;
+                }
+                if (_input[_pos] == '`')
+                    break;
+                _pos++;
+            }
+            var unitPart = _input[unitStart.._pos];
+            if (_pos < _input.Length && _input[_pos] == '`') _pos++;
+
+            if (UnitExpressionParser.TryParseConversion(
+                    unitPart,
+                    out _,
+                    out var dim,
+                    out var normSym))
+            {
+                return new SymQuantity(rationalVal, dim, normSym);
+            }
+        }
+
+        return new SymNumber(rationalVal);
     }
 
     private SymExpr ParseIdentifierOrFunction()

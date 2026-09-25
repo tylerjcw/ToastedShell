@@ -58,22 +58,22 @@ To build a **top-tier unit system across all programming languages**, Tōast mus
                                    │
          ┌─────────────────────────┴─────────────────────────┐
          ▼                                                   ▼
-   [Dynamic Shell Tier]                             [Compiled Static Tier]
-   • Boxed `Quantity` object                        • Generic value type `Quantity<Dim, Kind>`
-   • Runtime dimension vectors                      • Zero-allocation IL struct
-   • Shell pipeline reflection                      • Erased to `double` or SIMD vector
-   • Dynamic parsing & formatting                   • Compile-time dimensional verification
+   [Dynamic Runtime Tier]                           [Static Checking Tier]
+   • Boxed `Quantity` object                        • Physical annotations (`Mass`, `Energy`)
+   • Runtime dimension vectors                      • Dimensions checked by the type checker
+   • Shell pipeline reflection                      • Reported before the script runs
+   • Dynamic parsing & formatting                   • Values stay `Quantity` at run time
 ```
 
-### Pillar 1: Dual-Tier Execution Model (F# + Frink Synthesis)
+### Pillar 1: Dynamic Values, Static Checking (F# + Frink Synthesis)
 - **Interactive Shell / REPL Tier**: First-class `Quantity` object storing magnitude, unit symbol, dimensional vector, and conversion scaling. Enables runtime introspection, dynamic unit parsing from CLI input, and pipeline operations.
-- **Compiled Tier (`tosh --compile`)**: Statically checked dimensional types. Functions declare physical signatures:
+- **Static Checking Tier**: Statically checked dimensional types. Functions declare physical signatures:
   ```tosh
   func kinetic_energy(m: Mass, v: Velocity) -> Energy {
       return 0.5 * $m * ($v ** 2)
   }
   ```
-  The compiler's binder validates dimensions at compile time and erases the unit wrapper into bare 64-bit IEEE floats (`double`) or SIMD registers, achieving native C/Fortran execution performance.
+  The type checker validates dimensions before the script runs. There is no compiler and no erasure (`TOAST-ARCH-01`): values stay `Quantity` objects, and throughput for bulk numeric work comes from `QuantityArray` buffers (Phase 2) rather than from compiling the wrapper away.
 
 ### Pillar 2: Rational Exponents & Fractional Dimensions
 Scientific computing frequently encounters fractional dimensions:
@@ -305,9 +305,9 @@ The unified strength of Tōast emerges when these systems interact natively:
   ├── SemanticKind separation (Energy vs. Torque)
   └── Affine temperature points vs. deltas
 
-  Phase 2: Vectorized Quantities & Compiler Erasure
+  Phase 2: Vectorized Quantities & Static Unit Checking
   ├── QuantityArray contiguous SIMD memory buffers
-  └── Compiler binder unit verification and IL value-type erasure
+  └── Type-checker unit verification
 
   Phase 3: Core CAS Foundation
   ├── BigRational and exact arithmetic engine

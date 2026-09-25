@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Stdlib.Cas;
 
@@ -137,6 +138,7 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
     protected internal static bool TryCoerce(object? obj, out SymExpr expr)
     {
         if (obj is SymExpr se) { expr = se; return true; }
+        if (obj is Quantity q) { expr = new SymQuantity(q); return true; }
         if (obj is int i) { expr = Number(i); return true; }
         if (obj is long l) { expr = Number(l); return true; }
         if (obj is double d) { expr = Number(d); return true; }
@@ -164,6 +166,7 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
         SymNumber n => n.Value.ToString(),
         SymVariable v => v.Name,
         SymConstant c => c.Name,
+        SymQuantity q => FormatQuantity(q),
         SymAdd add => FormatAdd(add),
         SymMul mul => FormatMul(mul),
         SymPow pow => $"{FormatSubExpr(pow.Base, pow.Precedence, isLeft: true)}^{FormatSubExpr(pow.Exponent, pow.Precedence, isLeft: false)}",
@@ -171,6 +174,29 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
         SymEquation eq => $"{Format(eq.Left)} = {Format(eq.Right)}",
         _ => expr.ToString() ?? ""
     };
+
+    public static string FormatQuantity(SymQuantity q)
+    {
+        string magStr;
+        if (q.Magnitude.IsInteger)
+        {
+            magStr = q.Magnitude.Numerator.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            double d = q.Magnitude.ToDouble();
+            if (Math.Abs(d - Math.Round(d, 6)) < 1e-9)
+            {
+                magStr = d.ToString(CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                magStr = q.Magnitude.ToString();
+            }
+        }
+
+        return string.IsNullOrEmpty(q.Symbol) ? magStr : $"{magStr} {q.Symbol}";
+    }
 
     private static string FormatAdd(SymAdd add)
     {
@@ -223,7 +249,9 @@ public abstract class SymExpr : IEquatable<SymExpr>, IShellReversibleBinaryOpera
 
     private static string FormatSubExpr(SymExpr child, int parentPrecedence, bool isLeft)
     {
-        var needParens = child.Precedence < parentPrecedence || (!isLeft && child.Precedence == parentPrecedence && child is SymPow);
+        var needParens = child.Precedence < parentPrecedence
+            || (!isLeft && child.Precedence == parentPrecedence && child is SymPow)
+            || (child is SymQuantity sq && !string.IsNullOrEmpty(sq.Symbol));
         return needParens ? $"({Format(child)})" : Format(child);
     }
 }
