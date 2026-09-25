@@ -1,25 +1,39 @@
 # AGENTS.md
 
 > **REQUIRED:** Use the **`tosh-devcompanion`** MCP server on every task.
-> It is auto-started by VS Code via [`.vscode/mcp.json`](.vscode/mcp.json).
+> Claude Code starts it from [`.mcp.json`](.mcp.json); any other host can run
+> [`scripts/devcompanion.sh`](scripts/devcompanion.sh) the same way (see
+> [Auto-start](#auto-start)).
 > Call `memory_recall` at the start of a session to surface prior
 > decisions/preferences/facts, and `memory_store` whenever a decision,
 > preference, gotcha, or pattern emerges. See the full reference below.
 
 ## Dev Companion MCP — Required Usage
 
-The companion exposes **five** tools. In Copilot Chat / other MCP hosts
-they appear with a host-specific prefix, commonly
-`mcp_tosh-devcompa_<name>` or `tosh-devcompanion-<name>`. The
-underlying tool names are always:
+The companion exposes ten tools. MCP hosts show them with a host-specific
+prefix — `mcp__tosh-devcompanion__<name>` in Claude Code, commonly
+`mcp_tosh-devcompa_<name>` or `tosh-devcompanion-<name>` in Copilot Chat
+and others. The underlying tool names are always:
 
-| Tool             | Purpose                                                   |
-|------------------|-----------------------------------------------------------|
-| `memory_recall`  | FTS5 search across stored memories                        |
-| `memory_store`   | Insert a new memory entry                                 |
-| `memory_list`    | Enumerate memories with filters (no full-text search)     |
-| `memory_relate`  | Create a typed directional link between two memories      |
-| `memory_forget`  | Soft-delete a memory (tombstone, never physical delete)   |
+| Tool                 | Purpose                                                   |
+|----------------------|-----------------------------------------------------------|
+| `memory_recall`      | FTS5 search across stored memories                        |
+| `memory_store`       | Insert a new memory entry                                 |
+| `memory_store_batch` | Insert several memories atomically, optionally linked     |
+| `memory_update`      | Patch a memory; a content edit supersedes the old row     |
+| `memory_list`        | Enumerate memories with filters (no full-text search)     |
+| `memory_relate`      | Create a typed directional link between two memories      |
+| `memory_forget`      | Soft-delete a memory (tombstone, never physical delete)   |
+| `memory_tags`        | Distinct tags with counts — reuse one before inventing one |
+| `memory_graph`       | The typed-link neighbourhood of one or more memories      |
+| `memory_open`        | Resolve a memory's file links into clickable URIs         |
+
+Every `id` argument accepts the full id, the `short_id` results carry, or
+any unambiguous fragment of four or more characters from either end.
+
+If the tools are missing from a session, the same store is reachable from
+a shell: `scripts/devcompanion.sh recall <query>` (also `list`, `store`,
+`forget`).
 
 ### Workflow Rules (Required)
 
@@ -48,7 +62,7 @@ Required: `content`, `summary`, `category`.
 | `category`   | enum     | —           | `fact`, `preference`, `pattern`, `decision`, `history`, `note`. |
 | `tags`       | string[] | `[]`        | Stored comma-joined. |
 | `scope`      | enum     | `project`   | `project` or `global`. |
-| `visibility` | enum     | `private`   | `private` = DB only; `shared` = also `.tosh/memories.toml` (git-trackable). |
+| `visibility` | enum     | `private`   | `private` = DB only; `shared` = also `.tosh/memories/<id>.toml`, committed with the repo. |
 | `source`     | enum     | `ai`        | `user` entries cannot be deleted without `confirm=true`. |
 | `session_id` | string   | —           | Optional audit-trail tag. |
 
@@ -125,20 +139,53 @@ SQLite + FTS5 (Porter stemming). DB path resolution order:
 2. `./.tosh/memory.db` ← preferred when working in the repo
 3. `~/.tosh/memory.db`
 
-### Auto-start in VS Code
+`scripts/devcompanion.sh` always uses the repository's `.tosh/memory.db`,
+wherever it is started from.
 
-[.vscode/mcp.json](.vscode/mcp.json) is checked in and runs the
-companion in `--mcp` (stdio) mode via `dotnet run`. To inspect or
-restart it: command palette → **MCP: List Servers**. First start has a
-`dotnet run` build cost; for snappier startup, publish once:
+**Shared memories travel with the repository.** When the database is the
+project's own `.tosh/memory.db`, every memory stored with
+`visibility: "shared"` is also written to `.tosh/memories/<id>.toml` —
+one file per memory, holding it and the relations that start from it —
+and git tracks those files while ignoring the database. The companion
+imports the directory before every call, so a fresh clone or cloud session
+starts with the project's shared memories, and a pull or branch switch
+mid-session is picked up rather than overwritten. A memory whose file
+disappears (a revert, a branch without it) becomes private again. A file
+that does not parse — a merge left conflict markers in it — is left alone
+and reported in the `initialize` instructions and on the results of write
+tools until it is fixed. `TOSH_MEMORY_SHARED_DIR` overrides the directory;
+set it empty to turn mirroring off.
 
-```bash
-dotnet publish tools/Tosh.DevCompanion -c Release \
-  -o tools/Tosh.DevCompanion/bin/publish
-```
+One file per memory is deliberate. In a single file, any two branches that
+each add a memory conflict, and neither keeping both sides nor a
+`merge=union` driver resolves that correctly — git moves the lines the new
+blocks share out of the conflict. Don't go back to one file.
 
-…then swap the args in `.vscode/mcp.json` to invoke the published DLL
-directly.
+### Auto-start
+
+- **Claude Code** — [`.mcp.json`](.mcp.json) starts
+  `scripts/devcompanion.sh`, which builds the companion into
+  `tools/Tosh.DevCompanion/bin/mcp/` when its sources change (build output
+  goes to stderr, because stdout is the MCP channel) and runs it. In cloud
+  sessions [`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh)
+  first installs the .NET SDK, which cloud images lack, and builds it.
+- **VS Code** — `.vscode/mcp.json` is git-ignored (only `settings`,
+  `tasks`, `launch` and `extensions` are tracked under `.vscode/`), so each
+  checkout has its own. Pointing it at the launcher gives VS Code the same
+  database and shared directory as every other host:
+
+  ```json
+  {
+    "servers": {
+      "tosh-devcompanion": {
+        "type": "stdio",
+        "command": "${workspaceFolder}/scripts/devcompanion.sh"
+      }
+    }
+  }
+  ```
+
+  To inspect or restart it: command palette → **MCP: List Servers**.
 
 ### Companion vs Copilot's built-in `memory`
 
@@ -148,8 +195,8 @@ built-in memory store (the one under `/memories/` shown in the
 useful; the rule of thumb:
 
 - **Companion** — project-specific decisions, preferences, patterns.
-  Persists in `./.tosh/memory.db`, shareable via git when
-  `visibility: "shared"`.
+  Persists in `./.tosh/memory.db`; memories stored with
+  `visibility: "shared"` are also committed as `.tosh/memories/<id>.toml`.
 - **Copilot built-in `/memories/repo/`** — repository facts surfaced
   automatically into future turns by Copilot itself.
 
@@ -204,18 +251,19 @@ and exists solely to support agent workflows during development.
 
 It is exposed in two ways:
 
-1. **MCP server** (default) — speaks JSON-RPC over stdin/stdout, surfaces
-   five tools: `memory_store`, `memory_recall`, `memory_list`,
-   `memory_forget`, `memory_relate`. When the host editor wires this
-   process up, agents see them as `t_sh_devcompanion-memory_*` tools.
+1. **MCP server** (default) — speaks JSON-RPC over stdin/stdout and
+   surfaces the ten `memory_*` tools listed at the top of this file.
 2. **CLI** — for humans inspecting or seeding the store:
    `recall <query>`, `list`, `store <text>`, `forget <id>`.
 
+Both run through `scripts/devcompanion.sh`, which builds the companion
+when needed and uses the repository's `.tosh/memory.db`:
+
 ```bash
-dotnet run --project tools/Tosh.DevCompanion -- --mcp           # MCP mode (default)
-dotnet run --project tools/Tosh.DevCompanion -- recall "binder"
-dotnet run --project tools/Tosh.DevCompanion -- list --category decision
-dotnet run --project tools/Tosh.DevCompanion -- store "Prefer fluent member access over call-method" --category preference
+scripts/devcompanion.sh                          # MCP mode (default)
+scripts/devcompanion.sh recall "binder"
+scripts/devcompanion.sh list --category decision
+scripts/devcompanion.sh store "Prefer fluent member access over call-method" --category preference
 ```
 
 ### Storage
@@ -226,6 +274,9 @@ resolution order:
 1. `$TOSH_MEMORY_DB`
 2. `./.tosh/memory.db` (project-local — preferred when working on TōSh)
 3. `~/.tosh/memory.db` (global fallback)
+
+Shared memories are mirrored to `.tosh/memories/`, one file each; see
+[Storage Backend](#storage-backend).
 
 Deletes are soft (tombstoned, never physically removed). User-sourced
 memories require `confirm=true` to delete.

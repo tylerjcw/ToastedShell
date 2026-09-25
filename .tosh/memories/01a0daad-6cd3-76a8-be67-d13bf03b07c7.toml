@@ -1,0 +1,16 @@
+[[memory]]
+id = "01a0daad-6cd3-76a8-be67-d13bf03b07c7"
+created = 2026-09-25T22:26:33.811Z
+category = "preference"
+scope = "project"
+source = "user"
+session_id = "2026-09-25-build-ci-companion"
+tags = ["git", "build"]
+summary = ".tosh-publish-state is tracked in git and must not be listed in .gitignore"
+content = "User preference (2026-09-25): .tosh-publish-state must not be in .gitignore. It is tracked, and Directory.Build.props reads the publish counter and the .NET major (third field) from it, so it has to travel with the repository."
+
+[[relation]]
+from = "01a0daad-6cd3-76a8-be67-d13bf03b07c7"
+to = "01a0daad-6cc6-73dc-9b3b-34e2c5b199a6"
+relationship = "related_to"
+created = 2026-09-25T22:26:33.836Z

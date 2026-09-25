@@ -1,0 +1,11 @@
+[[memory]]
+id = "01a0daad-6cd4-70c6-aff7-30da15c22b28"
+created = 2026-09-25T22:26:33.812Z
+category = "decision"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-build-ci-companion"
+tags = ["companion", "memory", "git"]
+summary = "Shared memories are one file each in .tosh/memories/<id>.toml; a single file or merge=union breaks across branches"
+content = "Dev companion memories stored with visibility shared are mirrored one file per memory to .tosh/memories/<id>.toml, together with the relations that start from that memory. A single .tosh/memories.toml conflicted whenever two branches each added a memory, and keeping both sides did not resolve it, because git's merge moves the lines the two new blocks share out of the conflict; a merge=union driver interleaves them into one broken block the same way (both checked with git). The store imports the directory before every operation, so a pull or branch switch mid-session is picked up; writes files after every change; demotes to private a memory whose file went away (shared_file_ids records what the directory held); and leaves a file that does not parse, such as one with conflict markers, untouched while reporting it on MCP initialize and on the results of write tools."
+links = [{ path = "tools/Tosh.DevCompanion/Memory/SharedMemoryFile.cs" }, { path = "tools/Tosh.DevCompanion/Memory/SqliteMemoryStore.cs" }]

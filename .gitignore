@@ -88,9 +88,11 @@ docs/**/*.synctex.gz
 # VS Code extension dependencies
 editor/vscode/tosh.tosh-lang/node_modules/
 
-# Claude Code local settings
-.claude/
-.mcp.json
+# Claude Code local settings. The project's shared settings and hooks, and .mcp.json, which
+# starts the dev companion, are committed: a cloud session only has what the repository has.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 .codex
 
 

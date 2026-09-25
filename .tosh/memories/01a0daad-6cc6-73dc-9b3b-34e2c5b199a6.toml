@@ -1,0 +1,11 @@
+[[memory]]
+id = "01a0daad-6cc6-73dc-9b3b-34e2c5b199a6"
+created = 2026-09-25T22:26:33.798Z
+category = "decision"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-build-ci-companion"
+tags = ["ci", "dotnet", "build"]
+summary = "CI installs the .NET major from scripts/dotnet-major.sh; no global.json, so the framework is chosen in one place"
+content = "The .NET major is chosen in one place: the third field of .tosh-publish-state (YY.M:N:D), else <ToshDotNetMajor> in Directory.Build.props. scripts/dotnet-major.sh resolves it exactly as MSBuild does, and .github/workflows/ci.yml passes it to actions/setup-dotnet as \"<major>.0.x\", which also installs previews and release candidates before GA. A hard-coded dotnet-version had drifted: CI installed 10.0.x while every project targeted net11.0. There is deliberately no global.json, which would be a second place to bump. Anything else that installs an SDK (the Claude Code session hook) asks the same script."
+links = [{ path = "scripts/dotnet-major.sh" }, { path = ".github/workflows/ci.yml" }]

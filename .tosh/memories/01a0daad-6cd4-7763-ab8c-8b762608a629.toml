@@ -1,0 +1,17 @@
+[[memory]]
+id = "01a0daad-6cd4-7763-ab8c-8b762608a629"
+created = 2026-09-25T22:26:33.812Z
+category = "pattern"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-build-ci-companion"
+tags = ["companion", "mcp", "claude-code"]
+summary = "Run the companion through scripts/devcompanion.sh: MCP with no args, CLI with recall|list|store|forget"
+content = "scripts/devcompanion.sh is the one entry point to the dev companion. .mcp.json starts it with no arguments as the tosh-devcompanion MCP server; with arguments it is the CLI: recall <query>, list [--category X], store --content ... --summary ... --category ... --visibility shared, forget <id>. It builds tools/Tosh.DevCompanion into bin/mcp/ whenever its sources change, with build output on stderr because stdout is the MCP channel, then runs from the repository root with TOSH_MEMORY_DB=.tosh/memory.db, which is what turns on the .tosh/memories/ sync. When a session is missing the MCP tools, use the CLI from Bash."
+links = [{ path = "scripts/devcompanion.sh" }, { path = ".mcp.json" }]
+
+[[relation]]
+from = "01a0daad-6cd4-7763-ab8c-8b762608a629"
+to = "01a0daad-6cd4-70c6-aff7-30da15c22b28"
+relationship = "related_to"
+created = 2026-09-25T22:26:33.843Z
