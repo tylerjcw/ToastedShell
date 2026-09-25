@@ -1,0 +1,10 @@
+[[memory]]
+id = "01a0dac5-c487-7d6f-a043-b06655f768a4"
+created = 2026-09-25T22:53:09.127Z
+category = "fact"
+scope = "project"
+source = "ai"
+session_id = "2026-09-25-core-review"
+tags = ["output", "display", "review-2026-09-25"]
+summary = "Piped/non-TTY output still draws box tables with CLR type labels, and diagnostics keep ANSI colours"
+content = "With stdout or stderr redirected (e.g. `tosh -c 'echo hello' | cat`), TōSh renders `┌────────┬───────┐ │ String │ hello │` box tables and emits ANSI escape codes in diagnostics. Scalars render as a Type|value table in every mode (`1 + 2` shows `Int32 | 3`), using CLR type names rather than Tōast's `int`. Unix tools downstream of tosh receive table art instead of values."

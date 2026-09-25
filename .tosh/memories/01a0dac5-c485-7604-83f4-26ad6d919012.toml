@@ -1,0 +1,12 @@
+[[memory]]
+id = "01a0dac5-c485-7604-83f4-26ad6d919012"
+created = 2026-09-25T22:53:09.125Z
+category = "fact"
+scope = "project"
+source = "ai"
+pinned = true
+session_id = "2026-09-25-core-review"
+tags = ["process", "pipeline", "bug", "review-2026-09-25"]
+summary = "External|external pipes go through .NET as text lines: binary data is corrupted and ~80x slower than bash"
+content = "ExternalProcessCommand reads a child's stdout with ReadLineAsync and feeds the next child with WriteLineAsync(ExternalTextSerializer.Serialize(item)) (src/Tosh.Stdlib/ExternalProcessCommand.cs), so bytes are decoded as UTF-8, split into lines and re-encoded. Verified 2026-09-25: 100,000 random bytes through `/usr/bin/cat f | /usr/bin/sha256sum` arrive as 181,127 bytes (invalid UTF-8 becomes U+FFFD); a file with no trailing newline gains one; 50 MB of text through `cat | wc -l` takes ~3.4 s vs 44 ms in bash. Foreground children get setpgid after they start (line 257), a race classic shells avoid by setting it before exec."
+links = [{ path = "src/Tosh.Stdlib/ExternalProcessCommand.cs" }, { path = "src/Tosh.Runtime/TerminalControl.cs" }]
