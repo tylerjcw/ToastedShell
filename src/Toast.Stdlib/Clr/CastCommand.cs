@@ -50,11 +50,26 @@ public sealed class CastCommand : ShellCommand
         {
             var name = argument is ShellTextLine line ? line.Text : (string)argument!;
 
-            // CLR first, declaration second. `cast` has always resolved against the CLR, and
-            // its own documented example `cast list<int>` resolves to a *shell* descriptor for
-            // the builtin list type — so asking the declaration side first turned that example
-            // into "this value is not a 'list<int>'". Declared types are a fallback for names
-            // the CLR resolver does not know, which is exactly the gap this item is about.
+            // Built-in language aliases (string, int, bool, complex, StorageSize, etc.) win
+            // so declaring a class named 'String' does not shadow the CLR string type.
+            if (DotNetTypeResolver.BuiltInAliases.TryGetValue(name, out var builtinAlias))
+            {
+                return builtinAlias;
+            }
+
+            // User-declared classes and records take precedence over ambient CLR types
+            // so a user-declared `fluid record CpuInfo()` is not shadowed by an ambient CLR class.
+            if (context.LanguageRuntime.Classes.TryGetValue(name, out var rawDescriptor) &&
+                rawDescriptor is IShellTypeDescriptor userDeclared)
+            {
+                return userDeclared;
+            }
+
+            if (context.ShellTypes is { } view && view.TryGetNamedType(name, out var namedType))
+            {
+                return namedType;
+            }
+
             var clrType = context.TypeResolver.Resolve(name);
 
             if (clrType is not null)

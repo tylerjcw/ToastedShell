@@ -20,6 +20,10 @@ namespace Tosh.Stdlib.Data;
 [CommandOutput("Structured records produced by the chosen parser (json/csv/yaml/etc.) — usually dictionaries, lists, or scalars.")]
 public sealed class ParseCommand : ShellCommand
 {
+    private static readonly Regex TypedGroupSyntax = new(
+        @"\(\?(?:<(?<name>[a-zA-Z_]\w*)\s*:\s*(?<type>[a-zA-Z_][\w.?\[\]]*)\s*>|'(?<name>[a-zA-Z_]\w*)\s*:\s*(?<type>[a-zA-Z_][\w.?\[\]]*)\s*')",
+        RegexOptions.Compiled);
+
     public ParseCommand()
         : base("parse", "Parses text input with a regular expression into shell record objects.", "parse [-a] [-i] [-m] [-s] [-x] [--explicit-capture] <pattern|regex> [text ...]") { }
 
@@ -37,7 +41,30 @@ public sealed class ParseCommand : ShellCommand
             context,
             explicitInput,
             "parse expects pipeline text or explicit text values after the regular expression.");
-        var regex = ShellRegexUtilities.RequireRegex(context, parsed, parsed.Positionals[0], "regex", timeout: TimeSpan.FromSeconds(2));
+
+        var rawPatternArg = parsed.Positionals[0];
+        Dictionary<string, string> groupTypes = new(StringComparer.Ordinal);
+        object? effectivePatternArg = rawPatternArg;
+
+        if (rawPatternArg is string patternString && TypedGroupSyntax.IsMatch(patternString))
+        {
+            foreach (Match m in TypedGroupSyntax.Matches(patternString))
+            {
+                var groupName = m.Groups["name"].Value;
+                var typeName = m.Groups["type"].Value;
+                groupTypes[groupName] = typeName;
+            }
+
+            effectivePatternArg = TypedGroupSyntax.Replace(patternString, match =>
+            {
+                var groupName = match.Groups["name"].Value;
+                return match.Value.StartsWith("(?'", StringComparison.Ordinal)
+                    ? $"(?'{groupName}'"
+                    : $"(?<{groupName}>";
+            });
+        }
+
+        var regex = ShellRegexUtilities.RequireRegex(context, parsed, effectivePatternArg, "regex", timeout: TimeSpan.FromSeconds(2));
 
         var emitAllMatches = parsed.HasFlag("a", "all");
         var namedGroupNames = regex.GetGroupNames()
@@ -52,7 +79,7 @@ public sealed class ParseCommand : ShellCommand
 
                 while (match.Success)
                 {
-                    yield return CreateProjection(match, namedGroupNames);
+                    yield return CreateProjection(context, match, namedGroupNames, groupTypes);
                     match = match.NextMatch();
                 }
             }
@@ -62,19 +89,47 @@ public sealed class ParseCommand : ShellCommand
 
                 if (match.Success)
                 {
-                    yield return CreateProjection(match, namedGroupNames);
+                    yield return CreateProjection(context, match, namedGroupNames, groupTypes);
                 }
             }
         }
     }
 
-    private static System.Dynamic.ExpandoObject CreateProjection(Match match, IReadOnlyList<string> namedGroupNames)
+    private static System.Dynamic.ExpandoObject CreateProjection(
+        CommandContext context,
+        Match match,
+        IReadOnlyList<string> namedGroupNames,
+        IReadOnlyDictionary<string, string> groupTypes)
     {
         if (namedGroupNames.Count > 0)
         {
-            return ShellRecordUtilities.CreateExpando(
-                namedGroupNames
-                    .Select(name => new KeyValuePair<string, object?>(name, match.Groups[name].Success ? match.Groups[name].Value : null)));
+            var pairs = new List<KeyValuePair<string, object?>>(namedGroupNames.Count);
+            foreach (var name in namedGroupNames)
+            {
+                var group = match.Groups[name];
+                object? value;
+
+                if (group.Success)
+                {
+                    var rawText = group.Value;
+                    if (groupTypes.TryGetValue(name, out var typeName))
+                    {
+                        value = CoerceValue(context, rawText, typeName, name);
+                    }
+                    else
+                    {
+                        value = rawText;
+                    }
+                }
+                else
+                {
+                    value = null;
+                }
+
+                pairs.Add(new KeyValuePair<string, object?>(name, value));
+            }
+
+            return ShellRecordUtilities.CreateExpando(pairs);
         }
 
         if (match.Groups.Count > 1)
@@ -87,4 +142,50 @@ public sealed class ParseCommand : ShellCommand
         return ShellRecordUtilities.CreateExpando([new KeyValuePair<string, object?>("Value", match.Value)]);
     }
 
+    private static object? CoerceValue(CommandContext context, string rawText, string typeName, string groupName)
+    {
+        try
+        {
+            var isNullable = typeName.EndsWith('?');
+            var baseTypeName = isNullable ? typeName[..^1] : typeName;
+
+            return OperatorEvaluator.CastAs(
+                rawText,
+                baseTypeName,
+                name =>
+                {
+                    if (context.LanguageRuntime.Classes.TryGetValue(name, out var rawDesc) &&
+                        rawDesc is IShellTypeDescriptor userDesc)
+                    {
+                        return userDesc;
+                    }
+
+                    if (context.ShellTypes is { } view && view.TryGetNamedType(name, out var namedType))
+                    {
+                        return namedType;
+                    }
+
+                    var clrType = context.TypeResolver.Resolve(name);
+                    if (clrType is not null)
+                    {
+                        return clrType;
+                    }
+
+                    if (ReflectionMetadataUtilities.TryResolveShellType(context, name, out var declared))
+                    {
+                        return declared;
+                    }
+
+                    return null;
+                });
+        }
+        catch (Exception ex)
+        {
+            throw context.CreateDiagnostic(
+                "tosh.runtime.parse_type_conversion_failed",
+                $"Group '{groupName}' captured '{rawText}', which could not be converted to '{typeName}': {ex.Message}",
+                argumentIndex: 0,
+                label: $"cannot convert '{rawText}' to '{typeName}'");
+        }
+    }
 }

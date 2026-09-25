@@ -51,6 +51,20 @@ public static class ShellTypeConversion
             return TryConvertToEnum(value, target, enumType, out converted, out reason);
         }
 
+        if (value is not null && target is IShellConvertibleType convertibleType)
+        {
+            if (convertibleType.TryConvertInstance(value, out converted, out var convertReason))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(convertReason))
+            {
+                reason = convertReason;
+                return false;
+            }
+        }
+
         if (value is null)
         {
             reason = $"null is not a '{target.ShellTypeName}'";

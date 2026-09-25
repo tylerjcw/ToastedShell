@@ -98,6 +98,63 @@ public sealed class StructuredDataCommandTests
     }
 
     [Fact]
+    public async Task Parse_coerces_typed_groups_to_primitives_and_quantities()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var results = await engine.ExecuteToListAsync(
+            "echo \"PID=42 CPU=98.5 MEM=16384 kB ACTIVE=true\" | parse \"PID=(?<pid: int>\\d+) CPU=(?<cpu: double>[0-9.]+) MEM=(?<mem: StorageSize>\\d+ kB) ACTIVE=(?<active: bool>true|false)\"");
+
+        var projection = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
+        Assert.Equal(42, projection["pid"]);
+        Assert.Equal(98.5, projection["cpu"]);
+        Assert.IsType<StorageSize>(projection["mem"]);
+        Assert.Equal(true, projection["active"]);
+    }
+
+    [Fact]
+    public async Task Parse_supports_nullable_and_optional_typed_groups()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var withPort = await engine.ExecuteToListAsync(
+            "echo \"host=localhost port=8080\" | parse \"host=(?<host: string>\\S+)(?: port=(?<port: int?>\\d+))?\"");
+        var withoutPort = await engine.ExecuteToListAsync(
+            "echo \"host=localhost\" | parse \"host=(?<host: string>\\S+)(?: port=(?<port: int?>\\d+))?\"");
+
+        var proj1 = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(withPort));
+        Assert.Equal("localhost", proj1["host"]);
+        Assert.Equal(8080, proj1["port"]);
+
+        var proj2 = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(withoutPort));
+        Assert.Equal("localhost", proj2["host"]);
+        Assert.Null(proj2["port"]);
+    }
+
+    [Fact]
+    public async Task Parse_supports_single_quote_typed_groups()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        var results = await engine.ExecuteToListAsync(
+            "echo \"val=123\" | parse \"val=(?'num: int'\\d+)\"");
+
+        var projection = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
+        Assert.Equal(123, projection["num"]);
+    }
+
+    [Fact]
+    public async Task Parse_fails_with_clear_diagnostic_when_type_coercion_fails()
+    {
+        var engine = ShellEngine.CreateFullShell();
+
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+        {
+            await engine.ExecuteToListAsync("echo \"val=notanumber\" | parse \"val=(?<num: int>\\w+)\"");
+        });
+    }
+
+    [Fact]
     public async Task Summarize_auto_mode_applies_all_ops_to_scalar_numerics()
     {
         var runtime = ToshRuntime.CreateDefault();

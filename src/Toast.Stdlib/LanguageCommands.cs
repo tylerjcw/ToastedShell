@@ -250,6 +250,7 @@ public static class LanguageCommands
         commands.Register(new TypesCommand());
         commands.Register(new LoadAssemblyCommand());
         commands.Register(new CastCommand());
+        commands.RegisterAlias("as", "cast");
         commands.Register(new NewObjectCommand());
         // Verb-form commands deprecated 2026-05-10. Replacements:
         //   call / call-method  → $obj.Method($args) or $callable($args)

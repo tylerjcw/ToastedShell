@@ -18,6 +18,9 @@ internal static class IntrospectionSubcommands
         "fields",
         "methods",
         "events",
+        "add",
+        "del",
+        "delete",
     };
 
     public static bool TryDispatch(
