@@ -1,0 +1,17 @@
+[[memory]]
+id = "01a0dbf5-89fd-738a-bf48-fb0bdbe72163"
+created = 2026-09-26T04:24:57.085Z
+category = "pattern"
+scope = "project"
+source = "ai"
+pinned = true
+tags = ["tests", "signals", "safety", "gotcha", "tosh-0013"]
+summary = "Never let a test reach kill -1/0: .NET GetProcessById(-1)+Kill sends kill(-1,SIGKILL) and restarts the whole container"
+content = "2026-09-26, TOSH-0013. Three cloud-container restarts traced to this. On Linux, Process.GetProcessById(pid) tests existence with kill(pid, 0); for -1 that succeeds (\"some process exists\"), and Process.Kill then sends kill(-1, SIGKILL) — as root, every process in the container dies; as a user, every process the user owns. pid 0 does the same to the caller's process group. So TōSh's `kill -1` (or `kill $pid` with -1/0) killed everything before KillCommand got its `pid <= 0` guard, and `signal TERM -1` did the same through ProcessSignalSender.TrySend before its guard. Rules: (1) tests pass -2147483647, never -1 or 0 — the same `<= 0` branch refuses it, and unguarded it names a process group that cannot exist, so kill(2) answers ESRCH and the test fails harmlessly; (2) test the sender through TrySend/TrySendToGroup with signal 0 (the null signal); never drive `signal` at pids <= 0 through the command; (3) a negative control that removes these guards must not run any test that reaches kill(2) with -1/0; (4) snapshot files (tar) before a negative control and, after ANY interruption or container restart, diff the tree against the snapshot before trusting it — checking that the guard's message string exists is not enough, check the condition."
+links = [{ path = "src/Toast.Runtime/ProcessSignalSender.cs" }, { path = "tests/Tosh.Tests/ArgumentProvenanceTests.cs" }]
+
+[[relation]]
+from = "01a0dbf5-89fd-738a-bf48-fb0bdbe72163"
+to = "01a0dbc4-962a-721b-8d8f-f24c4b51ec82"
+relationship = "supersedes"
+created = 2026-09-26T04:24:57.089Z

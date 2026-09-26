@@ -1,0 +1,12 @@
+[[memory]]
+id = "01a0dbc4-962a-721b-8d8f-f24c4b51ec82"
+created = 2026-09-26T03:31:28.938Z
+category = "pattern"
+scope = "project"
+source = "ai"
+pinned = true
+tags = ["tests", "signals", "safety", "gotcha", "tosh-0013"]
+summary = "Never let a test or negative control reach kill(2) with pid -1/0: as root it signals the whole cloud container and restarts it"
+content = "2026-09-26, TOSH-0013. A negative-control run disabled the pid guard in ProcessSignalSender.TrySend while a test ran `signal 28 $target` with target -1. As root, kill(-1, sig) reaches every process in the container except PID 1; even SIGWINCH (ignored by default) took the Claude Code cloud session down and the container restarted, which looked like a hung test. The restart also left the mutation in the working tree, so the next run did it again. Rules: (1) test the guard only through ProcessSignalSender.TrySend/TrySendToGroup with signal 0 (the null signal delivers nothing even if the guard regresses); never drive `signal` at pids <= 0 through the command; `kill` is safe because it uses Process.Kill, not kill(2). (2) Before a negative control, snapshot the files (tar) and after ANY interruption or container restart diff the tree against the snapshot before trusting it — grep for the guard's message is not enough, check the condition itself."
+links = [{ path = "src/Toast.Runtime/ProcessSignalSender.cs" }, { path = "tests/Tosh.Tests/ArgumentProvenanceTests.cs" }]
+deleted = 2026-09-26T04:24:57.091Z
