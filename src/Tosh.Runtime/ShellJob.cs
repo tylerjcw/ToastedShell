@@ -204,10 +204,11 @@ public sealed class ShellJob
         string workingDirectory,
         IReadOnlyList<ShellJobProcessSpec> stages,
         IReadOnlyList<object?>? initialInput = null,
-        IReadOnlyList<ShellJobRedirectionSpec>? redirections = null)
+        IReadOnlyList<ShellJobRedirectionSpec>? redirections = null,
+        string? inputPath = null)
     {
         var job = new ShellJob(id, command, DateTimeOffset.Now);
-        job.StartPipeline(workingDirectory, stages, initialInput, redirections);
+        job.StartPipeline(workingDirectory, stages, initialInput, redirections, inputPath);
         return job;
     }
 
@@ -618,7 +619,8 @@ public sealed class ShellJob
         string workingDirectory,
         IReadOnlyList<ShellJobProcessSpec> stages,
         IReadOnlyList<object?>? initialInput,
-        IReadOnlyList<ShellJobRedirectionSpec>? redirections)
+        IReadOnlyList<ShellJobRedirectionSpec>? redirections,
+        string? inputPath = null)
     {
         if (stages.Count == 0)
         {
@@ -632,7 +634,7 @@ public sealed class ShellJob
             for (var index = 0; index < stages.Count; index++)
             {
                 var stage = stages[index];
-                var process = CreateProcess(stage, workingDirectory, redirectInput: index > 0 || (index == 0 && initialInput is { Count: > 0 }));
+                var process = CreateProcess(stage, workingDirectory, redirectInput: index > 0 || (index == 0 && (initialInput is { Count: > 0 } || inputPath is not null)));
 
                 if (!process.Start())
                 {
@@ -661,7 +663,7 @@ public sealed class ShellJob
             _processId = processes[0].Id;
         }
 
-        _completionTask = MonitorPipelineAsync(processes, initialInput, redirections);
+        _completionTask = MonitorPipelineAsync(processes, initialInput, redirections, inputPath);
     }
 
     private static Process CreateProcess(ShellJobProcessSpec stage, string workingDirectory, bool redirectInput)
@@ -691,7 +693,8 @@ public sealed class ShellJob
     private async Task<ShellJobCompletion> MonitorPipelineAsync(
         IReadOnlyList<Process> processes,
         IReadOnlyList<object?>? initialInput,
-        IReadOnlyList<ShellJobRedirectionSpec>? redirections)
+        IReadOnlyList<ShellJobRedirectionSpec>? redirections,
+        string? inputPath)
     {
         var output = new List<object?>();
         var errorLines = new List<string>();
@@ -701,6 +704,7 @@ public sealed class ShellJob
         var outputWriters = new List<TextWriter>();
         var errorWriters = new List<TextWriter>();
         var disposableWriters = new List<TextWriter>();
+        FileStream? outputFile = null;
 
         if (redirections is { Count: > 0 })
         {
@@ -725,12 +729,14 @@ public sealed class ShellJob
                 }
 
                 var mode = redirection.Mode == ShellJobRedirectionMode.Append ? FileMode.Append : FileMode.Create;
-                var writer = TextWriter.Synchronized(new StreamWriter(File.Open(redirection.Path, mode, FileAccess.Write, FileShare.Read), Encoding.UTF8));
+                var file = File.Open(redirection.Path, mode, FileAccess.Write, FileShare.Read);
+                var writer = TextWriter.Synchronized(new StreamWriter(file, RedirectionEncoding));
                 disposableWriters.Add(writer);
 
                 if (RedirectionIncludesOutput(redirection.Stream))
                 {
                     outputWriters.Add(writer);
+                    outputFile = file;
                 }
 
                 if (RedirectionIncludesError(redirection.Stream))
@@ -747,7 +753,11 @@ public sealed class ShellJob
         var pipeTasks = new List<Task>();
         Task? stdinTask = null;
 
-        if (initialInput is { Count: > 0 })
+        if (inputPath is not null)
+        {
+            stdinTask = PumpFileAsync(processes[0], inputPath, _cancellation.Token);
+        }
+        else if (initialInput is { Count: > 0 })
         {
             stdinTask = PumpStandardInputAsync(processes[0], initialInput, _cancellation.Token);
         }
@@ -757,37 +767,60 @@ public sealed class ShellJob
             pipeTasks.Add(PumpPipeAsync(processes[index], processes[index + 1], _cancellation.Token));
         }
 
+        var onlyOutputFile = outputWriters.Count == 1 ? outputFile : null;
+
         try
         {
-            while (true)
+            // `TOSH-0012`. One output file receives the last program's bytes as it wrote them.
+            // Decoding them as lines replaced invalid UTF-8 and added a newline the output did
+            // not have, so `cat x | gzip -c out> x.gz &` wrote an archive nothing could read.
+            // A direct file receives only stdout — anything shared with stderr is a buffered
+            // plan — so nothing else writes to it while this runs.
+            if (onlyOutputFile is not null)
             {
-                string? line;
-
                 try
                 {
-                    line = await finalProcess.StandardOutput.ReadLineAsync(_cancellation.Token);
+                    await new RawByteDestination(onlyOutputFile, ReaderCanLeave: false).CopyFromAsync(
+                        finalProcess.StandardOutput.BaseStream,
+                        ReadOnlyMemory<byte>.Empty,
+                        _cancellation.Token);
                 }
                 catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
                 {
-                    break;
                 }
-
-                if (line is null)
+            }
+            else
+            {
+                while (true)
                 {
-                    break;
-                }
+                    string? line;
 
-                if (outputWriters.Count > 0)
-                {
-                    foreach (var writer in outputWriters)
+                    try
                     {
-                        await writer.WriteLineAsync(line);
-                        await writer.FlushAsync(_cancellation.Token);
+                        line = await finalProcess.StandardOutput.ReadLineAsync(_cancellation.Token);
                     }
-                }
-                else
-                {
-                    output.Add(new ShellTextLine(line));
+                    catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    if (line is null)
+                    {
+                        break;
+                    }
+
+                    if (outputWriters.Count > 0)
+                    {
+                        foreach (var writer in outputWriters)
+                        {
+                            await writer.WriteLineAsync(line);
+                            await writer.FlushAsync(_cancellation.Token);
+                        }
+                    }
+                    else
+                    {
+                        output.Add(new ShellTextLine(line));
+                    }
                 }
             }
         }
@@ -897,12 +930,55 @@ public sealed class ShellJob
         }
     }
 
+    private static async Task PumpFileAsync(Process process, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var file = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                bufferSize: 1,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+            // A program that stops reading early has had what it wanted; not an error.
+            await new RawByteDestination(process.StandardInput.BaseStream, ReaderCanLeave: true)
+                .CopyFromAsync(file, ReadOnlyMemory<byte>.Empty, cancellationToken);
+        }
+        finally
+        {
+            try
+            {
+                process.StandardInput.Close();
+            }
+            catch
+            {
+            }
+        }
+    }
+
     private static async Task PumpPipeAsync(Process source, Process destination, CancellationToken cancellationToken)
     {
         try
         {
-            await source.StandardOutput.BaseStream.CopyToAsync(destination.StandardInput.BaseStream, cancellationToken);
-            await destination.StandardInput.BaseStream.FlushAsync(cancellationToken);
+            var delivered = await new RawByteDestination(destination.StandardInput.BaseStream, ReaderCanLeave: true)
+                .CopyFromAsync(source.StandardOutput.BaseStream, ReadOnlyMemory<byte>.Empty, cancellationToken);
+
+            if (!delivered)
+            {
+                // `TOSH-0012`. The next program exited without reading everything. Close our
+                // end, so this one meets a closed pipe on its next write. Leaving it open is
+                // how `yes | head -1 &` stayed "running" forever: nothing drained the pipe and
+                // `yes` blocked on it.
+                try
+                {
+                    source.StandardOutput.Close();
+                }
+                catch
+                {
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -958,6 +1034,11 @@ public sealed class ShellJob
         }
     }
 
+    // No byte-order mark. `Encoding.UTF8` has one, and a StreamWriter writes it at the start of
+    // a new file, so every background `out>` file began with EF BB BF — a file of text read
+    // back as three bytes longer and, to many tools, no longer plain text.
+    private static readonly Encoding RedirectionEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     private static bool RedirectionIncludesOutput(ShellJobRedirectionStream stream)
         => stream is ShellJobRedirectionStream.Output or ShellJobRedirectionStream.OutputThenError or ShellJobRedirectionStream.ErrorThenOutput;
 
@@ -996,7 +1077,7 @@ public sealed class ShellJob
             {
                 var text = GetRedirectionContent(redirection.Stream, outputText, errorText);
                 var fileMode = redirection.Mode == ShellJobRedirectionMode.Append ? FileMode.Append : FileMode.Create;
-                await using var writer = new StreamWriter(File.Open(redirection.Path, fileMode, FileAccess.Write, FileShare.Read), Encoding.UTF8);
+                await using var writer = new StreamWriter(File.Open(redirection.Path, fileMode, FileAccess.Write, FileShare.Read), RedirectionEncoding);
 
                 if (text.Length > 0)
                 {

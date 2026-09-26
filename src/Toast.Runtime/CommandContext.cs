@@ -79,6 +79,48 @@ public sealed record CommandContext
 
     public IShellNamedTypeView? ShellTypes { get; init; }
 
+    /// <summary>
+    /// Whether this stage's input comes from somewhere: an earlier stage, an <c>in&lt;</c> file,
+    /// or values handed to the pipeline.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IsPipelined"/> is true for <em>every</em> stage of a pipeline, the first
+    /// included, so it cannot say this. It matters to an external program at a terminal: its
+    /// stdin may stay with the terminal only when nothing upstream is waiting to feed it. Every
+    /// stage of <c>var x = (printf … | tr …)</c> used to inherit the terminal, and <c>tr</c>
+    /// read the keyboard instead of <c>printf</c> (<c>TOSH-0012</c>).
+    /// </remarks>
+    public bool HasUpstream { get; init; }
+
+    /// <summary>
+    /// The byte path from the previous stage, when the engine opened one. Only the consumer it
+    /// is bound to may offer a destination through it; see <see cref="RawByteHandoff"/>.
+    /// </summary>
+    public RawByteHandoff? RawInput { get; init; }
+
+    /// <summary>
+    /// The byte path to the next stage or to a redirected file, when the engine opened one. Only
+    /// the producer it is bound to may claim it; see <see cref="RawByteHandoff"/>.
+    /// </summary>
+    public RawByteHandoff? RawOutput { get; init; }
+
+    /// <summary>
+    /// Claims the destination the next stage offered, when this context is the producer the
+    /// engine built the byte path for. A derived context never can.
+    /// </summary>
+    public bool TryClaimRawOutput([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out RawByteDestination? destination)
+    {
+        destination = null;
+        return RawOutput is { } handoff && handoff.IsProducer(this) && handoff.TryClaim(out destination);
+    }
+
+    /// <summary>
+    /// The hand-off through which this context, as the consumer the engine built it for, may
+    /// offer a destination for its input bytes; null when there is none to offer through.
+    /// </summary>
+    public RawByteHandoff? RawInputForThisStage
+        => RawInput is { } handoff && handoff.IsConsumer(this) ? handoff : null;
+
     public ITypeResolver TypeResolver => ScopedTypeResolver ?? LanguageRuntime.TypeResolver;
 
     /// <summary>

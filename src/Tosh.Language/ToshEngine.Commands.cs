@@ -426,7 +426,10 @@ public sealed partial class ToshEngine
         PipelineExitStatusTracker? pipelineExitStatusTracker,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
         IReadOnlyList<object?>? prependedArguments = null,
-        bool outputIsCaptured = false)
+        bool outputIsCaptured = false,
+        bool hasUpstream = false,
+        RawByteHandoff? rawInput = null,
+        RawByteHandoff? rawOutput = null)
     {
         var command = ResolveCommand(sourceName, sourceText, commandSyntax);
 
@@ -503,7 +506,18 @@ public sealed partial class ToshEngine
             BlockExecutor: _ownBlockExecutor,
             OutputIsCaptured: outputIsCaptured,
             ScopedCommands: CreateScopedCommandView(),
-            ShellTypes: this);
+            ShellTypes: this)
+        {
+            HasUpstream = hasUpstream,
+            RawInput = rawInput,
+            RawOutput = rawOutput,
+        };
+
+        // `TOSH-0012`. Bound to this context rather than to the command: a registered command is
+        // one object shared by every stage that names it, and a context a command derives with
+        // `with` — for a renderer, a callback — must not inherit the right to claim or offer.
+        rawInput?.BindConsumer(context);
+        rawOutput?.BindProducer(context);
 
         if (LanguageRuntime.Options.Trace)
         {

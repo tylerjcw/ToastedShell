@@ -77,7 +77,12 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         // `var x = git …`, `(git …)`, `$(git …)` and `$"{git …}"` all printed to the
         // terminal and yielded null — they consume the value without being pipelined
         // (TS-P1-30).
-        if (atTerminal && context.OutputIsCaptured)
+        //
+        // Only a stage with nothing upstream, though. Capture used to reach every stage, so in
+        // `var x = (printf … | tr …)` at a terminal `tr` inherited the terminal as its stdin
+        // and read the keyboard instead of `printf` (TOSH-0012). A stage with input takes the
+        // piped path below; that is where its input is.
+        if (atTerminal && context.OutputIsCaptured && !context.HasUpstream)
         {
             return SpawnMode.Hybrid;
         }
@@ -440,6 +445,12 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
                         await channel.Writer.WriteAsync(item, context.CancellationToken);
                     }
                 }
+                else if (context.TryClaimRawOutput(out var destination))
+                {
+                    // The first stage of a captured pipeline runs here, and the next program
+                    // wants its bytes (TOSH-0012). See ExecuteWithPipesAsync.
+                    await CopyRawStdoutAsync(stdoutStream, parser.SniffedBytes, destination, context.CancellationToken);
+                }
                 else
                 {
                     // Hybrid consumer emitted non-TSSP bytes — forward verbatim,
@@ -554,7 +565,7 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         }
 
         var stderrTask = PumpStandardErrorAsync(process, context.Shell().Error, context.CancellationToken);
-        var stdinTask = PumpStandardInputAsync(process, context.Input, context.CancellationToken);
+        var stdinTask = PumpStandardInputAsync(process, context.Input, context.RawInputForThisStage, context.CancellationToken);
 
         var stdoutStream = process.StandardOutput.BaseStream;
         var parser = new TsspParser(stdoutStream);
@@ -573,6 +584,15 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         {
             await foreach (var item in ConsumeTsspFramesAsync(parser, header, context))
                 yield return item;
+        }
+        else if (context.TryClaimRawOutput(out var destination))
+        {
+            // TOSH-0012. The next stage is a program that offered its stdin, or the pipeline's
+            // output goes to a single file: either way the bytes are wanted, not text. Decoding
+            // them replaced every invalid UTF-8 sequence with U+FFFD, added a newline to output
+            // that had none, and cost 3.4 s on 50 MB that bash moves in 44 ms. Nothing is
+            // yielded — the claim is a promise that every byte went to the destination.
+            await CopyRawStdoutAsync(stdoutStream, parser.SniffedBytes, destination, context.CancellationToken);
         }
         else
         {
@@ -958,8 +978,17 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         }
     }
 
-    private static async Task PumpStandardInputAsync(Process process, IAsyncEnumerable<object?> input, CancellationToken cancellationToken)
+    private static async Task PumpStandardInputAsync(
+        Process process,
+        IAsyncEnumerable<object?> input,
+        RawByteHandoff? rawInput,
+        CancellationToken cancellationToken)
     {
+        // TOSH-0012. Offered before the first pull, because a producing program decides as
+        // soon as it starts whether to send bytes here or values through `input`. When it
+        // claims, `input` ends without an item and closing stdin below is its EOF.
+        rawInput?.Offer(new RawByteDestination(process.StandardInput.BaseStream, ReaderCanLeave: true));
+
         try
         {
             await foreach (var item in input.WithCancellation(cancellationToken))
@@ -970,6 +999,8 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
         }
         finally
         {
+            rawInput?.Withdraw();
+
             try
             {
                 process.StandardInput.Close();
@@ -977,6 +1008,33 @@ public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandRe
             catch
             {
             }
+        }
+    }
+
+    /// <summary>
+    /// Sends a program's stdout, byte for byte, to a destination the next stage claimed for it.
+    /// </summary>
+    private static async Task CopyRawStdoutAsync(
+        Stream stdoutStream,
+        ReadOnlyMemory<byte> sniffedBytes,
+        RawByteDestination destination,
+        CancellationToken cancellationToken)
+    {
+        if (await destination.CopyFromAsync(stdoutStream, sniffedBytes, cancellationToken))
+        {
+            return;
+        }
+
+        // The next program exited without reading everything — `… | head -1`. Close our end,
+        // so this one meets a closed pipe on its next write instead of blocking forever on one
+        // nobody drains. (It then gets EPIPE rather than SIGPIPE, because programs started from
+        // .NET inherit SIGPIPE as ignored — TOSH-0014.)
+        try
+        {
+            stdoutStream.Dispose();
+        }
+        catch
+        {
         }
     }
 

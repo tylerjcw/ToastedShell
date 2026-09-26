@@ -7162,6 +7162,7 @@ comparison operators):
 \code{o+e>>} / \code{out+err>>} & Redirect both (append) \\
 \code{e+o>} / \code{err+out>} & Redirect stderr+stdout (truncate) \\
 \code{e+o>>} / \code{err+out>>} & Redirect stderr+stdout (append) \\
+\code{in<} / \code{i<} & Read stdin from a file \\
 \code{<<<} & Here-string \\
 \bottomrule
 \caption{Redirection operators}
@@ -7174,6 +7175,20 @@ echo "world" out>> ./hello.txt      # Append
 /bin/sh -c "echo err >&2" err> ./errors.txt
 /bin/sh -c "output" o+e> ./combined.txt
 \end{lstlisting}
+
+Between two external programs the bytes one writes are the bytes the next reads, as in any
+other shell. The same holds from an external program in the last stage to a single \code{out>}
+or \code{out>>} file, and from an \code{in<} file to an external program in the first stage, so
+binary data and output without a final newline pass unchanged:
+
+\begin{lstlisting}
+/usr/bin/cat photo.jpg | /usr/bin/gzip -c out> photo.jpg.gz
+/usr/bin/gzip -dc in< photo.jpg.gz out> copy.jpg
+\end{lstlisting}
+
+A TōSh stage receives an external program's output as text, one line per value, and an external
+program receives TōSh values written one per line. Several output targets, or stdout and stderr
+sent to the same file, also receive text.
 
 \section{Process Substitution}
 

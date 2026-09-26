@@ -484,7 +484,8 @@ public sealed class ToshRuntime :
             request.WorkingDirectory,
             stages,
             request.InitialInput,
-            redirections));
+            redirections,
+            request.InputPath));
 
         return job.ToInfo();
     }

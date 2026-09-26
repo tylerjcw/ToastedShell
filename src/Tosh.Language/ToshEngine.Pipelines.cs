@@ -39,21 +39,24 @@ public sealed partial class ToshEngine
         }
 
         IReadOnlyList<object?>? initialInput = null;
+        string? inputPath = null;
         var processStages = new List<ToastBackgroundProcessSpec>();
         var redirections = new List<ToastBackgroundRedirectionSpec>();
         var stages = statement.Pipeline.Stages;
         var stageIndex = 0;
 
-        // Resolve input redirection for background pipelines.
+        // Resolve input redirection for background pipelines. Every stage here is a program,
+        // so the file goes to the first one as bytes (`TOSH-0012`).
         if (statement.Pipeline.InputRedirection is { } bgInputRedirection)
         {
             var inputTarget = await EvaluateArgumentAsync(sourceName, sourceText, bgInputRedirection.Source, cancellationToken);
-            var inputPath = ResolveInputRedirectionPath(sourceName, sourceText, bgInputRedirection, inputTarget);
-            initialInput = await AsyncEnumerableExtensions.ToListAsync(ReadLinesAsync(inputPath, cancellationToken), cancellationToken);
+            inputPath = ResolveInputRedirectionPath(sourceName, sourceText, bgInputRedirection, inputTarget);
         }
 
         if (stages.Count > 0 && stages[0] is ExpressionPipelineStageSyntax initialExpression)
         {
+            // An input expression has always taken precedence over `in<`; it still does.
+            inputPath = null;
             initialInput = await AsyncEnumerableExtensions.ToListAsync(
                 ExecuteExpressionStageAsync(sourceName, sourceText, initialExpression, cancellationToken),
                 cancellationToken);
@@ -145,7 +148,8 @@ public sealed partial class ToshEngine
             LanguageRuntime.CurrentDirectory,
             processStages,
             initialInput,
-            redirections));
+            redirections,
+            inputPath));
 
         LanguageRuntime.ExecutionObserver.SetLastResult(jobInfo);
         LanguageRuntime.ExecutionObserver.SetLastExitCode(0);
@@ -161,17 +165,20 @@ public sealed partial class ToshEngine
         IReadOnlyList<object?>? firstCommandArguments = null,
         bool outputIsCaptured = false)
     {
+        RawByteHandoff? inputBytes = null;
+
         // Resolve input redirection (in< / i<) before executing the pipeline.
         if (pipeline.InputRedirection is { } inputRedirection)
         {
             var inputTarget = await EvaluateArgumentAsync(sourceName, sourceText, inputRedirection.Source, cancellationToken);
             var inputPath = ResolveInputRedirectionPath(sourceName, sourceText, inputRedirection, inputTarget);
-            initialInput = ReadLinesAsync(inputPath, cancellationToken);
+            inputBytes = new RawByteHandoff();
+            initialInput = ReadInputRedirectionAsync(inputPath, inputBytes, cancellationToken);
         }
 
         if (pipeline.Redirections is null or { Count: 0 })
         {
-            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments, outputIsCaptured: outputIsCaptured)
+            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments, outputIsCaptured: outputIsCaptured, initialRawInput: inputBytes)
                                .WithCancellation(cancellationToken))
             {
                 yield return value;
@@ -198,6 +205,8 @@ public sealed partial class ToshEngine
         IToastStream? redirectedOutput = null;
         IToastStream? redirectedError = null;
         IDisposable? sessionRedirection = null;
+        RawByteHandoff? outputBytes = null;
+        RedirectedFileByteStream? outputFile = null;
 
         try
         {
@@ -247,6 +256,7 @@ public sealed partial class ToshEngine
                 if (RedirectionIncludesOutput(redirection.Stream))
                 {
                     outputTargets.Add(writer);
+                    outputFile = new RedirectedFileByteStream(writer, stream);
                 }
 
                 if (RedirectionIncludesError(redirection.Stream))
@@ -286,10 +296,20 @@ public sealed partial class ToshEngine
 
             var hasOutputRedirection = outputTargets.Count > 0;
 
+            // `TOSH-0012`. When the output goes to exactly one file, a program in the last
+            // stage writes its bytes there itself instead of yielding lines for the loop below
+            // to re-encode. Not with several targets, and not for a buffered plan: those
+            // receive text, and bytes that are not text have no faithful form there.
+            if (outputTargets.Count == 1 && outputFile is not null)
+            {
+                outputBytes = new RawByteHandoff();
+                outputBytes.Offer(new RawByteDestination(outputFile, ReaderCanLeave: false));
+            }
+
             // Deliberately NOT captured: this is the top-level display path, and terminal
             // passthrough is exactly what it is for. Redirection is handled below from the
             // values the pipeline yields (TS-P1-30).
-            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments, outputIsCaptured: outputIsCaptured)
+            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments, outputIsCaptured: outputIsCaptured, initialRawInput: inputBytes, finalRawOutput: outputBytes)
                                .WithCancellation(cancellationToken))
             {
                 if (hasOutputRedirection)
@@ -318,6 +338,7 @@ public sealed partial class ToshEngine
         }
         finally
         {
+            outputBytes?.Withdraw();
             sessionRedirection?.Dispose();
 
             if (originalOutput is not null)
@@ -539,7 +560,9 @@ public sealed partial class ToshEngine
         IAsyncEnumerable<object?>? initialInput = null,
         IReadOnlyList<object?>? firstCommandArguments = null,
         PipelineExitStatusTracker? pipelineExitStatusTracker = null,
-        bool outputIsCaptured = false)
+        bool outputIsCaptured = false,
+        RawByteHandoff? initialRawInput = null,
+        RawByteHandoff? finalRawOutput = null)
     {
         var ownsTracker = pipelineExitStatusTracker is null;
         pipelineExitStatusTracker ??= new PipelineExitStatusTracker(LanguageRuntime.Options.Pipefail);
@@ -554,9 +577,32 @@ public sealed partial class ToshEngine
         var stageCount = pipeline.Stages.Count;
         var stagesToRun = fusion is null ? stageCount : stageCount - GetStagesConsumed(fusion);
 
+        // `TOSH-0012`. A byte path runs only between two command stages, the only stages that
+        // can be programs: an expression stage ignores its input and a pipe-forward stage turns
+        // it into arguments. The last stage gets the caller's path — a redirected file — unless
+        // fusion replaced it, in which case its output is not the pipeline's.
+        var pendingRawInput = initialRawInput;
+
         for (int i = 0; i < stagesToRun; i++)
         {
             var stage = pipeline.Stages[i];
+            var stageRawInput = stage is CommandSyntax ? pendingRawInput : null;
+            RawByteHandoff? stageRawOutput = null;
+
+            if (stage is CommandSyntax)
+            {
+                if (i + 1 < stagesToRun)
+                {
+                    stageRawOutput = pipeline.Stages[i + 1] is CommandSyntax ? new RawByteHandoff() : null;
+                }
+                else if (fusion is null)
+                {
+                    stageRawOutput = finalRawOutput;
+                }
+            }
+
+            pendingRawInput = stageRawOutput;
+
             current = stage switch
             {
                 ExpressionPipelineStageSyntax expressionStage => ExecuteExpressionStageAsync(
@@ -573,7 +619,10 @@ public sealed partial class ToshEngine
                     isPipelined,
                     pipelineExitStatusTracker,
                     cancellationToken,
-                    outputIsCaptured: outputIsCaptured),
+                    outputIsCaptured: outputIsCaptured,
+                    hasUpstream: i > 0 || initialInput is not null,
+                    rawInput: stageRawInput,
+                    rawOutput: stageRawOutput),
                 PipeForwardStageSyntax pipeForward => ExecutePipeForwardStageAsync(
                     sourceName,
                     sourceText,
@@ -877,6 +926,92 @@ public sealed partial class ToshEngine
         return (await ToOperatorStringAsync(actual, cancellationToken)).EndsWith(
             await ToOperatorStringAsync(expected, cancellationToken),
             StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// What <c>in&lt;</c> feeds the first stage: the file's bytes when that stage is a program
+    /// that offered its stdin, and the file's lines otherwise (<c>TOSH-0012</c>).
+    /// </summary>
+    private static async IAsyncEnumerable<object?> ReadInputRedirectionAsync(
+        string path,
+        RawByteHandoff bytes,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (bytes.TryClaim(out var destination))
+        {
+            await using var file = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite,
+                bufferSize: 1,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+            // A program that stops reading early — `head -c 16 in< big.bin` — has had what it
+            // wanted; that is not an error, so the result is not checked.
+            await destination.CopyFromAsync(file, ReadOnlyMemory<byte>.Empty, cancellationToken);
+            yield break;
+        }
+
+        await foreach (var line in ReadLinesAsync(path, cancellationToken))
+        {
+            yield return line;
+        }
+    }
+
+    /// <summary>
+    /// The bytes a program writes to a redirected file, sent past the text writer the rest of
+    /// the redirection uses. Anything already written as text is flushed first, so the file
+    /// keeps the order things happened in.
+    /// </summary>
+    private sealed class RedirectedFileByteStream(TextWriter writer, Stream file) : Stream
+    {
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            writer.Flush();
+            file.Write(buffer, offset, count);
+        }
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            writer.Flush();
+            await file.WriteAsync(buffer, cancellationToken);
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            => WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override void Flush()
+        {
+            writer.Flush();
+            file.Flush();
+        }
+
+        public override async Task FlushAsync(CancellationToken cancellationToken)
+        {
+            writer.Flush();
+            await file.FlushAsync(cancellationToken);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
     }
 
     private static async IAsyncEnumerable<object?> ReadLinesAsync(

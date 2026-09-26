@@ -98,8 +98,21 @@ public sealed class TtyCaptureTests
         startInfo.ArgumentList.Add("/dev/null");
 
         using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-        process.WaitForExit(milliseconds: 60_000);
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        var suffix = string.Empty;
+
+        // A child that reads the terminal waits for a keyboard nobody is at. Reading to the end
+        // first, as this did, turned that into a suite that never finished rather than a test
+        // that failed (TOSH-0012).
+        if (!process.WaitForExit(milliseconds: 60_000))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            suffix = "\n[timed out after 60 s: something was waiting on the terminal]";
+        }
+
+        var output = standardOutput.GetAwaiter().GetResult() + standardError.GetAwaiter().GetResult() + suffix;
 
         // Strip ANSI styling and carriage returns the pty introduces.
         return System.Text.RegularExpressions.Regex
@@ -130,6 +143,49 @@ public sealed class TtyCaptureTests
         Assert.Contains("GOT[", output, StringComparison.Ordinal);
         Assert.DoesNotContain("GOT[]", output, StringComparison.Ordinal);
         Assert.DoesNotContain("GOT[null]", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_later_stage_of_a_captured_pipeline_reads_its_input_not_the_terminal()
+    {
+        if (PtyUnavailable())
+        {
+            return;
+        }
+
+        // TOSH-0012. Capture reached every stage, and at a terminal every captured stage ran
+        // hybrid — stdin left with the terminal — so `tr` read the keyboard instead of
+        // `printf`. With nothing typed that hung; with something typed it returned that.
+        var output = RunUnderPty(
+            "var x = (/usr/bin/printf \"hello\\n\" | /usr/bin/tr a-z A-Z)\necho $\"GOT[{$x}]\"");
+
+        Assert.Contains("GOT[HELLO]", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_first_stage_of_a_captured_pipeline_hands_its_bytes_to_the_next()
+    {
+        if (PtyUnavailable())
+        {
+            return;
+        }
+
+        // The first stage is the one that still runs hybrid, so it has to be able to claim the
+        // byte path as well. Decoded as text, each 0xFF becomes U+FFFD — three bytes — and a
+        // newline is added: `wc -c` would count 3001.
+        var file = Path.Combine(Path.GetTempPath(), $"tosh-tty-bytes-{Guid.NewGuid():N}.bin");
+        File.WriteAllBytes(file, Enumerable.Repeat((byte)0xFF, 1000).ToArray());
+
+        try
+        {
+            var output = RunUnderPty($"var x = (/usr/bin/cat {file} | /usr/bin/wc -c)\necho $\"GOT[{{$x}}]\"");
+
+            Assert.Contains("GOT[1000]", output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [Fact]

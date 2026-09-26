@@ -50,17 +50,18 @@ public sealed class TsspParser
         var consumed = 0;
         try
         {
-            // Greedy read until we've either seen the magic or definitively not.
+            // Read until we've either seen the magic or definitively not — which is as soon as
+            // one byte differs. Waiting for all of it held back a plain program's first few bytes
+            // until it had written as many as the magic is long, or exited: `printf ab; sleep 3`
+            // reached the next program after three seconds (TOSH-0012).
             while (consumed < magic.Length)
             {
                 var read = await _stream.ReadAsync(buf.AsMemory(consumed, magic.Length - consumed), ct);
                 if (read == 0) { _peek = buf.AsSpan(0, consumed).ToArray(); return null; }
-                consumed += read;
-            }
 
-            for (var i = 0; i < magic.Length; i++)
-            {
-                if (buf[i] != magic[i]) { _peek = buf.AsSpan(0, consumed).ToArray(); return null; }
+                var matches = buf.AsSpan(consumed, read).SequenceEqual(magic.AsSpan(consumed, read));
+                consumed += read;
+                if (!matches) { _peek = buf.AsSpan(0, consumed).ToArray(); return null; }
             }
 
             // Magic matched. Read until LF for the JSON header.

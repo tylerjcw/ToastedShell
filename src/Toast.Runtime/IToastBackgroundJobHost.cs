@@ -31,12 +31,18 @@ public sealed record ToastBackgroundRedirectionSpec(
 /// Everything a host needs to launch a background pipeline without exposing its job model
 /// to the language.
 /// </summary>
+/// <param name="InputPath">
+/// The <c>in&lt;</c> file, whose bytes become the first program's stdin unchanged. Handed over
+/// as a path rather than read into <paramref name="InitialInput"/> as lines, which decoded the
+/// bytes and so corrupted anything that was not text (<c>TOSH-0012</c>).
+/// </param>
 public sealed record ToastBackgroundPipelineRequest(
     string CommandText,
     string WorkingDirectory,
     IReadOnlyList<ToastBackgroundProcessSpec> Stages,
     IReadOnlyList<object?>? InitialInput,
-    IReadOnlyList<ToastBackgroundRedirectionSpec> Redirections);
+    IReadOnlyList<ToastBackgroundRedirectionSpec> Redirections,
+    string? InputPath = null);
 
 /// <summary>
 /// Starts and tracks background process pipelines on behalf of the language.
