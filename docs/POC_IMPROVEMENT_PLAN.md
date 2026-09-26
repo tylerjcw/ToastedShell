@@ -1,9 +1,10 @@
 # TōSh / Tōast — improving the proof of concept
 
 > **Status:** active — written 2026-09-25.
-> **Items:** [`TOSH-0012`](plan/items/TOSH-0012.md) (P0.1, complete),
-> [`TOSH-0013`](plan/items/TOSH-0013.md) (P0.2) and [`TOSH-0014`](plan/items/TOSH-0014.md)
-> (found during P0.1) are filed; the rest of this plan is listed here until it is started.
+> **Items:** [`TOSH-0012`](plan/items/TOSH-0012.md) (P0.1) and
+> [`TOSH-0013`](plan/items/TOSH-0013.md) (P0.2) are complete; [`TOSH-0014`](plan/items/TOSH-0014.md)
+> and [`TOSH-0015`](plan/items/TOSH-0015.md) were found along the way. The rest of this plan is
+> listed here until it is started.
 
 This .NET implementation is the proof of concept for Tōast. The final language is a separate,
 greenfield Rust implementation with its own runtime: a lossless syntax tree, a semantic model,
@@ -41,7 +42,7 @@ the proof of concept did.
 
 | # | Behaviour | Reproduction | What happened | Plan |
 |---|---|---|---|---|
-| 1 | A value becomes a flag | `var name = "-r"; rm $name victim` | `victim/` was deleted recursively; the file named `-r` was left alone | P0.2 |
+| 1 | A value becomes a flag | `var name = "-r"; rm $name victim` | `victim/` was deleted recursively; the file named `-r` was left alone | P0.2, fixed |
 | 2 | External output is not binary-safe | `/usr/bin/cat bin.dat \| /usr/bin/sha256sum` | 100,000 random bytes arrived as 181,127 (invalid UTF-8 replaced by U+FFFD) | P0.1, fixed |
 | 3 | Redirection is not binary-safe | `/usr/bin/cat bin.dat out> out.bin` | the same 181,127 corrupted bytes; `… \| /usr/bin/gzip -c out> f.gz` wrote an archive that decompresses to nothing | P0.1, fixed |
 | 4 | A newline is added | `/usr/bin/cat nonl.txt \| /usr/bin/wc -c` | 19 bytes became 20 | P0.1, fixed |
@@ -157,6 +158,22 @@ suggesting `--` when a variable starting with `-` reaches a program is a P2 cand
 **Acceptance.** For each of the six commands, a flag spelled literally still works and the same
 text arriving through a variable, a subexpression or a glob is treated as an operand.
 
+**Done, 2026-09-26.** Every case above holds. The record is a list type, `CommandArgumentList`, so
+it travels with the arguments: a command-wrapper function forwards its caller's list, `invoke`
+slices it, and a list a command builds for itself carries no record and yields no options at all —
+a lost option is an error, a value taken for one can be a recursive delete. `ln` (whose `-f`
+removes a directory recursively) and `xargs` (which re-parses the command line it builds, and so
+now quotes every line of input) were converted with the six; the other 79 files are
+[`TOSH-0015`](plan/items/TOSH-0015.md).
+
+The worst finding was not a flag at all. `kill` reads no options, so `-1` is a target — and on
+Linux `Process.GetProcessById(-1)` tests existence with kill(-1, 0), which succeeds, after which
+`Process.Kill` sends kill(-1, SIGKILL): **`kill -1` killed every process the user owned**, and
+`signal TERM -1` did the same through `ProcessSignalSender`. Both now refuse process ids of zero or
+less. It was found the hard way: a negative control that removed the new guard took the
+container running the tests down three times. Details in
+[`TOSH-0013`](plan/items/TOSH-0013.md).
+
 ---
 
 ## P1 — daily-use correctness
@@ -235,7 +252,12 @@ Performance work continues only where daily use needs it — external pipes in P
   decoded only at a Tōast stage. Specify how `>` is a redirection in command position and a
   comparison in expressions; the PoC side-stepped it with `out>`.
 - **Flags come from syntax.** Builtins and subcommand `arg`/`flag` declarations bind by syntax;
-  for external argv, lint values from variables that start with `-` and suggest `--`.
+  for external argv, lint values from variables that start with `-` and suggest `--`. The PoC's
+  answer, a per-argument "written as a word" flag carried by the argument list, is the minimum;
+  in the Rust design the parser can bind options before anything is evaluated.
+- **A process id is not a process group.** kill(2) reads -1 as every process and 0 as the
+  caller's group; a runtime's own helpers (.NET's `GetProcessById`) do the same. Make a pid a
+  positive type, and signalling a group a separately named operation.
 - **The host streams what `echo` yields.** Proposal 001 has a compiled entry point that "collects
   these pipeline objects" before serialising them; it should stream them, with a plain-text format
   when stdout is not a terminal.
@@ -256,3 +278,4 @@ Performance work continues only where daily use needs it — external pipes in P
 |---|---|
 | 2026-09-25 | Plan written; `TOSH-0012` and `TOSH-0013` filed; P0.1 started. |
 | 2026-09-26 | P0.1 done: `TOSH-0012` complete, including the background-job path and the protocol sniff; `TOSH-0014` filed. |
+| 2026-09-26 | P0.2 done: `TOSH-0013` complete, with `ln`, `xargs` and the `kill`/`signal` pid guard; `TOSH-0015` filed for the remaining files. |
