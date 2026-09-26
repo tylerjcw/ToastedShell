@@ -1,9 +1,9 @@
 # TōSh / Tōast — improving the proof of concept
 
 > **Status:** active — written 2026-09-25.
-> **Items:** [`TOSH-0012`](plan/items/TOSH-0012.md) (P0.1) and
-> [`TOSH-0013`](plan/items/TOSH-0013.md) (P0.2) are filed; the rest of this plan is listed
-> here until it is started.
+> **Items:** [`TOSH-0012`](plan/items/TOSH-0012.md) (P0.1, complete),
+> [`TOSH-0013`](plan/items/TOSH-0013.md) (P0.2) and [`TOSH-0014`](plan/items/TOSH-0014.md)
+> (found during P0.1) are filed; the rest of this plan is listed here until it is started.
 
 This .NET implementation is the proof of concept for Tōast. The final language is a separate,
 greenfield Rust implementation with its own runtime: a lossless syntax tree, a semantic model,
@@ -36,14 +36,17 @@ Every row below was reproduced on 2026-09-25 against the Debug build of `claude/
 most of them in a scratch directory. The repository's companion memories hold the same findings
 (`scripts/devcompanion.sh recall "review-2026-09-25"`).
 
+Rows marked *fixed* keep what was measured before the fix, so the table stays a record of what
+the proof of concept did.
+
 | # | Behaviour | Reproduction | What happened | Plan |
 |---|---|---|---|---|
 | 1 | A value becomes a flag | `var name = "-r"; rm $name victim` | `victim/` was deleted recursively; the file named `-r` was left alone | P0.2 |
-| 2 | External output is not binary-safe | `/usr/bin/cat bin.dat \| /usr/bin/sha256sum` | 100,000 random bytes arrived as 181,127 (invalid UTF-8 replaced by U+FFFD) | P0.1 |
-| 3 | Redirection is not binary-safe | `/usr/bin/cat bin.dat out> out.bin` | the same 181,127 corrupted bytes; `… \| /usr/bin/gzip -c out> f.gz` wrote an archive that decompresses to nothing | P0.1 |
-| 4 | A newline is added | `/usr/bin/cat nonl.txt \| /usr/bin/wc -c` | 19 bytes became 20 | P0.1 |
-| 5 | Pipes between programs are slow | `/usr/bin/cat big.txt \| /usr/bin/wc -l`, 50 MB | 3.4 s of piping, against 44 ms in bash | P0.1 |
-| 6 | A captured pipeline reads the terminal | `var x = (/usr/bin/printf "hello\n" \| /usr/bin/tr a-z A-Z)` at a TTY | `tr` read what was typed at the keyboard, not `printf`'s output | P0.1 |
+| 2 | External output is not binary-safe | `/usr/bin/cat bin.dat \| /usr/bin/sha256sum` | 100,000 random bytes arrived as 181,127 (invalid UTF-8 replaced by U+FFFD) | P0.1, fixed |
+| 3 | Redirection is not binary-safe | `/usr/bin/cat bin.dat out> out.bin` | the same 181,127 corrupted bytes; `… \| /usr/bin/gzip -c out> f.gz` wrote an archive that decompresses to nothing | P0.1, fixed |
+| 4 | A newline is added | `/usr/bin/cat nonl.txt \| /usr/bin/wc -c` | 19 bytes became 20 | P0.1, fixed |
+| 5 | Pipes between programs are slow | `/usr/bin/cat big.txt \| /usr/bin/wc -l`, 50 MB | 3.4 s of piping, against 44 ms in bash | P0.1, fixed |
+| 6 | A captured pipeline reads the terminal | `var x = (/usr/bin/printf "hello\n" \| /usr/bin/tr a-z A-Z)` at a TTY | `tr` read what was typed at the keyboard, not `printf`'s output | P0.1, fixed |
 | 7 | `echo` output is held back | `for i in 1..3 { sleep 1; echo $i }` | nothing for 3.5 s, then one table; a script's whole output is merged into one table at exit | P1 |
 | 8 | Piped output is table art | `tosh -c 'echo hello' \| cat` | `┌────────┬───────┐ │ String │ hello │`, plus ANSI colour in diagnostics | P1 |
 | 9 | `parallel` drops writes | `var total = 0; 1..200 \| parallel { $total = $total + 1 }` | `$total` is still 0, with no diagnostic | P1 |
@@ -77,17 +80,21 @@ reads the keyboard instead.
 **Design.** A byte hand-off between adjacent stages that both deal in bytes:
 
 - `RawByteHandoff` (`Toast.Runtime`) is created by the engine between each pair of adjacent
-  command stages, and between the last stage and a single `out>` file. The engine binds it to the
-  two command instances once they are resolved, so a command a stage invokes internally (a
+  command stages, and between the last stage and a single `out>` file. The engine binds each side
+  to the `CommandContext` it built for that stage, so a command a stage invokes internally (a
   callable run by `each`, a renderer) can never claim it — `CommandContext` is a record, and
-  `context with { … }` copies would otherwise carry it along.
+  `context with { … }` copies carry the reference along, but a copy is a different object.
+  (The first draft bound it to the resolved command instead; a registered command is one object
+  shared by every stage that names it, so the context is the precise key.)
 - The consuming side offers a destination before it starts pulling: an external command in piped
   mode offers its stdin; the engine offers the redirection's file.
 - The producing side, an external command whose stdout turned out to be plain rather than TSSP,
   claims the destination and copies bytes into it — the sniffed prefix first — and yields no
   items. If nothing was offered, it yields lines exactly as before.
 - A consumer that exits early (`… | head -c 10`) makes the copy fail with a broken pipe; the
-  producer then closes its read end so the child gets `SIGPIPE`, as it would under bash.
+  producer then closes its read end, so the child meets a closed pipe instead of blocking on one
+  nobody drains. It then reports `EPIPE` rather than dying of `SIGPIPE`, because programs started
+  by TōSh inherit `SIGPIPE` as ignored — [`TOSH-0014`](plan/items/TOSH-0014.md).
 - `in<` works the same way in reverse: when the first stage offers its stdin, the file's bytes are
   copied into it.
 - Only the first stage of a captured pipeline at a terminal runs in hybrid mode. Later stages have
@@ -102,6 +109,28 @@ as text. Builtins such as `cat` stay text-oriented for now; they can adopt the s
 and a file without a trailing newline all preserve every byte; 50 MB through `cat | wc -l` runs
 at pipe speed; the captured-pipeline case returns `HELLO`; the existing external-process tests
 still pass.
+
+**Done, 2026-09-26.** Every case above holds, and 50 MB now costs about 0.1–0.2 s over the
+shell's own start-up instead of 3.4 s. Three more defects in the same code were fixed with it:
+
+- *Background pipelines* (`… &`) had their own copy of the plumbing. `yes | head -1 &` stayed
+  "running" forever, because the pump that gave up when `head` left kept `yes`'s stdout open; every
+  `out>` file began with a UTF-8 byte-order mark; and `out>` and `in<` decoded bytes as lines.
+- *The protocol sniff* waited for eleven bytes before deciding a program's output was not TSSP,
+  so `printf ab; sleep 3` reached the next program after three seconds. It now decides at the first
+  byte that differs.
+
+Measurements, tests and known limits are in [`TOSH-0012`](plan/items/TOSH-0012.md).
+
+### P0.1 follow-up — `SIGPIPE` — [`TOSH-0014`](plan/items/TOSH-0014.md)
+
+Found while testing P0.1: .NET ignores `SIGPIPE`, an ignored signal survives `exec`, and so every
+program TōSh starts has it ignored (`SigIgn: …1000`, against `…0000` under bash). A writer whose
+reader has gone gets `EPIPE` and usually says so — `yes: standard output: Broken pipe` — where
+under bash it ends silently; a background job then reports `failed`. `PosixSignalRegistration`
+does not change it. The options are a launcher that resets it (`env --default-signal=PIPE` on GNU
+systems, or `posix_spawn` with `POSIX_SPAWN_SETSIGDEF`) or documenting it. Priority 1: it is noise
+and wrong status, not data loss.
 
 ### P0.2 Values never become flags — [`TOSH-0013`](plan/items/TOSH-0013.md)
 
@@ -226,3 +255,4 @@ Performance work continues only where daily use needs it — external pipes in P
 | Date | What |
 |---|---|
 | 2026-09-25 | Plan written; `TOSH-0012` and `TOSH-0013` filed; P0.1 started. |
+| 2026-09-26 | P0.1 done: `TOSH-0012` complete, including the background-job path and the protocol sniff; `TOSH-0014` filed. |

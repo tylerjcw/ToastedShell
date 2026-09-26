@@ -125,6 +125,7 @@
 | [`TOSH-0008`](items/TOSH-0008.md) | P2 | complete | 4/4 | A cross-RID publish ships the building machine's SDK assemblies, so a Windows build cannot compile |
 | [`TOSH-0010`](items/TOSH-0010.md) | P2 | complete | 6/6 | `build.tosh publish` reports failure after succeeding, on every RID |
 | [`TOSH-0011`](items/TOSH-0011.md) | P2 | complete | 5/5 | Both TUI browsers test for `q` before they test for focus, so searching for anything with a q in it quits |
+| [`TOSH-0012`](items/TOSH-0012.md) | P0 | complete | 8/8 | External programs' output is decoded as text, so pipes and redirections corrupt binary data |
 | [`TS-P1-13`](items/TS-P1-13.md) | P1 | withdrawn | — | Compiled ordinary member/index assignments evaluate target components before the RHS, while the interpreter... |
 | [`TS-P1-40`](items/TS-P1-40.md) | P1 | complete | — | Index assignment has two live implementations on different surfaces |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
