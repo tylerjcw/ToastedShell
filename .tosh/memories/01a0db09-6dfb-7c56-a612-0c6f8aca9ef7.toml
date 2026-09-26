@@ -1,0 +1,17 @@
+[[memory]]
+id = "01a0db09-6dfb-7c56-a612-0c6f8aca9ef7"
+created = 2026-09-26T00:07:03.419Z
+category = "fact"
+scope = "project"
+source = "ai"
+pinned = true
+session_id = "2026-09-25-build-ci-companion"
+tags = ["tests", "flaky"]
+summary = "Known test noise: several wall-clock-budget tests flake under parallel load; Journalctl/Lsipc fail without systemd"
+content = "Full suite on 2026-09-25/26 (.NET 11 RC1, cloud container): ~7977 tests; failures not caused by code changes fall in two groups. Environmental: the Journalctl and Lsipc tests, which need systemd and IPC facilities the container lacks. Timing (each asserts a wall-clock budget, often via Task.Run, which a saturated thread pool starves): ParserProgressGuardTests.Bounded_constructs_terminate_on_pathological_inputs (500 ms; up to four cases), PairedCollectionLiteralTests.Mismatched_literal_closers_recover_without_hanging (2 s), ConcurrencyCommandTests.Race_is_truly_concurrent_not_sequential, and UtilityCommandTests.Http_request_and_send_support_request_objects_and_out_files (local HTTP server). They fail under a parallel full-suite load and pass alone. Re-run a failing one in isolation (dotnet test --no-build --filter ...) before treating it as a regression."
+
+[[relation]]
+from = "01a0db09-6dfb-7c56-a612-0c6f8aca9ef7"
+to = "01a0db08-2c79-7aa8-aeda-54a10a72667f"
+relationship = "supersedes"
+created = 2026-09-26T00:07:03.421Z

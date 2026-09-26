@@ -1,0 +1,10 @@
+[[memory]]
+id = "01a0db08-0d12-7a0f-bec2-1d7dd3e3fbea"
+created = 2026-09-26T00:05:33.074Z
+category = "fact"
+scope = "project"
+source = "ai"
+tags = ["pipeline", "process", "tty"]
+summary = "CommandContext.IsPipelined is true for every stage incl. the first; HasUpstream says whether a stage has input"
+content = "IsPipelined = pipeline has >1 stage or initial input, so it is true for the first stage of `a | b` too. CommandContext.HasUpstream (added for TOSH-0012) is true only when the stage's input comes from an earlier stage, an in< file or values handed to the pipeline. ExternalProcessCommand.DetermineSpawnMode uses it: only a captured stage with no upstream runs Hybrid (stdin/stderr inherited); `var x = (printf … | tr …)` at a TTY used to make tr read the keyboard."
+links = [{ path = "src/Toast.Runtime/CommandContext.cs" }, { path = "src/Tosh.Stdlib/ExternalProcessCommand.cs" }]

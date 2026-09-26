@@ -1,0 +1,18 @@
+[[memory]]
+id = "01a0db08-2c79-7aa8-aeda-54a10a72667f"
+created = 2026-09-26T00:05:41.113Z
+category = "fact"
+scope = "project"
+source = "ai"
+pinned = true
+session_id = "2026-09-25-build-ci-companion"
+tags = ["tests", "flaky"]
+summary = "Known test noise: parser-guard, race and http tests flake under parallel load; Journalctl/Lsipc fail without systemd"
+content = "Full suite on 2026-09-25/26 (.NET 11 RC1, cloud container): ~7975 tests; failures not caused by code changes fall in two groups. Environmental: the Journalctl and Lsipc tests, which need systemd and IPC facilities the container lacks. Timing: ParserProgressGuardTests.Bounded_constructs_terminate_on_pathological_inputs (a 500 ms parse budget; up to four of its cases), Race_is_truly_concurrent, and UtilityCommandTests.Http_request_and_send_support_request_objects_and_out_files (local HTTP server) fail under a parallel full-suite load and pass when run alone. Re-run a failing one in isolation (dotnet test --no-build --filter ...) before treating it as a regression."
+deleted = 2026-09-26T00:07:03.421Z
+
+[[relation]]
+from = "01a0db08-2c79-7aa8-aeda-54a10a72667f"
+to = "01a0daad-6cd5-7ede-b3e2-9a5de13fcf41"
+relationship = "supersedes"
+created = 2026-09-26T00:05:41.119Z

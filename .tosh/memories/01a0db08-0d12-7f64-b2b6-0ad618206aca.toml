@@ -1,0 +1,16 @@
+[[memory]]
+id = "01a0db08-0d12-7f64-b2b6-0ad618206aca"
+created = 2026-09-26T00:05:33.074Z
+category = "fact"
+scope = "project"
+source = "ai"
+tags = ["redirection", "bytes", "jobs", "tosh-0012"]
+summary = "Fixed: ext out> file, in< and background (&) pipelines now pass bytes unchanged; background out> no longer writes a BOM"
+content = "TOSH-0012 (2026-09-26). The findings that `ext out> file` corrupted binary output and that `cat x | gzip -c out> f.gz` wrote a broken archive are fixed: a single out> target receives a program's bytes directly. Background pipelines (ShellJob.MonitorPipelineAsync) got the same: byte copy to a single out> file, in< passed as ToastBackgroundPipelineRequest.InputPath and copied as bytes, no UTF-8 BOM (Encoding.UTF8 wrote EF BB BF into every background out> file), and PumpPipeAsync closes the producer's stdout when the reader leaves (yes | head -1 & used to run forever)."
+links = [{ path = "src/Tosh.Runtime/ShellJob.cs" }, { path = "docs/plan/items/TOSH-0012.md" }]
+
+[[relation]]
+from = "01a0db08-0d12-7f64-b2b6-0ad618206aca"
+to = "01a0dada-a525-7ef4-8a42-4a3dd6e81f62"
+relationship = "supersedes"
+created = 2026-09-26T00:05:33.172Z

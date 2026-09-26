@@ -1,0 +1,10 @@
+[[memory]]
+id = "01a0db08-0d12-7e5e-b98c-0fdf61dab553"
+created = 2026-09-26T00:05:33.074Z
+category = "fact"
+scope = "project"
+source = "ai"
+tags = ["process", "signals", "sigpipe", "tosh-0014"]
+summary = "Programs started by .NET inherit SIGPIPE as ignored; PosixSignalRegistration can't reset it (TOSH-0014)"
+content = "Measured 2026-09-25: `tosh -c '/usr/bin/grep SigIgn /proc/self/status'` shows SigIgn 0x1000 (SIGPIPE) vs 0 under bash. .NET ignores SIGPIPE so its own writes get EPIPE; ignored signals survive exec, and Process.Start only resets signals with handlers. PosixSignalRegistration.Create((PosixSignal)13, ctx => ctx.Cancel = true) registers but children still have it ignored (tested in a standalone .NET 11 RC1 program). Effect: `yes | head -1` prints 'yes: standard output: Broken pipe' and exits 1 instead of dying silently (141); background jobs report 'failed'. Options: `env --default-signal=PIPE` trampoline (GNU coreutils >= 8.31), or posix_spawn with POSIX_SPAWN_SETSIGDEF. Filed as TOSH-0014."
+links = [{ path = "docs/plan/items/TOSH-0014.md" }]

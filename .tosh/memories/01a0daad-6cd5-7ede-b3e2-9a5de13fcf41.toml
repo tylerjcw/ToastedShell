@@ -9,3 +9,4 @@ session_id = "2026-09-25-build-ci-companion"
 tags = ["tests", "flaky"]
 summary = "Known test noise: 3 wall-clock tests flake under parallel load; Journalctl and Lsipc tests fail without systemd"
 content = "Full suite on 2026-09-25 (.NET 11 RC1, cloud container): 7958 tests, 5 failures, none caused by code changes. Environmental: the Journalctl and Lsipc tests, which need systemd and IPC facilities the container lacks. Timing: ParserProgressGuard (two tests) and Race_is_truly_concurrent assert wall-clock bounds; they fail under a parallel full-suite load and pass when run alone. Re-run a failing one in isolation before treating it as a regression."
+deleted = 2026-09-26T00:05:41.124Z

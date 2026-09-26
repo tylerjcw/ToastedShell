@@ -1,0 +1,16 @@
+[[memory]]
+id = "01a0db08-0d0f-7b96-b0d0-b3893d5727f0"
+created = 2026-09-26T00:05:33.072Z
+category = "pattern"
+scope = "project"
+source = "ai"
+tags = ["pipeline", "process", "bytes", "tosh-0012"]
+summary = "Program bytes flow via RawByteHandoff: consumer offers stdin/file first, producer claims after TSSP sniff"
+content = "TOSH-0012 (2026-09-26). External programs' bytes pass unchanged between adjacent command stages, from a last-stage program to a single out>/out>> file, and from an in< file to a first-stage program. Mechanism: the engine (EvaluatePipelineAsync) creates a RawByteHandoff between each pair of adjacent CommandSyntax stages, plus initialRawInput (in<) and finalRawOutput (single direct out> file, only when fusion is null). ExecuteCommandSyntaxAsync binds each side to the per-stage CommandContext (not the command object: registered commands are shared; `with` copies are different objects and so can't claim). Consumer: ExternalProcessCommand.PumpStandardInputAsync offers process stdin BEFORE pulling input, withdraws in finally. Producer: after the TSSP header sniff, a plain-output program calls context.TryClaimRawOutput and copies via RawByteDestination.CopyFromAsync, yielding nothing; on reader exit (returns false) it disposes its stdout so the child meets a closed pipe. TSSP producers still yield records; TōSh stages still get ShellTextLine. Known limits: a TōSh function wrapping a program is not a byte path; multiple out> targets and buffered plans (o+e>, same file twice) stay text."
+links = [{ path = "src/Toast.Runtime/RawByteHandoff.cs" }, { path = "src/Tosh.Stdlib/ExternalProcessCommand.cs" }, { path = "src/Tosh.Language/ToshEngine.Pipelines.cs" }, { path = "docs/plan/items/TOSH-0012.md" }]
+
+[[relation]]
+from = "01a0db08-0d0f-7b96-b0d0-b3893d5727f0"
+to = "01a0dac5-c485-7604-83f4-26ad6d919012"
+relationship = "supersedes"
+created = 2026-09-26T00:05:33.157Z

@@ -1,0 +1,10 @@
+[[memory]]
+id = "01a0db08-0d12-7614-9cf8-383796d5554b"
+created = 2026-09-26T00:05:33.074Z
+category = "pattern"
+scope = "project"
+source = "ai"
+tags = ["tests", "process", "gotcha"]
+summary = "Tests that run real programs must use absolute paths: cat, head, tail, wc, yes-like names are TōSh builtins"
+content = "cat, head, tail, wc, grep, sort and many other coreutils names resolve to TōSh builtins first, so `cat f | gzip` in a test runs the builtin, not /usr/bin/cat. Tests of external-process behaviour use absolute paths (/usr/bin/cat) or scripts written to a temp dir and run as ./name (see MixedPipelineTests.CreateScript, ExternalByteStreamTests.Program). Pty tests go through TtyCaptureTests.RunUnderPty (script(1)); it now kills the child after 60 s so a test that waits on the terminal fails instead of hanging the suite."
+links = [{ path = "tests/Tosh.Tests/ExternalByteStreamTests.cs" }, { path = "tests/Tosh.Tests/TtyCaptureTests.cs" }]
