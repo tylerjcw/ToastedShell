@@ -27,7 +27,7 @@ public sealed class ChmodCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(context);
         var recursive = parsed.HasFlag("R", "recursive");
 
         if (parsed.Positionals.Count == 0)

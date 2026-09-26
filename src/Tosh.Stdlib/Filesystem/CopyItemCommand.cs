@@ -29,7 +29,7 @@ public sealed class CopyItemCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var parsed = ParsedCommandArguments.Parse(context);
         var recursive = parsed.HasFlag("r", "R", "recursive");
         var force = parsed.HasFlag("f", "force");
         var noClobber = parsed.HasFlag("n", "no-clobber");

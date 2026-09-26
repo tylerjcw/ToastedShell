@@ -136,6 +136,19 @@ public sealed record CommandContext
 
     public TextSpan? GetArgumentSpan(int index) => Invocation?.GetArgumentSpan(index);
 
+    /// <summary>
+    /// Whether <c>Arguments[index]</c> may be read as an option: only when it was written in the
+    /// source as an unquoted word (<c>TOSH-0013</c>).
+    /// </summary>
+    /// <remarks>
+    /// A value — from a variable, an expression, a quoted string, a glob — is an operand even when
+    /// it starts with a dash, which is how <c>rm $name</c> stays safe for a file called <c>-r</c>.
+    /// When the engine did not build this argument list, nothing is known about it and the answer
+    /// is no; see <see cref="CommandArgumentList"/> for why that is the safe side.
+    /// </remarks>
+    public bool MayBeOption(int index)
+        => Arguments is CommandArgumentList tracked && index >= 0 && index < tracked.Count && tracked.IsWord(index);
+
     public ToshDiagnosticException CreateDiagnostic(
         string code,
         string title,

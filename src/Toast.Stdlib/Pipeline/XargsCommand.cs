@@ -19,7 +19,7 @@ public sealed class XargsCommand : ShellCommand
     {
         var evaluator = context.LanguageRuntime.Evaluator
                         ?? throw new InvalidOperationException("This runtime cannot evaluate nested commands for xargs.");
-        var options = ParseOptions(context.Arguments);
+        var options = ParseOptions(context);
         var inputValues = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
         var inputArguments = TokenizeInput(inputValues);
         var chunkSize = options.MaxArguments ?? int.MaxValue;
@@ -37,7 +37,8 @@ public sealed class XargsCommand : ShellCommand
 
         for (var offset = 0; offset < inputArguments.Count; offset += chunkSize)
         {
-            var invocation = BuildInvocation(options.CommandAndArguments.Concat(inputArguments.Skip(offset).Take(chunkSize)));
+            var invocation = BuildInvocation(options.CommandAndArguments.Concat(
+                inputArguments.Skip(offset).Take(chunkSize).Select(static token => new XargsArgument(token, IsWord: false))));
 
             await foreach (var value in evaluator.EvaluateAsync(invocation, "<xargs>", context.CancellationToken)
                                .WithCancellation(context.CancellationToken))
@@ -55,15 +56,28 @@ public sealed class XargsCommand : ShellCommand
             .ToArray();
     }
 
-    private static string BuildInvocation(IEnumerable<object?> arguments)
+    /// <summary>
+    /// The command line to evaluate. It is parsed again, so it decides what the command will
+    /// read as an option (<c>TOSH-0013</c>).
+    /// </summary>
+    /// <remarks>
+    /// Only a word the user wrote to <c>xargs</c> may stay bare. A line of input is always
+    /// quoted: left bare, a file called <c>-r</c> listed into <c>xargs rm</c> became <c>rm -r</c>
+    /// and removed the directories that followed it.
+    /// </remarks>
+    private static string BuildInvocation(IEnumerable<XargsArgument> arguments)
     {
-        return string.Join(" ", arguments.Select(ShellCommandLineEscaper.Quote));
+        return string.Join(" ", arguments.Select(static (argument, index) =>
+            index == 0 || argument.IsWord
+                ? ShellCommandLineEscaper.Quote(argument.Value)
+                : ShellCommandLineEscaper.QuoteValue(argument.Value)));
     }
 
-    private static XargsOptions ParseOptions(IReadOnlyList<object?> arguments)
+    private static XargsOptions ParseOptions(CommandContext context)
     {
+        var arguments = context.Arguments;
         int? maxArguments = null;
-        var commandAndArguments = new List<object?>();
+        var commandAndArguments = new List<XargsArgument>();
 
         for (var index = 0; index < arguments.Count; index++)
         {
@@ -74,13 +88,13 @@ public sealed class XargsCommand : ShellCommand
                 continue;
             }
 
-            if (commandAndArguments.Count == 0 && text is "-n" or "--max-args")
+            if (commandAndArguments.Count == 0 && context.MayBeOption(index) && text is "-n" or "--max-args")
             {
                 maxArguments = CommandArguments.RequireConverted<int>(arguments, ++index, "count");
                 continue;
             }
 
-            commandAndArguments.Add(arguments[index]);
+            commandAndArguments.Add(new XargsArgument(arguments[index], context.MayBeOption(index)));
         }
 
         if (commandAndArguments.Count == 0)
@@ -91,5 +105,7 @@ public sealed class XargsCommand : ShellCommand
         return new XargsOptions(maxArguments, commandAndArguments);
     }
 
-    private sealed record XargsOptions(int? MaxArguments, IReadOnlyList<object?> CommandAndArguments);
+    private sealed record XargsOptions(int? MaxArguments, IReadOnlyList<XargsArgument> CommandAndArguments);
+
+    private sealed record XargsArgument(object? Value, bool IsWord);
 }

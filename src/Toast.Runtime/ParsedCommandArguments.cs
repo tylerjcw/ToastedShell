@@ -14,17 +14,46 @@ public sealed class ParsedCommandArguments
 
     public IReadOnlyCollection<string> Flags => _flags;
 
+    /// <summary>
+    /// Parses a list whose origins are unknown: any string that looks like an option is one.
+    /// </summary>
+    /// <remarks>
+    /// Prefer <see cref="Parse(CommandContext)"/> for a command's own arguments. This form cannot
+    /// tell <c>-r</c> written by the user from a file called <c>-r</c> held in a variable
+    /// (<c>TOSH-0013</c>).
+    /// </remarks>
     public static ParsedCommandArguments Parse(IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+        return Parse(arguments, static _ => true);
+    }
 
+    /// <summary>
+    /// Parses a command's arguments, reading an option only from an argument the user wrote as an
+    /// unquoted word (<c>TOSH-0013</c>).
+    /// </summary>
+    /// <remarks>
+    /// <c>rm -r dir</c> still recurses; <c>var name = "-r"; rm $name dir</c> removes a file called
+    /// <c>-r</c> and refuses the directory. A quoted <c>"-r"</c> is an operand too, which is how
+    /// such a file is named on purpose, and <c>--</c> still ends the options.
+    /// </remarks>
+    public static ParsedCommandArguments Parse(CommandContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return Parse(context.Arguments, context.MayBeOption);
+    }
+
+    private static ParsedCommandArguments Parse(IReadOnlyList<object?> arguments, Func<int, bool> mayBeOption)
+    {
         var positionals = new List<object?>();
         var flags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var parseOptions = true;
 
-        foreach (var argument in arguments)
+        for (var index = 0; index < arguments.Count; index++)
         {
-            if (!parseOptions || argument is not string text || text.Length == 0)
+            var argument = arguments[index];
+
+            if (!parseOptions || argument is not string text || text.Length == 0 || !mayBeOption(index))
             {
                 positionals.Add(argument);
                 continue;

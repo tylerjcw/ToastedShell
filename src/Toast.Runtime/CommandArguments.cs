@@ -85,6 +85,14 @@ public static class CommandArguments
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
+        // `TOSH-0013`. A command that hands the rest of its arguments on — `invoke &rm -r dir`
+        // — hands on what is known about them too, or the `-r` the user wrote would reach `rm`
+        // as a value and stop being an option.
+        if (arguments is CommandArgumentList tracked)
+        {
+            return tracked.Slice(startIndex);
+        }
+
         if (startIndex >= arguments.Count)
         {
             return Array.Empty<object?>();

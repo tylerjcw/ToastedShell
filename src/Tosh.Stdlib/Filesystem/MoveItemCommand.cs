@@ -25,7 +25,7 @@ public sealed class MoveItemCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var options = ParseOptions(context.Arguments, context.Shell().CurrentDirectory);
+        var options = ParseOptions(context.Arguments, context.MayBeOption, context.Shell().CurrentDirectory);
 
         if (options.TargetDirectory is null && options.Positionals.Count < 2)
         {
@@ -122,7 +122,7 @@ public sealed class MoveItemCommand : ShellCommand
         }
     }
 
-    private static MoveOptions ParseOptions(IReadOnlyList<object?> arguments, string currentDirectory)
+    private static MoveOptions ParseOptions(IReadOnlyList<object?> arguments, Func<int, bool> mayBeOption, string currentDirectory)
     {
         var positionals = new List<object?>();
         object? targetDirectory = null;
@@ -137,7 +137,9 @@ public sealed class MoveItemCommand : ShellCommand
         {
             var argument = arguments[index];
 
-            if (!parseOptions || argument is not string text || text.Length == 0)
+            // `TOSH-0013`. Only a word the user wrote is an option; a value that starts with a
+            // dash — a file called `-f` from a variable or a glob — is a path to move.
+            if (!parseOptions || argument is not string text || text.Length == 0 || !mayBeOption(index))
             {
                 positionals.Add(argument);
                 continue;

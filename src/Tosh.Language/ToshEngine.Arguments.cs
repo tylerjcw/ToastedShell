@@ -316,8 +316,12 @@ public sealed partial class ToshEngine
     /// Only barewords are expanded, so `echo "~"` stays literal — quoting is how a tilde is
     /// written when a tilde is what is wanted — and so does a `$variable` holding one.
     /// </para>
+    /// <para>
+    /// The result also records which arguments were written as unquoted words, the only ones a
+    /// command may read as options (`TOSH-0013`): see <see cref="CommandArgumentList"/>.
+    /// </para>
     /// </remarks>
-    private IReadOnlyList<object?> ExpandCommandArguments(
+    private CommandArgumentList ExpandCommandArguments(
         IShellCommand command,
         IReadOnlyList<EvaluatedCommandArgument> evaluatedArguments,
         string sourceName,
@@ -325,11 +329,12 @@ public sealed partial class ToshEngine
     {
         if (evaluatedArguments.Count == 0)
         {
-            return [];
+            return CommandArgumentList.Values([]);
         }
 
         var allowGlobs = command is IImplicitGlobCommand;
         var expanded = new List<object?>(evaluatedArguments.Count);
+        var words = new List<bool>(evaluatedArguments.Count);
 
         for (var index = 0; index < evaluatedArguments.Count; index++)
         {
@@ -341,6 +346,7 @@ public sealed partial class ToshEngine
             // written form still knows which one suppressed expansion.
             var wasQuoted = evaluatedArgument.Syntax is BarewordArgumentSyntax quotedWord &&
                             ShellWordQuoting.ContainsQuote(quotedWord.Value);
+            var isWord = IsWrittenAsWord(evaluatedArgument.Syntax, wasQuoted);
 
             if (evaluatedArgument.Syntax is BarewordArgumentSyntax or SplatArgumentSyntax &&
                 evaluatedArgument.Value is string text &&
@@ -358,20 +364,37 @@ public sealed partial class ToshEngine
 
                     if (matches.Count > 0)
                     {
+                        // What a glob matched are names from the disk, not words the user
+                        // wrote: a file called `-rf` that `*` matches is an operand.
                         expanded.AddRange(matches.Select(static match => (object?)match.ArgumentText));
+                        words.AddRange(Enumerable.Repeat(false, matches.Count));
                         continue;
                     }
                 }
 
                 expanded.Add(text);
+                words.Add(isWord);
                 continue;
             }
 
             expanded.Add(evaluatedArgument.Value);
+            words.Add(isWord);
         }
 
-        return expanded;
+        return new CommandArgumentList(expanded, words);
     }
+
+    /// <summary>
+    /// Whether an argument was written as an unquoted word — a bare word, or a literal such as
+    /// <c>-9</c> — rather than produced by a variable, an expression, a quoted string or a splat.
+    /// </summary>
+    private static bool IsWrittenAsWord(ArgumentSyntax syntax, bool wasQuoted)
+        => syntax switch
+        {
+            BarewordArgumentSyntax => !wasQuoted,
+            LiteralArgumentSyntax literal => literal.Value is not string,
+            _ => false,
+        };
 
     /// <summary>
     /// Expands a leading tilde in one argument, refusing a <c>~name</c> that names nothing.

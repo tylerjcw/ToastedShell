@@ -58,6 +58,14 @@ public sealed class KillCommand : ShellCommand
 
         if (TryResolveProcessId(target, out var processId))
         {
+            // `TOSH-0013`. `kill` reads no options, so a computed `-9` or `-1` is a target — and
+            // no process has an id of zero or less. Said plainly rather than left to the
+            // platform, where 0 is a real process on Windows.
+            if (processId <= 0)
+            {
+                return new JobControlResult("kill", null, processId, false, $"{processId} is not a process id.");
+            }
+
             try
             {
                 using var process = Process.GetProcessById(processId);

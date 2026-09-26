@@ -87,6 +87,16 @@ public static class ProcessSignalSender
 
     public static bool TrySend(int processId, int signal, out string? error)
     {
+        // `TOSH-0013`. kill(2) reads 0 as "my own process group", -1 as "every process I may
+        // signal" and any other negative number as a process group. None of them is a process
+        // id, and each is one computed value away — a lookup that returned -1 — from `signal
+        // TERM $pid` stopping far more than it was asked to, TōSh included.
+        if (processId <= 0)
+        {
+            error = $"{processId} is not a process id.";
+            return false;
+        }
+
         if (OperatingSystem.IsWindows())
         {
             if (IsContinueSignal(signal))
@@ -193,6 +203,13 @@ public static class ProcessSignalSender
     /// </summary>
     public static bool TrySendToGroup(int processGroupId, int signal, out string? error)
     {
+        // kill(-1) is every process, and kill(0) — what -0 is — is the caller's own group.
+        if (processGroupId <= 1)
+        {
+            error = $"{processGroupId} is not a process group of a job.";
+            return false;
+        }
+
         if (OperatingSystem.IsWindows())
         {
             return TrySend(processGroupId, signal, out error);

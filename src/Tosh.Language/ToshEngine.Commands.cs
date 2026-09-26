@@ -456,21 +456,25 @@ public sealed partial class ToshEngine
             yield break;
         }
 
-        IReadOnlyList<object?> arguments;
+        CommandArgumentList arguments;
 
         try
         {
             var evaluatedArguments = await EvaluateCommandArgumentsAsync(sourceName, sourceText, command, commandSyntax, cancellationToken);
             arguments = ExpandCommandArguments(command, evaluatedArguments, sourceName, sourceText);
 
+            // `TOSH-0013`. What `|>` hands in is a value, never an option.
             if (prependedArguments is { Count: > 0 })
             {
-                arguments = prependedArguments.Concat(arguments).ToArray();
+                arguments = CommandArgumentList.Values(prependedArguments).Concat(arguments);
             }
 
+            // A command-wrapper function's own arguments, forwarded with what is known about
+            // them: after `func rmf => rm -rf`, `rmf -v x` keeps `-v` an option and
+            // `rmf $name` keeps `$name` a value.
             if (additionalArguments is { Count: > 0 })
             {
-                arguments = arguments.Concat(additionalArguments).ToArray();
+                arguments = arguments.Concat(CommandArgumentList.From(additionalArguments));
             }
         }
         catch (ToshDiagnosticException)
